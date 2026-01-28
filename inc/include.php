@@ -63,6 +63,21 @@ $topbar = '<div class="container-fluid bg-primary px-5 d-none d-lg-block">
     </div>
 </div>';
 
+// Cargar categorías de servicio dinámicamente
+$categories_query = "SELECT id, name, icon FROM service_categories WHERE is_active = 1 ORDER BY name";
+$categories_result = $conn->query($categories_query);
+$categories_menu = '';
+if ($categories_result && $categories_result->num_rows > 0) {
+    while ($cat = $categories_result->fetch_assoc()) {
+        $icon = !empty($cat['icon']) ? $cat['icon'] : 'fa-medkit';
+        $categories_menu .= '<a href="offers.php?category=' . $cat['id'] . '" class="dropdown-item">';
+        $categories_menu .= '<i class="fas ' . htmlspecialchars($icon) . ' me-2"></i>' . htmlspecialchars($cat['name']);
+        $categories_menu .= '</a>';
+    }
+} else {
+    $categories_menu = '<a href="offers.php" class="dropdown-item">Ver todos los servicios</a>';
+}
+
 $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
     <div class="navbar-nav ms-auto py-0">
         <a href="index.php" class="nav-item nav-link active">Home</a>
@@ -70,10 +85,9 @@ $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
         <div class="nav-item dropdown">
             <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">Services</a>
             <div class="dropdown-menu m-0">
-                <a href="dentistry.php" class="dropdown-item">Dentistry</a>
-                <a href="aesthetic.php" class="dropdown-item">Aesthetic</a>
-                <a href="physiotherapy.php" class="dropdown-item">Physiotherapy</a>
-                <a href="laboratory.php" class="dropdown-item">Laboratory</a>
+                <a href="offers.php" class="dropdown-item"><i class="fas fa-list me-2"></i>All Services</a>
+                <div class="dropdown-divider"></div>
+                ' . $categories_menu . '
             </div>
         </div>
         <a href="contact.php" class="nav-item nav-link">Contact</a>

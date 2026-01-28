@@ -1,0 +1,46 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f093fb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#f5576c;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="600" fill="url(#bgGradient)"/>
+  
+  <!-- Medical Cross Icon -->
+  <g transform="translate(400, 300)">
+    <!-- Horizontal bar -->
+    <rect x="-120" y="-35" width="240" height="70" rx="15" fill="white" opacity="0.9"/>
+    <!-- Vertical bar -->
+    <rect x="-35" y="-120" width="70" height="240" rx="15" fill="white" opacity="0.9"/>
+    
+    <!-- Heart pulse line decoration -->
+    <path d="M -150,-150 L -100,-150 L -80,-120 L -60,-180 L -40,-150 L 20,-150" 
+          stroke="white" stroke-width="4" fill="none" opacity="0.6" stroke-linecap="round"/>
+    <path d="M 50,150 L 100,150 L 120,120 L 140,180 L 160,150 L 200,150" 
+          stroke="white" stroke-width="4" fill="none" opacity="0.6" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Decorative circles -->
+  <circle cx="100" cy="100" r="30" fill="white" opacity="0.1"/>
+  <circle cx="700" cy="500" r="40" fill="white" opacity="0.1"/>
+  <circle cx="150" cy="500" r="25" fill="white" opacity="0.15"/>
+  <circle cx="650" cy="100" r="35" fill="white" opacity="0.15"/>
+  
+  <!-- Text -->
+  <text x="400" y="480" font-family="Arial, sans-serif" font-size="24" font-weight="bold" 
+        text-anchor="middle" fill="white" opacity="0.9">
+    Medical Service
+  </text>
+  <text x="400" y="520" font-family="Arial, sans-serif" font-size="18" 
+        text-anchor="middle" fill="white" opacity="0.7">
+    Image Coming Soon
+  </text>
+</svg>
