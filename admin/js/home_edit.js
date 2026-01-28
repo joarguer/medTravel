@@ -7,7 +7,6 @@ $(document).ready(function(){
     $.post(url, data, function(res){
         let response = JSON.parse(res);
         dataCarrucel = response;
-        console.log(response);
         let body = '';
         let i = 0;
         let id = response[i].id;
@@ -57,7 +56,6 @@ $(document).ready(function(){
 });
 
 function open_carrucel(i,id){
-    console.log(dataCarrucel);
     $('.btn-carrucel').removeClass('active');
     $('#btn-select-'+i).addClass('active');
     let body = '';
@@ -133,7 +131,6 @@ function addCarrucel(){
             $('.add_input').on('input', function(e) {
                 let text_come = e.target.value;
                 let input = e.target.id;
-                console.log(text_come,input); 
                 if(input == 'btn'){
                     $('#'+input+'_edit').text(text_come);
                 } else{
@@ -221,10 +218,8 @@ function addInput(id){
 }
 
 function editInputSubmit(input,i,id){
-    console.log(input,i,id);
     $('#'+input+'_'+i).attr('onclick', '');
     let text_come = $('#'+input+'_input_'+i).val();
-    console.log(text_come);
     let url = 'ajax/home_edit.php';
     let data = {
         id: id,
@@ -296,6 +291,37 @@ function editImg(i,id){
             }
         });
     }
+}
+
+function confirmDeleteCarrucel(i,id){
+    if(!confirm('¿Eliminar este carrusel?')){
+        return;
+    }
+    deleteCarrucel(id);
+}
+
+function deleteCarrucel(id){
+    if(!id){
+        toastr.error('No se encontró el registro','Eliminar');
+        return;
+    }
+    $.ajax({
+        url: 'ajax/delete_carrucel.php',
+        type: 'POST',
+        dataType: 'json',
+        data: { id: id },
+        success: function(response){
+            if(response.ok){
+                toastr.success('El carrusel fue eliminado','Eliminar');
+                location.reload();
+            } else {
+                toastr.error(response.error || 'No se pudo eliminar el carrusel','Eliminar');
+            }
+        },
+        error: function(){
+            toastr.error('Error al comunicarse con el servidor','Eliminar');
+        }
+    });
 }
 
 function notification(text,title,status){

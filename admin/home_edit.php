@@ -24,6 +24,52 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
         <!-- BEGIN PAGE LEVEL STYLES -->
         <link href="../assets/pages/css/about.css" rel="stylesheet" type="text/css" />
         <!-- END PAGE LEVEL STYLES -->
+        <style>
+            .carrucel-sidebar .carrucel-list {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+            }
+            .carrucel-list .carrucel-item {
+                border: 1px solid #e1e6ef;
+                border-radius: 4px;
+                background: #fff;
+                margin-bottom: 8px;
+                transition: border-color .2s ease, box-shadow .2s ease;
+                box-shadow: 0 1px 2px rgba(0,0,0,.05);
+            }
+            .carrucel-list .carrucel-item.active {
+                border-color: #00a5df;
+                background: #00a5df;
+                box-shadow: none;
+            }
+            .carrucel-item__content {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 8px 10px;
+            }
+            .carrucel-link {
+                font-weight: 600;
+                color: #304050;
+                display: flex;
+                align-items: center;
+                text-decoration: none;
+            }
+            .carrucel-item.active .carrucel-link {
+                color: #fff;
+            }
+            .carrucel-link__icon {
+                margin-right: 6px;
+                font-size: 16px;
+            }
+            .carrucel-delete {
+                min-width: 90px;
+                font-size: 10px;
+                letter-spacing: 0.4px;
+                text-transform: uppercase;
+            }
+        </style>
         <?php echo $theme_layout_style;?>
         <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
     </head>
@@ -81,24 +127,32 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                                     <!-- Brand and toggle get grouped for better mobile display -->
                                     <!-- Collect the nav links, forms, and other content for toggling -->
                                     <h3>Carrucel</h3>
-                                    <ul class="nav navbar-nav margin-bottom-35">
-                                        <?php 
-                                            $n = 0;
-                                            while($fil = mysqli_fetch_array($busca_carrucel)){ 
-                                                $id = $fil['id'];
-                                                if($n == 0){ 
-                                                    $active = 'active';
-                                                } else {
-                                                    $active = '';
-                                                }
-                                        ?>
-                                        <li class="btn-carrucel <?php echo $active;?>" id="btn-select-<?php echo $n;?>">
-                                            <a onclick="open_carrucel(<?php echo $n;?>,<?php echo $id;?>)">
-                                                <i class="icon-picture"></i> Carrucel <?php echo $n+1;?> 
-                                            </a>
-                                        </li>
-                                        <?php $n++; } ?>
-                                    </ul>
+                                    <div class="carrucel-sidebar">
+                                        <ul class="nav navbar-nav margin-bottom-35 carrucel-list">
+                                            <?php 
+                                                $n = 0;
+                                                while($fil = mysqli_fetch_array($busca_carrucel)){ 
+                                                    $id = $fil['id'];
+                                                    if($n == 0){ 
+                                                        $active = 'active';
+                                                    } else {
+                                                        $active = '';
+                                                    }
+                                            ?>
+                                            <li class="btn-carrucel <?php echo $active;?> carrucel-item" id="btn-select-<?php echo $n;?>">
+                                                <div class="carrucel-item__content">
+                                                    <a class="carrucel-link" onclick="open_carrucel(<?php echo $n;?>,<?php echo $id;?>)">
+                                                        <span class="carrucel-link__icon"><i class="icon-picture"></i></span>
+                                                        <span>Carrucel <?php echo $n+1;?></span>
+                                                    </a>
+                                                    <?php if($es_admin){ ?>
+                                                    <button type="button" class="btn btn-xs red-sunglo btn-carrucel-delete" onclick="confirmDeleteCarrucel(<?php echo $n;?>,<?php echo $id;?>)">Eliminar</button>
+                                                    <?php } ?>
+                                                </div>
+                                            </li>
+                                            <?php $n++; } ?>
+                                        </ul>
+                                    </div>
                                     <h3>Add Carrucel</h3>
                                     <ul class="nav navbar-nav">
                                         <li>

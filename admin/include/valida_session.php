@@ -41,7 +41,9 @@ function tiene_rol_minimo_2() {
 // Mejor comparación basada en el nombre del script para evitar rutas absolutas inesperadas
 $current = basename($_SERVER['PHP_SELF']);
 $admin_only = array(
-    'crear_usuario.php','create_bd.php'
+    'crear_usuario.php','create_bd.php',
+    'home_edit.php','about_edit.php','services_edit.php','blog_edit.php',
+    'service_categories.php','service_catalog.php','providers.php'
 );
 $role2_allowed = array(
     'tipo_vehiculos.php','add_info_turistico.php','edit_info_turistico.php',
