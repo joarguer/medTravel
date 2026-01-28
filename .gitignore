@@ -3,3 +3,4 @@
 img/surgeon/*_files/
 img/surgeon/**/Fotos y videos de Instagram_files/
 *.heic
+.env
