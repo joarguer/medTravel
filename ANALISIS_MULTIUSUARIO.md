@@ -39,26 +39,46 @@ $sql = "SELECT * FROM provider_service_offers WHERE id = ? AND provider_id = ? L
 
 ### Para Prestadores (Médicos/Clínicas):
 1. ✅ Mis Ofertas: CRUD de ofertas propias
-2. ✅ Mis Datos: Editar perfil
-3. ✅ Galería de fotos por oferta
-4. ⚠️ **FALTANTE**: No pueden editar su información de proveedor
+2. ✅ Mis Datos: Editar perfil personal
+3. ✅ Mi Empresa: Editar información de su proveedor/empresa
+4. ✅ Galería de fotos por oferta
+5. ✅ Upload de logo empresarial
 
 ---
 
-## Problemas Identificados y Recomendaciones
+## ✅ IMPLEMENTADO: Gestión de Perfil del Proveedor
 
-### 🔴 CRÍTICO: Falta Gestión de Perfil del Proveedor
+**Módulo: Mi Empresa** *(Implementado 28/01/2026)*
 
-**Problema:**
-Los prestadores pueden crear ofertas pero **no pueden editar su propia información** (nombre, descripción, dirección, teléfono, etc.). Solo los administradores pueden hacerlo desde `providers.php`.
+Los prestadores ahora pueden gestionar su propia información empresarial:
+- ✅ Editar nombre, descripción, ciudad, dirección
+- ✅ Actualizar teléfono, email, website
+- ✅ Subir y gestionar logo empresarial
+- ✅ Vista restringida por `provider_id` (aislamiento total)
+- ✅ Validaciones de seguridad (whitelist, prepared statements, validación MIME)
 
-**Solución Recomendada:**
-Crear página `mi_empresa.php` o `mi_perfil_proveedor.php` donde el proveedor pueda:
-- Editar descripción de su clínica/consultorio
-- Actualizar datos de contacto
-- Subir logo/foto de perfil de la empresa
-- Gestionar redes sociales
-- Ver estadísticas de sus ofertas
+**Archivos implementados:**
+- `admin/mi_empresa.php` - Página de edición
+- `admin/ajax/mi_empresa.php` - Backend AJAX
+- `admin/js/mi_empresa.js` - Lógica frontend
+- `sql/setup_empresas.sql` - Configuración completa
+- Ver: `MODULO_MI_EMPRESA.md` para documentación completa
+
+### ✅ Integración en Crear Usuario
+
+**Actualización:** Al crear usuarios con rol "Proveedor", ahora se puede:
+- Seleccionar la empresa desde un dropdown
+- Asignar automáticamente `provider_id` al usuario
+- Vincular usuario-empresa en un solo paso
+
+**Archivos modificados:**
+- `admin/crear_usuario.php` - Dropdown de empresas
+- `admin/ajax/crear_usuario.php` - Guardar provider_id
+- `admin/js/crear_usuario.js` - Mostrar/ocultar según rol
+
+---
+
+## Problemas Identificados y Recomendaciones (ACTUALIZADO)
 
 ### 🟡 MEDIO: Gestión de Imágenes en Ofertas
 
@@ -128,11 +148,18 @@ mysqli_stmt_execute($stmt);
 
 ## Checklist de Implementación Pendiente
 
+### ✅ Completadas (28/01/2026):
+- [x] Crear página de edición de perfil de proveedor (`mi_empresa.php`)
+- [x] AJAX backend para actualizar datos de proveedor (filtrado por `provider_id`)
+- [x] Sistema de carga de logo/foto de empresa
+- [x] Integración en crear usuario con dropdown de empresas
+- [x] Badge de rol en header (ADMIN/PRESTADOR)
+- [x] Validar que upload de imágenes esté completo
+
 ### Prioridad Alta:
-- [ ] Crear página de edición de perfil de proveedor (`mi_empresa.php`)
-- [ ] AJAX backend para actualizar datos de proveedor (filtrado por `provider_id`)
-- [ ] Sistema de carga de logo/foto de empresa
-- [ ] Validar que upload de imágenes de ofertas esté completo
+- [ ] Dashboard con estadísticas del proveedor
+- [ ] Sistema de notificaciones
+- [ ] Estados de aprobación de ofertas
 
 ### Prioridad Media:
 - [ ] Dashboard con estadísticas del proveedor
@@ -147,75 +174,120 @@ mysqli_stmt_execute($stmt);
 
 ---
 
-## Conclusión
+## Conclusión (Actualizado 28/01/2026)
 
-**El sistema tiene una base sólida de aislamiento multiusuario**, especialmente en la gestión de ofertas. Las consultas SQL están bien protegidas y usan prepared statements correctamente.
+**El sistema tiene una implementación sólida y completa de aislamiento multiusuario**. Las consultas SQL están protegidas con prepared statements y el sistema de roles funciona correctamente.
 
-**Principal gap**: Falta que los proveedores puedan gestionar su propia información de empresa sin depender del administrador.
+**✅ Principales logros:**
+1. Gestión completa de ofertas con aislamiento por `provider_id`
+2. Módulo "Mi Empresa" para autogestión de prestadores
+3. Integración fluida en creación de usuarios
+4. Seguridad robusta con validaciones en cliente y servidor
+5. UI clara con badges de rol
 
-**Recomendación inmediata**: Implementar `mi_empresa.php` con los campos del proveedor editables por el usuario autenticado con ese `provider_id`.
+**✅ Gap principal RESUELTO**: Los proveedores ahora pueden gestionar su información sin depender del administrador.
+
+**Próximos pasos recomendados:**
+1. Dashboard con métricas para prestadores
+2. Sistema de notificaciones
+3. Estados de aprobación de ofertas
+4. Mejoras UX (wizard, vista previa)
 
 ---
 
-## Código Ejemplo para Implementar
+## Estructura Actual del Proyecto
+
+### Módulos Implementados:
+
+**Admin (Backend):**
+```
+admin/
+├── mi_empresa.php          # ✅ NUEVO: Gestión perfil proveedor
+├── provider_offers.php     # ✅ Gestión ofertas con aislamiento
+├── providers.php           # ✅ CRUD empresas (solo admin)
+├── crear_usuario.php       # ✅ ACTUALIZADO: Dropdown empresas
+├── ajax/
+│   ├── mi_empresa.php      # ✅ NUEVO: Backend perfil proveedor
+│   ├── provider_offers.php # ✅ Backend ofertas
+│   └── crear_usuario.php   # ✅ ACTUALIZADO: Guardar provider_id
+└── js/
+    ├── mi_empresa.js       # ✅ NUEVO: Frontend perfil
+    └── crear_usuario.js    # ✅ ACTUALIZADO: Toggle empresa
+```
+
+**SQL:**
+```
+sql/
+├── setup_empresas.sql      # ✅ NUEVO: Setup completo multiusuario
+├── add_logo_to_providers.sql # ✅ NUEVO: Migración logo
+├── providers.sql           # ✅ Estructura providers
+└── provider_offers.sql     # ✅ Estructura ofertas
+```
+
+**Assets:**
+```
+img/
+└── providers/              # ✅ NUEVO: Logos empresas por provider_id
+    ├── .htaccess           # ✅ Protección directorio
+    └── {provider_id}/      # ✅ Subdirectorios aislados
+```
+
+---
+
+## Código Ejemplo Implementado ✅
 
 ### Archivo: `admin/mi_empresa.php`
 ```php
 <?php
 include('include/include.php');
-$provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
-if (!$provider_id) {
-    die('No tiene acceso a esta función');
+
+// Bloquear si NO es prestador
+if (!isset($_SESSION['provider_id']) || empty($_SESSION['provider_id'])) {
+    header("Location: index.php");
+    exit();
 }
-// Cargar datos del proveedor
-$stmt = mysqli_prepare($conexion, "SELECT * FROM providers WHERE id = ? LIMIT 1");
+
+$provider_id = (int)$_SESSION['provider_id'];
+
+// Cargar datos del prestador
+$sql = "SELECT * FROM providers WHERE id = ?";
+$stmt = mysqli_prepare($conexion, $sql);
 mysqli_stmt_bind_param($stmt, 'i', $provider_id);
 mysqli_stmt_execute($stmt);
-$provider = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+$provider = mysqli_fetch_array(mysqli_stmt_get_result($stmt));
+// ... formulario de edición
 ?>
-<!-- Formulario para editar datos del proveedor -->
 ```
 
 ### Archivo: `admin/ajax/mi_empresa.php`
 ```php
 <?php
-include('../include/conexion.php');
-require_login_ajax();
-$provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
-if (!$provider_id) {
-    http_response_code(403);
-    echo json_encode(['ok'=>false,'error'=>'FORBIDDEN']);
+session_start();
+include("../include/conexion.php");
+
+// Verificar provider_id en sesión
+if (!isset($_SESSION['provider_id']) || empty($_SESSION['provider_id'])) {
+    echo json_encode(['ok' => false, 'error' => 'No tiene permisos de prestador']);
     exit();
 }
 
-$tipo = $_REQUEST['tipo'] ?? '';
+$provider_id = (int)$_SESSION['provider_id'];
+$tipo = $_REQUEST["tipo"] ?? '';
 
-if ($tipo === 'update') {
-    // Actualizar solo los campos permitidos
-    $allowed = ['name','description','city','address','phone','email','website'];
-    $data = [];
-    foreach ($allowed as $k) {
-        if (isset($_REQUEST[$k])) $data[$k] = $_REQUEST[$k];
-    }
+if ($tipo == 'actualizar_empresa') {
+    // Whitelist estricta de campos editables
+    $allowed_fields = ['name', 'description', 'city', 'address', 'phone', 'email', 'website'];
     
-    // UPDATE con WHERE provider_id para aislamiento
-    $stmt = mysqli_prepare($conexion, 
-        "UPDATE providers SET name=?, description=?, city=?, address=?, phone=?, email=?, website=? 
-         WHERE id=? LIMIT 1");
-    mysqli_stmt_bind_param($stmt, 'sssssssi', 
-        $data['name'], $data['description'], $data['city'], 
-        $data['address'], $data['phone'], $data['email'], 
-        $data['website'], $provider_id);
-    
-    if (mysqli_stmt_execute($stmt)) {
-        echo json_encode(['ok'=>true]);
-    } else {
-        echo json_encode(['ok'=>false,'error'=>'DB_ERROR']);
-    }
+    // UPDATE solo con provider_id de sesión (aislamiento)
+    $sql = "UPDATE providers SET ... WHERE id = ?";
+    // Prepared statement con provider_id forzado
 }
 ?>
 ```
 
+**Ver documentación completa:** `MODULO_MI_EMPRESA.md`
+
 ---
 
 Fecha de análisis: 28 de enero de 2026
+**Última actualización: 28 de enero de 2026** - Módulo Mi Empresa implementado ✅
