@@ -1,0 +1,630 @@
+2026-01-27 22:02:49 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:02:49 - COOKIES: Array
+(
+)
+
+2026-01-27 22:03:01 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:03:01 - COOKIES: Array
+(
+    [PHPSESSID] => 9f653038742382f12c673c8ee48d7b2f
+)
+
+2026-01-27 22:03:09 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:03:09 - COOKIES: Array
+(
+    [PHPSESSID] => f1507fcced678f99e31ce51d34e9c0e7
+)
+
+2026-01-27 22:03:29 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:03:29 - COOKIES: Array
+(
+    [PHPSESSID] => f1507fcced678f99e31ce51d34e9c0e7
+)
+
+2026-01-27 22:03:29 - EXCEPTION mysqli_stmt_bind_param(): Argument #1 ($statement) must be of type mysqli_stmt, false given in /Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/htdocs/medtravel/admin/ajax/provider_offers.php:51
+#0 /Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/htdocs/medtravel/admin/ajax/provider_offers.php(51): mysqli_stmt_bind_param(false, 'i', 1)
+#1 {main}
+2026-01-27 22:03:34 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:03:34 - COOKIES: Array
+(
+    [PHPSESSID] => f1507fcced678f99e31ce51d34e9c0e7
+)
+
+2026-01-27 22:03:34 - EXCEPTION mysqli_stmt_bind_param(): Argument #1 ($statement) must be of type mysqli_stmt, false given in /Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/htdocs/medtravel/admin/ajax/provider_offers.php:51
+#0 /Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/htdocs/medtravel/admin/ajax/provider_offers.php(51): mysqli_stmt_bind_param(false, 'i', 1)
+#1 {main}
+2026-01-27 22:03:59 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:03:59 - COOKIES: Array
+(
+    [PHPSESSID] => f1507fcced678f99e31ce51d34e9c0e7
+)
+
+2026-01-27 22:04:05 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:04:05 - COOKIES: Array
+(
+    [PHPSESSID] => f1507fcced678f99e31ce51d34e9c0e7
+)
+
+2026-01-27 22:10:31 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:10:31 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:10:33 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:10:33 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:21:33 - provider_offers request: method=POST req=Array
+(
+    [tipo] => toggle
+    [id] => 1
+)
+
+2026-01-27 22:21:33 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:21:33 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:21:33 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:21:34 - provider_offers request: method=POST req=Array
+(
+    [tipo] => toggle
+    [id] => 1
+)
+
+2026-01-27 22:21:34 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:21:34 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:21:34 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:21:39 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:21:39 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:22:36 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:22:36 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:25:01 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:25:01 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:25:03 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:25:03 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:26:01 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:26:01 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:26:05 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:26:05 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:26:50 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:26:50 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:28:55 - provider_offers request: method=POST req=Array
+(
+    [tipo] => update
+    [service_id] => 1
+    [title] => Oferta demo 2
+    [description] => Oferta de ejemplo para pruebas 2
+    [price_from] => 100.02
+    [currency] => USD
+    [is_active] => 1
+    [id] => 1
+)
+
+2026-01-27 22:28:55 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:28:55 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:28:55 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:29:04 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:29:04 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:29:14 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:29:14 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:29:16 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:29:16 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:29:18 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 22:29:18 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:29:23 - provider_offers request: method=POST req=Array
+(
+    [tipo] => upload_media
+    [offer_id] => 1
+)
+
+2026-01-27 22:29:23 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:29:25 - provider_offers request: method=POST req=Array
+(
+    [tipo] => update
+    [service_id] => 1
+    [title] => Oferta demo 2
+    [description] => Oferta de ejemplo para pruebas 2
+    [price_from] => 100.02
+    [currency] => USD
+    [is_active] => 1
+    [id] => 1
+)
+
+2026-01-27 22:29:25 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:29:25 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:29:25 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 22:29:29 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 22:29:29 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:39:36 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 23:39:36 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:39:39 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 23:39:39 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:39:48 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 23:39:48 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:39:50 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 23:39:50 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:39:52 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 23:39:52 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:39:53 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 23:39:53 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:39:55 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 23:39:55 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:40:09 - provider_offers request: method=POST req=Array
+(
+    [tipo] => upload_media
+    [offer_id] => 1
+)
+
+2026-01-27 23:40:09 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:40:17 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 23:40:17 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:40:22 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-27 23:40:22 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:43:40 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 23:43:40 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:45:07 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 23:45:07 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-27 23:50:22 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-27 23:50:22 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-28 00:06:03 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-28 00:06:03 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-28 00:43:21 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-28 00:43:21 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-28 14:19:05 - provider_offers request: method=POST req=Array
+(
+    [tipo] => list
+)
+
+2026-01-28 14:19:05 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
+2026-01-28 14:19:12 - provider_offers request: method=GET req=Array
+(
+    [tipo] => get
+    [id] => 1
+)
+
+2026-01-28 14:19:12 - COOKIES: Array
+(
+    [_fbp] => fb.0.1762527475746.37113096148179177
+    [PGADMIN_LANGUAGE] => es
+    [conectarbot_session] => c5315bfb22e7b54d4728c192c2ccece1
+    [PHPSESSID] => bb9ef4ec019c8890dff25d8a7ba0f925
+)
+
