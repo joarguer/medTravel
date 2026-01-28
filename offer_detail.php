@@ -38,16 +38,8 @@ if (mysqli_num_rows($result) == 0) {
 
 $offer = mysqli_fetch_assoc($result);
 
-// Obtener imágenes de la oferta
-$images_query = "SELECT image_path, is_primary FROM offer_media WHERE offer_id = ? ORDER BY is_primary DESC, sort_order ASC";
-$img_stmt = mysqli_prepare($conexion, $images_query);
-mysqli_stmt_bind_param($img_stmt, "i", $offer_id);
-mysqli_stmt_execute($img_stmt);
-$images_result = mysqli_stmt_get_result($img_stmt);
+// Por ahora usar placeholder para imágenes
 $images = [];
-while ($img = mysqli_fetch_assoc($images_result)) {
-    $images[] = $img;
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -332,12 +324,11 @@ while ($img = mysqli_fetch_assoc($images_result)) {
     <!-- Hero Section -->
     <div class="offer-hero">
         <?php 
-        $hero_image = !empty($images[0]['image_path']) ? $images[0]['image_path'] : 'img/site/placeholder-medical.jpg';
+        $hero_image = 'img/site/placeholder-medical.jpg';
         ?>
         <img src="<?php echo htmlspecialchars($hero_image); ?>" 
              alt="<?php echo htmlspecialchars($offer['title']); ?>" 
-             class="hero-image"
-             onerror="this.src='img/site/placeholder-medical.jpg'">
+             class="hero-image">
         <div class="hero-overlay"></div>
         <div class="hero-content">
             <div class="container">
@@ -470,8 +461,8 @@ while ($img = mysqli_fetch_assoc($images_result)) {
                 </div>
                 <?php endif; ?>
 
-                <!-- Image Gallery -->
-                <?php if (count($images) > 1): ?>
+                <!-- Image Gallery - Commented out until offer_media is populated -->
+                <?php /* if (count($images) > 1): ?>
                 <div class="content-section">
                     <h2 class="section-heading">
                         <i class="fas fa-images"></i>Gallery
@@ -489,7 +480,7 @@ while ($img = mysqli_fetch_assoc($images_result)) {
                         <?php endforeach; ?>
                     </div>
                 </div>
-                <?php endif; ?>
+                <?php endif; */ ?>
             </div>
 
             <!-- Right Column - Sidebar -->
@@ -611,5 +602,4 @@ while ($img = mysqli_fetch_assoc($images_result)) {
 </html>
 <?php 
 mysqli_stmt_close($stmt);
-mysqli_stmt_close($img_stmt);
 ?>

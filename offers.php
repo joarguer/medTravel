@@ -186,16 +186,8 @@ $offers_result = mysqli_stmt_get_result($stmt);
                             <div class="offer-card card h-100">
                                 <div class="position-relative">
                                     <?php 
-                                    // Obtener primera imagen de la oferta o usar placeholder
-                                    $img_query = mysqli_prepare($conexion, "SELECT image_path FROM offer_media WHERE offer_id = ? AND is_active = 1 ORDER BY is_primary DESC, sort_order ASC LIMIT 1");
-                                    mysqli_stmt_bind_param($img_query, 'i', $offer['id']);
-                                    mysqli_stmt_execute($img_query);
-                                    $img_result = mysqli_stmt_get_result($img_query);
+                                    // Usar placeholder por defecto
                                     $image_path = 'img/site/placeholder-medical.jpg';
-                                    if ($img_row = mysqli_fetch_assoc($img_result)) {
-                                        $image_path = $img_row['image_path'];
-                                    }
-                                    mysqli_stmt_close($img_query);
                                     ?>
                                     <img src="<?php echo htmlspecialchars($image_path); ?>" 
                                          class="card-img-top" 
@@ -268,6 +260,14 @@ $offers_result = mysqli_stmt_get_result($stmt);
     <script src="lib/owlcarousel/owl.carousel.min.js"></script>
     <script src="lib/lightbox/js/lightbox.min.js"></script>
     <script src="js/main.js"></script>
+    <script>
+        // Remove spinner after page load
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                document.getElementById('spinner').classList.remove('show');
+            }, 300);
+        });
+    </script>
 </body>
 </html>
 <?php mysqli_stmt_close($stmt); ?>
