@@ -167,6 +167,19 @@ $rst   = mysqli_fetch_array($busca);
                                                             <div class="form-group" id="div-empresa">
                                                                 <label class="control-label">Empresa</label>
                                                                 <select id="empresa" name="empresa" placeholder="Razón Social Empresa" class="form-control"></select></div>
+                                                            <div class="form-group" id="div-provider" style="display:none;">
+                                                                <label class="control-label">Prestador / Empresa <span class="required">*</span></label>
+                                                                <select id="provider_id" name="provider_id" class="form-control">
+                                                                    <option value="">-- Seleccione una empresa --</option>
+                                                                    <?php
+                                                                    $providers = mysqli_query($conexion, "SELECT id, name, type FROM providers WHERE is_active = 1 ORDER BY name ASC");
+                                                                    while($prov = mysqli_fetch_array($providers)) {
+                                                                        echo '<option value="'.$prov['id'].'">'.htmlspecialchars($prov['name']).' ('.ucfirst($prov['type']).')</option>';
+                                                                    }
+                                                                    ?>
+                                                                </select>
+                                                                <span class="help-block">Seleccione la empresa a la que pertenecerá este usuario</span>
+                                                            </div>
                                                             <div class="form-group">
                                                                 <label class="control-label">Número Celular</label>
                                                                 <input type="text" placeholder="3191234567" class="form-control" id="celular" name="celular" /> </div>

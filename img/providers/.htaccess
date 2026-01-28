@@ -1,0 +1,22 @@
+# Proteger directorio de logos de proveedores
+# Permitir acceso a imágenes pero denegar listado de directorios
+
+Options -Indexes
+
+# Permitir solo archivos de imagen
+<FilesMatch "\.(jpg|jpeg|png|webp|gif)$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
+
+# Denegar acceso a otros tipos de archivos
+<FilesMatch "\.">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Permitir acceso a imágenes
+<FilesMatch "\.(jpg|jpeg|png|webp|gif)$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>

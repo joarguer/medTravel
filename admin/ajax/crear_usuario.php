@@ -22,6 +22,7 @@ if($tipo == 'crear_usuario'){
         $cedula = isset($_REQUEST['cedula']) ? trim($_REQUEST['cedula']) : '';
         $rol = isset($_REQUEST['rol']) ? trim($_REQUEST['rol']) : '';
         $ppal = isset($_REQUEST['ppal']) ? (int)$_REQUEST['ppal'] : 0;
+        $provider_id = isset($_REQUEST['provider_id']) && $_REQUEST['provider_id'] !== '' ? (int)$_REQUEST['provider_id'] : null;
 
         // comprobar usuario único
         $sql_check = "SELECT id FROM usuarios WHERE usuario = ? LIMIT 1";
@@ -47,31 +48,16 @@ if($tipo == 'crear_usuario'){
         $activo = 1;
 
         // Ajustar INSERT a las columnas reales de la tabla `usuarios` en esta instalación
-        $sql_ins = "INSERT INTO usuarios (usuario, password, avatar, nombre, activo, token, empresa, ppal, usrlogin, rol, cargo, email, ciudad, telefono, celular, cambio_password) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        $sql_ins = "INSERT INTO usuarios (usuario, password, avatar, nombre, activo, token, empresa, ppal, usrlogin, rol, cargo, email, ciudad, telefono, celular, cambio_password, provider_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         if ($stmin = mysqli_prepare($conexion, $sql_ins)) {
             $usuario_val = $email; // campo `usuario`
             $usrlogin_val = $email; // campo `usrlogin`
             $cargo_val = isset($_REQUEST['cargo']) ? trim($_REQUEST['cargo']) : '';
             $ciudad_val = isset($_REQUEST['ciudad']) ? trim($_REQUEST['ciudad']) : '';
             $telefono_val = isset($_REQUEST['telefono']) ? trim($_REQUEST['telefono']) : '';
-            // tipos por columna: usuario(s), password(s), avatar(s), nombre(s), activo(i), token(s), empresa(s), ppal(i), usrlogin(s), rol(s), cargo(s), email(s), ciudad(s), telefono(s), celular(s), cambio_password(i)
-            $types = 'ssssississsssssi';
-            mysqli_stmt_bind_param($stmin, $types, $usuario_val, $password, $avatar_default, $fullnombre, $activo, $token, $rasocial, $ppal, $usrlogin_val, $rol, $cargo_val, $email, $ciudad_val, $telefono_val, $celular, $cambio_password);
-            $exec = mysqli_stmt_execute($stmin);
-            if ($exec === false) {
-                $resultados['error'] = mysqli_stmt_error($stmin);
-                $resultados['status'] = null;
-            } else {
-                $id_creado = mysqli_insert_id($conexion);
-                $resultados['status'] = true;
-                $resultados['id'] = $id_creado;
-            }
-            // debug log
-            error_log('crear_usuario branch resultados: ' . print_r($resultados, true));
-            mysqli_stmt_close($stmin);
-        } else {
-            $resultados['error'] = mysqli_error($conexion);
-            $resultados['status'] = null;
+            // tipos por columna: usuario(s), password(s), avatar(s), nombre(s), activo(i), token(s), empresa(s), ppal(i), usrlogin(s), rol(s), cargo(s), email(s), ciudad(s), telefono(s), celular(s), cambio_password(i), provider_id(i)
+            $types = 'ssssississsssssii';
+            mysqli_stmt_bind_param($stmin, $types, $usuario_val, $password, $avatar_default, $fullnombre, $activo, $token, $rasocial, $ppal, $usrlogin_val, $rol, $cargo_val, $email, $ciudad_val, $telefono_val, $celular, $cambio_password, $provider_id);
         }
 }
 

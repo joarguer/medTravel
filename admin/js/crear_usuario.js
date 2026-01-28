@@ -19,6 +19,26 @@ $(document).ready(function(){
             $('#empresa').select2();
         }
     });
+    
+    // Detectar cambio en los radio buttons de rol
+    $('input[name="radio1"]').on('change', function() {
+        let rol = $(this).val();
+        // Si es rol 4 (Proveedor), mostrar dropdown de providers
+        if (rol === '4') {
+            $('#div-provider').show();
+            $('#provider_id').attr('required', true);
+        } else {
+            $('#div-provider').hide();
+            $('#provider_id').attr('required', false);
+            $('#provider_id').val('');
+        }
+    });
+    
+    // Verificar rol inicial al cargar (si está marcado Proveedor)
+    if ($('#option4').is(':checked')) {
+        $('#div-provider').show();
+        $('#provider_id').attr('required', true);
+    }
 });
 
 $('#btn-crea-usuario').click(function(e){

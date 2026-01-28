@@ -222,7 +222,13 @@ $top_header =  '<div class="clearfix navbar-fixed-top">
                     <!-- BEGIN USER PROFILE -->
                     <div class="btn-group-img btn-group">
                         <button type="button" class="btn btn-sm md-skip dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
-                            <span>Hi, '.$nombre_usuario.'</span>
+                            <span>Hi, '.$nombre_usuario.' ';
+if ($es_admin) {
+    $top_header .= '<span class="badge badge-danger">ADMIN</span>';
+} elseif ($es_prestador) {
+    $top_header .= '<span class="badge badge-info">PRESTADOR</span>';
+}
+$top_header .= '</span>
                             <img src="admin/'.$avatar.'" alt="" id="avatar_header"> </button>
                         <ul class="dropdown-menu-v2" role="menu">
                             <li>
@@ -271,7 +277,7 @@ $top_header =  '<div class="clearfix navbar-fixed-top">
 
 // Detectar página actual para activar pestaña del menú
 $current_page = basename($_SERVER['PHP_SELF']);
-$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php');
+$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','blog_edit.php');
 $is_admin_page = in_array($current_page, $admin_pages);
 $is_site_page = $es_admin && in_array($current_page, $site_pages);
@@ -330,6 +336,14 @@ if ($es_admin || $es_prestador) {
     $top_header_2 .=               '<li class="'.($current_page === 'provider_offers.php' ? 'active' : '').'">
                                     <a href="./provider_offers.php"> 
                                     <i class="icon-list"></i> Mis Ofertas </a>
+                                </li>';
+}
+
+// Mi Empresa: solo visible a prestadores (NO a admin, porque admin gestiona todas las empresas en "Prestadores")
+if ($es_prestador && !$es_admin) {
+    $top_header_2 .=               '<li class="'.($current_page === 'mi_empresa.php' ? 'active' : '').'">
+                                    <a href="./mi_empresa.php"> 
+                                    <i class="icon-organization"></i> Mi Empresa </a>
                                 </li>';
 }
 
