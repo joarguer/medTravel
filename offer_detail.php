@@ -1,38 +1,50 @@
 <?php
+// Activar reporte de errores para debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 include('inc/include.php');
 
 // Obtener ID de la oferta
 $offer_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
 if ($offer_id == 0) {
-    header('Location: offers.php');
-    exit();
+    die('ID de oferta inválido');
 }
 
-// Consulta de la oferta con información del prestador
+// Consulta simplificada primero para verificar
 $query = "
     SELECT 
-        o.id, o.title, o.description, o.price_from, o.currency, o.duration,
-        o.includes, o.not_includes, o.requirements, o.recovery_time,
-        p.id as provider_id, p.name as provider_name, p.description as provider_description,
-        p.city, p.address, p.phone, p.email, p.website, p.logo,
-        sc.id as service_id, sc.name as service_name, sc.icon as service_icon,
-        scat.name as category_name
+        o.id, o.title, o.description, o.price_from, o.currency,
+        p.id as provider_id, p.name as provider_name, 
+        p.city, p.phone, p.email, p.logo
     FROM provider_service_offers o
     INNER JOIN providers p ON o.provider_id = p.id
-    INNER JOIN service_catalog sc ON o.service_id = sc.id
-    INNER JOIN service_categories scat ON sc.category_id = scat.id
-    WHERE o.id = ? AND o.is_active = 1 AND p.is_active = 1
+    WHERE o.id = ? AND o.is_active = 1
     LIMIT 1
 ";
 
 $stmt = mysqli_prepare($conexion, $query);
+if (!$stmt) {
+    die('Error en prepare: ' . mysqli_error($conexion));
+}
+
 mysqli_stmt_bind_param($stmt, "i", $offer_id);
-mysqli_stmt_execute($stmt);
+if (!mysqli_stmt_execute($stmt)) {
+    die('Error en execute: ' . mysqli_stmt_error($stmt));
+}
+
 $result = mysqli_stmt_get_result($stmt);
 
 if (mysqli_num_rows($result) == 0) {
-    header('Location: offers.php');
+    // Mensaje de debug más útil
+    echo '<!DOCTYPE html><html><head><title>Offer Not Found</title></head><body>';
+    echo '<div style="max-width:800px;margin:100px auto;padding:40px;background:#f7fafc;border-radius:20px;text-align:center;">';
+    echo '<h1 style="color:#667eea;margin-bottom:20px;">🔍 Oferta No Encontrada</h1>';
+    echo '<p style="font-size:18px;color:#4a5568;margin-bottom:30px;">La oferta con ID <strong>' . $offer_id . '</strong> no existe o no está activa.</p>';
+    echo '<a href="offers.php" style="display:inline-block;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;padding:15px 40px;border-radius:30px;text-decoration:none;font-weight:bold;">← Ver Todas las Ofertas</a>';
+    echo '</div></body></html>';
+    mysqli_stmt_close($stmt);
     exit();
 }
 
@@ -335,11 +347,11 @@ $images = [];
                 <div class="breadcrumb-custom mb-4">
                     <a href="index.php">Home</a> / 
                     <a href="offers.php">Services</a> / 
-                    <span><?php echo htmlspecialchars($offer['category_name']); ?></span>
+                    <span>Detail</span>
                 </div>
                 <span class="hero-service-badge">
-                    <i class="fas <?php echo !empty($offer['service_icon']) ? $offer['service_icon'] : 'fa-medkit'; ?>"></i>
-                    <?php echo htmlspecialchars($offer['service_name']); ?>
+                    <i class="fas fa-medkit"></i>
+                    Medical Service
                 </span>
                 <h1 class="hero-title"><?php echo htmlspecialchars($offer['title']); ?></h1>
                 <div class="info-badge" style="background: rgba(255,255,255,0.2); color: white;">
@@ -369,23 +381,26 @@ $images = [];
                         <?php echo nl2br(htmlspecialchars($offer['description'])); ?>
                     </p>
                     
-                    <?php if (!empty($offer['duration'])): ?>
+                    <!-- Campos opcionales comentados hasta que existan en la tabla -->
+                    <?php /* if (!empty($offer['duration'])): ?>
                         <div class="mt-4">
                             <span class="info-badge">
                                 <i class="fas fa-clock"></i>Duration: <?php echo htmlspecialchars($offer['duration']); ?>
                             </span>
                         </div>
-                    <?php endif; ?>
+                    <?php endif; */ ?>
                     
-                    <?php if (!empty($offer['recovery_time'])): ?>
+                    <?php /* if (!empty($offer['recovery_time'])): ?>
                         <div class="mt-2">
                             <span class="info-badge">
                                 <i class="fas fa-heartbeat"></i>Recovery: <?php echo htmlspecialchars($offer['recovery_time']); ?>
                             </span>
                         </div>
-                    <?php endif; ?>
+                    <?php endif; */ ?>
                 </div>
 
+                <!-- Secciones opcionales comentadas -->
+                <?php /* 
                 <!-- What's Included -->
                 <?php if (!empty($offer['includes'])): ?>
                 <div class="content-section">
