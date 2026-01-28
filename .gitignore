@@ -8,3 +8,4 @@ admin/include/conexion.local.php
 img/surgeon/*Instagram*
 # Logs
 admin/logs/*.log
+.vscode/sftp.json

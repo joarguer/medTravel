@@ -30,6 +30,28 @@ $n = 1;
         <!-- BEGIN PAGE LEVEL STYLES -->
         <link href="../../assets/pages/css/about.css" rel="stylesheet" type="text/css" />
         <!-- END PAGE LEVEL STYLES -->
+        <style>
+            .guide-item {
+                margin-bottom: 28px;
+            }
+            .guide-img {
+                padding: 10px;
+            }
+            .guide-img-efects {
+                padding: 0;
+                border-radius: 10px;
+                overflow: hidden;
+            }
+            .guide-img-efects img {
+                width: 100%;
+                display: block;
+                object-fit: cover;
+                height: 320px;
+            }
+            .guide-icon .btn {
+                margin: 0 4px;
+            }
+        </style>
         <?php echo $theme_layout_style;?>
         <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
     </head>

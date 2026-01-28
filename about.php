@@ -1,8 +1,8 @@
 <?php
 include('inc/include.php'); ; 
-$busca_header = mysqli_query($conexion,"SELECT * FROM about_header WHERE activo = '0' ORDER BY id ASC");
+$busca_header = mysqli_query($conexion,"SELECT * FROM about_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 $rst_header = mysqli_fetch_array($busca_header);
-$busca_us = mysqli_query($conexion,"SELECT * FROM about_us WHERE activo = '0' ORDER BY id ASC");
+$busca_us = mysqli_query($conexion,"SELECT * FROM about_us WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 $rst_us = mysqli_fetch_array($busca_us);
 ?>
 <!DOCTYPE html>
@@ -86,27 +86,27 @@ $rst_us = mysqli_fetch_array($busca_us);
                     <h5 class="section-title px-3">Our Specialist</h5>
                     <h1 class="mb-0">Meet Our Specialist</h1>
                 </div>
-                <div class="row g-4">
+                <div class="row g-4 justify-content-center">
                     <?php 
                     $busca_specialist = mysqli_query($conexion,"SELECT * FROM specialist_list WHERE activo = '0' ORDER BY id ASC");
                     while($rst_specialist = mysqli_fetch_array($busca_specialist)){
                     ?>
-                    <div class="col-md-6 col-lg-3">
-                        <div class="guide-item">
-                            <div class="guide-img">
+                    <div class="col-sm-6 col-md-4 col-lg-3">
+                        <div class="guide-item h-100 d-flex flex-column">
+                            <div class="guide-img flex-shrink-0">
                                 <div class="guide-img-efects">
-                                    <img src="<?php echo $rst_specialist['img'];?>" class="img-fluid w-100 rounded-top" alt="Image">
+                                    <img src="<?php echo $rst_specialist['img'];?>" class="img-fluid w-100 rounded-top" alt="<?php echo $rst_specialist['titulo'];?>" style="height: 320px; object-fit: cover;">
                                 </div>
                                 <div class="guide-icon rounded-pill p-2">
-                                    <a class="btn btn-square btn-primary rounded-circle mx-1" href="<?php echo $rst_specialist['facebook'];?>"><i class="fab fa-facebook-f"></i></a>
-                                    <a class="btn btn-square btn-primary rounded-circle mx-1" href="<?php echo $rst_specialist['twiter'];?>"><i class="fab fa-twitter"></i></a>
-                                    <a class="btn btn-square btn-primary rounded-circle mx-1" href="<?php echo $rst_specialist['instagram'];?>"><i class="fab fa-instagram"></i></a>
+                                    <a class="btn btn-square btn-primary rounded-circle mx-1" href="<?php echo $rst_specialist['facebook'];?>" target="_blank"><i class="fab fa-facebook-f"></i></a>
+                                    <a class="btn btn-square btn-primary rounded-circle mx-1" href="<?php echo $rst_specialist['twiter'];?>" target="_blank"><i class="fab fa-twitter"></i></a>
+                                    <a class="btn btn-square btn-primary rounded-circle mx-1" href="<?php echo $rst_specialist['instagram'];?>" target="_blank"><i class="fab fa-instagram"></i></a>
                                 </div>
                             </div>
-                            <div class="guide-title text-center rounded-bottom p-4">
+                            <div class="guide-title text-center rounded-bottom p-4 flex-grow-1 d-flex flex-column justify-content-center">
                                 <div class="guide-title-inner">
-                                    <h4 class="mt-3"><?php echo $rst_specialist['titulo'];?></h4>
-                                    <p class="mb-0"><?php echo $rst_specialist['subtitulo'];?></p>
+                                    <h4 class="mt-2 mb-3"><?php echo $rst_specialist['titulo'];?></h4>
+                                    <p class="mb-0 text-muted"><?php echo $rst_specialist['subtitulo'];?></p>
                                 </div>
                             </div>
                         </div>
