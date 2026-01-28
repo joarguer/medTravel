@@ -4,3 +4,7 @@ img/surgeon/*_files/
 img/surgeon/**/Fotos y videos de Instagram_files/
 *.heic
 .env
+admin/include/conexion.local.php
+img/surgeon/*Instagram*
+# Logs
+admin/logs/*.log
