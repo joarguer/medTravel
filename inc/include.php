@@ -65,7 +65,7 @@ $topbar = '<div class="container-fluid bg-primary px-5 d-none d-lg-block">
 
 // Cargar categorías de servicio dinámicamente
 $categories_query = "SELECT id, name, icon FROM service_categories WHERE is_active = 1 ORDER BY name";
-$categories_result = $conn->query($categories_query);
+$categories_result = $conexion->query($categories_query);
 $categories_menu = '';
 if ($categories_result && $categories_result->num_rows > 0) {
     while ($cat = $categories_result->fetch_assoc()) {

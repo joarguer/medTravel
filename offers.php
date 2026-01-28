@@ -1,0 +1,273 @@
+<?php
+include('inc/include.php');
+
+// Obtener categoría del parámetro GET
+$category_id = isset($_GET['category']) ? (int)$_GET['category'] : 0;
+$category_name = 'All Services';
+
+// Obtener información de la categoría si existe
+if ($category_id > 0) {
+    $cat_query = mysqli_prepare($conexion, "SELECT name, description FROM service_categories WHERE id = ? LIMIT 1");
+    mysqli_stmt_bind_param($cat_query, 'i', $category_id);
+    mysqli_stmt_execute($cat_query);
+    $cat_result = mysqli_stmt_get_result($cat_query);
+    if ($cat_row = mysqli_fetch_assoc($cat_result)) {
+        $category_name = htmlspecialchars($cat_row['name']);
+    }
+    mysqli_stmt_close($cat_query);
+}
+
+// Obtener ofertas activas con sus prestadores
+if ($category_id > 0) {
+    // Filtrar por categoría
+    $offers_query = "
+        SELECT 
+            o.id, o.title, o.description, o.price_from, o.currency,
+            p.id as provider_id, p.name as provider_name, p.city, p.logo,
+            sc.name as service_name
+        FROM provider_service_offers o
+        INNER JOIN providers p ON o.provider_id = p.id
+        INNER JOIN service_catalog sc ON o.service_id = sc.id
+        WHERE o.is_active = 1 AND p.is_active = 1 AND sc.category_id = ?
+        ORDER BY o.created_at DESC
+    ";
+    $stmt = mysqli_prepare($conexion, $offers_query);
+    mysqli_stmt_bind_param($stmt, 'i', $category_id);
+} else {
+    // Todas las ofertas
+    $offers_query = "
+        SELECT 
+            o.id, o.title, o.description, o.price_from, o.currency,
+            p.id as provider_id, p.name as provider_name, p.city, p.logo,
+            sc.name as service_name
+        FROM provider_service_offers o
+        INNER JOIN providers p ON o.provider_id = p.id
+        INNER JOIN service_catalog sc ON o.service_id = sc.id
+        WHERE o.is_active = 1 AND p.is_active = 1
+        ORDER BY o.created_at DESC
+    ";
+    $stmt = mysqli_prepare($conexion, $offers_query);
+}
+
+mysqli_stmt_execute($stmt);
+$offers_result = mysqli_stmt_get_result($stmt);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <?php echo $head; ?>
+    <style>
+        .offer-card {
+            transition: all 0.3s ease;
+            border: none;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+        .offer-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        .offer-card .card-img-top {
+            height: 250px;
+            object-fit: cover;
+        }
+        .provider-logo {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            position: absolute;
+            top: 210px;
+            left: 20px;
+        }
+        .price-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 18px;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .service-badge {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .provider-name {
+            color: #667eea;
+            font-weight: 600;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .city-tag {
+            color: #999;
+            font-size: 13px;
+        }
+        .btn-view-offer {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-view-offer:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            color: white;
+        }
+        .category-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 80px 0;
+            margin-bottom: 50px;
+        }
+        .no-offers {
+            text-align: center;
+            padding: 100px 20px;
+        }
+        .no-offers i {
+            font-size: 80px;
+            color: #ddd;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Spinner Start -->
+    <div id="spinner" class="show bg-white position-fixed translate-middle w-100 vh-100 top-50 start-50 d-flex align-items-center justify-content-center">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
+    <!-- Spinner End -->
+
+    <!-- Navbar Start -->
+    <div class="container-fluid position-relative p-0">
+        <nav class="navbar navbar-expand-lg navbar-light px-4 px-lg-5 py-3 py-lg-0">
+            <?php echo $logo; ?>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse">
+                <span class="fa fa-bars"></span>
+            </button>
+            <?php echo $menu; ?>
+        </nav>
+    </div>
+    <!-- Navbar End -->
+
+    <!-- Header Start -->
+    <div class="category-header">
+        <div class="container text-center">
+            <h5 class="text-white-50 mb-3">MEDICAL SERVICES</h5>
+            <h1 class="display-3 text-white mb-4"><?php echo $category_name; ?></h1>
+            <p class="text-white-50 mb-0">Discover quality medical services from verified providers</p>
+        </div>
+    </div>
+    <!-- Header End -->
+
+    <!-- Offers Start -->
+    <div class="container-fluid py-5">
+        <div class="container py-5">
+            <?php if (mysqli_num_rows($offers_result) > 0): ?>
+                <div class="row g-4">
+                    <?php while ($offer = mysqli_fetch_assoc($offers_result)): ?>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="offer-card card h-100">
+                                <div class="position-relative">
+                                    <?php 
+                                    // Obtener primera imagen de la oferta o usar placeholder
+                                    $img_query = mysqli_prepare($conexion, "SELECT image_path FROM offer_media WHERE offer_id = ? AND is_active = 1 ORDER BY is_primary DESC, sort_order ASC LIMIT 1");
+                                    mysqli_stmt_bind_param($img_query, 'i', $offer['id']);
+                                    mysqli_stmt_execute($img_query);
+                                    $img_result = mysqli_stmt_get_result($img_query);
+                                    $image_path = 'img/site/placeholder-medical.jpg';
+                                    if ($img_row = mysqli_fetch_assoc($img_result)) {
+                                        $image_path = $img_row['image_path'];
+                                    }
+                                    mysqli_stmt_close($img_query);
+                                    ?>
+                                    <img src="<?php echo htmlspecialchars($image_path); ?>" 
+                                         class="card-img-top" 
+                                         alt="<?php echo htmlspecialchars($offer['title']); ?>"
+                                         onerror="this.src='img/site/placeholder-medical.jpg'">
+                                    
+                                    <?php if ($offer['price_from']): ?>
+                                        <div class="price-badge">
+                                            From <?php echo $offer['currency']; ?> <?php echo number_format($offer['price_from'], 2); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <?php if ($offer['logo']): ?>
+                                        <img src="admin/img/providers/<?php echo $offer['provider_id']; ?>/<?php echo htmlspecialchars($offer['logo']); ?>" 
+                                             class="provider-logo" 
+                                             alt="<?php echo htmlspecialchars($offer['provider_name']); ?>"
+                                             onerror="this.style.display='none'">
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <div class="card-body">
+                                    <span class="service-badge"><?php echo htmlspecialchars($offer['service_name']); ?></span>
+                                    
+                                    <h5 class="card-title mb-3">
+                                        <?php echo htmlspecialchars($offer['title']); ?>
+                                    </h5>
+                                    
+                                    <p class="card-text text-muted" style="height: 60px; overflow: hidden;">
+                                        <?php echo htmlspecialchars(substr($offer['description'], 0, 120)) . '...'; ?>
+                                    </p>
+                                    
+                                    <div class="provider-name">
+                                        <i class="fas fa-hospital-alt me-2"></i><?php echo htmlspecialchars($offer['provider_name']); ?>
+                                    </div>
+                                    
+                                    <?php if ($offer['city']): ?>
+                                        <div class="city-tag">
+                                            <i class="fas fa-map-marker-alt me-1"></i><?php echo htmlspecialchars($offer['city']); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    
+                                    <div class="mt-4">
+                                        <a href="offer_detail.php?id=<?php echo $offer['id']; ?>" class="btn btn-view-offer w-100">
+                                            View Details <i class="fas fa-arrow-right ms-2"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endwhile; ?>
+                </div>
+            <?php else: ?>
+                <div class="no-offers">
+                    <i class="fas fa-inbox"></i>
+                    <h3 class="text-muted mb-3">No offers available yet</h3>
+                    <p class="text-muted">Check back soon for new medical services in this category</p>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <!-- Offers End -->
+
+    <?php echo $footer; ?>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="lib/easing/easing.min.js"></script>
+    <script src="lib/waypoints/waypoints.min.js"></script>
+    <script src="lib/owlcarousel/owl.carousel.min.js"></script>
+    <script src="lib/lightbox/js/lightbox.min.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
+<?php mysqli_stmt_close($stmt); ?>

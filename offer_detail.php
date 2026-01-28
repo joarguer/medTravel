@@ -26,7 +26,7 @@ $query = "
     LIMIT 1
 ";
 
-$stmt = mysqli_prepare($conn, $query);
+$stmt = mysqli_prepare($conexion, $query);
 mysqli_stmt_bind_param($stmt, "i", $offer_id);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
@@ -40,7 +40,7 @@ $offer = mysqli_fetch_assoc($result);
 
 // Obtener imágenes de la oferta
 $images_query = "SELECT image_path, is_primary FROM offer_media WHERE offer_id = ? ORDER BY is_primary DESC, sort_order ASC";
-$img_stmt = mysqli_prepare($conn, $images_query);
+$img_stmt = mysqli_prepare($conexion, $images_query);
 mysqli_stmt_bind_param($img_stmt, "i", $offer_id);
 mysqli_stmt_execute($img_stmt);
 $images_result = mysqli_stmt_get_result($img_stmt);
