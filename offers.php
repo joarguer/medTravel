@@ -29,7 +29,7 @@ if ($category_id > 0) {
         INNER JOIN providers p ON o.provider_id = p.id
         INNER JOIN service_catalog sc ON o.service_id = sc.id
         WHERE o.is_active = 1 AND p.is_active = 1 AND sc.category_id = ?
-        ORDER BY o.created_at DESC
+        ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);
     mysqli_stmt_bind_param($stmt, 'i', $category_id);
@@ -44,7 +44,7 @@ if ($category_id > 0) {
         INNER JOIN providers p ON o.provider_id = p.id
         INNER JOIN service_catalog sc ON o.service_id = sc.id
         WHERE o.is_active = 1 AND p.is_active = 1
-        ORDER BY o.created_at DESC
+        ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);
 }
