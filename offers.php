@@ -275,12 +275,33 @@ $offers_result = mysqli_stmt_get_result($stmt);
     <script src="lib/lightbox/js/lightbox.min.js"></script>
     <script src="js/main.js"></script>
     <script>
-        // Remove spinner after page load
+        // Remove spinner immediately and on load
+        (function() {
+            var spinner = document.getElementById('spinner');
+            if (spinner) {
+                setTimeout(function() {
+                    spinner.classList.remove('show');
+                    spinner.style.display = 'none';
+                }, 500);
+            }
+        })();
+        
         window.addEventListener('load', function() {
-            setTimeout(function() {
-                document.getElementById('spinner').classList.remove('show');
-            }, 300);
+            var spinner = document.getElementById('spinner');
+            if (spinner) {
+                spinner.classList.remove('show');
+                spinner.style.display = 'none';
+            }
         });
+        
+        // Force hide after 2 seconds regardless
+        setTimeout(function() {
+            var spinner = document.getElementById('spinner');
+            if (spinner) {
+                spinner.classList.remove('show');
+                spinner.style.display = 'none';
+            }
+        }, 2000);
     </script>
 </body>
 </html>
