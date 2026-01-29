@@ -2,75 +2,93 @@
 include("../include/include.php");
 requireAuth();
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-    $title = isset($_POST['title']) ? trim($_POST['title']) : '';
-    $subtitle_1 = isset($_POST['subtitle_1']) ? trim($_POST['subtitle_1']) : '';
-    $subtitle_2 = isset($_POST['subtitle_2']) ? trim($_POST['subtitle_2']) : '';
+$tipo = isset($_POST['tipo']) ? $_POST['tipo'] : '';
+
+// Obtener datos del header
+if ($tipo == 'get_header') {
+    $query = mysqli_query($conexion, "SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+    $header = mysqli_fetch_assoc($query);
     
-    if (empty($title)) {
-        echo json_encode(['success' => false, 'message' => 'El título es requerido']);
+    if (!$header) {
+        // Si no existe, crear uno por defecto
+        mysqli_query($conexion, "INSERT INTO services_header (title, subtitle_1, subtitle_2, activo) VALUES ('Our Medical Services', 'MEDICAL SERVICES', 'Discover quality medical services from verified providers', 0)");
+        $query = mysqli_query($conexion, "SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+        $header = mysqli_fetch_assoc($query);
+    }
+    
+    echo json_encode(['header' => $header]);
+    exit;
+}
+
+// Editar campo individual
+if ($tipo == 'edit_campo') {
+    $campo = isset($_POST['campo']) ? $_POST['campo'] : '';
+    $valor = isset($_POST['valor']) ? $_POST['valor'] : '';
+    $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+    
+    $campos_permitidos = ['title', 'subtitle_1', 'subtitle_2'];
+    
+    if (!in_array($campo, $campos_permitidos)) {
+        echo json_encode(['success' => false, 'message' => 'Campo no válido']);
         exit;
     }
     
-    // Manejar el upload de imagen
-    $bg_image = null;
-    if (isset($_FILES['bg_image']) && $_FILES['bg_image']['error'] === UPLOAD_ERR_OK) {
+    $stmt = mysqli_prepare($conexion, "UPDATE services_header SET $campo = ? WHERE id = ?");
+    mysqli_stmt_bind_param($stmt, 'si', $valor, $id);
+    
+    if (mysqli_stmt_execute($stmt)) {
+        echo json_encode(['success' => true, 'message' => 'Campo actualizado correctamente']);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Error al actualizar: ' . mysqli_error($conexion)]);
+    }
+    
+    mysqli_stmt_close($stmt);
+    exit;
+}
+
+// Subir imagen
+if ($tipo == 'upload_image') {
+    $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+    
+    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
         $upload_dir = '../../img/site/';
         
-        // Crear directorio si no existe
         if (!is_dir($upload_dir)) {
             mkdir($upload_dir, 0755, true);
         }
         
-        $file_extension = strtolower(pathinfo($_FILES['bg_image']['name'], PATHINFO_EXTENSION));
+        $file_extension = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
         $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         
         if (!in_array($file_extension, $allowed_extensions)) {
-            echo json_encode(['success' => false, 'message' => 'Formato de imagen no válido. Use JPG, PNG, GIF o WEBP']);
+            echo json_encode(['success' => false, 'message' => 'Formato de imagen no válido']);
             exit;
         }
         
-        // Generar nombre único
         $new_filename = 'services-header-' . time() . '.' . $file_extension;
         $upload_path = $upload_dir . $new_filename;
         
-        if (move_uploaded_file($_FILES['bg_image']['tmp_name'], $upload_path)) {
+        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
             $bg_image = 'img/site/' . $new_filename;
+            
+            $stmt = mysqli_prepare($conexion, "UPDATE services_header SET bg_image = ? WHERE id = ?");
+            mysqli_stmt_bind_param($stmt, 'si', $bg_image, $id);
+            
+            if (mysqli_stmt_execute($stmt)) {
+                echo json_encode(['success' => true, 'message' => 'Imagen actualizada correctamente']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Error al guardar en BD']);
+            }
+            
+            mysqli_stmt_close($stmt);
         } else {
             echo json_encode(['success' => false, 'message' => 'Error al subir la imagen']);
-            exit;
-        }
-    }
-    
-    if ($id > 0) {
-        // Actualizar
-        if ($bg_image) {
-            $stmt = mysqli_prepare($conexion, "UPDATE services_header SET title = ?, subtitle_1 = ?, subtitle_2 = ?, bg_image = ? WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, 'ssssi', $title, $subtitle_1, $subtitle_2, $bg_image, $id);
-        } else {
-            $stmt = mysqli_prepare($conexion, "UPDATE services_header SET title = ?, subtitle_1 = ?, subtitle_2 = ? WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, 'sssi', $title, $subtitle_1, $subtitle_2, $id);
         }
     } else {
-        // Insertar
-        if ($bg_image) {
-            $stmt = mysqli_prepare($conexion, "INSERT INTO services_header (title, subtitle_1, subtitle_2, bg_image, activo) VALUES (?, ?, ?, ?, 0)");
-            mysqli_stmt_bind_param($stmt, 'ssss', $title, $subtitle_1, $subtitle_2, $bg_image);
-        } else {
-            $stmt = mysqli_prepare($conexion, "INSERT INTO services_header (title, subtitle_1, subtitle_2, activo) VALUES (?, ?, ?, 0)");
-            mysqli_stmt_bind_param($stmt, 'sss', $title, $subtitle_1, $subtitle_2);
-        }
+        echo json_encode(['success' => false, 'message' => 'No se recibió ninguna imagen']);
     }
-    
-    if (mysqli_stmt_execute($stmt)) {
-        echo json_encode(['success' => true, 'message' => 'Configuración guardada exitosamente']);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Error al guardar: ' . mysqli_error($conexion)]);
-    }
-    
-    mysqli_stmt_close($stmt);
-} else {
-    echo json_encode(['success' => false, 'message' => 'Método no permitido']);
+    exit;
 }
+
+echo json_encode(['success' => false, 'message' => 'Tipo de operación no válido']);
 ?>
