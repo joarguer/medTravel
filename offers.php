@@ -38,11 +38,12 @@ if ($category_id > 0) {
         SELECT 
             o.id, o.title, o.description, o.price_from, o.currency,
             p.id as provider_id, p.name as provider_name, p.city, p.logo,
-            sc.name as service_name
+            sc.name as service_name,
+            (SELECT file_path FROM offer_media WHERE offer_id = o.id AND media_type = 'image' ORDER BY id ASC LIMIT 1) as main_image
         FROM provider_service_offers o
         INNER JOIN providers p ON o.provider_id = p.id
         INNER JOIN service_catalog sc ON o.service_id = sc.id
-        WHERE o.is_active = 1 AND p.is_active = 1 AND sc.category_id = ?
+        WHERE sc.category_id = ?
         ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);
@@ -53,11 +54,11 @@ if ($category_id > 0) {
         SELECT 
             o.id, o.title, o.description, o.price_from, o.currency,
             p.id as provider_id, p.name as provider_name, p.city, p.logo,
-            sc.name as service_name
+            sc.name as service_name,
+            (SELECT file_path FROM offer_media WHERE offer_id = o.id AND media_type = 'image' ORDER BY id ASC LIMIT 1) as main_image
         FROM provider_service_offers o
         INNER JOIN providers p ON o.provider_id = p.id
         INNER JOIN service_catalog sc ON o.service_id = sc.id
-        WHERE o.is_active = 1 AND p.is_active = 1
         ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);
@@ -200,12 +201,19 @@ $offers_result = mysqli_stmt_get_result($stmt);
                             <div class="offer-card card h-100">
                                 <div class="position-relative">
                                     <?php 
-                                    // Usar placeholder por defecto con data URI para evitar 404
-                                    $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f0f0f0" width="400" height="300"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedical Service%3C/text%3E%3C/svg%3E';
+                                    // Determinar qué imagen usar
+                                    if (!empty($offer['main_image'])) {
+                                        // Imagen de la oferta desde offer_media
+                                        $image_path = htmlspecialchars($offer['main_image']);
+                                    } else {
+                                        // Placeholder SVG si no hay imagen
+                                        $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f0f0f0" width="400" height="300"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedical Service%3C/text%3E%3C/svg%3E';
+                                    }
                                     ?>
                                     <img src="<?php echo $image_path; ?>" 
                                          class="card-img-top" 
-                                         alt="<?php echo htmlspecialchars($offer['title']); ?>">
+                                         alt="<?php echo htmlspecialchars($offer['title']); ?>"
+                                         onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22400%22 height=%22300%22/%3E%3Ctext fill=%22%23999%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-family=%22Arial%22 font-size=%2218%22%3EMedical Service%3C/text%3E%3C/svg%3E';">
                                     
                                     <?php if ($offer['price_from']): ?>
                                         <div class="price-badge">
