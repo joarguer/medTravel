@@ -8,11 +8,13 @@ if(mysqli_num_rows($busca_header) > 0) {
     $page_title = $rst_header['title'];
     $page_subtitle_1 = $rst_header['subtitle_1'];
     $page_subtitle_2 = $rst_header['subtitle_2'];
+    $bg_image = $rst_header['bg_image'];
 } else {
     // Valores por defecto si no existe configuración
     $page_title = 'Our Medical Services';
     $page_subtitle_1 = 'MEDICAL SERVICES';
     $page_subtitle_2 = 'Discover quality medical services from verified providers';
+    $bg_image = '';
 }
 
 // Obtener categoría del parámetro GET
@@ -180,7 +182,11 @@ $offers_result = mysqli_stmt_get_result($stmt);
     <!-- Navbar End -->
 
     <!-- Header Start -->
-    <div class="category-header">
+    <div class="category-header" style="<?php 
+        if (!empty($bg_image)) {
+            echo 'background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(' . htmlspecialchars($bg_image) . '); background-size: cover; background-position: center;';
+        }
+    ?>">
         <div class="container text-center">
             <h5 class="text-white-50 mb-3"><?php echo htmlspecialchars($page_subtitle_1); ?></h5>
             <h1 class="display-3 text-white mb-4"><?php echo htmlspecialchars($category_name); ?></h1>
