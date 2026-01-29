@@ -41,6 +41,46 @@ CREATE TABLE IF NOT EXISTS service_categories (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Agregar columnas si no existen
+SET @dbname = DATABASE();
+SET @tablename = 'service_categories';
+
+-- Verificar y agregar columna icon
+SET @columnname = 'icon';
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE table_name = @tablename AND table_schema = @dbname AND column_name = @columnname) > 0,
+  'SELECT 1',
+  CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' VARCHAR(100) DEFAULT NULL AFTER description')
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- Verificar y agregar columna is_active
+SET @columnname = 'is_active';
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE table_name = @tablename AND table_schema = @dbname AND column_name = @columnname) > 0,
+  'SELECT 1',
+  CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' TINYINT(1) NOT NULL DEFAULT 1 AFTER icon')
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- Verificar y agregar columna created_at
+SET @columnname = 'created_at';
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE table_name = @tablename AND table_schema = @dbname AND column_name = @columnname) > 0,
+  'SELECT 1',
+  CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER is_active')
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
 -- =======================================================
 -- 4. TABLA: service_catalog (Catálogo de servicios)
 -- =======================================================
@@ -52,9 +92,61 @@ CREATE TABLE IF NOT EXISTS service_catalog (
   icon VARCHAR(100) DEFAULT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  KEY idx_category_id (category_id),
-  CONSTRAINT fk_service_category FOREIGN KEY (category_id) REFERENCES service_categories (id) ON DELETE CASCADE
+  KEY idx_category_id (category_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Agregar columnas si no existen
+SET @tablename = 'service_catalog';
+
+-- Verificar y agregar columna icon
+SET @columnname = 'icon';
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE table_name = @tablename AND table_schema = @dbname AND column_name = @columnname) > 0,
+  'SELECT 1',
+  CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' VARCHAR(100) DEFAULT NULL AFTER description')
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- Verificar y agregar columna is_active
+SET @columnname = 'is_active';
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE table_name = @tablename AND table_schema = @dbname AND column_name = @columnname) > 0,
+  'SELECT 1',
+  CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' TINYINT(1) NOT NULL DEFAULT 1 AFTER icon')
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- Verificar y agregar columna created_at
+SET @columnname = 'created_at';
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+   WHERE table_name = @tablename AND table_schema = @dbname AND column_name = @columnname) > 0,
+  'SELECT 1',
+  CONCAT('ALTER TABLE ', @tablename, ' ADD COLUMN ', @columnname, ' DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER is_active')
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+-- Agregar foreign key si no existe (puede fallar si ya existe, se ignora)
+SET @fk_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                  WHERE CONSTRAINT_SCHEMA = @dbname 
+                  AND TABLE_NAME = @tablename 
+                  AND CONSTRAINT_NAME = 'fk_service_category');
+                  
+SET @preparedStatement = IF(@fk_exists = 0,
+  'ALTER TABLE service_catalog ADD CONSTRAINT fk_service_category FOREIGN KEY (category_id) REFERENCES service_categories (id) ON DELETE CASCADE',
+  'SELECT 1'
+);
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
 
 -- =======================================================
 -- 5. TABLA: providers (Empresas/Clínicas/Médicos)
