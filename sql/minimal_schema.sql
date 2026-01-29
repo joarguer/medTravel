@@ -159,6 +159,19 @@ PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SELECT COUNT(*) INTO @c FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='about_us' AND COLUMN_NAME='list';
 SET @s = IF(@c=0,'ALTER TABLE about_us ADD COLUMN `list` TEXT DEFAULT NULL','SELECT 1');
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Tabla para configurar el header de la página de servicios/ofertas
+CREATE TABLE IF NOT EXISTS services_header (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL DEFAULT 'Our Medical Services',
+  subtitle_1 VARCHAR(255) DEFAULT 'MEDICAL SERVICES',
+  subtitle_2 VARCHAR(255) DEFAULT 'Discover quality medical services from verified providers',
+  bg_image VARCHAR(255) DEFAULT NULL,
+  activo TINYINT(1) DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT IGNORE INTO carrucel (img, over_title, title, parrafo, btn, activo, orden) VALUES
 ('img/carousel-1.jpg', 'Warning', 'Welcome to MedTravel', 'Discover our medical tourism packages.', 'Learn More', 0, 1),
 ('img/carousel-2.jpg', 'Health', 'Top Specialists', 'Find certified specialists and clinics.', 'View Specialists', 0, 2),
@@ -168,6 +181,11 @@ INSERT IGNORE INTO empresas (nombre_comercial, estado, email) VALUES ('Empresa D
 
 INSERT IGNORE INTO about_header (img, titulo, activo) VALUES ('img/about-header.jpg', 'About MedTravel', 0);
 INSERT IGNORE INTO about_us (img, bg, titulo, texto, activo) VALUES ('img/about-img.jpg', 'img/about-img-bg.png', 'Who We Are', 'MedTravel connects patients with top clinics worldwide.', 0);
+
+-- Insertar configuración por defecto para services_header
+INSERT IGNORE INTO services_header (title, subtitle_1, subtitle_2, activo) VALUES
+('Our Medical Services', 'MEDICAL SERVICES', 'Discover quality medical services from verified providers', 0);
+
 -- Insertar fila de `about_us` con los campos exactos usados por la plantilla
 INSERT IGNORE INTO about_us (img, bg, titulo_small, titulo_1, titulo_2, paragrafo, `list`, activo) VALUES (
   'img/about-img.jpg',

@@ -1,9 +1,23 @@
 <?php
 include('inc/include.php');
 
+// Obtener configuración del header desde la base de datos
+$busca_header = mysqli_query($conexion,"SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+if(mysqli_num_rows($busca_header) > 0) {
+    $rst_header = mysqli_fetch_array($busca_header);
+    $page_title = $rst_header['title'];
+    $page_subtitle_1 = $rst_header['subtitle_1'];
+    $page_subtitle_2 = $rst_header['subtitle_2'];
+} else {
+    // Valores por defecto si no existe configuración
+    $page_title = 'Our Medical Services';
+    $page_subtitle_1 = 'MEDICAL SERVICES';
+    $page_subtitle_2 = 'Discover quality medical services from verified providers';
+}
+
 // Obtener categoría del parámetro GET
 $category_id = isset($_GET['category']) ? (int)$_GET['category'] : 0;
-$category_name = 'All Services';
+$category_name = $page_title;
 
 // Obtener información de la categoría si existe
 if ($category_id > 0) {
@@ -169,9 +183,9 @@ $offers_result = mysqli_stmt_get_result($stmt);
     <!-- Header Start -->
     <div class="category-header">
         <div class="container text-center">
-            <h5 class="text-white-50 mb-3">MEDICAL SERVICES</h5>
-            <h1 class="display-3 text-white mb-4"><?php echo $category_name; ?></h1>
-            <p class="text-white-50 mb-0">Discover quality medical services from verified providers</p>
+            <h5 class="text-white-50 mb-3"><?php echo htmlspecialchars($page_subtitle_1); ?></h5>
+            <h1 class="display-3 text-white mb-4"><?php echo htmlspecialchars($category_name); ?></h1>
+            <p class="text-white-50 mb-0"><?php echo htmlspecialchars($page_subtitle_2); ?></p>
         </div>
     </div>
     <!-- Header End -->

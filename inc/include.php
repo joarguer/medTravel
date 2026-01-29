@@ -261,14 +261,29 @@ $newsletter = '<div class="container-fluid subscribe py-5">
                     </div>
                 </div>';
 
-$script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>';
+$script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
+            <script>
+            (function(d,t) {
+                var BASE_URL="https://app.conectarbot.com";
+                var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+                g.src=BASE_URL+"/packs/js/sdk.js";
+                g.async = true;
+                s.parentNode.insertBefore(g,s);
+                g.onload=function(){
+                window.chatwootSDK.run({
+                    websiteToken: \'gTx6gMFvwxANw2toFVHenzse\',
+                    baseUrl: BASE_URL
+                })
+                }
+            })(document,"script");
+            </script>';
 
 $copyright = <<<HTML
 <div class="container-fluid copyright text-body py-4">
     <div class="container">
         <div class="row g-4 align-items-center">
             <div class="col-md-6 text-center text-md-end mb-md-0">
-                <i class="fas fa-copyright me-2"></i><a class="text-white" href="#">Your Site Name</a>, All right reserved.
+                <i class="fas fa-copyright me-2"></i><a class="text-white" href="#">MedTravel</a>, All right reserved.
             </div>
         </div>
     </div>

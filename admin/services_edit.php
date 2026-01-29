@@ -54,7 +54,51 @@ $rst   = mysqli_fetch_array($busca);
                                         </div>
                                     </div>
                                     <div class="portlet-body">
-                                        <p>Plantilla para gestionar los servicios. Implementar campos y lógica según requisitos.</p>
+                                        <div class="row">
+                                            <div class="col-md-12">
+                                                <?php
+                                                $busca_services = mysqli_query($conexion,"SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+                                                if(mysqli_num_rows($busca_services) > 0){
+                                                    $rst_services = mysqli_fetch_array($busca_services);
+                                                    $id_services = $rst_services['id'];
+                                                } else {
+                                                    $id_services = 0;
+                                                }
+                                                ?>
+                                                <form id="form_services_header">
+                                                    <input type="hidden" name="id" id="id" value="<?php echo $id_services; ?>">
+                                                    
+                                                    <div class="form-group">
+                                                        <label>Título Principal</label>
+                                                        <input type="text" class="form-control" name="title" id="title" 
+                                                               value="<?php echo isset($rst_services['title']) ? htmlspecialchars($rst_services['title']) : ''; ?>" 
+                                                               placeholder="Our Medical Services">
+                                                    </div>
+                                                    
+                                                    <div class="form-group">
+                                                        <label>Subtítulo 1 (Superior)</label>
+                                                        <input type="text" class="form-control" name="subtitle_1" id="subtitle_1" 
+                                                               value="<?php echo isset($rst_services['subtitle_1']) ? htmlspecialchars($rst_services['subtitle_1']) : ''; ?>" 
+                                                               placeholder="MEDICAL SERVICES">
+                                                    </div>
+                                                    
+                                                    <div class="form-group">
+                                                        <label>Subtítulo 2 (Descripción)</label>
+                                                        <input type="text" class="form-control" name="subtitle_2" id="subtitle_2" 
+                                                               value="<?php echo isset($rst_services['subtitle_2']) ? htmlspecialchars($rst_services['subtitle_2']) : ''; ?>" 
+                                                               placeholder="Discover quality medical services">
+                                                    </div>
+                                                    
+                                                    <div class="form-group">
+                                                        <button type="submit" class="btn btn-primary">
+                                                            <i class="fa fa-save"></i> Guardar Cambios
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                                
+                                                <div id="mensaje_services" class="mt-3"></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -67,5 +111,6 @@ $rst   = mysqli_fetch_array($busca);
         <?php echo $sider_bar;?>
         <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <?php echo $theme_layout_script;?>
+        <script src="js/services_edit.js"></script>
     </body>
 </html>
