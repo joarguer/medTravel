@@ -160,16 +160,16 @@ function createHeader(){
         try {
             let response = JSON.parse(res);
             if(response.success){
-                swal("¡Éxito!", response.message, "success");
+                notification(response.message, '¡Éxito!', 'success');
                 refreshServicesData(renderHeaderView);
             } else {
-                swal("Error", response.message, "error");
+                notification(response.message, 'Error', 'error');
             }
         } catch(e) {
-            swal("Error", "Error al procesar respuesta: " + e.message, "error");
+            notification('Error al procesar respuesta: ' + e.message, 'Error', 'error');
         }
     }).fail(function(){
-        swal("Error", "Error de conexión al servidor", "error");
+        notification('Error de conexión al servidor', 'Error', 'error');
     });
 }
 
@@ -187,73 +187,82 @@ function editInputSubmit(campo, id){
             let response = JSON.parse(res);
             if(response.success){
                 $('#'+campo+'_edit').html(valor);
-                swal("¡Éxito!", response.message, "success");
+                notification(response.message, '¡Éxito!', 'success');
                 refreshServicesData();
             } else {
-                swal("Error", response.message, "error");
+                notification(response.message, 'Error', 'error');
             }
         } catch(e) {
-            swal("Error", "Error al procesar respuesta: " + e.message, "error");
+            notification('Error al procesar respuesta: ' + e.message, 'Error', 'error');
         }
     }).fail(function(){
-        swal("Error", "Error de conexión al servidor", "error");
+        notification('Error de conexión al servidor', 'Error', 'error');
     });
 }
 
 function editImg(id){
-    swal({
-        title: "Cambiar imagen de fondo",
-        text: "Seleccione una nueva imagen:",
-        content: {
-            element: "input",
-            attributes: {
-                type: "file",
-                accept: "image/*",
-                id: "fileInput"
-            }
-        },
-        buttons: {
-            cancel: "Cancelar",
-            confirm: {
-                text: "Subir",
-                closeModal: false
-            }
-        }
-    }).then((result) => {
-        if(result){
-            let fileInput = document.getElementById('fileInput');
-            if(fileInput && fileInput.files.length > 0){
-                let formData = new FormData();
-                formData.append('tipo', 'upload_image');
-                formData.append('id', id);
-                formData.append('image', fileInput.files[0]);
-                
-                $.ajax({
-                    url: 'ajax/services_edit.php',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function(res){
-                        try {
-                            let response = JSON.parse(res);
-                            if(response.success){
-                                swal("¡Éxito!", response.message, "success");
-                                refreshServicesData(renderHeaderView);
-                            } else {
-                                swal("Error", response.message, "error");
-                            }
-                        } catch(e) {
-                            swal("Error", "Error al procesar respuesta: " + e.message, "error");
-                        }
-                    },
-                    error: function(){
-                        swal("Error", "Error al subir la imagen", "error");
+    let title = $('#title').val() || 'services-header';
+    title = title.replace(/\s/g, '_');
+    title = title.replace(/[^\w\s]/gi, '');
+    title = title.trim();
+    
+    let file = document.createElement('input');
+    file.type = 'file';
+    file.accept = 'image/*';
+    file.click();
+    
+    file.onchange = function(){
+        let formData = new FormData();
+        formData.append('tipo', 'upload_image');
+        formData.append('id', id);
+        formData.append('image', file.files[0]);
+        formData.append('title', title);
+        
+        $.ajax({
+            url: 'ajax/services_edit.php',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(res){
+                try {
+                    let response = JSON.parse(res);
+                    if(response.success){
+                        notification(response.message, '¡Éxito!', 'success');
+                        refreshServicesData(renderHeaderView);
+                    } else {
+                        notification(response.message, 'Error', 'error');
                     }
-                });
-            } else {
-                swal("Error", "No se seleccionó ninguna imagen", "error");
+                } catch(e) {
+                    notification('Error al procesar respuesta: ' + e.message, 'Error', 'error');
+                }
+            },
+            error: function(){
+                notification('Error al subir la imagen', 'Error', 'error');
             }
-        }
-    });
+        });
+    };
+}
+
+function notification(text, title, status){
+    if(status == "success"){
+        toastr.success(text, title);
+    } else {
+        toastr.error(text, title);
+    }
+    
+    toastr.options = {
+        "closeButton": true,
+        "debug": false,
+        "positionClass": "toast-top-right",
+        "onclick": null,
+        "showDuration": "1000",
+        "hideDuration": "1000",
+        "timeOut": "5000",
+        "extendedTimeOut": "1000",
+        "showEasing": "swing",
+        "hideEasing": "linear",
+        "showMethod": "fadeIn",
+        "hideMethod": "fadeOut"
+    };
 }
