@@ -8,6 +8,46 @@ function refreshServicesData(callback){
     $.post(url, data, function(res){
         try {
             let response = JSON.parse(res);
+            
+            // Verificar si hay error de tabla no existente
+            if (response.error === 'tabla_no_existe') {
+                $('.page-content-col').html(`
+                    <div class="alert alert-danger">
+                        <h4><i class="fa fa-exclamation-triangle"></i> Tabla no encontrada</h4>
+                        <p>${response.message}</p>
+                        <hr>
+                        <p>Por favor ejecute el siguiente script SQL en phpMyAdmin:</p>
+                        <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;">
+CREATE TABLE IF NOT EXISTS services_header (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    title VARCHAR(255) NOT NULL DEFAULT 'Our Medical Services',
+    subtitle_1 VARCHAR(255) NOT NULL DEFAULT 'MEDICAL SERVICES',
+    subtitle_2 TEXT,
+    bg_image VARCHAR(500),
+    activo ENUM('0','1') DEFAULT '0',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO services_header (title, subtitle_1, subtitle_2, activo) 
+VALUES ('Our Medical Services', 'MEDICAL SERVICES', 'Discover quality medical services from verified providers', '0');
+                        </pre>
+                    </div>
+                `);
+                return;
+            }
+            
+            // Verificar si hay error en la query
+            if (response.error === 'query_error') {
+                $('.page-content-col').html(`
+                    <div class="alert alert-danger">
+                        <h4><i class="fa fa-exclamation-triangle"></i> Error de base de datos</h4>
+                        <p>${response.message}</p>
+                    </div>
+                `);
+                return;
+            }
+            
             dataheader = response['header'] || {};
             if(typeof callback === 'function'){
                 callback();
@@ -15,11 +55,13 @@ function refreshServicesData(callback){
         } catch(e) {
             console.error('Error parsing response:', e);
             console.log('Response:', res);
-            $('.page-content-col').html('<div class="alert alert-danger">Error al cargar datos: ' + e.message + '</div>');
+            $('.page-content-col').html('<div class="alert alert-danger">Error al cargar datos: ' + e.message + '<br><pre>' + res + '</pre></div>');
         }
     }).fail(function(xhr, status, error) {
         console.error('AJAX Error:', error);
-        $('.page-content-col').html('<div class="alert alert-danger">Error de conexión: ' + error + '</div>');
+        console.log('Status:', status);
+        console.log('Response:', xhr.responseText);
+        $('.page-content-col').html('<div class="alert alert-danger">Error de conexión: ' + error + '<br>Status: ' + status + '<br><pre>' + xhr.responseText + '</pre></div>');
     });
 }
 

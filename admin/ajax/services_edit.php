@@ -6,14 +6,37 @@ $tipo = isset($_POST['tipo']) ? $_POST['tipo'] : '';
 
 // Obtener datos del header
 if ($tipo == 'get_header') {
+    // Verificar si la tabla existe
+    $table_check = mysqli_query($conexion, "SHOW TABLES LIKE 'services_header'");
+    if (mysqli_num_rows($table_check) == 0) {
+        echo json_encode([
+            'header' => null, 
+            'error' => 'tabla_no_existe',
+            'message' => 'La tabla services_header no existe. Por favor ejecute el script SQL de instalación.'
+        ]);
+        exit;
+    }
+    
     $query = mysqli_query($conexion, "SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+    
+    if (!$query) {
+        echo json_encode([
+            'header' => null,
+            'error' => 'query_error',
+            'message' => mysqli_error($conexion)
+        ]);
+        exit;
+    }
+    
     $header = mysqli_fetch_assoc($query);
     
     if (!$header) {
-        // Si no existe, crear uno por defecto
-        mysqli_query($conexion, "INSERT INTO services_header (title, subtitle_1, subtitle_2, activo) VALUES ('Our Medical Services', 'MEDICAL SERVICES', 'Discover quality medical services from verified providers', 0)");
-        $query = mysqli_query($conexion, "SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
-        $header = mysqli_fetch_assoc($query);
+        // Si no existe, intentar crear uno por defecto
+        $insert = mysqli_query($conexion, "INSERT INTO services_header (title, subtitle_1, subtitle_2, activo) VALUES ('Our Medical Services', 'MEDICAL SERVICES', 'Discover quality medical services from verified providers', 0)");
+        if ($insert) {
+            $query = mysqli_query($conexion, "SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+            $header = mysqli_fetch_assoc($query);
+        }
     }
     
     echo json_encode(['header' => $header]);
