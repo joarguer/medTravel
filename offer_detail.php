@@ -1,6 +1,21 @@
 <?php
 include('inc/include.php');
 
+// Obtener configuración del header desde la base de datos
+$busca_header = mysqli_query($conexion,"SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+if(mysqli_num_rows($busca_header) > 0) {
+    $rst_header = mysqli_fetch_array($busca_header);
+    $page_title = $rst_header['title'];
+    $page_subtitle_1 = $rst_header['subtitle_1'];
+    $page_subtitle_2 = $rst_header['subtitle_2'];
+    $bg_image = $rst_header['bg_image'];
+} else {
+    $page_title = 'Our Medical Services';
+    $page_subtitle_1 = 'MEDICAL SERVICES';
+    $page_subtitle_2 = 'Discover quality medical services from verified providers';
+    $bg_image = '';
+}
+
 // Obtener ID de la oferta
 $offer_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
@@ -52,82 +67,143 @@ $offer = mysqli_fetch_assoc($result);
     <style>
         .offer-hero {
             position: relative;
-            height: 400px;
+            padding: 80px 0;
             overflow: hidden;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+            background-size: cover;
+            background-position: center;
         }
         .hero-content {
             position: relative;
-            padding-top: 100px;
             color: white;
             z-index: 10;
         }
         .hero-title {
             font-size: 2.5rem;
-            font-weight: 900;
-            margin-bottom: 20px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            color: white;
+        }
+        .hero-subtitle {
+            font-size: 1rem;
+            color: rgba(255,255,255,0.9);
+            font-weight: 500;
         }
         .content-section {
             background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
-            margin-bottom: 30px;
+            padding: 35px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border: 1px solid #e5e7eb;
+            margin-bottom: 25px;
         }
         .section-heading {
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #2d3748;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
             margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-heading i {
+            color: #0f766e;
+            font-size: 1.3rem;
         }
         .price-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: white;
+            border: 2px solid #0f766e;
             padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(118, 75, 162, 0.4);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.15);
             position: sticky;
             top: 100px;
         }
+        .price-label {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
         .price-amount {
-            font-size: 3rem;
-            font-weight: 900;
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #0f766e;
             margin: 15px 0;
         }
         .btn-book {
-            background: white;
-            color: #667eea;
+            background: #0f766e;
+            color: white;
             padding: 15px 30px;
-            border-radius: 30px;
-            font-weight: 800;
+            border-radius: 8px;
+            font-weight: 600;
             width: 100%;
             border: none;
-            font-size: 1rem;
+            font-size: 15px;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+        .btn-book:hover {
+            background: #0d9488;
+            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.3);
         }
         .provider-card {
-            background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            background: #f8fafc;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
             margin-top: 20px;
+        }
+        .provider-card h3 {
+            color: #1e293b;
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .provider-card h3 i {
+            color: #0f766e;
         }
         .contact-item {
             display: flex;
-            align-items: center;
-            padding: 10px 0;
-            color: #4a5568;
+            align-items: flex-start;
+            padding: 12px 0;
+            color: #475569;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .contact-item:last-child {
+            border-bottom: none;
         }
         .contact-item i {
-            width: 30px;
-            height: 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            width: 35px;
+            height: 35px;
+            background: #e0f2fe;
+            color: #0369a1;
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .contact-item strong {
+            color: #334155;
+            font-size: 13px;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .contact-item a {
+            color: #0f766e;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .contact-item a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -153,11 +229,19 @@ $offer = mysqli_fetch_assoc($result);
     <!-- Navbar End -->
 
     <!-- Hero Section -->
-    <div class="offer-hero">
+    <div class="offer-hero" style="<?php 
+        if (!empty($bg_image)) {
+            echo 'background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(' . htmlspecialchars($bg_image) . ');';
+        }
+    ?>">
         <div class="hero-content">
             <div class="container text-center">
+                <p class="hero-subtitle mb-2"><?php echo htmlspecialchars($page_subtitle_1); ?></p>
                 <h1 class="hero-title"><?php echo htmlspecialchars($offer['title']); ?></h1>
-                <p class="text-white-50">By <?php echo htmlspecialchars($offer['provider_name']); ?></p>
+                <p class="hero-subtitle mt-2">
+                    <i class="fas fa-hospital me-2"></i>
+                    <?php echo htmlspecialchars($offer['provider_name']); ?>
+                </p>
             </div>
         </div>
     </div>
@@ -169,9 +253,10 @@ $offer = mysqli_fetch_assoc($result);
             <div class="col-lg-8">
                 <div class="content-section">
                     <h2 class="section-heading">
-                        <i class="fas fa-info-circle"></i> Description
+                        <i class="fas fa-file-medical-alt"></i> 
+                        Description
                     </h2>
-                    <p style="font-size: 1.1rem; line-height: 1.8; color: #4a5568;">
+                    <p style="font-size: 1rem; line-height: 1.8; color: #475569;">
                         <?php echo nl2br(htmlspecialchars($offer['description'])); ?>
                     </p>
                 </div>
@@ -181,21 +266,20 @@ $offer = mysqli_fetch_assoc($result);
             <div class="col-lg-4">
                 <!-- Price Card -->
                 <div class="price-card">
-                    <div class="text-center">
-                        <div style="font-size: 1rem; opacity: 0.9;">Starting from</div>
-                        <div class="price-amount">
-                            <?php echo htmlspecialchars($offer['currency']); ?> 
-                            <?php echo number_format($offer['price_from'], 2); ?>
-                        </div>
-                        <a href="mailto:<?php echo htmlspecialchars($offer['email']); ?>" class="btn-book">
-                            Request Information
-                        </a>
+                    <div class="price-label">Starting from</div>
+                    <div class="price-amount">
+                        <?php echo htmlspecialchars($offer['currency']); ?> 
+                        <?php echo number_format($offer['price_from'], 2); ?>
                     </div>
+                    <a href="mailto:<?php echo htmlspecialchars($offer['email']); ?>" class="btn btn-book">
+                        <i class="fas fa-envelope me-2"></i>Request Information
+                    </a>
                 </div>
 
                 <!-- Provider Card -->
                 <div class="provider-card">
-                    <h3 style="font-size: 1.5rem; font-weight: 800; margin-bottom: 20px;">
+                    <h3>
+                        <i class="fas fa-hospital"></i>
                         <?php echo htmlspecialchars($offer['provider_name']); ?>
                     </h3>
                     
