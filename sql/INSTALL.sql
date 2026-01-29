@@ -3,9 +3,13 @@
 -- Ejecutar este archivo en MySQL para configurar todo
 -- =======================================================
 
--- 1. Crear base de datos si no existe
-CREATE DATABASE IF NOT EXISTS bolsacar_medtravel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE bolsacar_medtravel;
+-- IMPORTANTE: En producción, ejecuta este script desde phpMyAdmin
+-- seleccionando primero tu base de datos (bolsacar_medtravel)
+-- No necesitas CREATE DATABASE en hosting compartido
+
+-- 1. Crear base de datos (SOLO para desarrollo local)
+-- CREATE DATABASE IF NOT EXISTS bolsacar_medtravel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- USE bolsacar_medtravel;
 
 -- =======================================================
 -- 2. TABLA: services_header (NUEVA - para configurar UI)
