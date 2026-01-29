@@ -78,19 +78,26 @@ if ($categories_result && $categories_result->num_rows > 0) {
     $categories_menu = '<a href="offers.php" class="dropdown-item">Ver todos los servicios</a>';
 }
 
+// Detectar la página actual para marcar el menú activo
+$current_page = basename($_SERVER['PHP_SELF']);
+$home_active = ($current_page == 'index.php') ? 'active' : '';
+$about_active = ($current_page == 'about.php') ? 'active' : '';
+$services_active = (in_array($current_page, ['offers.php', 'offer_detail.php', 'services.php'])) ? 'active' : '';
+$contact_active = ($current_page == 'contact.php') ? 'active' : '';
+
 $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
     <div class="navbar-nav ms-auto py-0">
-        <a href="index.php" class="nav-item nav-link active">Home</a>
-        <a href="about.php" class="nav-item nav-link">About</a>
+        <a href="index.php" class="nav-item nav-link ' . $home_active . '">Home</a>
+        <a href="about.php" class="nav-item nav-link ' . $about_active . '">About</a>
         <div class="nav-item dropdown">
-            <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">Services</a>
+            <a href="#" class="nav-link dropdown-toggle ' . $services_active . '" data-bs-toggle="dropdown">Services</a>
             <div class="dropdown-menu m-0">
                 <a href="offers.php" class="dropdown-item"><i class="fas fa-list me-2"></i>All Services</a>
                 <div class="dropdown-divider"></div>
                 ' . $categories_menu . '
             </div>
         </div>
-        <a href="contact.php" class="nav-item nav-link">Contact</a>
+        <a href="contact.php" class="nav-item nav-link ' . $contact_active . '">Contact</a>
     </div>
     <a href="login.php" class="btn btn-primary rounded-pill py-2 px-4 ms-lg-4">Sign In</a>
 </div>';

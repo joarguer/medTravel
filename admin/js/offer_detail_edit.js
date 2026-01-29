@@ -99,10 +99,8 @@ function renderHeaderView(){
     let subtitle_2 = dataheader.subtitle_2 || 'Complete information about your medical service';
     let bg_image = dataheader.bg_image || '';
     
-    let backgroundStyle = bg_image ? `background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(https://medtravel.com.co/${bg_image});` : 'background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);';
-    
     let body = `
-        <div class="services-header" id="header_0" style="${backgroundStyle}">
+        <div class="row margin-bottom-40 about-header" id="header_0">
             <div class="col-md-12">
                 <h1 id="title_edit">${title}</h1>
                 <p id="parrafo_edit"><span>${subtitle_1}</span> / ${subtitle_2}</p>
@@ -122,11 +120,40 @@ function renderHeaderView(){
         </div>
         <div class="form-group">
             <button type="button" class="btn btn-white btn-block" onclick="editImg(${id})">
-                <i class="fa fa-image"></i> Cambiar imagen de fondo
+                <i class="fa fa-image"></i> CAMBIAR IMAGEN DE FONDO
             </button>
         </div>`;
     
     $('.page-content-col').html(body);
+    
+    // Aplicar estilos CSS al preview
+    if(bg_image){
+        $('.about-header').css('background-image', 'url(https://medtravel.com.co/'+bg_image+')');
+        $('.about-header').css('background-color', 'rgba(0, 0, 0, 0.5)');
+    } else {
+        $('.about-header').css('background', 'linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)');
+    }
+    $('.about-header').css('background-size', 'cover');
+    $('.about-header').css('background-position', 'center');
+    $('.about-header').css('height', '300px');
+    $('.about-header').css('padding', '60px 20px');
+    $('.about-header').css('border-radius', '10px');
+    $('.about-header').css('color', 'white');
+    $('.about-header').css('display', 'flex');
+    $('.about-header').css('align-items', 'center');
+    $('.about-header').css('justify-content', 'center');
+    $('.about-header').css('font-family', 'Roboto');
+    $('.about-header h1').css('font-weight', '800');
+    $('.about-header h1').css('font-size', '2.5rem');
+    $('.about-header h1').css('margin-bottom', '15px');
+    $('.about-header h1').css('text-shadow', '2px 2px 4px rgba(0,0,0,0.3)');
+    $('.about-header p').css('font-size', '1rem');
+    $('.about-header p').css('font-weight', '400');
+    $('.about-header p').css('color', '#fff');
+    $('.about-header p').css('margin-bottom', '10px');
+    $('.about-header p').css('text-shadow', '1px 1px 2px rgba(0,0,0,0.3)');
+    $('.about-header p span').css('color', '#ffd700');
+    $('.about-header p span').css('font-weight', '600');
 }
 
 $(document).ready(function(){

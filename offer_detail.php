@@ -237,11 +237,8 @@ $offer = mysqli_fetch_assoc($result);
         <div class="hero-content">
             <div class="container text-center">
                 <p class="hero-subtitle mb-2"><?php echo htmlspecialchars($page_subtitle_1); ?></p>
-                <h1 class="hero-title"><?php echo htmlspecialchars($offer['title']); ?></h1>
-                <p class="hero-subtitle mt-2">
-                    <i class="fas fa-hospital me-2"></i>
-                    <?php echo htmlspecialchars($offer['provider_name']); ?>
-                </p>
+                <h1 class="hero-title"><?php echo htmlspecialchars($page_title); ?></h1>
+                <p class="hero-subtitle mt-2"><?php echo htmlspecialchars($page_subtitle_2); ?></p>
             </div>
         </div>
     </div>
