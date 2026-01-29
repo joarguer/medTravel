@@ -1,6 +1,17 @@
 <?php
-include("../include/include.php");
-requireAuth();
+session_start();
+include("../include/conexion.php");
+
+// Verificar autenticación
+if (!isset($_SESSION['id'])) {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => false,
+        'error' => 'not_authenticated',
+        'message' => 'No autorizado'
+    ]);
+    exit;
+}
 
 $tipo = isset($_POST['tipo']) ? $_POST['tipo'] : '';
 
