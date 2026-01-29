@@ -277,7 +277,7 @@ $top_header .= '</span>
 
 // Detectar página actual para activar pestaña del menú
 $current_page = basename($_SERVER['PHP_SELF']);
-$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php');
+$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offer_detail_edit.php','blog_edit.php');
 $is_admin_page = in_array($current_page, $admin_pages);
 $is_site_page = $es_admin && in_array($current_page, $site_pages);
@@ -328,6 +328,16 @@ if ($es_admin) {
     $top_header_2 .=               '<li class="'.($current_page === 'providers.php' ? 'active' : '').'">
                                     <a href="./providers.php"> 
                                     <i class="icon-list"></i> Prestadores </a>
+                                </li>';
+    // link Verificación de Proveedores (debajo de Prestadores)
+    $top_header_2 .=               '<li class="'.($current_page === 'provider_verification.php' ? 'active' : '').'">
+                                    <a href="./provider_verification.php"> 
+                                    <i class="fa fa-shield"></i> Verificación </a>
+                                </li>';
+    // link Clientes/CRM (debajo de Verificación)
+    $top_header_2 .=               '<li class="'.($current_page === 'clientes.php' ? 'active' : '').'">
+                                    <a href="./clientes.php"> 
+                                    <i class="icon-users"></i> Clientes </a>
                                 </li>';
 }
 
