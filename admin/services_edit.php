@@ -90,6 +90,24 @@ $rst   = mysqli_fetch_array($busca);
                                                     </div>
                                                     
                                                     <div class="form-group">
+                                                        <label>Imagen de Fondo del Header</label>
+                                                        <?php if(isset($rst_services['bg_image']) && !empty($rst_services['bg_image'])): ?>
+                                                            <div class="mb-3">
+                                                                <img src="../../<?php echo htmlspecialchars($rst_services['bg_image']); ?>" 
+                                                                     alt="Header Background" 
+                                                                     style="max-width: 300px; height: auto; border: 2px solid #ddd; border-radius: 5px;">
+                                                                <p class="text-muted mt-2">
+                                                                    <small>Imagen actual: <?php echo htmlspecialchars($rst_services['bg_image']); ?></small>
+                                                                </p>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                        <input type="file" class="form-control" name="bg_image" id="bg_image" accept="image/*">
+                                                        <p class="help-block">
+                                                            <small>Formato recomendado: JPG, PNG. Tamaño recomendado: 1920x400px</small>
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    <div class="form-group">
                                                         <button type="submit" class="btn btn-primary">
                                                             <i class="fa fa-save"></i> Guardar Cambios
                                                         </button>

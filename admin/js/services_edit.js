@@ -3,13 +3,16 @@ $(document).ready(function() {
     $('#form_services_header').on('submit', function(e) {
         e.preventDefault();
         
-        const formData = $(this).serialize();
+        // Usar FormData para soportar archivos
+        const formData = new FormData(this);
         
         $.ajax({
             url: 'ajax/services_edit.php',
             type: 'POST',
             data: formData,
             dataType: 'json',
+            processData: false,  // No procesar los datos
+            contentType: false,  // No establecer contentType
             success: function(response) {
                 if (response.success) {
                     $('#mensaje_services').html(
