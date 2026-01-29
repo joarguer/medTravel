@@ -2,7 +2,7 @@
 include('inc/include.php');
 
 // Obtener configuración del header desde la base de datos
-$busca_header = mysqli_query($conexion,"SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+$busca_header = mysqli_query($conexion,"SELECT * FROM offer_detail_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 if(mysqli_num_rows($busca_header) > 0) {
     $rst_header = mysqli_fetch_array($busca_header);
     $page_title = $rst_header['title'];
@@ -10,9 +10,9 @@ if(mysqli_num_rows($busca_header) > 0) {
     $page_subtitle_2 = $rst_header['subtitle_2'];
     $bg_image = $rst_header['bg_image'];
 } else {
-    $page_title = 'Our Medical Services';
-    $page_subtitle_1 = 'MEDICAL SERVICES';
-    $page_subtitle_2 = 'Discover quality medical services from verified providers';
+    $page_title = 'Medical Service Details';
+    $page_subtitle_1 = 'OFFER DETAILS';
+    $page_subtitle_2 = 'Complete information about your medical service';
     $bg_image = '';
 }
 

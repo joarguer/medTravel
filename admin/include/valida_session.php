@@ -42,7 +42,7 @@ function tiene_rol_minimo_2() {
 $current = basename($_SERVER['PHP_SELF']);
 $admin_only = array(
     'crear_usuario.php','create_bd.php',
-    'home_edit.php','about_edit.php','services_edit.php','blog_edit.php',
+    'home_edit.php','about_edit.php','services_edit.php','offer_detail_edit.php','blog_edit.php',
     'service_categories.php','service_catalog.php','providers.php'
 );
 $role2_allowed = array(

@@ -278,7 +278,7 @@ $top_header .= '</span>
 // Detectar página actual para activar pestaña del menú
 $current_page = basename($_SERVER['PHP_SELF']);
 $admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php');
-$site_pages = array('home_edit.php','about_edit.php','services_edit.php','blog_edit.php');
+$site_pages = array('home_edit.php','about_edit.php','services_edit.php','offer_detail_edit.php','blog_edit.php');
 $is_admin_page = in_array($current_page, $admin_pages);
 $is_site_page = $es_admin && in_array($current_page, $site_pages);
 $is_dashboard = ($current_page === 'index.php');
@@ -364,6 +364,9 @@ if ($es_admin) {
                                     </li>
                                     <li>
                                         <a href="services_edit.php"> Services </a>
+                                    </li>
+                                    <li>
+                                        <a href="offer_detail_edit.php"> Offer Detail </a>
                                     </li>
                                     <li>
                                         <a href="blog_edit.php"> Blog </a>
