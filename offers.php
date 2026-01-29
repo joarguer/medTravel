@@ -74,74 +74,129 @@ $offers_result = mysqli_stmt_get_result($stmt);
     <style>
         .offer-card {
             transition: all 0.3s ease;
-            border: none;
-            border-radius: 15px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            background: white;
         }
         .offer-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            border-color: #d1d5db;
         }
         .offer-card .card-img-top {
-            height: 250px;
+            height: 220px;
             object-fit: cover;
         }
         .provider-logo {
-            width: 60px;
-            height: 60px;
+            width: 50px;
+            height: 50px;
             object-fit: cover;
-            border-radius: 50%;
-            border: 3px solid #fff;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             position: absolute;
-            top: 210px;
+            top: 180px;
             left: 20px;
+            background: white;
         }
-        .price-badge {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 25px;
-            font-weight: 600;
-            font-size: 18px;
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        .price-info {
+            background: #f8fafc;
+            padding: 12px 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .price-label {
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .price-amount {
+            color: #0f766e;
+            font-size: 20px;
+            font-weight: 700;
         }
         .service-badge {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 6px 12px;
+            border-radius: 6px;
             font-size: 12px;
-            display: inline-block;
-            margin-bottom: 10px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .service-badge i {
+            font-size: 14px;
+        }
+        .offer-card .card-body {
+            padding: 24px;
+        }
+        .offer-card .card-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 12px;
+            line-height: 1.4;
+        }
+        .offer-card .card-text {
+            color: #64748b;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .provider-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 0;
+            border-top: 1px solid #f1f5f9;
+            margin-top: 16px;
+        }
+        .provider-info i {
+            color: #0f766e;
+            font-size: 16px;
         }
         .provider-name {
-            color: #667eea;
+            color: #334155;
             font-weight: 600;
             font-size: 14px;
-            margin-top: 10px;
+            margin: 0;
         }
         .city-tag {
-            color: #999;
+            color: #94a3b8;
             font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .city-tag i {
+            font-size: 12px;
         }
         .btn-view-offer {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #0f766e;
             border: none;
             color: white;
-            padding: 12px 30px;
-            border-radius: 25px;
+            padding: 12px 24px;
+            border-radius: 8px;
             font-weight: 600;
+            font-size: 14px;
             transition: all 0.3s ease;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         .btn-view-offer:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            background: #0d9488;
             color: white;
+            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.3);
         }
         .category-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -218,12 +273,6 @@ $offers_result = mysqli_stmt_get_result($stmt);
                                          alt="<?php echo htmlspecialchars($offer['title']); ?>"
                                          onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22400%22 height=%22300%22/%3E%3Ctext fill=%22%23999%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-family=%22Arial%22 font-size=%2218%22%3EMedical Service%3C/text%3E%3C/svg%3E';">
                                     
-                                    <?php if ($offer['price_from']): ?>
-                                        <div class="price-badge">
-                                            From <?php echo $offer['currency']; ?> <?php echo number_format($offer['price_from'], 2); ?>
-                                        </div>
-                                    <?php endif; ?>
-                                    
                                     <?php if ($offer['logo']): ?>
                                         <img src="admin/img/providers/<?php echo $offer['provider_id']; ?>/<?php echo htmlspecialchars($offer['logo']); ?>" 
                                              class="provider-logo" 
@@ -233,32 +282,47 @@ $offers_result = mysqli_stmt_get_result($stmt);
                                 </div>
                                 
                                 <div class="card-body">
-                                    <span class="service-badge"><?php echo htmlspecialchars($offer['service_name']); ?></span>
+                                    <span class="service-badge">
+                                        <i class="fas fa-stethoscope"></i>
+                                        <?php echo htmlspecialchars($offer['service_name']); ?>
+                                    </span>
                                     
-                                    <h5 class="card-title mb-3">
+                                    <h5 class="card-title">
                                         <?php echo htmlspecialchars($offer['title']); ?>
                                     </h5>
                                     
-                                    <p class="card-text text-muted" style="height: 60px; overflow: hidden;">
+                                    <p class="card-text" style="height: 60px; overflow: hidden;">
                                         <?php echo htmlspecialchars(substr($offer['description'], 0, 120)) . '...'; ?>
                                     </p>
                                     
-                                    <div class="provider-name">
-                                        <i class="fas fa-hospital-alt me-2"></i><?php echo htmlspecialchars($offer['provider_name']); ?>
-                                    </div>
-                                    
-                                    <?php if ($offer['city']): ?>
-                                        <div class="city-tag">
-                                            <i class="fas fa-map-marker-alt me-1"></i><?php echo htmlspecialchars($offer['city']); ?>
+                                    <div class="provider-info">
+                                        <div style="flex: 1;">
+                                            <div class="provider-name">
+                                                <i class="fas fa-hospital"></i>
+                                                <?php echo htmlspecialchars($offer['provider_name']); ?>
+                                            </div>
+                                            <?php if ($offer['city']): ?>
+                                                <div class="city-tag">
+                                                    <i class="fas fa-map-marker-alt"></i>
+                                                    <?php echo htmlspecialchars($offer['city']); ?>
+                                                </div>
+                                            <?php endif; ?>
                                         </div>
-                                    <?php endif; ?>
-                                    
-                                    <div class="mt-4">
-                                        <a href="offer_detail.php?id=<?php echo $offer['id']; ?>" class="btn btn-view-offer w-100">
-                                            View Details <i class="fas fa-arrow-right ms-2"></i>
-                                        </a>
                                     </div>
+                                    
+                                    <a href="offer_detail.php?id=<?php echo $offer['id']; ?>" class="btn btn-view-offer">
+                                        <i class="fas fa-info-circle me-2"></i>View Details
+                                    </a>
                                 </div>
+                                
+                                <?php if ($offer['price_from']): ?>
+                                    <div class="price-info">
+                                        <span class="price-label">Starting from</span>
+                                        <span class="price-amount">
+                                            <?php echo $offer['currency']; ?> <?php echo number_format($offer['price_from'], 2); ?>
+                                        </span>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endwhile; ?>
