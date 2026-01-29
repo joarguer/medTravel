@@ -38,8 +38,7 @@ if ($category_id > 0) {
         SELECT 
             o.id, o.title, o.description, o.price_from, o.currency,
             p.id as provider_id, p.name as provider_name, p.city, p.logo,
-            sc.name as service_name,
-            (SELECT file_path FROM offer_media WHERE offer_id = o.id AND media_type = 'image' ORDER BY id ASC LIMIT 1) as main_image
+            sc.name as service_name
         FROM provider_service_offers o
         INNER JOIN providers p ON o.provider_id = p.id
         INNER JOIN service_catalog sc ON o.service_id = sc.id
@@ -54,8 +53,7 @@ if ($category_id > 0) {
         SELECT 
             o.id, o.title, o.description, o.price_from, o.currency,
             p.id as provider_id, p.name as provider_name, p.city, p.logo,
-            sc.name as service_name,
-            (SELECT file_path FROM offer_media WHERE offer_id = o.id AND media_type = 'image' ORDER BY id ASC LIMIT 1) as main_image
+            sc.name as service_name
         FROM provider_service_offers o
         INNER JOIN providers p ON o.provider_id = p.id
         INNER JOIN service_catalog sc ON o.service_id = sc.id
@@ -201,13 +199,12 @@ $offers_result = mysqli_stmt_get_result($stmt);
                             <div class="offer-card card h-100">
                                 <div class="position-relative">
                                     <?php 
-                                    // Determinar qué imagen usar
-                                    if (!empty($offer['main_image'])) {
-                                        // Imagen de la oferta desde offer_media
-                                        $image_path = htmlspecialchars($offer['main_image']);
-                                    } else {
-                                        // Placeholder SVG si no hay imagen
-                                        $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f0f0f0" width="400" height="300"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedical Service%3C/text%3E%3C/svg%3E';
+                                    // Intentar obtener imagen de offer_media
+                                    $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f0f0f0" width="400" height="300"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedical Service%3C/text%3E%3C/svg%3E';
+                                    
+                                    $img_query = mysqli_query($conexion, "SELECT file_path FROM offer_media WHERE offer_id = {$offer['id']} AND media_type = 'image' ORDER BY id ASC LIMIT 1");
+                                    if ($img_query && $img_row = mysqli_fetch_assoc($img_query)) {
+                                        $image_path = htmlspecialchars($img_row['file_path']);
                                     }
                                     ?>
                                     <img src="<?php echo $image_path; ?>" 
