@@ -6,19 +6,51 @@ function refreshServicesData(callback){
         tipo: 'get_header'
     };
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
-        dataheader = response['header'] || {};
-        if(typeof callback === 'function'){
-            callback();
+        try {
+            let response = JSON.parse(res);
+            dataheader = response['header'] || {};
+            if(typeof callback === 'function'){
+                callback();
+            }
+        } catch(e) {
+            console.error('Error parsing response:', e);
+            console.log('Response:', res);
+            $('.page-content-col').html('<div class="alert alert-danger">Error al cargar datos: ' + e.message + '</div>');
         }
+    }).fail(function(xhr, status, error) {
+        console.error('AJAX Error:', error);
+        $('.page-content-col').html('<div class="alert alert-danger">Error de conexión: ' + error + '</div>');
     });
 }
 
 function renderHeaderView(){
     if(!dataheader || !dataheader.id){
-        $('.page-content-col').html('<div class="alert alert-warning">No se encontró configuración. Por favor, ejecute el script SQL primero.</div>');
+        // Si no hay datos, crear el formulario para insertar
+        let body = `
+            <div class="alert alert-info">
+                <i class="fa fa-info-circle"></i> No existe configuración. Complete el formulario para crear una.
+            </div>
+            <div class="form-group">
+                <label>Título Principal</label>
+                <input type="text" class="form-control" id="new_title" value="Our Medical Services" placeholder="Our Medical Services">
+            </div>
+            <div class="form-group">
+                <label>Subtítulo 1 (Superior)</label>
+                <input type="text" class="form-control" id="new_subtitle_1" value="MEDICAL SERVICES" placeholder="MEDICAL SERVICES">
+            </div>
+            <div class="form-group">
+                <label>Subtítulo 2 (Descripción)</label>
+                <input type="text" class="form-control" id="new_subtitle_2" value="Discover quality medical services from verified providers" placeholder="Discover quality medical services">
+            </div>
+            <div class="form-group">
+                <button type="button" class="btn btn-primary" onclick="createHeader()">
+                    <i class="fa fa-save"></i> Crear Configuración
+                </button>
+            </div>`;
+        $('.page-content-col').html(body);
         return;
     }
+    
     let id = dataheader.id;
     let title = dataheader.title || 'Our Medical Services';
     let subtitle_1 = dataheader.subtitle_1 || 'MEDICAL SERVICES';
@@ -69,6 +101,36 @@ function open_header(id){
     renderHeaderView();
 }
 
+function createHeader(){
+    let title = $('#new_title').val();
+    let subtitle_1 = $('#new_subtitle_1').val();
+    let subtitle_2 = $('#new_subtitle_2').val();
+    
+    let url = 'ajax/services_edit.php';
+    let data = {
+        tipo: 'create_header',
+        title: title,
+        subtitle_1: subtitle_1,
+        subtitle_2: subtitle_2
+    };
+    
+    $.post(url, data, function(res){
+        try {
+            let response = JSON.parse(res);
+            if(response.success){
+                swal("¡Éxito!", response.message, "success");
+                refreshServicesData(renderHeaderView);
+            } else {
+                swal("Error", response.message, "error");
+            }
+        } catch(e) {
+            swal("Error", "Error al procesar respuesta: " + e.message, "error");
+        }
+    }).fail(function(){
+        swal("Error", "Error de conexión al servidor", "error");
+    });
+}
+
 function editInputSubmit(campo, id){
     let valor = $('#'+campo).val();
     let url = 'ajax/services_edit.php';
@@ -79,14 +141,20 @@ function editInputSubmit(campo, id){
         id: id
     };
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
-        if(response.success){
-            $('#'+campo+'_edit').html(valor);
-            swal("¡Éxito!", response.message, "success");
-            refreshServicesData();
-        } else {
-            swal("Error", response.message, "error");
+        try {
+            let response = JSON.parse(res);
+            if(response.success){
+                $('#'+campo+'_edit').html(valor);
+                swal("¡Éxito!", response.message, "success");
+                refreshServicesData();
+            } else {
+                swal("Error", response.message, "error");
+            }
+        } catch(e) {
+            swal("Error", "Error al procesar respuesta: " + e.message, "error");
         }
+    }).fail(function(){
+        swal("Error", "Error de conexión al servidor", "error");
     });
 }
 
@@ -125,12 +193,16 @@ function editImg(id){
                     processData: false,
                     contentType: false,
                     success: function(res){
-                        let response = JSON.parse(res);
-                        if(response.success){
-                            swal("¡Éxito!", response.message, "success");
-                            refreshServicesData(renderHeaderView);
-                        } else {
-                            swal("Error", response.message, "error");
+                        try {
+                            let response = JSON.parse(res);
+                            if(response.success){
+                                swal("¡Éxito!", response.message, "success");
+                                refreshServicesData(renderHeaderView);
+                            } else {
+                                swal("Error", response.message, "error");
+                            }
+                        } catch(e) {
+                            swal("Error", "Error al procesar respuesta: " + e.message, "error");
                         }
                     },
                     error: function(){

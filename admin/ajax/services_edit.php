@@ -20,6 +20,25 @@ if ($tipo == 'get_header') {
     exit;
 }
 
+// Crear header
+if ($tipo == 'create_header') {
+    $title = isset($_POST['title']) ? $_POST['title'] : 'Our Medical Services';
+    $subtitle_1 = isset($_POST['subtitle_1']) ? $_POST['subtitle_1'] : 'MEDICAL SERVICES';
+    $subtitle_2 = isset($_POST['subtitle_2']) ? $_POST['subtitle_2'] : 'Discover quality medical services';
+    
+    $stmt = mysqli_prepare($conexion, "INSERT INTO services_header (title, subtitle_1, subtitle_2, activo) VALUES (?, ?, ?, 0)");
+    mysqli_stmt_bind_param($stmt, 'sss', $title, $subtitle_1, $subtitle_2);
+    
+    if (mysqli_stmt_execute($stmt)) {
+        echo json_encode(['success' => true, 'message' => 'Configuración creada correctamente']);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Error al crear: ' . mysqli_error($conexion)]);
+    }
+    
+    mysqli_stmt_close($stmt);
+    exit;
+}
+
 // Editar campo individual
 if ($tipo == 'edit_campo') {
     $campo = isset($_POST['campo']) ? $_POST['campo'] : '';
