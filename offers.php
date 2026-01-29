@@ -200,13 +200,12 @@ $offers_result = mysqli_stmt_get_result($stmt);
                             <div class="offer-card card h-100">
                                 <div class="position-relative">
                                     <?php 
-                                    // Usar placeholder por defecto
-                                    $image_path = 'img/site/placeholder-medical.jpg';
+                                    // Usar placeholder por defecto con data URI para evitar 404
+                                    $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f0f0f0" width="400" height="300"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedical Service%3C/text%3E%3C/svg%3E';
                                     ?>
-                                    <img src="<?php echo htmlspecialchars($image_path); ?>" 
+                                    <img src="<?php echo $image_path; ?>" 
                                          class="card-img-top" 
-                                         alt="<?php echo htmlspecialchars($offer['title']); ?>"
-                                         onerror="this.src='img/site/placeholder-medical.jpg'">
+                                         alt="<?php echo htmlspecialchars($offer['title']); ?>">
                                     
                                     <?php if ($offer['price_from']): ?>
                                         <div class="price-badge">
