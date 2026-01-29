@@ -8,7 +8,7 @@ if ($offer_id == 0) {
     die('ID de oferta inválido');
 }
 
-// Consulta simplificada
+// Consulta simplificada compatible con producción
 $query = "
     SELECT 
         o.id, o.title, o.description, o.price_from, o.currency,
@@ -16,7 +16,7 @@ $query = "
         p.city, p.phone, p.email, p.logo
     FROM provider_service_offers o
     INNER JOIN providers p ON o.provider_id = p.id
-    WHERE o.id = ? AND o.is_active = 1
+    WHERE o.id = ?
     LIMIT 1
 ";
 
