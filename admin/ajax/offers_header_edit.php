@@ -4,9 +4,9 @@ include("../include/conexion.php");
 
 $tipo = isset($_POST['tipo']) ? $_POST['tipo'] : '';
 
-// Obtener datos del header de services.php
+// Obtener datos del header de offers.php
 if ($tipo == 'get_header') {
-    $query = mysqli_query($conexion, "SELECT * FROM services_page_header WHERE activo = '1' ORDER BY id ASC LIMIT 1");
+    $query = mysqli_query($conexion, "SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
     
     if (!$query) {
         echo json_encode([
@@ -22,22 +22,13 @@ if ($tipo == 'get_header') {
     exit;
 }
 
-// Obtener un servicio específico
-if ($tipo == 'get_service') {
-    $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-    $query = mysqli_query($conexion, "SELECT * FROM coordination_services WHERE id = $id");
-    $service = mysqli_fetch_assoc($query);
-    echo json_encode($service);
-    exit;
-}
-
 // Editar header
 if ($tipo == 'edit_header') {
     $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
     $field = isset($_POST['field']) ? $_POST['field'] : '';
     $value = isset($_POST['value']) ? $_POST['value'] : '';
     
-    $allowed_fields = ['title', 'subtitle', 'main_title', 'description'];
+    $allowed_fields = ['title', 'subtitle_1', 'subtitle_2'];
     
     if (!in_array($field, $allowed_fields)) {
         echo json_encode(['status' => 'error', 'message' => 'Campo no válido']);
@@ -47,7 +38,7 @@ if ($tipo == 'edit_header') {
     $field_escaped = mysqli_real_escape_string($conexion, $field);
     $value_escaped = mysqli_real_escape_string($conexion, $value);
     
-    $query = "UPDATE services_page_header SET `$field_escaped` = '$value_escaped' WHERE id = $id";
+    $query = "UPDATE services_header SET `$field_escaped` = '$value_escaped' WHERE id = $id";
     
     if (mysqli_query($conexion, $query)) {
         echo json_encode(['status' => 'success']);
@@ -57,27 +48,7 @@ if ($tipo == 'edit_header') {
     exit;
 }
 
-// Editar servicio
-if ($tipo == 'edit_service') {
-    $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-    $icon_class = isset($_POST['icon_class']) ? $_POST['icon_class'] : '';
-    $title = isset($_POST['title']) ? $_POST['title'] : '';
-    $description = isset($_POST['description']) ? $_POST['description'] : '';
-    
-    $stmt = mysqli_prepare($conexion, "UPDATE coordination_services SET icon_class = ?, title = ?, description = ? WHERE id = ?");
-    mysqli_stmt_bind_param($stmt, 'sssi', $icon_class, $title, $description, $id);
-    
-    if (mysqli_stmt_execute($stmt)) {
-        echo json_encode(['status' => 'success']);
-    } else {
-        echo json_encode(['status' => 'error', 'message' => mysqli_error($conexion)]);
-    }
-    
-    mysqli_stmt_close($stmt);
-    exit;
-}
-
-// Subir imagen del header
+// Upload header image
 if ($tipo == 'upload_header_image') {
     $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
     
@@ -95,20 +66,20 @@ if ($tipo == 'upload_header_image') {
     }
     
     // Crear directorio si no existe
-    $upload_dir = '../../img/services/';
+    $upload_dir = '../../img/site/';
     if (!file_exists($upload_dir)) {
         mkdir($upload_dir, 0777, true);
     }
     
     // Generar nombre único
     $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $filename = 'header_' . time() . '.' . $extension;
+    $filename = 'offers_header_' . time() . '.' . $extension;
     $filepath = $upload_dir . $filename;
-    $db_path = 'img/services/' . $filename;
+    $db_path = 'img/site/' . $filename;
     
     if (move_uploaded_file($file['tmp_name'], $filepath)) {
         $db_path_escaped = mysqli_real_escape_string($conexion, $db_path);
-        $query = "UPDATE services_page_header SET header_image = '$db_path_escaped' WHERE id = $id";
+        $query = "UPDATE services_header SET bg_image = '$db_path_escaped' WHERE id = $id";
         
         if (mysqli_query($conexion, $query)) {
             echo json_encode(['status' => 'success', 'path' => $db_path]);

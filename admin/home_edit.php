@@ -5,6 +5,10 @@ $busca = mysqli_query($conexion,"SELECT * FROM usuarios WHERE id = '".$id_usuari
 $rst   = mysqli_fetch_array($busca);
 $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
+$busca_como_funciona = mysqli_query($conexion,"SELECT * FROM home_como_funciona WHERE activo = '0' ORDER BY step_number ASC");
+$busca_services = mysqli_query($conexion,"SELECT * FROM home_services WHERE activo = '0' ORDER BY orden ASC");
+mysqli_data_seek($busca_como_funciona, 0);
+mysqli_data_seek($busca_services, 0);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -68,6 +72,46 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                 font-size: 10px;
                 letter-spacing: 0.4px;
                 text-transform: uppercase;
+            }
+            /* Estilos para Como Funciona y Services */
+            .como-funciona-list, .services-list {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+            }
+            .como-funciona-item, .service-item {
+                border: 1px solid #e1e6ef;
+                border-radius: 4px;
+                background: #fff;
+                margin-bottom: 8px;
+                transition: border-color .2s ease, box-shadow .2s ease;
+                box-shadow: 0 1px 2px rgba(0,0,0,.05);
+            }
+            .como-funciona-item.active, .service-item.active {
+                border-color: #26C281;
+                background: #26C281;
+                box-shadow: none;
+            }
+            .como-funciona-item__content, .service-item__content {
+                display: flex;
+                align-items: center;
+                padding: 8px 10px;
+            }
+            .como-funciona-link, .service-link {
+                font-weight: 600;
+                color: #304050;
+                display: flex;
+                align-items: center;
+                text-decoration: none;
+                cursor: pointer;
+            }
+            .como-funciona-item.active .como-funciona-link,
+            .service-item.active .service-link {
+                color: #fff;
+            }
+            .como-funciona-link__icon, .service-link__icon {
+                margin-right: 8px;
+                font-size: 16px;
             }
         </style>
         <?php echo $theme_layout_style;?>
@@ -162,6 +206,46 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                                             </a>
                                         </li>
                                     </ul>
+                                    
+                                    <h3>Cómo Funciona</h3>
+                                    <div class="como-funciona-sidebar">
+                                        <ul class="nav navbar-nav margin-bottom-35 como-funciona-list">
+                                            <?php 
+                                                $m = 0;
+                                                while($fil_como = mysqli_fetch_array($busca_como_funciona)){ 
+                                                    $id_como = $fil_como['id'];
+                                            ?>
+                                            <li class="btn-como-funciona como-funciona-item" id="btn-como-<?php echo $m;?>">
+                                                <div class="como-funciona-item__content">
+                                                    <a class="como-funciona-link" onclick="open_como_funciona(<?php echo $m;?>,<?php echo $id_como;?>)">
+                                                        <span class="como-funciona-link__icon"><i class="<?php echo $fil_como['icon_class'];?>"></i></span>
+                                                        <span><?php echo $fil_como['step_number'];?>. <?php echo $fil_como['title'];?></span>
+                                                    </a>
+                                                </div>
+                                            </li>
+                                            <?php $m++; } ?>
+                                        </ul>
+                                    </div>
+                                    
+                                    <h3>Servicios Detallados</h3>
+                                    <div class="services-sidebar">
+                                        <ul class="nav navbar-nav margin-bottom-35 services-list">
+                                            <?php 
+                                                $p = 0;
+                                                while($fil_service = mysqli_fetch_array($busca_services)){ 
+                                                    $id_service = $fil_service['id'];
+                                            ?>
+                                            <li class="btn-service service-item" id="btn-service-<?php echo $p;?>">
+                                                <div class="service-item__content">
+                                                    <a class="service-link" onclick="open_service(<?php echo $p;?>,<?php echo $id_service;?>)">
+                                                        <span class="service-link__icon"><i class="<?php echo $fil_service['icon_class'];?>"></i></span>
+                                                        <span><?php echo $fil_service['title'];?></span>
+                                                    </a>
+                                                </div>
+                                            </li>
+                                            <?php $p++; } ?>
+                                        </ul>
+                                    </div>
                                 </nav>
                             </div>
                             <!-- END PAGE SIDEBAR -->

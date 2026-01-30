@@ -138,15 +138,19 @@ console.log(urlPagina);
 let pageSidebarMenu = document.querySelector('.navbar-nav');
 
 // Recorre los enlaces en el menú y verifica si la URL coincide con la dirección del enlace
-let menuLinks = pageSidebarMenu.querySelectorAll('a');
-menuLinks.forEach(function(link) {
-    if (link.getAttribute('href') === urlPagina) {
-        //quito active
-        let activeLink = pageSidebarMenu.querySelector('.active');
-        activeLink.classList.remove('active');
-        link.classList.add('active');
-    }
-});
+if (pageSidebarMenu) {
+    let menuLinks = pageSidebarMenu.querySelectorAll('a');
+    menuLinks.forEach(function(link) {
+        if (link.getAttribute('href') === urlPagina) {
+            //quito active
+            let activeLink = pageSidebarMenu.querySelector('.active');
+            if (activeLink) {
+                activeLink.classList.remove('active');
+            }
+            link.classList.add('active');
+        }
+    });
+}
 
 function submit(){
     let name = document.getElementById('name').value;

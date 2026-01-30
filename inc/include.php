@@ -89,8 +89,9 @@ $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
     <div class="navbar-nav ms-auto py-0">
         <a href="index.php" class="nav-item nav-link ' . $home_active . '">Home</a>
         <a href="about.php" class="nav-item nav-link ' . $about_active . '">About</a>
+        <a href="services.php" class="nav-item nav-link ' . $services_active . '">Services</a>
         <div class="nav-item dropdown">
-            <a href="#" class="nav-link dropdown-toggle ' . $services_active . '" data-bs-toggle="dropdown">Services</a>
+            <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">Medical Services</a>
             <div class="dropdown-menu m-0">
                 <a href="offers.php" class="dropdown-item"><i class="fas fa-list me-2"></i>All Services</a>
                 <div class="dropdown-divider"></div>

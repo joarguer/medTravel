@@ -1,5 +1,29 @@
 <?php
 include('inc/include.php'); 
+
+// Obtener configuración del header
+$busca_header = mysqli_query($conexion, "SELECT * FROM services_page_header WHERE activo = '1' ORDER BY id ASC LIMIT 1");
+$header_data = mysqli_fetch_array($busca_header);
+
+// Valores por defecto si no hay datos en BD
+$page_title = isset($header_data['title']) ? $header_data['title'] : 'Our Services';
+$subtitle = isset($header_data['subtitle']) ? $header_data['subtitle'] : 'Comprehensive Services';
+$main_title = isset($header_data['main_title']) ? $header_data['main_title'] : 'Complete Coordination & Management';
+$description = isset($header_data['description']) ? $header_data['description'] : 'At MedTravel we connect patients from the United States with certified medical providers in Colombia, offering complete coordination service from planning to post-procedure follow-up.';
+$header_image = isset($header_data['header_image']) ? $header_data['header_image'] : 'img/carousel-1.jpg';
+
+// Obtener servicios de coordinación
+$busca_services = mysqli_query($conexion, "SELECT * FROM coordination_services WHERE activo = '1' ORDER BY orden ASC");
+$services_left = [];
+$services_right = [];
+
+while($service = mysqli_fetch_array($busca_services)){
+    if($service['position'] == 'left'){
+        $services_left[] = $service;
+    } else {
+        $services_right[] = $service;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -31,13 +55,10 @@ include('inc/include.php');
         <!-- Navbar & Hero End -->
 
         <!-- Header Start -->
-        <div class="container-fluid bg-breadcrumb">
+        <div class="container-fluid bg-breadcrumb" style="background: linear-gradient(rgba(19, 53, 123, 0.5), rgba(19, 53, 123, 0.5)), url(<?php echo $header_image; ?>); background-position: center center; background-repeat: no-repeat; background-size: cover; background-attachment: fixed;">
             <div class="container text-center py-5" style="max-width: 900px;">
-                <h3 class="text-white display-3 mb-4">Our Services</h1>
-                <ol class="breadcrumb justify-content-center mb-0">
-                    <li class="breadcrumb-item"><a href="index.php">Home</a></li>
-                    <li class="breadcrumb-item active text-white">Services</li>
-                </ol>    
+                <h4 class="mb-3" style="color: #FFA500; font-weight: 600; text-transform: uppercase;"><?php echo $subtitle; ?></h4>
+                <h3 class="text-white display-3 mb-4"><?php echo $main_title; ?></h3>
             </div>
         </div>
         <!-- Header End -->
@@ -46,117 +67,46 @@ include('inc/include.php');
         <div class="container-fluid bg-light service py-5">
             <div class="container py-5">
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                    <h5 class="section-title px-3">Searvices</h5>
-                    <h1 class="mb-0">Our Services</h1>
+                    <p class="mb-0"><?php echo $description; ?></p>
                 </div>
                 <div class="row g-4">
                     <div class="col-lg-6">
                         <div class="row g-4">
+                            <?php foreach($services_left as $service){ ?>
                             <div class="col-12">
                                 <div class="service-content-inner d-flex align-items-center bg-white border border-primary rounded p-4 pe-0">
                                     <div class="service-content text-end">
-                                        <h5 class="mb-4">WorldWide Tours</h5>
-                                        <p class="mb-0">Dolor sit amet consectetur adipisicing elit. Non alias eum, suscipit expedita corrupti officiis debitis possimus nam laudantium beatae quidem dolore consequuntur voluptate rem reiciendis, omnis sequi harum earum.
-                                        </p>
+                                        <h5 class="mb-4"><?php echo $service['title']; ?></h5>
+                                        <p class="mb-0"><?php echo $service['description']; ?></p>
                                     </div>
                                     <div class="service-icon p-4">
-                                        <i class="fa fa-globe fa-4x text-primary"></i>
+                                        <i class="<?php echo $service['icon_class']; ?> fa-4x text-primary"></i>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <div class="service-content-inner d-flex align-items-center  bg-white border border-primary rounded p-4 pe-0">
-                                    <div class="service-content text-end">
-                                        <h5 class="mb-4">Hotel Reservation</h5>
-                                        <p class="mb-0">Dolor sit amet consectetur adipisicing elit. Non alias eum, suscipit expedita corrupti officiis debitis possimus nam laudantium beatae quidem dolore consequuntur voluptate rem reiciendis, omnis sequi harum earum.
-                                        </p>
-                                    </div>
-                                    <div class="service-icon p-4">
-                                        <i class="fa fa-hotel fa-4x text-primary"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="service-content-inner d-flex align-items-center bg-white border border-primary rounded p-4 pe-0">
-                                    <div class="service-content text-end">
-                                        <h5 class="mb-4">Travel Guides</h5>
-                                        <p class="mb-0">Dolor sit amet consectetur adipisicing elit. Non alias eum, suscipit expedita corrupti officiis debitis possimus nam laudantium beatae quidem dolore consequuntur voluptate rem reiciendis, omnis sequi harum earum.
-                                        </p>
-                                    </div>
-                                    <div class="service-icon p-4">
-                                        <i class="fa fa-user fa-4x text-primary"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="service-content-inner d-flex align-items-center bg-white border border-primary rounded p-4 pe-0">
-                                    <div class="service-content text-end">
-                                        <h5 class="mb-4">Event Management</h5>
-                                        <p class="mb-0">Dolor sit amet consectetur adipisicing elit. Non alias eum, suscipit expedita corrupti officiis debitis possimus nam laudantium beatae quidem dolore consequuntur voluptate rem reiciendis, omnis sequi harum earum.
-                                        </p>
-                                    </div>
-                                    <div class="service-icon p-4">
-                                        <i class="fa fa-cog fa-4x text-primary"></i>
-                                    </div>
-                                </div>
-                            </div>
+                            <?php } ?>
                         </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="row g-4">
+                            <?php foreach($services_right as $service){ ?>
                             <div class="col-12">
                                 <div class="service-content-inner d-flex align-items-center bg-white border border-primary rounded p-4 ps-0">
                                     <div class="service-icon p-4">
-                                        <i class="fa fa-globe fa-4x text-primary"></i>
+                                        <i class="<?php echo $service['icon_class']; ?> fa-4x text-primary"></i>
                                     </div>
                                     <div class="service-content">
-                                        <h5 class="mb-4">WorldWide Tours</h5>
-                                        <p class="mb-0">Dolor sit amet consectetur adipisicing elit. Non alias eum, suscipit expedita corrupti officiis debitis possimus nam laudantium beatae quidem dolore consequuntur voluptate rem reiciendis, omnis sequi harum earum.
-                                        </p>
+                                        <h5 class="mb-4"><?php echo $service['title']; ?></h5>
+                                        <p class="mb-0"><?php echo $service['description']; ?></p>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <div class="service-content-inner d-flex align-items-center bg-white border border-primary rounded p-4 ps-0">
-                                    <div class="service-icon p-4">
-                                        <i class="fa fa-hotel fa-4x text-primary"></i>
-                                    </div>
-                                    <div class="service-content">
-                                        <h5 class="mb-4">Hotel Reservation</h5>
-                                        <p class="mb-0">Dolor sit amet consectetur adipisicing elit. Non alias eum, suscipit expedita corrupti officiis debitis possimus nam laudantium beatae quidem dolore consequuntur voluptate rem reiciendis, omnis sequi harum earum.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="service-content-inner d-flex align-items-center bg-white border border-primary rounded p-4 ps-0">
-                                    <div class="service-icon p-4">
-                                        <i class="fa fa-user fa-4x text-primary"></i>
-                                    </div>
-                                    <div class="service-content">
-                                        <h5 class="mb-4">Travel Guides</h5>
-                                        <p class="mb-0">Dolor sit amet consectetur adipisicing elit. Non alias eum, suscipit expedita corrupti officiis debitis possimus nam laudantium beatae quidem dolore consequuntur voluptate rem reiciendis, omnis sequi harum earum.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="service-content-inner d-flex align-items-center bg-white border border-primary rounded p-4 ps-0">
-                                    <div class="service-icon p-4">
-                                        <i class="fa fa-cog fa-4x text-primary"></i>
-                                    </div>
-                                    <div class="service-content">
-                                        <h5 class="mb-4">Event Management</h5>
-                                        <p class="mb-0">Dolor sit amet consectetur adipisicing elit. Non alias eum, suscipit expedita corrupti officiis debitis possimus nam laudantium beatae quidem dolore consequuntur voluptate rem reiciendis, omnis sequi harum earum.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                            <?php } ?>
                         </div>
                     </div>
                     <div class="col-12">
                         <div class="text-center">
-                            <a class="btn btn-primary rounded-pill py-3 px-5 mt-2" href="">Service More</a>
+                            <a class="btn btn-primary rounded-pill py-3 px-5 mt-2" href="contact.php">Request Quote</a>
                         </div>
                     </div>
                 </div>

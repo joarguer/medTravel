@@ -105,10 +105,121 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                 </div>
             </div>
         </div>
-        Navbar & Hero End --
+        <!-- Navbar & Hero End -->
 
-        !-- Destination Start --
+        <!-- Services Start -->
+        <div class="container-fluid services py-5 bg-light">
+            <div class="container py-5">
+                <div class="mx-auto text-center mb-5" style="max-width: 900px;">
+                    <h5 class="section-title px-3">Our Services</h5>
+                    <h1 class="mb-4">Comprehensive Coordination & Management</h1>
+                    <p class="mb-0">We connect patients from the United States with certified medical providers in Colombia, offering complete coordination and support throughout the entire process.</p>
+                </div>
+                <div class="row g-4">
+                    <!-- Coordinación Médica -->
+                    <div class="col-lg-4 col-md-6">
+                        <div class="services-item border border-primary rounded h-100 p-4">
+                            <div class="services-icon mb-3">
+                                <i class="fas fa-heartbeat fa-3x text-primary"></i>
+                            </div>
+                            <h4 class="mb-3">Medical Coordination</h4>
+                            <p class="mb-0">We coordinate your appointments with certified medical providers in Colombia, providing translation, consultation support and post-procedure follow-up.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Gestión de Vuelos -->
+                    <div class="col-lg-4 col-md-6">
+                        <div class="services-item border border-primary rounded h-100 p-4">
+                            <div class="services-icon mb-3">
+                                <i class="fas fa-plane-departure fa-3x text-primary"></i>
+                            </div>
+                            <h4 class="mb-3">Flight Management</h4>
+                            <p class="mb-0">We find and coordinate the best flight options from the United States to Colombia, adapting to your medical dates and preferences.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Alojamiento -->
+                    <div class="col-lg-4 col-md-6">
+                        <div class="services-item border border-primary rounded h-100 p-4">
+                            <div class="services-icon mb-3">
+                                <i class="fas fa-hotel fa-3x text-primary"></i>
+                            </div>
+                            <h4 class="mb-3">Accommodation</h4>
+                            <p class="mb-0">We book hotels and lodging options adapted to your budget and recovery, with locations near the clinics.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Transporte Local -->
+                    <div class="col-lg-4 col-md-6">
+                        <div class="services-item border border-primary rounded h-100 p-4">
+                            <div class="services-icon mb-3">
+                                <i class="fas fa-car fa-3x text-primary"></i>
+                            </div>
+                            <h4 class="mb-3">Local Transportation</h4>
+                            <p class="mb-0">We arrange transfers from the airport to clinics, hotels and points of interest, ensuring your comfort and punctuality.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Alimentación -->
+                    <div class="col-lg-4 col-md-6">
+                        <div class="services-item border border-primary rounded h-100 p-4">
+                            <div class="services-icon mb-3">
+                                <i class="fas fa-utensils fa-3x text-primary"></i>
+                            </div>
+                            <h4 class="mb-3">Meals</h4>
+                            <p class="mb-0">We coordinate meal options that meet post-operative medical restrictions and special diets during your stay.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Soporte 24/7 -->
+                    <div class="col-lg-4 col-md-6">
+                        <div class="services-item border border-primary rounded h-100 p-4">
+                            <div class="services-icon mb-3">
+                                <i class="fas fa-headset fa-3x text-primary"></i>
+                            </div>
+                            <h4 class="mb-3">24/7 Support</h4>
+                            <p class="mb-0">24-hour bilingual assistance, emergency management and resolution of unforeseen events throughout your medical tourism experience.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center mt-5">
+                    <a href="services.php" class="btn btn-primary rounded-pill py-3 px-5">Ver Todos los Servicios</a>
+                </div>
+            </div>
+        </div>
+        <!-- Services End -->
+
+        <!-- Cómo Funciona Start -->
         <div class="container-fluid destination py-5">
+            <div class="container py-5">
+                <div class="mx-auto text-center mb-5" style="max-width: 900px;">
+                    <h5 class="section-title px-3">Simple Process</h5>
+                    <h1 class="mb-4">How Does MedTravel Work?</h1>
+                    <p class="mb-0">In just 4 steps we coordinate your complete medical trip from the United States to Colombia</p>
+                </div>
+                <div class="row g-4">
+                    <?php
+                    $busca_como_funciona = mysqli_query($conexion,"SELECT * FROM home_como_funciona WHERE activo = '0' ORDER BY step_number ASC");
+                    while($rst_como = mysqli_fetch_array($busca_como_funciona)){
+                    ?>
+                    <div class="col-lg-3 col-md-6">
+                        <div class="text-center">
+                            <div class="d-inline-flex align-items-center justify-content-center bg-primary rounded-circle mb-4" style="width: 100px; height: 100px;">
+                                <i class="<?php echo $rst_como['icon_class'];?> fa-3x text-white"></i>
+                            </div>
+                            <h4><?php echo $rst_como['step_number'];?>. <?php echo $rst_como['title'];?></h4>
+                            <p class="text-muted"><?php echo $rst_como['description'];?></p>
+                        </div>
+                    </div>
+                    <?php } ?>
+                </div>
+            </div>
+        </div>
+        <!-- Cómo Funciona End -->
+
+        <!-- Old Destination Section Removed -->
+        <div style="display:none;">
             <div class="container py-5">
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
                     <h5 class="section-title px-3">Destination</h5>
@@ -414,765 +525,85 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                 </div>
             </div>
         </div>
-        !-- Destination End --
+        </div>
+        <!-- Old Destination Section End -->
 
-        !-- Explore Tour Start --
-        <div class="container-fluid ExploreTour py-5">
+        <!-- Servicios Detallados Start -->
+        <div class="container-fluid ExploreTour py-5 bg-light">
             <div class="container py-5">
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                    <h5 class="section-title px-3">Explore Tour</h5>
-                    <h1 class="mb-4">The World</h1>
-                    <p class="mb-0">Lorem ipsum dolor sit amet consectetur adipisicing elit. Laborum tempore nam, architecto doloremque velit explicabo? Voluptate sunt eveniet fuga eligendi! Expedita laudantium fugiat corrupti eum cum repellat a laborum quasi.
-                    </p>
+                    <h5 class="section-title px-3 text-dark">Our Services</h5>
+                    <h1 class="mb-4 text-dark">Comprehensive Coordination Services</h1>
+                    <p class="mb-0 text-muted">We manage every aspect of your medical tourism experience in Colombia, from planning to post-procedure follow-up.</p>
                 </div>
-                <div class="tab-class text-center">
-                    <ul class="nav nav-pills d-inline-flex justify-content-center mb-5">
-                        <li class="nav-item">
-                            <a class="d-flex mx-3 py-2 border border-primary bg-light rounded-pill active" data-bs-toggle="pill" href="#NationalTab-1">
-                                <span class="text-dark" style="width: 250px;">National Tour Category</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="d-flex py-2 mx-3 border border-primary bg-light rounded-pill" data-bs-toggle="pill" href="#InternationalTab-2">
-                                <span class="text-dark" style="width: 250px;">International tour Category</span>
-                            </a>
-                        </li>
-                    </ul>
-                    <div class="tab-content">
-                        <div id="NationalTab-1" class="tab-pane fade show p-0 active">
-                            <div class="row g-4">
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="national-item">
-                                        <img src="img/explore-tour-1.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                        <div class="national-content">
-                                            <div class="national-info">
-                                                <h5 class="text-white text-uppercase mb-2">Weekend Tour</h5>
-                                                <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                            </div>
-                                        </div>
-                                        <div class="national-plus-icon">
-                                            <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="national-item">
-                                        <img src="img/explore-tour-2.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                        <div class="national-content">
-                                            <div class="national-info">
-                                                <h5 class="text-white text-uppercase mb-2">Holiday Tour</h5>
-                                                <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                            </div>
-                                        </div>
-                                        <div class="national-plus-icon">
-                                            <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="national-item">
-                                        <img src="img/explore-tour-3.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                        <div class="national-content">
-                                            <div class="national-info">
-                                                <h5 class="text-white text-uppercase mb-2">Road Trip</h5>
-                                                <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                            </div>
-                                        </div>
-                                        <div class="tour-offer bg-info">15% Off</div>
-                                        <div class="national-plus-icon">
-                                            <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="national-item">
-                                        <img src="img/explore-tour-4.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                        <div class="national-content">
-                                            <div class="national-info">
-                                                <h5 class="text-white text-uppercase mb-2">Historical Trip</h5>
-                                                <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                            </div>
-                                        </div>
-                                        <div class="national-plus-icon">
-                                            <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="national-item">
-                                        <img src="img/explore-tour-5.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                        <div class="national-content">
-                                            <div class="national-info">
-                                                <h5 class="text-white text-uppercase mb-2">Family Tour</h5>
-                                                <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                            </div>
-                                        </div>
-                                        <div class="tour-offer bg-warning">50% Off</div>
-                                        <div class="national-plus-icon">
-                                            <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6 col-lg-4">
-                                    <div class="national-item">
-                                        <img src="img/explore-tour-6.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                        <div class="national-content">
-                                            <div class="national-info">
-                                                <h5 class="text-white text-uppercase mb-2">Beach Tour</h5>
-                                                <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                            </div>
-                                        </div>
-                                        <div class="national-plus-icon">
-                                            <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                        </div>
-                                    </div>
+                <div class="row g-4">
+                    <?php
+                    $busca_services = mysqli_query($conexion,"SELECT * FROM home_services WHERE activo = '0' ORDER BY orden ASC");
+                    while($rst_service = mysqli_fetch_array($busca_services)){
+                    ?>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="national-item h-100">
+                            <img src="<?php echo $rst_service['img'];?>" class="img-fluid w-100 rounded" alt="<?php echo $rst_service['title'];?>">
+                            <div class="national-content">
+                                <div class="national-info">
+                                    <h5 class="text-white text-uppercase mb-2"><?php echo $rst_service['title'];?></h5>
+                                    <p class="text-white mb-2" style="font-size: 14px;"><?php echo $rst_service['description'];?></p>
+                                    <a href="services.php" class="btn-hover text-white">Learn More <i class="fa fa-arrow-right ms-2"></i></a>
                                 </div>
                             </div>
-                        </div>
-                        <div id="InternationalTab-2" class="tab-pane fade show p-0">
-                            <div class="InternationalTour-carousel owl-carousel">
-                                <div class="international-item">
-                                    <img src="img/explore-tour-1.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                    <div class="international-content">
-                                        <div class="international-info">
-                                            <h5 class="text-white text-uppercase mb-2">Australia</h5>
-                                            <a href="#" class="btn-hover text-white me-4"><i class="fas fa-map-marker-alt me-1"></i> 8 Cities</a>
-                                            <a href="#" class="btn-hover text-white"><i class="fa fa-eye ms-2"></i> <span>143+ Tour Places</span></a>
-                                        </div>
-                                    </div>
-                                    <div class="tour-offer bg-success">30% Off</div>
-                                    <div class="international-plus-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="international-item">
-                                    <img src="img/explore-tour-2.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                    <div class="international-content">
-                                        <div class="international-info">
-                                            <h5 class="text-white text-uppercase mb-2">Germany</h5>
-                                            <a href="#" class="btn-hover text-white me-4"><i class="fas fa-map-marker-alt me-1"></i> 12 Cities</a>
-                                            <a href="#" class="btn-hover text-white"><i class="fa fa-eye ms-2"></i> <span>21+ Tour Places</span></a>
-                                        </div>
-                                    </div>
-                                    <div class="international-plus-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="international-item">
-                                    <img src="img/explore-tour-3.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                    <div class="international-content">
-                                        <div class="tour-offer bg-warning">45% Off</div>
-                                        <div class="international-info">
-                                            <h5 class="text-white text-uppercase mb-2">Spain</h5>
-                                            <a href="#" class="btn-hover text-white me-4"><i class="fas fa-map-marker-alt me-1"></i> 9 Cities</a>
-                                            <a href="#" class="btn-hover text-white"><i class="fa fa-eye ms-2"></i> <span>133+ Tour Places</span></a>
-                                        </div>
-                                    </div>
-                                    <div class="international-plus-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="international-item">
-                                    <img src="img/explore-tour-4.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                    <div class="international-content">
-                                        <div class="international-info">
-                                            <h5 class="text-white text-uppercase mb-2">Japan</h5>
-                                            <a href="#" class="btn-hover text-white me-4"><i class="fas fa-map-marker-alt me-1"></i> 8 Cities</a>
-                                            <a href="#" class="btn-hover text-white"><i class="fa fa-eye ms-2"></i> <span>137+ Tour Places</span></a>
-                                        </div>
-                                    </div>
-                                    <div class="international-plus-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="international-item">
-                                    <img src="img/explore-tour-5.jpg" class="img-fluid w-100 rounded" alt="Image">
-                                    <div class="international-content">
-                                        <div class="tour-offer bg-info">70% Off</div>
-                                        <div class="international-info">
-                                            <h5 class="text-white text-uppercase mb-2">London</h5>
-                                            <a href="#" class="btn-hover text-white me-4"><i class="fas fa-map-marker-alt me-1"></i> 17 Cities</a>
-                                            <a href="#" class="btn-hover text-white"><i class="fa fa-eye ms-2"></i> <span>26+ Tour Places</span></a>
-                                        </div>
-                                    </div>
-                                    <div class="international-plus-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
+                            <?php if(!empty($rst_service['badge'])){ ?>
+                            <div class="tour-offer <?php echo $rst_service['badge_class'];?>"><?php echo $rst_service['badge'];?></div>
+                            <?php } ?>
+                            <div class="national-plus-icon">
+                                <a href="services.php" class="my-auto"><i class="<?php echo $rst_service['icon_class'];?> fa-2x text-white"></i></a>
                             </div>
                         </div>
                     </div>
+                    <?php } ?>
                 </div>
             </div>
         </div>
-        !-- Explore Tour Start --
+        <!-- Servicios Detallados End -->
 
-        !-- Packages Start --
-        <div class="container-fluid packages py-5">
-            <div class="container py-5">
-                <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                    <h5 class="section-title px-3">Packages</h5>
-                    <h1 class="mb-0">Awesome Packages</h1>
-                </div>
-                <div class="packages-carousel owl-carousel">
-                    <div class="packages-item">
-                        <div class="packages-img">
-                            <img src="img/packages-4.jpg" class="img-fluid w-100 rounded-top" alt="Image">
-                            <div class="packages-info d-flex border border-start-0 border-end-0 position-absolute" style="width: 100%; bottom: 0; left: 0; z-index: 5;">
-                                <small class="flex-fill text-center border-end py-2"><i class="fa fa-map-marker-alt me-2"></i>Venice - Italy</small>
-                                <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt me-2"></i>3 days</small>
-                                <small class="flex-fill text-center py-2"><i class="fa fa-user me-2"></i>2 Person</small>
-                            </div>
-                            <div class="packages-price py-2 px-4">$349.00</div>
-                        </div>
-                        <div class="packages-content bg-light">
-                            <div class="p-4 pb-0">
-                                <h5 class="mb-0">Venice - Italy</h5>
-                                <small class="text-uppercase">Hotel Deals</small>
-                                <div class="mb-3">
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                </div>
-                                <p class="mb-4">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Nesciunt nemo quia quae illum aperiam fugiat voluptatem repellat</p>
-                            </div>
-                            <div class="row bg-primary rounded-bottom mx-0">
-                                <div class="col-6 text-start px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Read More</a>
-                                </div>
-                                <div class="col-6 text-end px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Book Now</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="packages-item">
-                        <div class="packages-img">
-                            <img src="img/packages-2.jpg" class="img-fluid w-100 rounded-top" alt="Image">
-                            <div class="packages-info d-flex border border-start-0 border-end-0 position-absolute" style="width: 100%; bottom: 0; left: 0; z-index: 5;">
-                                <small class="flex-fill text-center border-end py-2"><i class="fa fa-map-marker-alt me-2"></i>Venice - Italy</small>
-                                <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt me-2"></i>3 days</small>
-                                <small class="flex-fill text-center py-2"><i class="fa fa-user me-2"></i>2 Person</small>
-                            </div>
-                            <div class="packages-price py-2 px-4">$449.00</div>
-                        </div>
-                        <div class="packages-content bg-light">
-                            <div class="p-4 pb-0">
-                                <h5 class="mb-0">The New California</h5>
-                                <small class="text-uppercase">Hotel Deals</small>
-                                <div class="mb-3">
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                </div>
-                                <p class="mb-4">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Nesciunt nemo quia quae illum aperiam fugiat voluptatem repellat</p>
-                            </div>
-                            <div class="row bg-primary rounded-bottom mx-0">
-                                <div class="col-6 text-start px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Read More</a>
-                                </div>
-                                <div class="col-6 text-end px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Book Now</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="packages-item">
-                        <div class="packages-img">
-                            <img src="img/packages-3.jpg" class="img-fluid w-100 rounded-top" alt="Image">
-                            <div class="packages-info d-flex border border-start-0 border-end-0 position-absolute" style="width: 100%; bottom: 0; left: 0; z-index: 5;">
-                                <small class="flex-fill text-center border-end py-2"><i class="fa fa-map-marker-alt me-2"></i>Venice - Italy</small>
-                                <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt me-2"></i>3 days</small>
-                                <small class="flex-fill text-center py-2"><i class="fa fa-user me-2"></i>2 Person</small>
-                            </div>
-                            <div class="packages-price py-2 px-4">$549.00</div>
-                        </div>
-                        <div class="packages-content bg-light">
-                            <div class="p-4 pb-0">
-                                <h5 class="mb-0">Discover Japan</h5>
-                                <small class="text-uppercase">Hotel Deals</small>
-                                <div class="mb-3">
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                </div>
-                                <p class="mb-4">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Nesciunt nemo quia quae illum aperiam fugiat voluptatem repellat</p>
-                            </div>
-                            <div class="row bg-primary rounded-bottom mx-0">
-                                <div class="col-6 text-start px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Read More</a>
-                                </div>
-                                <div class="col-6 text-end px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Book Now</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="packages-item">
-                        <div class="packages-img">
-                            <img src="img/packages-1.jpg" class="img-fluid w-100 rounded-top" alt="Image">
-                            <div class="packages-info d-flex border border-start-0 border-end-0 position-absolute" style="width: 100%; bottom: 0; left: 0; z-index: 5;">
-                                <small class="flex-fill text-center border-end py-2"><i class="fa fa-map-marker-alt me-2"></i>Thayland</small>
-                                <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt me-2"></i>3 days</small>
-                                <small class="flex-fill text-center py-2"><i class="fa fa-user me-2"></i>2 Person</small>
-                            </div>
-                            <div class="packages-price py-2 px-4">$649.00</div>
-                        </div>
-                        <div class="packages-content bg-light">
-                            <div class="p-4 pb-0">
-                                <h5 class="mb-0">Thayland Trip</h5>
-                                <small class="text-uppercase">Hotel Deals</small>
-                                <div class="mb-3">
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                    <small class="fa fa-star text-primary"></small>
-                                </div>
-                                <p class="mb-4">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Nesciunt nemo quia quae illum aperiam fugiat voluptatem repellat</p>
-                            </div>
-                            <div class="row bg-primary rounded-bottom mx-0">
-                                <div class="col-6 text-start px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Read More</a>
-                                </div>
-                                <div class="col-6 text-end px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Book Now</a>
-                                </div>
-                            </div>
-                        </div>
+        <!-- Call to Action Start -->
+        <div class="container-fluid py-5" style="background: linear-gradient(rgba(19, 53, 123, 0.9), rgba(19, 53, 123, 0.9)), url(img/about-img-1.png);">
+            <div class="container text-center py-5">
+                <div class="mx-auto" style="max-width: 900px;">
+                    <h5 class="section-title px-3 text-white">Ready for Your Medical Trip?</h5>
+                    <h1 class="mb-4 text-white">Start Your Experience with MedTravel</h1>
+                    <p class="mb-4 text-white">We connect patients from the United States with certified medical providers in Colombia. We coordinate everything necessary for your peace of mind: flights, accommodation, transportation, meals and 24/7 support.</p>
+                    <div class="d-flex justify-content-center gap-3 flex-wrap">
+                        <a href="contact.php" class="btn btn-light rounded-pill py-3 px-5">Request Quote</a>
+                        <a href="services.php" class="btn btn-outline-light rounded-pill py-3 px-5">View Services</a>
                     </div>
                 </div>
             </div>
         </div>
-        !-- Packages End --
-
-        !-- Gallery Start --
-        <div class="container-fluid gallery py-5 my-5">
-            <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                <h5 class="section-title px-3">Our Gallery</h5>
-                <h1 class="mb-4">Tourism & Traveling Gallery.</h1>
-                <p class="mb-0">Lorem ipsum dolor sit amet consectetur adipisicing elit. Laborum tempore nam, architecto doloremque velit explicabo? Voluptate sunt eveniet fuga eligendi! Expedita laudantium fugiat corrupti eum cum repellat a laborum quasi.
-                </p>
-            </div>
-            <div class="tab-class text-center">
-                <ul class="nav nav-pills d-inline-flex justify-content-center mb-5">
-                    <li class="nav-item">
-                        <a class="d-flex mx-3 py-2 border border-primary bg-light rounded-pill active" data-bs-toggle="pill" href="#GalleryTab-1">
-                            <span class="text-dark" style="width: 150px;">All</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="d-flex py-2 mx-3 border border-primary bg-light rounded-pill" data-bs-toggle="pill" href="#GalleryTab-2">
-                            <span class="text-dark" style="width: 150px;">World tour</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="d-flex mx-3 py-2 border border-primary bg-light rounded-pill" data-bs-toggle="pill" href="#GalleryTab-3">
-                            <span class="text-dark" style="width: 150px;">Ocean Tour</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="d-flex mx-3 py-2 border border-primary bg-light rounded-pill" data-bs-toggle="pill" href="#GalleryTab-4">
-                            <span class="text-dark" style="width: 150px;">Summer Tour</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="d-flex mx-3 py-2 border border-primary bg-light rounded-pill" data-bs-toggle="pill" href="#GalleryTab-5">
-                            <span class="text-dark" style="width: 150px;">Sport Tour</span>
-                        </a>
-                    </li>
-                </ul>
-                <div class="tab-content">
-                    <div id="GalleryTab-1" class="tab-pane fade show p-0 active">
-                        <div class="row g-2">
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-1.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-1.jpg" data-lightbox="gallery-1" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-3">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-2.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-2.jpg" data-lightbox="gallery-2" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-3.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-3.jpg" data-lightbox="gallery-3" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-3">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-4.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-4.jpg" data-lightbox="gallery-4" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-5.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-5.jpg" data-lightbox="gallery-5" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-6.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-6.jpg" data-lightbox="gallery-6" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-3 col-xl-3">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-7.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-7.jpg" data-lightbox="gallery-7" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-3 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-8.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-8.jpg" data-lightbox="gallery-8" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-3 col-xl-3">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-9.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-9.jpg" data-lightbox="gallery-9" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-3 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-10.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-10.jpg" data-lightbox="gallery-10" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="GalleryTab-2" class="tab-pane fade show p-0">
-                        <div class="row g-2">
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-3">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-2.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-2.jpg" data-lightbox="gallery-2" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-3.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-3.jpg" data-lightbox="gallery-3" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="GalleryTab-3" class="tab-pane fade show p-0">
-                        <div class="row g-2">
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-3">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-2.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-2.jpg" data-lightbox="gallery-2" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-3.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-3.jpg" data-lightbox="gallery-3" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="GalleryTab-4" class="tab-pane fade show p-0">
-                        <div class="row g-2">
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-3">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-2.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-2.jpg" data-lightbox="gallery-2" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-3.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-3.jpg" data-lightbox="gallery-3" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="GalleryTab-5" class="tab-pane fade show p-0">
-                        <div class="row g-2">
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-3">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-2.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-2.jpg" data-lightbox="gallery-2" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-sm-6 col-md-6 col-lg-4 col-xl-2">
-                                <div class="gallery-item h-100">
-                                    <img src="img/gallery-3.jpg" class="img-fluid w-100 h-100 rounded" alt="Image">
-                                    <div class="gallery-content">
-                                        <div class="gallery-info">
-                                            <h5 class="text-white text-uppercase mb-2">World Tour</h5>
-                                            <a href="#" class="btn-hover text-white">View All Place <i class="fa fa-arrow-right ms-2"></i></a>
-                                        </div>
-                                    </div>
-                                    <div class="gallery-plus-icon">
-                                        <a href="img/gallery-3.jpg" data-lightbox="gallery-3" class="my-auto"><i class="fas fa-plus fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        !-- Gallery End --
+        <!-- Call to Action End -->
 
         <!-- Tour Booking Start -->
         <?php echo $booking_widget; ?>
         <!-- Tour Booking End -->
 
-        !-- Blog Start --
-        <div class="container-fluid blog py-5">
-            <div class="container py-5">
-                <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                    <h5 class="section-title px-3">Our Blog</h5>
-                    <h1 class="mb-4">Popular Travel Blogs</h1>
-                    <p class="mb-0">Lorem ipsum dolor sit amet consectetur adipisicing elit. Deleniti deserunt tenetur sapiente atque. Magni non explicabo beatae sit, vel reiciendis consectetur numquam id similique sunt error obcaecati ducimus officia maiores.
-                    </p>
-                </div>
-                <div class="row g-4 justify-content-center">
-                    <div class="col-lg-4 col-md-6">
-                        <div class="blog-item">
-                            <div class="blog-img">
-                                <div class="blog-img-inner">
-                                    <img class="img-fluid w-100 rounded-top" src="img/blog-1.jpg" alt="Image">
-                                    <div class="blog-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
-                                    <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i>28 Jan 2050</small>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white border-end py-2"><i class="fa fa-thumbs-up text-primary me-2"></i>1.7K</a>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white py-2"><i class="fa fa-comments text-primary me-2"></i>1K</a>
-                                </div>
-                            </div>
-                            <div class="blog-content border border-top-0 rounded-bottom p-4">
-                                <p class="mb-3">Posted By: Royal Hamblin </p>
-                                <a href="#" class="h4">Adventures Trip</a>
-                                <p class="my-3">Tempor erat elitr rebum at clita. Diam dolor diam ipsum sit diam amet diam eos</p>
-                                <a href="#" class="btn btn-primary rounded-pill py-2 px-4">Read More</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4 col-md-6">
-                        <div class="blog-item">
-                            <div class="blog-img">
-                                <div class="blog-img-inner">
-                                    <img class="img-fluid w-100 rounded-top" src="img/blog-2.jpg" alt="Image">
-                                    <div class="blog-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
-                                    <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i>28 Jan 2050</small>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white border-end py-2"><i class="fa fa-thumbs-up text-primary me-2"></i>1.7K</a>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white py-2"><i class="fa fa-comments text-primary me-2"></i>1K</a>
-                                </div>
-                            </div>
-                            <div class="blog-content border border-top-0 rounded-bottom p-4">
-                                <p class="mb-3">Posted By: Royal Hamblin </p>
-                                <a href="#" class="h4">Adventures Trip</a>
-                                <p class="my-3">Tempor erat elitr rebum at clita. Diam dolor diam ipsum sit diam amet diam eos</p>
-                                <a href="#" class="btn btn-primary rounded-pill py-2 px-4">Read More</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4 col-md-6">
-                        <div class="blog-item">
-                            <div class="blog-img">
-                                <div class="blog-img-inner">
-                                    <img class="img-fluid w-100 rounded-top" src="img/blog-3.jpg" alt="Image">
-                                    <div class="blog-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
-                                    <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i>28 Jan 2050</small>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white border-end py-2"><i class="fa fa-thumbs-up text-primary me-2"></i>1.7K</a>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white py-2"><i class="fa fa-comments text-primary me-2"></i>1K</a>
-                                </div>
-                            </div>
-                            <div class="blog-content border border-top-0 rounded-bottom p-4">
-                                <p class="mb-3">Posted By: Royal Hamblin </p>
-                                <a href="#" class="h4">Adventures Trip</a>
-                                <p class="my-3">Tempor erat elitr rebum at clita. Diam dolor diam ipsum sit diam amet diam eos</p>
-                                <a href="#" class="btn btn-primary rounded-pill py-2 px-4">Read More</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        !-- Blog End --
-
-        !-- Testimonial Start --
+        <!-- Testimonial Start -->
         <div class="container-fluid testimonial py-5">
             <div class="container py-5">
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                    <h5 class="section-title px-3">Testimonial</h5>
-                    <h1 class="mb-0">Our Clients Say!!!</h1>
+                    <h5 class="section-title px-3">Testimonials</h5>
+                    <h1 class="mb-0">What Our Clients Say!</h1>
                 </div>
                 <div class="testimonial-carousel owl-carousel">
                     <div class="testimonial-item text-center rounded pb-4">
                         <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Quis nostrum cupiditate, eligendi repellendus saepe illum earum architecto dicta quisquam quasi porro officiis. Vero reiciendis,
+                            <p class="text-center mb-5">MedTravel perfectly coordinated my medical trip to Colombia. From the airport to the clinic, everything was impeccable. The post-operative follow-up gave me great peace of mind.
                             </p>
                         </div>
                         <div class="testimonial-img p-1">
                             <img src="img/testimonial-1.jpg" class="img-fluid rounded-circle" alt="Image">
                         </div>
                         <div style="margin-top: -35px;">
-                            <h5 class="mb-0">John Abraham</h5>
-                            <p class="mb-0">New York, USA</p>
+                            <h5 class="mb-0">Sarah Johnson</h5>
+                            <p class="mb-0">Miami, Florida</p>
                             <div class="d-flex justify-content-center">
                                 <i class="fas fa-star text-primary"></i>
                                 <i class="fas fa-star text-primary"></i>
@@ -1184,15 +615,15 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                     </div>
                     <div class="testimonial-item text-center rounded pb-4">
                         <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Quis nostrum cupiditate, eligendi repellendus saepe illum earum architecto dicta quisquam quasi porro officiis. Vero reiciendis,
+                            <p class="text-center mb-5">Excellent service. The team was always available, communication was clear and the hotel they booked was close to the clinic. Highly recommended.
                             </p>
                         </div>
                         <div class="testimonial-img p-1">
                             <img src="img/testimonial-2.jpg" class="img-fluid rounded-circle" alt="Image">
                         </div>
                         <div style="margin-top: -35px;">
-                            <h5 class="mb-0">John Abraham</h5>
-                            <p class="mb-0">New York, USA</p>
+                            <h5 class="mb-0">Michael Anderson</h5>
+                            <p class="mb-0">Orlando, Florida</p>
                             <div class="d-flex justify-content-center">
                                 <i class="fas fa-star text-primary"></i>
                                 <i class="fas fa-star text-primary"></i>
@@ -1204,15 +635,15 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                     </div>
                     <div class="testimonial-item text-center rounded pb-4">
                         <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Quis nostrum cupiditate, eligendi repellendus saepe illum earum architecto dicta quisquam quasi porro officiis. Vero reiciendis,
+                            <p class="text-center mb-5">I felt safe throughout the entire process. The coordination with the doctors was professional and the 24/7 support helped me a lot when I had questions.
                             </p>
                         </div>
                         <div class="testimonial-img p-1">
                             <img src="img/testimonial-3.jpg" class="img-fluid rounded-circle" alt="Image">
                         </div>
                         <div style="margin-top: -35px;">
-                            <h5 class="mb-0">John Abraham</h5>
-                            <p class="mb-0">New York, USA</p>
+                            <h5 class="mb-0">Jennifer Martinez</h5>
+                            <p class="mb-0">Tampa, Florida</p>
                             <div class="d-flex justify-content-center">
                                 <i class="fas fa-star text-primary"></i>
                                 <i class="fas fa-star text-primary"></i>
@@ -1224,15 +655,15 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                     </div>
                     <div class="testimonial-item text-center rounded pb-4">
                         <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Quis nostrum cupiditate, eligendi repellendus saepe illum earum architecto dicta quisquam quasi porro officiis. Vero reiciendis,
+                            <p class="text-center mb-5">Amazing experience. They coordinated my flight, transportation and accommodation. The bilingual team made everything easy. Worth every penny.
                             </p>
                         </div>
                         <div class="testimonial-img p-1">
                             <img src="img/testimonial-4.jpg" class="img-fluid rounded-circle" alt="Image">
                         </div>
                         <div style="margin-top: -35px;">
-                            <h5 class="mb-0">John Abraham</h5>
-                            <p class="mb-0">New York, USA</p>
+                            <h5 class="mb-0">Robert Williams</h5>
+                            <p class="mb-0">Jacksonville, Florida</p>
                             <div class="d-flex justify-content-center">
                                 <i class="fas fa-star text-primary"></i>
                                 <i class="fas fa-star text-primary"></i>
@@ -1245,7 +676,7 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                 </div>
             </div>
         </div>
-        !-- Testimonial End -->
+        <!-- Testimonial End -->
 
         <!-- Contact Start -->
         <?php echo $contact; ?>

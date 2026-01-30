@@ -88,5 +88,78 @@ if($tipo == 'add_input'){
         $resultados['text_go'] = $text_come;
     }
 }
+
+// Cómo Funciona
+if($tipo == 'get_como_funciona'){
+    $id = $_REQUEST["id"];
+    $busco = mysqli_query($conexion,"SELECT * FROM home_como_funciona WHERE id = '$id'");
+    if(mysqli_num_rows($busco) > 0){
+        $resultados = mysqli_fetch_array($busco);
+    }
+}
+if($tipo == 'edit_como_funciona'){
+    $id = $_REQUEST["id"];
+    $icon_class = $_REQUEST["icon_class"];
+    $title = $_REQUEST["title"];
+    $description = $_REQUEST["description"];
+    $actualizo = mysqli_query($conexion,"UPDATE home_como_funciona SET icon_class = '$icon_class', title = '$title', description = '$description' WHERE id = '$id'");
+    if($actualizo){
+        $resultados['status'] = 'success';
+    } else {
+        $resultados['status'] = 'error';
+    }
+}
+
+// Servicios Detallados
+if($tipo == 'get_services'){
+    $id = $_REQUEST["id"];
+    $busco = mysqli_query($conexion,"SELECT * FROM home_services WHERE id = '$id'");
+    if(mysqli_num_rows($busco) > 0){
+        $resultados = mysqli_fetch_array($busco);
+    }
+}
+if($tipo == 'edit_service'){
+    $id = $_REQUEST["id"];
+    $icon_class = $_REQUEST["icon_class"];
+    $title = $_REQUEST["title"];
+    $description = $_REQUEST["description"];
+    $badge = $_REQUEST["badge"];
+    $badge_class = $_REQUEST["badge_class"];
+    $actualizo = mysqli_query($conexion,"UPDATE home_services SET icon_class = '$icon_class', title = '$title', description = '$description', badge = '$badge', badge_class = '$badge_class' WHERE id = '$id'");
+    if($actualizo){
+        $resultados['status'] = 'success';
+    } else {
+        $resultados['status'] = 'error';
+    }
+}
+if($tipo == 'edit_service_img'){
+    $id = $_REQUEST["id"];
+    $title = $_REQUEST["title"];
+    $ruta = "../../img/services/".$id."_".$title."_".$_FILES['file']['name'];
+    if (($_FILES["file"]["type"] == "image/pjpeg") || ($_FILES["file"]["type"] == "image/jpeg") || ($_FILES["file"]["type"] == "image/png") || ($_FILES["file"]["type"] == "image/gif")) {
+        $busco = mysqli_query($conexion,"SELECT img FROM home_services WHERE id = '$id'");
+        if(mysqli_num_rows($busco) > 0){
+            $archivo_ = mysqli_fetch_array($busco);
+            $archivo =  "../../".$archivo_['img'];
+            $archivo = explode("?",$archivo);
+            $archivo = $archivo[0];
+            if (file_exists($archivo)) {
+                unlink($archivo);
+            }
+        }
+        if (move_uploaded_file($_FILES["file"]["tmp_name"], $ruta)) {
+            $ruta   = "img/services/".$id."_".$title."_".$_FILES['file']['name']."?".rand();
+            $busca  = mysqli_query($conexion,"UPDATE home_services SET img = '$ruta' WHERE id = '$id'");
+            $resultados['status'] = 'success';
+            $resultados['ruta'] = $ruta;
+        } else {
+            $resultados['status'] = 'error1: '.mysqli_error($conexion);
+            $resultados['ruta'] = $ruta;
+        }
+    } else {
+        $resultados['status'] = 'error2: '.mysqli_error($conexion);
+        $resultados['ruta'] = $ruta;
+    }
+}
 echo json_encode($resultados);
 ?>

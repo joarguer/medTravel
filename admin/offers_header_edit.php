@@ -3,23 +3,21 @@ include("include/include.php");
 $id_usuario = $_SESSION['id_usuario'];
 $busca = mysqli_query($conexion,"SELECT * FROM usuarios WHERE id = '".$id_usuario."'");
 $rst   = mysqli_fetch_array($busca);
-$busca_page_header = mysqli_query($conexion,"SELECT * FROM services_page_header WHERE activo = '1' ORDER BY id ASC LIMIT 1");
-$rst_page_header = mysqli_fetch_array($busca_page_header);
-$busca_services = mysqli_query($conexion,"SELECT * FROM coordination_services WHERE activo = '1' ORDER BY orden ASC");
-$n = 1;
+$busca_header = mysqli_query($conexion,"SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
+$rst_header = mysqli_fetch_array($busca_header);
 ?>
 <!DOCTYPE html>
 <html lang="es">
     <head>
         <meta charset="utf-8" />
-        <title>medTravel - Services Page Edit</title>
+        <title>medTravel - Medical Services Header Edit</title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta content="width=device-width, initial-scale=1" name="viewport" />
         <?php echo $global_first_style;?>
         <link href="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.css" rel="stylesheet" type="text/css" />
         <?php echo $theme_global_style;?>
         <style>
-            .services-header {
+            .offers-header {
                 background-color: rgba(0, 0, 0, 0.5);
                 background-size: cover;
                 background-position: center;
@@ -32,21 +30,25 @@ $n = 1;
                 justify-content: center;
                 flex-direction: column;
             }
-            .services-header h1 {
+            .offers-header h4 {
+                font-weight: 600;
+                color: #ccc;
+                text-align: center;
+                margin: 0 0 10px 0;
+                font-size: 16px;
+            }
+            .offers-header h1 {
                 font-weight: 800;
                 color: #fff;
                 text-align: center;
                 margin: 0 0 10px 0;
             }
-            .services-header p {
+            .offers-header p {
                 font-size: 18px;
                 font-weight: 400;
                 color: #fff;
                 text-align: center;
                 margin: 0;
-            }
-            .services-header p span {
-                color: orange;
             }
         </style>
         <?php echo $theme_layout_style;?>
@@ -67,10 +69,10 @@ $n = 1;
             <div class="container-fluid">
                 <div class="page-content">
                     <div class="breadcrumbs">
-                        <h1>Services Page Edit</h1>
+                        <h1>Medical Services Header Edit</h1>
                         <ol class="breadcrumb">
                             <li><a href="#">Site</a></li>
-                            <li class="active">Services (services.php)</li>
+                            <li class="active">Medical Services Header (offers.php)</li>
                         </ol>
                         <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".page-sidebar">
                             <span class="sr-only">Toggle navigation</span>
@@ -86,7 +88,7 @@ $n = 1;
                         <div class="page-content-row">
                             <div class="page-sidebar">
                                 <nav class="navbar" role="navigation">
-                                    <h3>Page Header</h3>
+                                    <h3>Header Settings</h3>
                                     <ul class="nav navbar-nav">
                                         <li class="btn-header active" id="btn-header">
                                             <a onclick="open_header()">
@@ -94,36 +96,22 @@ $n = 1;
                                             </a>
                                         </li>
                                     </ul>
-                                    
-                                    <h3>Coordination Services</h3>
-                                    <ul class="nav navbar-nav services-list">
-                                        <?php 
-                                        $m = 0;
-                                        while($fil_service = mysqli_fetch_array($busca_services)){
-                                            $id_service = $fil_service['id'];
-                                        ?>
-                                        <li class="btn-service" id="btn-service-<?php echo $m;?>">
-                                            <a onclick="open_service(<?php echo $m;?>,<?php echo $id_service;?>)">
-                                                <i class="<?php echo $fil_service['icon_class'];?>"></i> <?php echo $fil_service['title'];?>
-                                            </a>
-                                        </li>
-                                        <?php $m++; } ?>
-                                    </ul>
                                 </nav>
                             </div>
                             <div class="page-content-col">
+                                <!-- Content loaded by JavaScript -->
                             </div>
                         </div>
                     </div>
                 </div>
-                <?php echo $footer;?>
             </div>
+
+            <?php echo $footer;?>
         </div>
-        
-        <?php echo $sider_bar;?>
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+
+        <?php echo $theme_global_js;?>
         <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
-        <?php echo $theme_layout_script;?>
-        <script src="js/services_edit.js" type="text/javascript"></script>
+        <?php echo $theme_layout_js;?>
+        <script src="js/offers_header_edit.js" type="text/javascript"></script>
     </body>
 </html>

@@ -346,3 +346,241 @@ function notification(text,title,status){
         "hideMethod": "fadeOut"
     }
 }
+
+// ========== CÓMO FUNCIONA ==========
+function open_como_funciona(i, id){
+    $('.btn-como-funciona').removeClass('active');
+    $('#btn-como-'+i).addClass('active');
+    
+    let url = 'ajax/home_edit.php';
+    let data = {
+        'tipo': 'get_como_funciona',
+        'id': id
+    };
+    
+    $.post(url, data, function(res){
+        let response = JSON.parse(res);
+        let body = '';
+        body += `<div class="row margin-bottom-40">
+                    <div class="col-md-12">
+                        <h2>Editar Paso ${response.step_number}</h2>
+                        <div class="step-preview">
+                            <div class="step-icon"><i class="${response.icon_class} fa-3x text-primary"></i></div>
+                            <h4>${response.title}</h4>
+                            <p>${response.description}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Icono (clase de Font Awesome)</label>
+                    <input onchange="editComoFunciona('icon_class',${i},${id})" type="text" class="form-control" id="icon_class_input_${i}" value="${response.icon_class}" placeholder="fa fa-search">
+                    <small class="form-text text-muted">Ejemplo: fa fa-search, fa fa-calendar, etc.</small>
+                </div>
+                <div class="form-group">
+                    <label>Título</label>
+                    <input onchange="editComoFunciona('title',${i},${id})" type="text" class="form-control" id="title_input_${i}" value="${response.title}" placeholder="Título del paso">
+                </div>
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea onchange="editComoFunciona('description',${i},${id})" class="form-control" id="description_input_${i}" rows="4" placeholder="Descripción del paso">${response.description}</textarea>
+                </div>`;
+        $('.page-content-col').html(body);
+        $('.step-preview').css('padding', '20px');
+        $('.step-preview').css('border', '1px solid #ddd');
+        $('.step-preview').css('border-radius', '5px');
+        $('.step-preview').css('margin-bottom', '20px');
+        $('.step-preview .step-icon').css('margin-bottom', '10px');
+    });
+}
+
+function editComoFunciona(field, i, id){
+    let value = $('#'+field+'_input_'+i).val();
+    let url = 'ajax/home_edit.php';
+    let data = {
+        'tipo': 'edit_como_funciona',
+        'id': id,
+        'icon_class': $('#icon_class_input_'+i).val(),
+        'title': $('#title_input_'+i).val(),
+        'description': $('#description_input_'+i).val()
+    };
+    
+    $.post(url, data, function(res){
+        let response = JSON.parse(res);
+        if(response.status == 'success'){
+            notification('Se ha actualizado el paso', 'Cómo Funciona', 'success');
+            // Actualizar preview
+            if(field == 'icon_class'){
+                $('.step-icon i').attr('class', value + ' fa-3x text-primary');
+            } else if(field == 'title'){
+                $('.step-preview h4').text(value);
+            } else if(field == 'description'){
+                $('.step-preview p').text(value);
+            }
+        } else {
+            notification('Error al actualizar', 'Error', 'error');
+        }
+    });
+}
+
+// ========== SERVICIOS DETALLADOS ==========
+function open_service(i, id){
+    $('.btn-service').removeClass('active');
+    $('#btn-service-'+i).addClass('active');
+    
+    let url = 'ajax/home_edit.php';
+    let data = {
+        'tipo': 'get_services',
+        'id': id
+    };
+    
+    $.post(url, data, function(res){
+        let response = JSON.parse(res);
+        let badge_html = '';
+        if(response.badge){
+            badge_html = `<span class="badge ${response.badge_class}">${response.badge}</span>`;
+        }
+        
+        let body = '';
+        body += `<div class="row margin-bottom-40">
+                    <div class="col-md-12">
+                        <h2>Editar Servicio</h2>
+                        <div class="service-preview">
+                            <div class="service-preview-header">
+                                ${badge_html}
+                                <div class="service-icon"><i class="${response.icon_class} fa-3x text-primary"></i></div>
+                            </div>
+                            <img src="https://medtravel.com.co/${response.img}" alt="${response.title}" class="img-fluid mb-3" style="max-height: 200px; object-fit: cover; width: 100%;">
+                            <h4>${response.title}</h4>
+                            <p>${response.description}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Icono (clase de Font Awesome)</label>
+                    <input onchange="editService('icon_class',${i},${id})" type="text" class="form-control" id="icon_class_input_${i}" value="${response.icon_class}" placeholder="fa fa-hospital">
+                    <small class="form-text text-muted">Ejemplo: fa fa-hospital, fa fa-heartbeat, etc.</small>
+                </div>
+                <div class="form-group">
+                    <label>Título</label>
+                    <input onchange="editService('title',${i},${id})" type="text" class="form-control" id="title_input_${i}" value="${response.title}" placeholder="Título del servicio">
+                </div>
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea onchange="editService('description',${i},${id})" class="form-control" id="description_input_${i}" rows="4" placeholder="Descripción del servicio">${response.description}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Badge (etiqueta)</label>
+                    <input onchange="editService('badge',${i},${id})" type="text" class="form-control" id="badge_input_${i}" value="${response.badge}" placeholder="Nuevo, Popular, etc.">
+                </div>
+                <div class="form-group">
+                    <label>Badge Class (clase CSS)</label>
+                    <select onchange="editService('badge_class',${i},${id})" class="form-control" id="badge_class_input_${i}">
+                        <option value="bg-primary" ${response.badge_class == 'bg-primary' ? 'selected' : ''}>Azul (Primary)</option>
+                        <option value="bg-success" ${response.badge_class == 'bg-success' ? 'selected' : ''}>Verde (Success)</option>
+                        <option value="bg-danger" ${response.badge_class == 'bg-danger' ? 'selected' : ''}>Rojo (Danger)</option>
+                        <option value="bg-warning" ${response.badge_class == 'bg-warning' ? 'selected' : ''}>Amarillo (Warning)</option>
+                        <option value="bg-info" ${response.badge_class == 'bg-info' ? 'selected' : ''}>Cian (Info)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Imagen</label>
+                    <button type="button" class="btn btn-white btn-block" onclick="editServiceImg(${i},${id})">Cambiar imagen</button>
+                </div>`;
+        $('.page-content-col').html(body);
+        $('.service-preview').css('padding', '20px');
+        $('.service-preview').css('border', '1px solid #ddd');
+        $('.service-preview').css('border-radius', '5px');
+        $('.service-preview').css('margin-bottom', '20px');
+        $('.service-preview-header').css('position', 'relative');
+        $('.service-preview-header .badge').css('position', 'absolute');
+        $('.service-preview-header .badge').css('top', '10px');
+        $('.service-preview-header .badge').css('right', '10px');
+        $('.service-preview .service-icon').css('margin-bottom', '10px');
+    });
+}
+
+function editService(field, i, id){
+    let value = $('#'+field+'_input_'+i).val();
+    let url = 'ajax/home_edit.php';
+    let data = {
+        'tipo': 'edit_service',
+        'id': id,
+        'icon_class': $('#icon_class_input_'+i).val(),
+        'title': $('#title_input_'+i).val(),
+        'description': $('#description_input_'+i).val(),
+        'badge': $('#badge_input_'+i).val(),
+        'badge_class': $('#badge_class_input_'+i).val()
+    };
+    
+    $.post(url, data, function(res){
+        let response = JSON.parse(res);
+        if(response.status == 'success'){
+            notification('Se ha actualizado el servicio', 'Servicios', 'success');
+            // Actualizar preview
+            if(field == 'icon_class'){
+                $('.service-icon i').attr('class', value + ' fa-3x text-primary');
+            } else if(field == 'title'){
+                $('.service-preview h4').text(value);
+            } else if(field == 'description'){
+                $('.service-preview p').text(value);
+            } else if(field == 'badge'){
+                let badge_class = $('#badge_class_input_'+i).val();
+                if(value){
+                    $('.service-preview-header .badge').remove();
+                    $('.service-preview-header').prepend(`<span class="badge ${badge_class}">${value}</span>`);
+                    $('.service-preview-header .badge').css('position', 'absolute');
+                    $('.service-preview-header .badge').css('top', '10px');
+                    $('.service-preview-header .badge').css('right', '10px');
+                } else {
+                    $('.service-preview-header .badge').remove();
+                }
+            } else if(field == 'badge_class'){
+                let badge_text = $('#badge_input_'+i).val();
+                if(badge_text){
+                    $('.service-preview-header .badge').attr('class', 'badge ' + value);
+                }
+            }
+        } else {
+            notification('Error al actualizar', 'Error', 'error');
+        }
+    });
+}
+
+function editServiceImg(i, id){
+    let title = $('#title_input_'+i).val();
+    title = title.replace(/\s/g, '_');
+    title = title.replace(/[^\w\s]/gi, '');
+    title = title.trim();
+    
+    let file = document.createElement('input');
+    file.type = 'file';
+    file.accept = 'image/*';
+    file.click();
+    
+    file.onchange = function(){
+        let form = new FormData();
+        form.append('file', file.files[0]);
+        form.append('id', id);
+        form.append('tipo', 'edit_service_img');
+        form.append('title', title);
+        let url = 'ajax/home_edit.php';
+        
+        $.ajax({
+            url: url,
+            type: 'POST',
+            data: form,
+            processData: false,
+            contentType: false,
+            success: function(res){
+                let response = JSON.parse(res);
+                if(response.status == 'success'){
+                    notification('Se ha actualizado la imagen', 'Imagen', 'success');
+                    let img = response.ruta;
+                    $('.service-preview img').attr('src', 'https://medtravel.com.co/'+img);
+                } else {
+                    notification('Error al actualizar la imagen', 'Error', 'error');
+                }
+            }
+        });
+    }
+}

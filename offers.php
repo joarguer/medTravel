@@ -5,21 +5,22 @@ include('inc/include.php');
 $busca_header = mysqli_query($conexion,"SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 if(mysqli_num_rows($busca_header) > 0) {
     $rst_header = mysqli_fetch_array($busca_header);
-    $page_title = $rst_header['title'];
-    $page_subtitle_1 = $rst_header['subtitle_1'];
-    $page_subtitle_2 = $rst_header['subtitle_2'];
+    $page_title = !empty($rst_header['title']) ? $rst_header['title'] : 'All Medical Services';
+    $page_subtitle_1 = !empty($rst_header['subtitle_1']) ? $rst_header['subtitle_1'] : 'MEDICAL SERVICES';
+    $page_subtitle_2 = !empty($rst_header['subtitle_2']) ? $rst_header['subtitle_2'] : 'Browse all available medical services from certified providers in Colombia';
     $bg_image = $rst_header['bg_image'];
 } else {
     // Valores por defecto si no existe configuración
-    $page_title = 'Our Medical Services';
+    $page_title = 'All Medical Services';
     $page_subtitle_1 = 'MEDICAL SERVICES';
-    $page_subtitle_2 = 'Discover quality medical services from verified providers';
+    $page_subtitle_2 = 'Browse all available medical services from certified providers in Colombia';
     $bg_image = '';
 }
 
 // Obtener categoría del parámetro GET
 $category_id = isset($_GET['category']) ? (int)$_GET['category'] : 0;
 $category_name = $page_title;
+$category_description = '';
 
 // Obtener información de la categoría si existe
 if ($category_id > 0) {
@@ -29,6 +30,7 @@ if ($category_id > 0) {
     $cat_result = mysqli_stmt_get_result($cat_query);
     if ($cat_row = mysqli_fetch_assoc($cat_result)) {
         $category_name = htmlspecialchars($cat_row['name']);
+        $category_description = htmlspecialchars($cat_row['description']);
     }
     mysqli_stmt_close($cat_query);
 }
@@ -208,7 +210,7 @@ $offers_result = mysqli_stmt_get_result($stmt);
         .category-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 80px 0;
+            padding: 120px 0 80px 0;
             margin-bottom: 50px;
         }
         .no-offers {
@@ -250,9 +252,17 @@ $offers_result = mysqli_stmt_get_result($stmt);
         }
     ?>">
         <div class="container text-center">
-            <h5 class="text-white-50 mb-3"><?php echo htmlspecialchars($page_subtitle_1); ?></h5>
+            <h5 class="text-white-50 mb-3"><?php echo $category_id > 0 ? 'MEDICAL CATEGORY' : htmlspecialchars($page_subtitle_1); ?></h5>
             <h1 class="display-3 text-white mb-4"><?php echo htmlspecialchars($category_name); ?></h1>
-            <p class="text-white-50 mb-0"><?php echo htmlspecialchars($page_subtitle_2); ?></p>
+            <p class="text-white-50 mb-0" style="max-width: 800px; margin: 0 auto; font-size: 1.1rem;">
+                <?php 
+                if ($category_id > 0 && !empty($category_description)) {
+                    echo $category_description;
+                } else {
+                    echo htmlspecialchars($page_subtitle_2);
+                }
+                ?>
+            </p>
         </div>
     </div>
     <!-- Header End -->
@@ -260,6 +270,26 @@ $offers_result = mysqli_stmt_get_result($stmt);
     <!-- Offers Start -->
     <div class="container-fluid py-5">
         <div class="container py-5">
+            <?php if ($category_id > 0): ?>
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h2 class="mb-2">Available Services</h2>
+                                <p class="text-muted">Certified providers offering <?php echo strtolower($category_name); ?> services in Colombia</p>
+                            </div>
+                            <a href="offers.php" class="btn btn-outline-primary">View All Categories</a>
+                        </div>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="row mb-4">
+                    <div class="col-12 text-center">
+                        <h2 class="mb-2">Explore All Medical Services</h2>
+                        <p class="text-muted">Browse through our comprehensive catalog of medical services from certified providers across Colombia</p>
+                    </div>
+                </div>
+            <?php endif; ?>
             <?php if (mysqli_num_rows($offers_result) > 0): ?>
                 <div class="row g-4">
                     <?php while ($offer = mysqli_fetch_assoc($offers_result)): ?>
