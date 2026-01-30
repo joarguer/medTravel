@@ -119,6 +119,10 @@ $rst_us = mysqli_fetch_array($busca_us);
         </div>
         <!-- Travel Guide End -->
 
+        <!-- Booking Widget Start -->
+        <?php echo $booking_widget; ?>
+        <!-- Booking Widget End -->
+
         <!-- Subscribe Start -->
         <?php echo $newsletter; ?>
         <!-- Subscribe End -->
@@ -142,7 +146,7 @@ $rst_us = mysqli_fetch_array($busca_us);
         <script src="lib/waypoints/waypoints.min.js"></script>
         <script src="lib/owlcarousel/owl.carousel.min.js"></script>
         <script src="lib/lightbox/js/lightbox.min.js"></script>
-        
+        <?php echo $script; ?>
 
         <!-- Template Javascript -->
         <script src="js/main.js"></script>

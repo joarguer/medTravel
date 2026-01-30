@@ -85,15 +85,25 @@ $(document).ready(function() {
                 if (response.ok) {
                     toastr.success(response.message || 'Logo actualizado correctamente', 'Éxito');
                     
-                    // Actualizar preview
+                    // Actualizar preview - forzar actualización en ambos elementos
                     if (response.url) {
-                        $('#logo-preview').attr('src', response.url + '?t=' + new Date().getTime());
+                        var newUrl = response.url + '?t=' + new Date().getTime();
+                        $('#logo-preview').attr('src', newUrl);
+                        
+                        // Actualizar también el preview del plugin fileinput si existe
+                        $('.fileinput-preview img').attr('src', newUrl);
+                        
+                        // Recargar la página después de 1 segundo para asegurar que se vea el logo
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1000);
                     }
                 } else {
                     toastr.error(response.error || 'Error al subir el logo', 'Error');
                 }
             },
             error: function(xhr, status, error) {
+                console.log('Error completo:', xhr.responseText);
                 toastr.error('Error de conexión: ' + error, 'Error');
             }
         });

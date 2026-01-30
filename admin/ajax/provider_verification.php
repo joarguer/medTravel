@@ -11,9 +11,9 @@ $id_usuario = $_SESSION['id_usuario'];
 if ($tipo == 'get') {
     $sql = "SELECT 
                 p.id,
-                p.nombre AS provider_name,
+                p.name AS provider_name,
                 p.email,
-                p.telefono,
+                p.phone AS telefono,
                 COALESCE(pv.status, 'pending') AS verification_status,
                 COALESCE(pv.verification_level, 'basic') AS verification_level,
                 COALESCE(pv.trust_score, 0) AS trust_score,
@@ -29,7 +29,7 @@ if ($tipo == 'get') {
             FROM providers p
             LEFT JOIN provider_verification pv ON p.id = pv.provider_id
             LEFT JOIN provider_verification_items pvi ON p.id = pvi.provider_id
-            GROUP BY p.id, p.nombre, p.email, p.telefono, pv.status, pv.verification_level, pv.trust_score, pv.verified_at, pv.expires_at
+            GROUP BY p.id, p.name, p.email, p.phone, pv.status, pv.verification_level, pv.trust_score, pv.verified_at, pv.expires_at
             ORDER BY p.id DESC";
     
     $resultado = mysqli_query($conexion, $sql);

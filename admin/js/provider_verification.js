@@ -170,6 +170,9 @@ function openVerificationModal(providerId, providerName) {
                 // Renderizar checklist
                 renderChecklist(items);
                 
+                // Cargar documentos del proveedor
+                loadProviderDocuments(providerId);
+                
                 $('#modalVerificacion').modal('show');
             } else {
                 toastr.error(response.message || 'Error al cargar verificación');
@@ -363,9 +366,170 @@ function saveVerificationStatus() {
     });
 }
 
-// Adjuntar evidencia (placeholder - requiere implementación de upload)
+// Adjuntar evidencia - Abrir modal de upload
 function attachEvidence(itemId) {
-    toastr.info('Funcionalidad de carga de documentos en desarrollo');
-    // TODO: Implementar modal de upload de documentos
-    // Vincular con provider_documents table
+    var providerId = $('#provider_id').val();
+    if (!providerId) {
+        toastr.error('ID de proveedor no válido');
+        return;
+    }
+    
+    // Guardar itemId para referenciar después del upload
+    $('#upload_item_id').val(itemId);
+    $('#upload_provider_id').val(providerId);
+    
+    // Limpiar formulario
+    $('#uploadDocumentForm')[0].reset();
+    $('#uploadPreview').html('');
+    
+    // Abrir modal
+    $('#modalUploadDocument').modal('show');
+}
+
+// Previsualizar archivo seleccionado
+function previewFile() {
+    var input = document.getElementById('document_file');
+    var preview = $('#uploadPreview');
+    var file = input.files[0];
+    
+    if (file) {
+        var fileSize = (file.size / 1024 / 1024).toFixed(2); // MB
+        var fileName = file.name;
+        var fileType = file.type;
+        
+        var icon = 'fa-file';
+        if (fileType.includes('pdf')) icon = 'fa-file-pdf-o';
+        else if (fileType.includes('image')) icon = 'fa-file-image-o';
+        else if (fileType.includes('word')) icon = 'fa-file-word-o';
+        
+        preview.html(`
+            <div class="alert alert-info">
+                <i class="fa ${icon} fa-2x pull-left" style="margin-right: 10px;"></i>
+                <strong>${fileName}</strong><br>
+                <small>Tamaño: ${fileSize} MB | Tipo: ${fileType}</small>
+            </div>
+        `);
+    }
+}
+
+// Subir documento
+function uploadDocument() {
+    var form = $('#uploadDocumentForm')[0];
+    var formData = new FormData(form);
+    
+    // Agregar datos adicionales
+    formData.append('provider_id', $('#upload_provider_id').val());
+    formData.append('item_id', $('#upload_item_id').val());
+    
+    // Validar que hay archivo
+    if (!$('#document_file')[0].files[0]) {
+        toastr.error('Debe seleccionar un archivo');
+        return;
+    }
+    
+    // Deshabilitar botón
+    var btnUpload = $('#btnUploadDocument');
+    btnUpload.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Subiendo...');
+    
+    $.ajax({
+        url: 'ajax/upload_document.php',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: 'json',
+        success: function(response) {
+            if (response.ok) {
+                toastr.success(response.message);
+                $('#modalUploadDocument').modal('hide');
+                
+                // Recargar el modal de verificación para mostrar el documento
+                var providerId = $('#upload_provider_id').val();
+                var providerName = $('#provider_name').text();
+                openVerificationModal(providerId, providerName);
+            } else {
+                toastr.error(response.message || 'Error al subir documento');
+            }
+        },
+        error: function(xhr, status, error) {
+            toastr.error('Error de conexión al subir documento');
+            console.error('Upload error:', error);
+        },
+        complete: function() {
+            btnUpload.prop('disabled', false).html('<i class="fa fa-upload"></i> Subir Documento');
+        }
+    });
+}
+
+// Cargar lista de documentos del proveedor
+function loadProviderDocuments(providerId) {
+    $.ajax({
+        url: 'ajax/provider_documents.php?action=list&provider_id=' + providerId,
+        type: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            if (response.ok && response.data.length > 0) {
+                var html = '<div class="mt-20"><h4>Documentos Adjuntos</h4><div class="table-responsive">';
+                html += '<table class="table table-condensed table-hover">';
+                html += '<thead><tr><th>Documento</th><th>Tipo</th><th>Tamaño</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
+                
+                $.each(response.data, function(i, doc) {
+                    var verifiedBadge = doc.is_verified == 1 
+                        ? '<span class="label label-success"><i class="fa fa-check"></i> Verificado</span>'
+                        : '<span class="label label-default">Pendiente</span>';
+                    
+                    html += '<tr>';
+                    html += '<td><i class="fa fa-file-o"></i> ' + doc.original_filename + '</td>';
+                    html += '<td>' + doc.document_type + '</td>';
+                    html += '<td>' + doc.file_size_formatted + '</td>';
+                    html += '<td>' + verifiedBadge + '</td>';
+                    html += '<td>';
+                    html += '<a href="' + doc.download_url + '" target="_blank" class="btn btn-xs btn-primary" title="Descargar">';
+                    html += '<i class="fa fa-download"></i></a> ';
+                    html += '<button class="btn btn-xs btn-danger" onclick="deleteDocument(' + doc.id + ')" title="Eliminar">';
+                    html += '<i class="fa fa-trash"></i></button>';
+                    html += '</td>';
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table></div></div>';
+                $('#documents_list').html(html);
+            } else {
+                $('#documents_list').html('<div class="alert alert-info mt-20">No hay documentos adjuntos</div>');
+            }
+        },
+        error: function() {
+            $('#documents_list').html('<div class="alert alert-danger mt-20">Error al cargar documentos</div>');
+        }
+    });
+}
+
+// Eliminar documento
+function deleteDocument(docId) {
+    if (!confirm('¿Está seguro de eliminar este documento? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    $.ajax({
+        url: 'ajax/provider_documents.php',
+        type: 'POST',
+        data: {
+            action: 'delete',
+            id: docId
+        },
+        dataType: 'json',
+        success: function(response) {
+            if (response.ok) {
+                toastr.success(response.message);
+                // Recargar lista de documentos
+                var providerId = $('#provider_id').val();
+                loadProviderDocuments(providerId);
+            } else {
+                toastr.error(response.message);
+            }
+        },
+        error: function() {
+            toastr.error('Error de conexión al eliminar');
+        }
+    });
 }

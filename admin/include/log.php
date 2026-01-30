@@ -92,21 +92,55 @@ if (!$busca_usua) {
 //empresa
 if (mysqli_num_rows($busca_usua) > 0) {
     $fil = mysqli_fetch_array($busca_usua);
-    if (v($fil,'password','') === hash('sha512', v($fil,'token','').$password)) {
+    
+    // NUEVO: Verificar contraseña (soporta hash antiguo SHA512 y nuevo bcrypt)
+    $password_valido = false;
+    $stored_password = v($fil,'password','');
+    
+    // Método 1: Nuevo sistema con bcrypt (password_hash/password_verify)
+    if (substr($stored_password, 0, 4) === '$2y$' || substr($stored_password, 0, 4) === '$2a$') {
+        // Es un hash bcrypt
+        $password_valido = password_verify($password, $stored_password);
+    } 
+    // Método 2: Sistema antiguo con SHA512 + token
+    else {
+        $password_valido = ($stored_password === hash('sha512', v($fil,'token','').$password));
+    }
+    
+    if ($password_valido) {
         //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC
         $rasocial = v($fil,'empresa','');
         $rasocial_esc = mysqli_real_escape_string($conexion, $rasocial);
-        $query = mysqli_query($conexion, "SELECT * FROM empresas WHERE rasocial = '".$rasocial_esc."' LIMIT 1");
+        
+        // NUEVO: Si no hay empresa en el campo, intentar buscar por provider_id
+        if (empty($rasocial) && !empty($fil['provider_id'])) {
+            $query = mysqli_query($conexion, "SELECT id, name as rasocial, name as nit, 0 as activo, '' as logo FROM providers WHERE id = ".(int)$fil['provider_id']." LIMIT 1");
+        } else {
+            $query = mysqli_query($conexion, "SELECT * FROM empresas WHERE rasocial = '".$rasocial_esc."' LIMIT 1");
+        }
+        
         if (!$query) {
             error_log('DB error: '.mysqli_error($conexion));
             header("location:../../login.php?error=query");
             exit();
         }
         if (mysqli_num_rows($query) == 0) {
-            header("location:../../login.php?error=empresa");
-            exit();
+            // NUEVO: Si es rol admin o no requiere empresa, crear una empresa virtual
+            if (v($fil,'rol','') === 'admin' || empty($rasocial)) {
+                $fila = [
+                    'id' => 1,
+                    'rasocial' => v($fil,'nombre','Usuario'),
+                    'nit' => '000000000',
+                    'activo' => 0,
+                    'logo' => ''
+                ];
+            } else {
+                header("location:../../login.php?error=empresa");
+                exit();
+            }
+        } else {
+            $fila = mysqli_fetch_array($query);
         }
-        $fila = mysqli_fetch_array($query);
         $_SESSION['nitEmpresa'] = v($fila,'nit','');
         if (v($fila,'activo',0) == 1) {
             header("location:../../index.php?usuario=nulo1");
@@ -159,20 +193,26 @@ if (mysqli_num_rows($busca_usua) > 0) {
         $_SESSION["id_empresa"]		=   v($fila,'id',0);
         $_SESSION["id_usuario"]		=   v($fil,'id',0);
         // Mapear user -> provider (si existe) y guardar provider_id en sesión
-        $provider_id = null;
-        if (isset($conexion) && is_int((int)$_SESSION["id_usuario"])) {
-            $stmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1");
-            if ($stmt) {
-                $uid = (int) $_SESSION["id_usuario"];
-                mysqli_stmt_bind_param($stmt, "i", $uid);
-                mysqli_stmt_execute($stmt);
-                mysqli_stmt_bind_result($stmt, $p_id);
-                if (mysqli_stmt_fetch($stmt)) {
-                    $_SESSION['provider_id'] = (int) $p_id;
-                } else {
-                    if (isset($_SESSION['provider_id'])) unset($_SESSION['provider_id']);
+        // NUEVO: Leer provider_id directamente de la tabla usuarios
+        if (!empty($fil['provider_id']) && (int)$fil['provider_id'] > 0) {
+            $_SESSION['provider_id'] = (int)$fil['provider_id'];
+        } else {
+            // Fallback: buscar en tabla provider_users (sistema antiguo)
+            $provider_id = null;
+            if (isset($conexion) && is_int((int)$_SESSION["id_usuario"])) {
+                $stmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1");
+                if ($stmt) {
+                    $uid = (int) $_SESSION["id_usuario"];
+                    mysqli_stmt_bind_param($stmt, "i", $uid);
+                    mysqli_stmt_execute($stmt);
+                    mysqli_stmt_bind_result($stmt, $p_id);
+                    if (mysqli_stmt_fetch($stmt)) {
+                        $_SESSION['provider_id'] = (int) $p_id;
+                    } else {
+                        if (isset($_SESSION['provider_id'])) unset($_SESSION['provider_id']);
+                    }
+                    mysqli_stmt_close($stmt);
                 }
-                mysqli_stmt_close($stmt);
             }
         }
         $_SESSION["nombre_usuario"]	=   v($fil,'nombre','');

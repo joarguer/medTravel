@@ -205,6 +205,130 @@ $offer = mysqli_fetch_assoc($result);
         .contact-item a:hover {
             text-decoration: underline;
         }
+        
+        /* Galería de Fotos */
+        .gallery-section {
+            background: white;
+            padding: 35px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border: 1px solid #e5e7eb;
+            margin-bottom: 25px;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .gallery-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            aspect-ratio: 4/3;
+        }
+        .gallery-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .gallery-item::after {
+            content: '🔍';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 3rem;
+            color: white;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            transition: transform 0.3s ease;
+            pointer-events: none;
+        }
+        .gallery-item:hover::after {
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .gallery-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(15, 118, 110, 0.7), rgba(20, 184, 166, 0.7));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        .gallery-item:hover::before {
+            opacity: 1;
+        }
+        .no-photos {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+        .no-photos i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+        /* Estilos para contenido HTML formateado */
+        .description-content {
+            font-size: 1rem;
+            line-height: 1.8;
+            color: #475569;
+        }
+        .description-content p {
+            margin-bottom: 1rem;
+        }
+        .description-content h1, 
+        .description-content h2, 
+        .description-content h3, 
+        .description-content h4 {
+            color: #1e293b;
+            font-weight: 700;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .description-content h1 { font-size: 2rem; }
+        .description-content h2 { font-size: 1.75rem; }
+        .description-content h3 { font-size: 1.5rem; }
+        .description-content h4 { font-size: 1.25rem; }
+        .description-content ul,
+        .description-content ol {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .description-content li {
+            margin-bottom: 0.5rem;
+        }
+        .description-content strong,
+        .description-content b {
+            font-weight: 700;
+            color: #334155;
+        }
+        .description-content em,
+        .description-content i {
+            font-style: italic;
+        }
+        .description-content a {
+            color: #0f766e;
+            text-decoration: underline;
+        }
+        .description-content a:hover {
+            color: #0d9488;
+        }
+        .description-content blockquote {
+            border-left: 4px solid #0f766e;
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #64748b;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -248,14 +372,52 @@ $offer = mysqli_fetch_assoc($result);
         <div class="row g-4">
             <!-- Left Column -->
             <div class="col-lg-8">
+                <!-- Galería de Fotos -->
+                <?php
+                // Obtener fotos de la oferta
+                $photos_query = mysqli_query($conexion, "SELECT id, path FROM offer_media WHERE offer_id = {$offer['id']} AND is_active = 1 ORDER BY sort_order ASC, id ASC");
+                $photos = [];
+                if ($photos_query) {
+                    while ($photo = mysqli_fetch_assoc($photos_query)) {
+                        $photos[] = $photo;
+                    }
+                }
+                ?>
+                
+                <?php if (count($photos) > 0): ?>
+                <div class="gallery-section">
+                    <h2 class="section-heading">
+                        <i class="fas fa-images"></i> 
+                        Gallery
+                    </h2>
+                    <div class="gallery-grid">
+                        <?php foreach ($photos as $photo): ?>
+                            <a href="<?php echo htmlspecialchars($photo['path']); ?>" 
+                               data-lightbox="offer-gallery" 
+                               data-title="<?php echo htmlspecialchars($offer['title']); ?>" 
+                               class="gallery-item">
+                                <img src="<?php echo htmlspecialchars($photo['path']); ?>" 
+                                     alt="<?php echo htmlspecialchars($offer['title']); ?>"
+                                     loading="lazy">
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <!-- Descripción -->
                 <div class="content-section">
                     <h2 class="section-heading">
                         <i class="fas fa-file-medical-alt"></i> 
                         Description
                     </h2>
-                    <p style="font-size: 1rem; line-height: 1.8; color: #475569;">
-                        <?php echo nl2br(htmlspecialchars($offer['description'])); ?>
-                    </p>
+                    <div class="description-content">
+                        <?php 
+                        // Decodificar entidades HTML y mostrar el contenido formateado
+                        $description = html_entity_decode($offer['description'], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                        echo $description;
+                        ?>
+                    </div>
                 </div>
             </div>
 
@@ -320,6 +482,10 @@ $offer = mysqli_fetch_assoc($result);
 
     <div class="pb-5"></div>
 
+    <!-- Booking Widget Start -->
+    <?php echo $booking_widget; ?>
+    <!-- Booking Widget End -->
+
     <!-- Footer Start -->
     <?php echo $footer; ?>
     <!-- Footer End -->
@@ -331,6 +497,7 @@ $offer = mysqli_fetch_assoc($result);
     <script src="lib/waypoints/waypoints.min.js"></script>
     <script src="lib/owlcarousel/owl.carousel.min.js"></script>
     <script src="lib/lightbox/js/lightbox.min.js"></script>
+    <?php echo $script; ?>
     <script src="js/main.js"></script>
     
     <script>

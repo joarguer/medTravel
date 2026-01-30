@@ -102,6 +102,11 @@ include('include/include.php');
                                 <input type="text" class="form-control" name="name" id="prov-name" placeholder="Nombre del prestador" required />
                             </div>
                             <div class="form-group">
+                                <label>Razón Social</label>
+                                <input type="text" class="form-control" name="legal_name" id="prov-legal-name" placeholder="Razón social / Nombre legal" />
+                                <span class="help-block">Nombre legal o fiscal de la empresa/profesional</span>
+                            </div>
+                            <div class="form-group">
                                 <label>Ciudad</label>
                                 <input type="text" class="form-control" name="city" id="prov-city" />
                             </div>
@@ -136,6 +141,35 @@ include('include/include.php');
                             <div class="form-group">
                                 <label class="mr10"><input type="checkbox" name="is_verified" id="prov-verified"> Verificado</label>
                                 <label><input type="checkbox" name="is_active" id="prov-active" checked> Activo</label>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h4 class="bold"><i class="fa fa-user-circle"></i> Acceso al Panel Administrativo</h4>
+                            <p class="text-muted">Credenciales para que el prestador pueda ingresar al sistema</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Usuario <span class="required">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-addon"><i class="fa fa-user"></i></span>
+                                    <input type="text" class="form-control" name="username" id="prov-username" placeholder="Usuario para login" required />
+                                </div>
+                                <span class="help-block">El prestador usará este usuario para iniciar sesión</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Contraseña <span class="required" id="password-required">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-addon"><i class="fa fa-lock"></i></span>
+                                    <input type="password" class="form-control" name="password" id="prov-password" placeholder="Contraseña" />
+                                </div>
+                                <span class="help-block" id="password-help">Dejar en blanco al editar para mantener la contraseña actual</span>
                             </div>
                         </div>
                     </div>

@@ -24,7 +24,6 @@ if ($tipo == 'get') {
                 created_at,
                 updated_at
             FROM clientes 
-            WHERE activo = 1
             ORDER BY id DESC";
     
     $resultado = mysqli_query($conexion, $sql);
@@ -44,7 +43,7 @@ if ($tipo == 'get') {
 elseif ($tipo == 'get_one') {
     $id = mysqli_real_escape_string($conexion, $_POST['id']);
     
-    $sql = "SELECT * FROM clientes WHERE id = '$id' AND activo = 1";
+    $sql = "SELECT * FROM clientes WHERE id = '$id'";
     $resultado = mysqli_query($conexion, $sql);
     
     if ($resultado && mysqli_num_rows($resultado) > 0) {
@@ -101,7 +100,7 @@ elseif ($tipo == 'create') {
     $referred_by = isset($_POST['referred_by']) ? mysqli_real_escape_string($conexion, $_POST['referred_by']) : '';
     
     // Validar que el email no exista
-    $check_email = "SELECT id FROM clientes WHERE email = '$email' AND activo = 1";
+    $check_email = "SELECT id FROM clientes WHERE email = '$email'";
     $resultado_check = mysqli_query($conexion, $check_email);
     
     if (mysqli_num_rows($resultado_check) > 0) {
@@ -118,8 +117,7 @@ elseif ($tipo == 'create') {
                 contacto_emergencia_nombre, contacto_emergencia_telefono, contacto_emergencia_relacion,
                 condiciones_medicas, alergias, medicamentos_actuales,
                 notas,
-                utm_source, utm_medium, utm_campaign, utm_content, utm_term, referred_by,
-                created_by, activo
+                utm_source, utm_medium, utm_campaign, utm_content, utm_term, referred_by
             ) VALUES (
                 '$nombre', '$apellido', '$email', " . ($fecha_nacimiento ? "'$fecha_nacimiento'" : "NULL") . ", '$telefono', '$whatsapp',
                 '$pais', '$estado', '$ciudad', '$direccion', '$codigo_postal',
@@ -128,8 +126,7 @@ elseif ($tipo == 'create') {
                 '$contacto_emergencia_nombre', '$contacto_emergencia_telefono', '$contacto_emergencia_relacion',
                 '$condiciones_medicas', '$alergias', '$medicamentos_actuales',
                 '$notas',
-                '$utm_source', '$utm_medium', '$utm_campaign', '$utm_content', '$utm_term', '$referred_by',
-                '$id_usuario', 1
+                '$utm_source', '$utm_medium', '$utm_campaign', '$utm_content', '$utm_term', '$referred_by'
             )";
     
     if (mysqli_query($conexion, $sql)) {
@@ -187,7 +184,7 @@ elseif ($tipo == 'update') {
     $referred_by = isset($_POST['referred_by']) ? mysqli_real_escape_string($conexion, $_POST['referred_by']) : '';
     
     // Validar que el email no exista para otro cliente
-    $check_email = "SELECT id FROM clientes WHERE email = '$email' AND id != '$id' AND activo = 1";
+    $check_email = "SELECT id FROM clientes WHERE email = '$email' AND id != '$id'";
     $resultado_check = mysqli_query($conexion, $check_email);
     
     if (mysqli_num_rows($resultado_check) > 0) {
@@ -224,9 +221,8 @@ elseif ($tipo == 'update') {
                 utm_campaign = '$utm_campaign',
                 utm_content = '$utm_content',
                 utm_term = '$utm_term',
-                referred_by = '$referred_by',
-                updated_by = '$id_usuario'
-            WHERE id = '$id' AND activo = 1";
+                referred_by = '$referred_by'
+            WHERE id = '$id'";
     
     if (mysqli_query($conexion, $sql)) {
         echo json_encode(['success' => true, 'message' => 'Cliente actualizado exitosamente']);
@@ -235,11 +231,11 @@ elseif ($tipo == 'update') {
     }
 }
 
-// DELETE: Eliminar cliente (soft delete)
+// DELETE: Eliminar cliente (cambiar status a 'inactivo')
 elseif ($tipo == 'delete') {
     $id = mysqli_real_escape_string($conexion, $_POST['id']);
     
-    $sql = "UPDATE clientes SET activo = 0, updated_by = '$id_usuario' WHERE id = '$id'";
+    $sql = "UPDATE clientes SET status = 'inactivo' WHERE id = '$id'";
     
     if (mysqli_query($conexion, $sql)) {
         echo json_encode(['success' => true, 'message' => 'Cliente eliminado exitosamente']);

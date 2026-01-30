@@ -1,16 +1,47 @@
 <?php
-session_start();
-include("../include/conexion.php");
+// Habilitar reporte de errores para debug
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Iniciar sesión
+@session_start();
+
+// Intentar incluir conexión
+try {
+    include_once("../include/conexion.php");
+} catch (Exception $e) {
+    header('Content-Type: application/json');
+    echo json_encode(array('ok' => false, 'error' => 'Error al incluir conexión: ' . $e->getMessage()));
+    exit();
+}
+
+// Verificar conexión
+if (!isset($conexion)) {
+    header('Content-Type: application/json');
+    echo json_encode(array('ok' => false, 'error' => 'Variable de conexión no definida'));
+    exit();
+}
+
+// Verificar conexión
+if (!isset($conexion)) {
+    header('Content-Type: application/json');
+    echo json_encode(array('ok' => false, 'error' => 'Variable de conexión no definida'));
+    exit();
+}
+
+// Establecer header JSON
+header('Content-Type: application/json');
 
 // Verificar sesión activa
 if (!isset($_SESSION["usuario"]) || empty($_SESSION["usuario"])) {
-    echo json_encode(['ok' => false, 'error' => 'Sesión no válida']);
+    echo json_encode(array('ok' => false, 'error' => 'Sesión no válida'));
     exit();
 }
 
 // Verificar provider_id en sesión
 if (!isset($_SESSION['provider_id']) || empty($_SESSION['provider_id'])) {
-    echo json_encode(['ok' => false, 'error' => 'No tiene permisos de prestador']);
+    echo json_encode(array('ok' => false, 'error' => 'No tiene permisos de prestador'));
     exit();
 }
 
@@ -23,52 +54,41 @@ if ($tipo == 'actualizar_empresa') {
     $allowed_fields = array('name', 'description', 'city', 'address', 'phone', 'email', 'website');
     
     $updates = array();
-    $params = array();
-    $types = '';
     
-    // Construir UPDATE dinámico solo con campos permitidos
+    // Construir UPDATE con valores escapados manualmente
     foreach ($allowed_fields as $field) {
         if (isset($_POST[$field])) {
-            $updates[] = "$field = ?";
-            $params[] = $_POST[$field];
-            $types .= 's';
+            $value = mysqli_real_escape_string($conexion, $_POST[$field]);
+            $updates[] = "`$field` = '$value'";
         }
     }
     
     if (empty($updates)) {
-        echo json_encode(['ok' => false, 'error' => 'No hay campos para actualizar']);
+        echo json_encode(array('ok' => false, 'error' => 'No hay campos para actualizar'));
         exit();
     }
     
-    // Agregar provider_id al final
-    $params[] = $provider_id;
-    $types .= 'i';
+    // Construir y ejecutar SQL
+    $sql = "UPDATE providers SET " . implode(', ', $updates) . " WHERE id = " . intval($provider_id);
     
-    $sql = "UPDATE providers SET " . implode(', ', $updates) . " WHERE id = ?";
+    $exec = mysqli_query($conexion, $sql);
     
-    if ($stmt = mysqli_prepare($conexion, $sql)) {
-        mysqli_stmt_bind_param($stmt, $types, ...$params);
-        $exec = mysqli_stmt_execute($stmt);
-        
-        if ($exec === false) {
-            $resultados['ok'] = false;
-            $resultados['error'] = 'Error al actualizar: ' . mysqli_stmt_error($stmt);
-        } else {
-            $resultados['ok'] = true;
-            $resultados['message'] = 'Datos actualizados correctamente';
-        }
-        
-        mysqli_stmt_close($stmt);
-    } else {
+    if ($exec === false) {
         $resultados['ok'] = false;
-        $resultados['error'] = 'Error de preparación: ' . mysqli_error($conexion);
+        $resultados['error'] = 'Error al actualizar: ' . mysqli_error($conexion);
+    } else {
+        $resultados['ok'] = true;
+        $resultados['message'] = 'Datos actualizados correctamente';
     }
+    
+    echo json_encode($resultados);
+    exit();
 }
 
 if ($tipo == 'upload_logo') {
     // Validar que se subió un archivo
     if (!isset($_FILES['logo']) || $_FILES['logo']['error'] !== UPLOAD_ERR_OK) {
-        echo json_encode(['ok' => false, 'error' => 'No se recibió archivo o hubo un error']);
+        echo json_encode(array('ok' => false, 'error' => 'No se recibió archivo o hubo un error'));
         exit();
     }
     
@@ -76,18 +96,25 @@ if ($tipo == 'upload_logo') {
     
     // Validar tamaño (máximo 2MB)
     if ($file['size'] > 2 * 1024 * 1024) {
-        echo json_encode(['ok' => false, 'error' => 'El archivo excede el tamaño máximo de 2MB']);
+        echo json_encode(array('ok' => false, 'error' => 'El archivo excede el tamaño máximo de 2MB'));
         exit();
     }
     
     // Validar tipo MIME
     $allowed_types = array('image/jpeg', 'image/png', 'image/webp');
-    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $mime = finfo_file($finfo, $file['tmp_name']);
-    finfo_close($finfo);
+    
+    // Verificar si finfo está disponible
+    if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+    } else {
+        // Fallback usando el tipo del archivo
+        $mime = $file['type'];
+    }
     
     if (!in_array($mime, $allowed_types)) {
-        echo json_encode(['ok' => false, 'error' => 'Formato no permitido. Use JPG, PNG o WEBP']);
+        echo json_encode(array('ok' => false, 'error' => 'Formato no permitido. Use JPG, PNG o WEBP'));
         exit();
     }
     
@@ -97,13 +124,13 @@ if ($tipo == 'upload_logo') {
         'image/png' => 'png',
         'image/webp' => 'webp'
     );
-    $ext = $ext_map[$mime];
+    $ext = isset($ext_map[$mime]) ? $ext_map[$mime] : 'jpg';
     
-    // Crear directorio si no existe
-    $upload_dir = "../img/providers/$provider_id/";
+    // Crear directorio si no existe - ruta correcta desde ajax/
+    $upload_dir = "../../img/providers/" . $provider_id . "/";
     if (!is_dir($upload_dir)) {
-        if (!mkdir($upload_dir, 0755, true)) {
-            echo json_encode(['ok' => false, 'error' => 'No se pudo crear el directorio']);
+        if (!@mkdir($upload_dir, 0755, true)) {
+            echo json_encode(array('ok' => false, 'error' => 'No se pudo crear el directorio'));
             exit();
         }
     }
@@ -113,35 +140,39 @@ if ($tipo == 'upload_logo') {
     $filepath = $upload_dir . $filename;
     
     // Mover archivo
-    if (!move_uploaded_file($file['tmp_name'], $filepath)) {
-        echo json_encode(['ok' => false, 'error' => 'Error al guardar el archivo']);
+    if (!@move_uploaded_file($file['tmp_name'], $filepath)) {
+        echo json_encode(array('ok' => false, 'error' => 'Error al guardar el archivo'));
         exit();
     }
     
-    // Actualizar base de datos
-    $sql = "UPDATE providers SET logo = ? WHERE id = ?";
-    if ($stmt = mysqli_prepare($conexion, $sql)) {
-        mysqli_stmt_bind_param($stmt, 'si', $filename, $provider_id);
-        $exec = mysqli_stmt_execute($stmt);
-        
-        if ($exec === false) {
-            // Eliminar archivo si falla la BD
-            unlink($filepath);
-            $resultados['ok'] = false;
-            $resultados['error'] = 'Error al actualizar la base de datos';
-        } else {
-            $resultados['ok'] = true;
-            $resultados['message'] = 'Logo actualizado correctamente';
-            $resultados['filename'] = $filename;
-            $resultados['url'] = '../img/providers/' . $provider_id . '/' . $filename;
+    // Actualizar base de datos usando query simple
+    $filename_esc = mysqli_real_escape_string($conexion, $filename);
+    $sql = "UPDATE providers SET logo = '$filename_esc' WHERE id = " . intval($provider_id);
+    $exec = mysqli_query($conexion, $sql);
+    
+    if ($exec === false) {
+        // Eliminar archivo si falla la BD
+        if (file_exists($filepath)) {
+            @unlink($filepath);
         }
-        
-        mysqli_stmt_close($stmt);
+        echo json_encode(array('ok' => false, 'error' => 'Error al actualizar la base de datos: ' . mysqli_error($conexion)));
     } else {
-        unlink($filepath);
-        $resultados['ok'] = false;
-        $resultados['error'] = 'Error de preparación';
+        echo json_encode(array(
+            'ok' => true,
+            'message' => 'Logo actualizado correctamente',
+            'filename' => $filename,
+            'url' => '../img/providers/' . $provider_id . '/' . $filename
+        ));
     }
+    exit();
+}
+
+// Si no se reconoce el tipo, devolver error
+if (empty($resultados)) {
+    $resultados = array(
+        'ok' => false,
+        'error' => 'Tipo de operación no válido'
+    );
 }
 
 echo json_encode($resultados);

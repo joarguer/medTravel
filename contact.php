@@ -47,6 +47,10 @@ include('inc/include.php');
         <?php echo $contact; ?>
         <!-- Contact End -->
 
+        <!-- Booking Widget Start -->
+        <?php echo $booking_widget; ?>
+        <!-- Booking Widget End -->
+
         <!-- Subscribe Start -->
         <div class="container-fluid subscribe py-5">
             <div class="container text-center py-5">

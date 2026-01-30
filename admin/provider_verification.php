@@ -190,6 +190,11 @@ $id_usuario = $_SESSION['id_usuario'];
                             <!-- Se llena dinámicamente con items -->
                         </div>
                         
+                        <!-- LISTA DE DOCUMENTOS -->
+                        <div id="documents_list" class="mt-20">
+                            <!-- Se llena dinámicamente con loadProviderDocuments() -->
+                        </div>
+                        
                         <button type="button" class="btn btn-success btn-block" onclick="initializeChecklist()">
                             <i class="fa fa-plus"></i> Inicializar Checklist Estándar
                         </button>
@@ -200,6 +205,63 @@ $id_usuario = $_SESSION['id_usuario'];
                             <i class="fa fa-save"></i> Guardar Estado
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+        <!-- END MODAL -->
+        
+        <!-- BEGIN MODAL - UPLOAD DOCUMENTO -->
+        <div class="modal fade" id="modalUploadDocument" tabindex="-1" role="dialog">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
+                        <h4 class="modal-title">Subir Documento de Evidencia</h4>
+                    </div>
+                    <form id="uploadDocumentForm" enctype="multipart/form-data">
+                        <input type="hidden" id="upload_provider_id" name="provider_id">
+                        <input type="hidden" id="upload_item_id" name="item_id">
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label>Tipo de Documento</label>
+                                <select class="form-control" id="document_type" name="document_type">
+                                    <option value="medical_license">Licencia Médica</option>
+                                    <option value="business_registration">Registro Empresarial</option>
+                                    <option value="professional_certification">Certificación Profesional</option>
+                                    <option value="facility_photos">Fotos de Instalaciones</option>
+                                    <option value="insurance_certificate">Certificado de Seguro</option>
+                                    <option value="identity_document">Documento de Identidad</option>
+                                    <option value="tax_document">Documento Tributario</option>
+                                    <option value="accreditation">Acreditación</option>
+                                    <option value="other">Otro</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Título <small class="text-muted">(opcional)</small></label>
+                                <input type="text" class="form-control" id="document_title" name="title" placeholder="Ej: Licencia Médica 2024">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Descripción <small class="text-muted">(opcional)</small></label>
+                                <textarea class="form-control" rows="2" id="document_description" name="description" placeholder="Detalles adicionales del documento"></textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Archivo <span class="text-danger">*</span></label>
+                                <input type="file" class="form-control" id="document_file" name="document" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="previewFile()" required>
+                                <small class="help-block">Formatos: PDF, JPG, PNG, DOC (Máximo 10MB)</small>
+                            </div>
+                            
+                            <div id="uploadPreview"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" id="btnUploadDocument" onclick="uploadDocument()">
+                                <i class="fa fa-upload"></i> Subir Documento
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

@@ -151,6 +151,13 @@ $offers_result = mysqli_stmt_get_result($stmt);
             font-size: 14px;
             line-height: 1.6;
         }
+        .offer-card .card-text p {
+            margin: 0;
+            padding: 0;
+        }
+        .offer-card .card-text p:not(:last-child) {
+            margin-bottom: 8px;
+        }
         .provider-info {
             display: flex;
             align-items: center;
@@ -263,10 +270,20 @@ $offers_result = mysqli_stmt_get_result($stmt);
                                     // Intentar obtener imagen de offer_media
                                     $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f0f0f0" width="400" height="300"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedical Service%3C/text%3E%3C/svg%3E';
                                     
-                                    $img_query = mysqli_query($conexion, "SELECT file_path FROM offer_media WHERE offer_id = {$offer['id']} AND media_type = 'image' ORDER BY id ASC LIMIT 1");
+                                    // DEBUG: Ver qué hay en la tabla
+                                    $debug_query = "SELECT id, offer_id, path, is_active FROM offer_media WHERE offer_id = {$offer['id']}";
+                                    $debug_result = mysqli_query($conexion, $debug_query);
+                                    $debug_found = $debug_result ? mysqli_num_rows($debug_result) : 0;
+                                    
+                                    // Intentar obtener imagen (sin filtro is_active primero)
+                                    $img_query = mysqli_query($conexion, "SELECT path FROM offer_media WHERE offer_id = {$offer['id']} ORDER BY sort_order ASC, id ASC LIMIT 1");
                                     if ($img_query && $img_row = mysqli_fetch_assoc($img_query)) {
-                                        $image_path = htmlspecialchars($img_row['file_path']);
+                                        // NO agregar 'admin/' porque las imágenes están en /img/offers/ (raíz del proyecto)
+                                        $image_path = htmlspecialchars($img_row['path']);
                                     }
+                                    
+                                    // DEBUG temporal (comentar después)
+                                    // echo "<!-- DEBUG Offer {$offer['id']}: Fotos encontradas: $debug_found, Path: $image_path -->";
                                     ?>
                                     <img src="<?php echo $image_path; ?>" 
                                          class="card-img-top" 
@@ -292,7 +309,26 @@ $offers_result = mysqli_stmt_get_result($stmt);
                                     </h5>
                                     
                                     <p class="card-text" style="height: 60px; overflow: hidden;">
-                                        <?php echo htmlspecialchars(substr($offer['description'], 0, 120)) . '...'; ?>
+                                        <?php 
+                                        // Decodificar entidades HTML primero
+                                        $decoded_text = html_entity_decode($offer['description'], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                                        // Eliminar tags HTML para obtener texto plano
+                                        $clean_text = strip_tags($decoded_text);
+                                        // Limpiar espacios múltiples y saltos de línea
+                                        $clean_text = preg_replace('/\s+/', ' ', trim($clean_text));
+                                        // Truncar el texto a 100 caracteres
+                                        if (mb_strlen($clean_text, 'UTF-8') > 100) {
+                                            $truncated = mb_substr($clean_text, 0, 100, 'UTF-8');
+                                            // Buscar el último espacio para no cortar palabras
+                                            $last_space = mb_strrpos($truncated, ' ', 0, 'UTF-8');
+                                            if ($last_space !== false && $last_space > 80) {
+                                                $truncated = mb_substr($truncated, 0, $last_space, 'UTF-8');
+                                            }
+                                            echo htmlspecialchars($truncated, ENT_QUOTES, 'UTF-8') . '...';
+                                        } else {
+                                            echo htmlspecialchars($clean_text, ENT_QUOTES, 'UTF-8');
+                                        }
+                                        ?>
                                     </p>
                                     
                                     <div class="provider-info">
@@ -338,6 +374,10 @@ $offers_result = mysqli_stmt_get_result($stmt);
     </div>
     <!-- Offers End -->
 
+    <!-- Booking Widget Start -->
+    <?php echo $booking_widget; ?>
+    <!-- Booking Widget End -->
+
     <?php echo $footer; ?>
 
     <!-- JavaScript Libraries -->
@@ -347,6 +387,7 @@ $offers_result = mysqli_stmt_get_result($stmt);
     <script src="lib/waypoints/waypoints.min.js"></script>
     <script src="lib/owlcarousel/owl.carousel.min.js"></script>
     <script src="lib/lightbox/js/lightbox.min.js"></script>
+    <?php echo $script; ?>
     <script src="js/main.js"></script>
     <script>
         // Remove spinner immediately and on load

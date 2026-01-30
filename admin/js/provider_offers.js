@@ -1,4 +1,30 @@
 $(function(){
+    // Inicializar Summernote
+    function initSummernote(){
+        if ($.fn.summernote) {
+            $('.summernote').summernote({
+                height: 250,
+                toolbar: [
+                    ['style', ['style', 'bold', 'italic', 'underline', 'clear']],
+                    ['font', ['strikethrough', 'superscript', 'subscript']],
+                    ['fontsize', ['fontsize']],
+                    ['color', ['color']],
+                    ['para', ['ul', 'ol', 'paragraph']],
+                    ['height', ['height']],
+                    ['insert', ['link']],
+                    ['view', ['fullscreen', 'codeview', 'help']]
+                ],
+                placeholder: 'Describa su servicio médico de manera profesional...',
+                dialogsInBody: true,
+                callbacks: {
+                    onInit: function() {
+                        console.log('Summernote inicializado');
+                    }
+                }
+            });
+        }
+    }
+    
     function api(data, cb){
         $.ajax({
             url: 'ajax/provider_offers.php',
@@ -49,7 +75,7 @@ $(function(){
                 var actions = $('<td>');
                 actions.append($('<button class="btn btn-xs btn-primary mr5">Editar</button>').click(function(){ openEdit(row.id); }));
                 actions.append($('<button class="btn btn-xs btn-warning mr5">Fotos</button>').click(function(){ loadGallery(row.id); }));
-                actions.append($('<button class="btn btn-xs btn-default">Toggle</button>').click(function(){ toggle(row.id); }));
+                actions.append($('<button class="btn btn-xs btn-default">Activar/Desactivar</button>').click(function(){ toggle(row.id); }));
                 tr.append(actions);
                 tbody.append(tr);
             });
@@ -58,9 +84,21 @@ $(function(){
 
     function openEdit(id){
         if(!id){
-            $('#form-offer')[0].reset(); $('#offer-id').val(''); $('#offer-active').prop('checked',true);
-            $('#offerModal').modal('show'); return;
+            $('#form-offer')[0].reset(); 
+            $('#offer-id').val(''); 
+            $('#offer-active').prop('checked',true);
+            $('#modal-title-text').text('Nueva Oferta de Servicio');
+            // Limpiar Summernote
+            if ($.fn.summernote) {
+                $('#offer-desc').summernote('code', '');
+            }
+            $('#gallery-preview').empty();
+            // Activar primera pestaña
+            $('.nav-tabs a[href="#tab-general"]').tab('show');
+            $('#offerModal').modal('show'); 
+            return;
         }
+        $('#modal-title-text').text('Editar Oferta de Servicio');
         $.getJSON('ajax/provider_offers.php?tipo=get&id='+id, function(res){
             if(!res.ok) return alert(res.error);
             var d = res.data;
@@ -68,22 +106,37 @@ $(function(){
             $('#offer-service').val(d.service_id);
             if ($.fn.select2) { try { $('#offer-service').trigger('change'); } catch(e){} }
             $('#offer-title').val(d.title);
-            $('#offer-desc').val(d.description);
+            // Cargar HTML en Summernote
+            if ($.fn.summernote) {
+                $('#offer-desc').summernote('code', d.description || '');
+            } else {
+                $('#offer-desc').val(d.description);
+            }
             $('#offer-price').val(d.price_from);
             $('#offer-currency').val(d.currency);
             $('#offer-active').prop('checked', d.is_active==1);
-            renderGallery(d.media||[]);
+            renderGalleryInModal(d.media||[]);
+            // Activar primera pestaña
+            $('.nav-tabs a[href="#tab-general"]').tab('show');
             $('#offerModal').modal('show');
         });
     }
 
     function save(){
         var id = $('#offer-id').val();
+        // Obtener HTML de Summernote
+        var description = '';
+        if ($.fn.summernote) {
+            description = $('#offer-desc').summernote('code');
+        } else {
+            description = $('#offer-desc').val();
+        }
+        
         var data = {
             tipo: id? 'update':'create',
             service_id: $('#offer-service').val(),
             title: $('#offer-title').val(),
-            description: $('#offer-desc').val(),
+            description: description,
             price_from: $('#offer-price').val(),
             currency: $('#offer-currency').val(),
             is_active: $('#offer-active').is(':checked')?1:0
@@ -105,6 +158,21 @@ $(function(){
         $.getJSON('ajax/provider_offers.php?tipo=get&id='+offer_id, function(res){ if(!res.ok) return alert(res.error); renderGallery(res.data.media||[]); });
     }
 
+    function renderGalleryInModal(list){
+        var cont = $('#gallery-preview').empty();
+        if(!list || list.length==0) { 
+            cont.html('<div class="col-md-12"><div class="alert alert-info"><i class="fa fa-info-circle"></i> No hay imágenes subidas aún. Use el botón "Subir Imagen" para agregar fotos.</div></div>'); 
+            return; 
+        }
+        $.each(list, function(i,m){
+            var col = $('<div class="col-xs-6 col-sm-4 col-md-3" style="margin-bottom:15px;">');
+            var imgWrap = $('<div style="position:relative; border:2px solid #e9ecef; border-radius:8px; overflow:hidden; padding:5px; background:#fff;">');
+            imgWrap.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'border-radius':'4px', 'width':'100%', 'height':'150px', 'object-fit':'cover'}));
+            col.append(imgWrap);
+            cont.append(col);
+        });
+    }
+    
     function renderGallery(list){
         var cont = $('#offer-gallery').empty();
         if(!list || list.length==0) { cont.html('<p>No hay fotos</p>'); return; }
@@ -118,18 +186,47 @@ $(function(){
     }
 
     function renderSingleMedia(m){
-        var cont = $('#offer-gallery');
+        // Agregar a la galería del modal
+        var cont = $('#gallery-preview');
+        // Limpiar mensaje de "no hay imágenes"
+        cont.find('.alert').remove();
+        
+        var col = $('<div class="col-xs-6 col-sm-4 col-md-3" style="margin-bottom:15px;">');
+        var imgWrap = $('<div style="position:relative; border:2px solid #e9ecef; border-radius:8px; overflow:hidden; padding:5px; background:#fff;">');
+        imgWrap.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'border-radius':'4px', 'width':'100%', 'height':'150px', 'object-fit':'cover'}));
+        col.append(imgWrap);
+        cont.append(col);
+        
+        // También agregar a la galería principal
+        var contMain = $('#offer-gallery');
         var row = $('<div class="row">');
-        var col = $('<div class="col-xs-3">');
-        col.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'margin-bottom':'10px'}));
-        row.append(col);
-        cont.prepend(row);
+        var colMain = $('<div class="col-xs-3">');
+        colMain.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'margin-bottom':'10px'}));
+        row.append(colMain);
+        contMain.prepend(row);
+        
+        // Mensaje de éxito si toastr está disponible
+        if (typeof toastr !== 'undefined') {
+            toastr.success('Imagen subida exitosamente', 'Éxito');
+        }
     }
 
-    $('#btn-new-offer').click(function(){ loadServices(function(){ openEdit(0); }); });
+    $('#btn-new-offer').click(function(){ 
+        loadServices(function(){
+            initSummernote(); // Inicializar antes de abrir
+            openEdit(0); 
+        }); 
+    });
     $('#offer-save').click(save);
     $('#offer-upload').click(upload);
 
     // init
     loadServices(listOffers);
+    
+    // Inicializar Summernote al abrir modal de edición
+    $('#offerModal').on('shown.bs.modal', function(){
+        if (!$('#offer-desc').data('summernote')) {
+            initSummernote();
+        }
+    });
 });

@@ -195,7 +195,17 @@ if (!$provider) {
                                                                 <div class="col-md-10">
                                                                     <div class="fileinput fileinput-new" data-provides="fileinput">
                                                                         <div class="fileinput-new thumbnail" style="width: 200px; height: 150px;">
-                                                                            <img id="logo-preview" src="<?php echo !empty($provider['logo']) ? '../img/providers/'.$provider_id.'/'.$provider['logo'] : 'https://via.placeholder.com/200x150?text=Sin+Logo'; ?>" alt="Logo" />
+                                                                            <?php 
+                                                                            $logo_path = 'https://via.placeholder.com/200x150?text=Sin+Logo';
+                                                                            if (!empty($provider['logo'])) {
+                                                                                // Construir path correcto
+                                                                                $logo_file = 'img/providers/' . $provider_id . '/' . $provider['logo'];
+                                                                                if (file_exists('../' . $logo_file)) {
+                                                                                    $logo_path = '../' . $logo_file . '?v=' . time();
+                                                                                }
+                                                                            }
+                                                                            ?>
+                                                                            <img id="logo-preview" src="<?php echo $logo_path; ?>" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
                                                                         </div>
                                                                         <div class="fileinput-preview fileinput-exists thumbnail" style="max-width: 200px; max-height: 150px;"></div>
                                                                         <div>
@@ -207,6 +217,9 @@ if (!$provider) {
                                                                             <a href="javascript:;" class="btn red fileinput-exists" data-dismiss="fileinput">Eliminar</a>
                                                                         </div>
                                                                         <span class="help-block">Formatos permitidos: JPG, PNG, WEBP. Máximo 2MB.</span>
+                                                                        <?php if (!empty($provider['logo'])): ?>
+                                                                        <span class="help-block">Archivo actual: <?php echo htmlspecialchars($provider['logo']); ?></span>
+                                                                        <?php endif; ?>
                                                                     </div>
                                                                 </div>
                                                             </div>

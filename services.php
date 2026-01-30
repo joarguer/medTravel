@@ -257,6 +257,10 @@ include('inc/include.php');
         </div>
         <!-- Testimonial End -->
 
+        <!-- Booking Widget Start -->
+        <?php echo $booking_widget; ?>
+        <!-- Booking Widget End -->
+
         <!-- Subscribe Start -->
         <div class="container-fluid subscribe py-5">
             <div class="container text-center py-5">
@@ -292,7 +296,7 @@ include('inc/include.php');
         <script src="lib/waypoints/waypoints.min.js"></script>
         <script src="lib/owlcarousel/owl.carousel.min.js"></script>
         <script src="lib/lightbox/js/lightbox.min.js"></script>
-        
+        <?php echo $script; ?>
 
         <!-- Template Javascript -->
         <script src="js/main.js"></script>

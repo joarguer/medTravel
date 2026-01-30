@@ -277,7 +277,7 @@ $top_header .= '</span>
 
 // Detectar página actual para activar pestaña del menú
 $current_page = basename($_SERVER['PHP_SELF']);
-$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php');
+$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','email_settings.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offer_detail_edit.php','blog_edit.php');
 $is_admin_page = in_array($current_page, $admin_pages);
 $is_site_page = $es_admin && in_array($current_page, $site_pages);
@@ -314,6 +314,12 @@ if ($es_admin) {
                                     <i class="fa fa-chart-bar"></i> Informes </a>
                                 </li>';
     
+    // Email Settings - Configuración SMTP
+    $top_header_2 .=               '<li class="'.($current_page === 'email_settings.php' ? 'active' : '').'">
+                                    <a href="./email_settings.php"> 
+                                    <i class="fa fa-envelope"></i> Configuración Email </a>
+                                </li>';
+    
     // agregar link Categorías de servicios (solo visible para admins con acceso en el menú Administrativo)
     $top_header_2 .=               '<li class="'.($current_page === 'service_categories.php' ? 'active' : '').'">
                                     <a href="./service_categories.php"> 
@@ -338,6 +344,11 @@ if ($es_admin) {
     $top_header_2 .=               '<li class="'.($current_page === 'clientes.php' ? 'active' : '').'">
                                     <a href="./clientes.php"> 
                                     <i class="icon-users"></i> Clientes </a>
+                                </li>';
+    // link Paquetes (debajo de Clientes)
+    $top_header_2 .=               '<li class="'.($current_page === 'paquetes.php' ? 'active' : '').'">
+                                    <a href="./paquetes.php"> 
+                                    <i class="icon-briefcase"></i> Paquetes </a>
                                 </li>';
 }
 
