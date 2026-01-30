@@ -59,6 +59,7 @@ CREATE TABLE service_catalog (
 CREATE TABLE providers (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(200) NOT NULL,
+  legal_name VARCHAR(250) DEFAULT NULL COMMENT 'Razón social o nombre legal',
   logo VARCHAR(255) DEFAULT NULL,
   city VARCHAR(100) DEFAULT NULL,
   address TEXT DEFAULT NULL,
