@@ -142,14 +142,15 @@ $n = 1;
         <!-- END CONTAINER -->
         <!-- BEGIN QUICK SIDEBAR -->
         <?php echo $sider_bar;?>
-        <!-- BEGIN CORE PLUGINS -->
+        <!-- THEME (loads jQuery) -->
+        <?php echo $theme_layout_script;?>
+        <!-- CORE PLUGINS (after jQuery) -->
         <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-        <!-- END CORE PLUGINS -->
-        <!-- BEGIN PAGE LEVEL PLUGINS -->
+        <!-- PAGE LEVEL PLUGINS -->
         <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.sparkline.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-wysihtml5/wysihtml5-0.3.0.js" type="text/javascript"></script>
@@ -157,13 +158,8 @@ $n = 1;
         <script src="../../assets/global/plugins/bootstrap-markdown/lib/markdown.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-markdown/js/bootstrap-markdown.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-summernote/summernote.min.js" type="text/javascript"></script>
-        <!-- END PAGE LEVEL PLUGINS -->
-        <!-- BEGIN THEME GLOBAL SCRIPTS -->
-        <?php echo $theme_layout_script;?>
-        <!-- END THEME GLOBAL SCRIPTS -->
-        <!-- BEGIN PAGE LEVEL SCRIPTS -->
+        <!-- PAGE LEVEL SCRIPTS -->
         <script src="../../assets/pages/scripts/profile.min.js" type="text/javascript"></script>
-        <!-- END PAGE LEVEL SCRIPTS -->
         <script src="js/about_edit.js" type="text/javascript"></script>
     </body>
 </html>

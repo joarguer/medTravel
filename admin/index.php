@@ -267,13 +267,15 @@ if ($es_admin) {
 <![endif]-->
         <!-- BEGIN CORE PLUGINS -->
         <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+        <!-- THEME (loads jQuery) -->
+        <?php echo $theme_layout_script;?>
+        <!-- CORE PLUGINS (after jQuery) -->
         <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-        <!-- END CORE PLUGINS -->
-        <!-- BEGIN PAGE LEVEL PLUGINS -->
+        <!-- PAGE LEVEL PLUGINS -->
         <script src="../../assets/global/plugins/moment.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-daterangepicker/daterangepicker.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/morris/morris.min.js" type="text/javascript"></script>
@@ -298,10 +300,6 @@ if ($es_admin) {
         <script src="../../assets/global/plugins/jquery-easypiechart/jquery.easypiechart.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.sparkline.min.js" type="text/javascript"></script>
         <!-- END PAGE LEVEL PLUGINS -->
-        <!-- BEGIN THEME GLOBAL SCRIPTS -->
-        <!-- app.min.js and theme scripts loaded from include.php -->
-        <?php echo $theme_layout_script;?>
-        <!-- END THEME GLOBAL SCRIPTS -->
         <script type="text/javascript">
         jQuery(function() {
             var seriesData = <?php echo json_encode($series_data); ?>;
