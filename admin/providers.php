@@ -49,6 +49,11 @@ include('include/include.php');
                                         <span class="caption-subject font-dark bold uppercase">Prestadores</span>
                                     </div>
                                     <div class="actions">
+                                        <select id="filter-kind" class="form-control input-sm" style="width:auto; display:inline-block;">
+                                            <option value="">Todos</option>
+                                            <option value="medical">Médicos</option>
+                                            <option value="partner">Partners</option>
+                                        </select>
                                         <a id="btn-new-provider" class="btn btn-primary">Nuevo prestador</a>
                                     </div>
                                 </div>
@@ -58,6 +63,7 @@ include('include/include.php');
                                             <tr>
                                                 <th>Nombre</th>
                                                 <th>Tipo</th>
+                                                <th>Clasificación</th>
                                                 <th>Ciudad</th>
                                                 <th>Verificado</th>
                                                 <th>Activo</th>
@@ -96,6 +102,14 @@ include('include/include.php');
                             <div class="form-group">
                                 <label>Tipo</label>
                                 <select id="prov-type" name="type" class="form-control select2me"><option value="medico">Médico</option><option value="clinica">Clínica</option></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Clasificación</label>
+                                <select id="prov-kind" name="kind" class="form-control select2me">
+                                    <option value="medical">Prestador médico</option>
+                                    <option value="partner">Servicio complementario</option>
+                                </select>
+                                <span class="help-block">Define si es prestador médico o un partner complementario.</span>
                             </div>
                             <div class="form-group">
                                 <label>Nombre</label>

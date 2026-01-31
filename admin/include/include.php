@@ -46,6 +46,8 @@ $theme_layout_style =  '<!-- BEGIN THEME LAYOUT STYLES -->
                         <link href="../assets/global/plugins/bootstrap-toastr/toastr.min.css" rel="stylesheet" type="text/css" />';   
 
 $theme_layout_script =  '<!-- BEGIN THEME LAYOUT SCRIPTS -->
+                        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+                        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
                         <script src="../../assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
                         <script src="../../assets/global/scripts/app.min.js" type="text/javascript"></script>
                         <script src="../../assets/layouts/layout5/scripts/layout.min.js" type="text/javascript"></script>
@@ -269,7 +271,7 @@ $top_header .= '</span>
 
 // Detectar página actual para activar pestaña del menú
 $current_page = basename($_SERVER['PHP_SELF']);
-$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','email_settings.php','booking_requests.php','medtravel_services.php');
+$admin_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','informes.php','service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','email_settings.php','booking_requests.php','medtravel_services.php','roles.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
 $is_admin_page = in_array($current_page, $admin_pages);
 $is_site_page = $es_admin && in_array($current_page, $site_pages);
@@ -374,8 +376,14 @@ if ($es_admin) {
                                             <li class="'.($current_page === 'mis_datos.php' ? 'active' : '').'">
                                                 <a href="./mis_datos.php">Mi Perfil</a>
                                             </li>
+                                            <li class="'.($current_page === 'usuarios.php' ? 'active' : '').'">
+                                                <a href="./usuarios.php">Usuarios</a>
+                                            </li>
                                             <li class="'.($current_page === 'crear_usuario.php' ? 'active' : '').'">
                                                 <a href="./crear_usuario.php">Crear Usuarios</a>
+                                            </li>
+                                            <li class="'.($current_page === 'roles.php' ? 'active' : '').'">
+                                                <a href="./roles.php">Roles</a>
                                             </li>
                                         </ul>
                                     </li>

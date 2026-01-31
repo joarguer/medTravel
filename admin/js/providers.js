@@ -2,6 +2,7 @@ $(document).ready(function(){
     const url = 'ajax/providers.php';
     const urlCats = 'ajax/service_categories.php';
     const urlServices = 'ajax/service_catalog.php';
+    var currentKindFilter = '';
 
     function escapeHtml(text){ if(!text) return ''; return $('<div>').text(text).html(); }
 
@@ -13,7 +14,7 @@ $(document).ready(function(){
     }
 
     function loadProviders(){
-        $.post(url, { tipo: 'list' }, function(res){
+        $.post(url, { tipo: 'list', kind: currentKindFilter }, function(res){
             if(!res || !res.ok) return;
             let tbody='';
             res.data.forEach(function(p){
@@ -28,6 +29,7 @@ $(document).ready(function(){
                 tbody += '<tr data-id="'+p.id+'">';
                 tbody += '<td>'+escapeHtml(p.name)+'</td>';
                 tbody += '<td>'+escapeHtml(p.type)+'</td>';
+                tbody += '<td>'+escapeHtml(p.kind || 'medical')+'</td>';
                 tbody += '<td>'+escapeHtml(p.city||'')+'</td>';
                 const verLink = '<a href="provider_verification.php" class="ml10">Gestionar</a>';
                 tbody += '<td><span class="'+st.cls+'">'+st.text+'</span>'+completion+' '+verLink+'</td>';
@@ -48,6 +50,7 @@ $(document).ready(function(){
         $('#prov-password').val('').prop('required', true);
         $('#password-required').show();
         $('#password-help').text('Contraseña para acceso al sistema');
+        $('#prov-kind').val('medical');
         $('#prov-categories option').prop('selected',false); 
         $('#prov-services option').prop('selected',false); 
         $('#providerModal').modal('show'); 
@@ -75,6 +78,7 @@ $(document).ready(function(){
         
         let data = {
             type: type,
+            kind: $('#prov-kind').val() || 'medical',
             name: name,
             legal_name: $('#prov-legal-name').val().trim(),
             username: username,
@@ -127,6 +131,7 @@ $(document).ready(function(){
                 let p = res.data.provider; 
                 $('#prov-id').val(p.id); 
                 $('#prov-type').val(p.type); 
+                $('#prov-kind').val(p.kind || 'medical');
                 $('#prov-name').val(p.name); 
                 $('#prov-legal-name').val(p.legal_name || '');
                 $('#prov-city').val(p.city); 
@@ -169,5 +174,10 @@ $(document).ready(function(){
     $('#tbl-providers').on('click', '.delete', function(){ if(!confirm('Desactivar este prestador?')) return; let id = $(this).closest('tr').data('id'); $.post(url, { tipo: 'toggle', id: id, val: 0 }, function(res){ if(res && res.ok) loadProviders(); else alert('Error'); }, 'json'); });
 
     $('#tbl-providers').on('click', '.toggle-active', function(){ let btn = $(this); let id = btn.closest('tr').data('id'); let val = btn.data('val'); $.post(url, { tipo: 'toggle', id: id, val: val }, function(res){ if(res && res.ok) loadProviders(); else alert('Error'); }, 'json'); });
+
+    $('#filter-kind').on('change', function(){
+        currentKindFilter = $(this).val();
+        loadProviders();
+    });
 
 });

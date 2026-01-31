@@ -23,7 +23,6 @@ $rst   = mysqli_fetch_array($busca);
         <link href="../../assets/pages/css/profile.min.css" rel="stylesheet" type="text/css" />
         <!-- END PAGE LEVEL STYLES -->
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
     </head>
     <!-- END HEAD -->
 
@@ -353,22 +352,14 @@ $rst   = mysqli_fetch_array($busca);
         <!-- END CONTAINER -->
         <!-- BEGIN QUICK SIDEBAR -->
         <?php echo $sider_bar;?>
-        <!-- BEGIN CORE PLUGINS -->
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+        <?php echo $theme_layout_script;?>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-        <!-- END CORE PLUGINS -->
-        <!-- BEGIN PAGE LEVEL PLUGINS -->
         <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.sparkline.min.js" type="text/javascript"></script>
-        <!-- BEGIN THEME GLOBAL SCRIPTS -->
-        <?php echo $theme_layout_script;?>
-        <!-- END THEME GLOBAL SCRIPTS -->
-        <!-- BEGIN PAGE LEVEL SCRIPTS -->
         <script src="../../assets/pages/scripts/profile.min.js" type="text/javascript"></script>
-        <!-- END PAGE LEVEL SCRIPTS -->
         <script src="js/mis_datos.js" type="text/javascript"></script>
     </body>
 </html>

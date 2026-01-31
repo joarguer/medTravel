@@ -1,6 +1,6 @@
 <?php
 session_start();
-include('../include/conexion.php');
+include('../include/include.php');
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 $tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
@@ -18,9 +18,17 @@ function slugify($text){
 
 try{
     if($tipo == 'list'){
+        $kind_filter = isset($_REQUEST['kind']) ? $_REQUEST['kind'] : '';
+        $kinds = array('medical','partner');
+        if($kind_filter && !in_array($kind_filter, $kinds)) $kind_filter = '';
+        // permiso: vista general si no hay filtro, o específica por tipo
+        $can_view_any = user_can('providers.view');
+        $can_view_med = user_can('providers.medical.view');
+        $can_view_partner = user_can('providers.partner.view');
+        if(!$can_view_any && !$can_view_med && !$can_view_partner){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
         $rows = [];
         $sql = "SELECT 
-                    p.id, p.type, p.name, p.slug, p.city, p.is_verified, p.is_active, p.created_at,
+                    p.id, p.type, p.kind, p.name, p.slug, p.city, p.is_verified, p.is_active, p.created_at,
                     COALESCE(pv.status,'pending') AS verification_status,
                     COALESCE(pv.verification_level,'basic') AS verification_level,
                     COALESCE(pv.trust_score,0) AS trust_score,
@@ -37,10 +45,20 @@ try{
                     FROM provider_verification_items
                     GROUP BY provider_id
                 ) items ON items.provider_id = p.id
-                ORDER BY p.created_at DESC";
+                WHERE 1=1";
+        if($kind_filter){ $sql .= " AND p.kind = '".mysqli_real_escape_string($conexion,$kind_filter)."'"; }
+        $sql .= " ORDER BY p.created_at DESC";
         $res = mysqli_query($conexion, $sql);
         if(mysqli_errno($conexion)){ error_log('providers list error: '.mysqli_error($conexion)); echo json_encode(['ok'=>false,'error'=>'db']); exit; }
         while($r = mysqli_fetch_assoc($res)) $rows[] = $r;
+        // filtrar según permisos específicos si no tiene permiso general
+        if(!$can_view_any){
+            $rows = array_filter($rows, function($r) use ($can_view_med, $can_view_partner){
+                if($r['kind']==='partner') return $can_view_partner;
+                return $can_view_med; // default medical
+            });
+            $rows = array_values($rows);
+        }
         echo json_encode(['ok'=>true,'data'=>$rows]); exit;
     }
 
@@ -55,6 +73,9 @@ try{
             $row = mysqli_fetch_assoc($res);
             mysqli_stmt_close($st);
             if(!$row){ echo json_encode(['ok'=>false,'error'=>'not_found']); exit; }
+            // permiso según tipo
+            $kind = isset($row['kind']) ? $row['kind'] : 'medical';
+            if(!user_can('providers.view') && !user_can('providers.'.$kind.'.view')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
             
             // categories
             $cats = [];
@@ -88,6 +109,15 @@ try{
         $name = isset($_REQUEST['name']) ? trim($_REQUEST['name']) : '';
         $username = isset($_REQUEST['username']) ? trim($_REQUEST['username']) : '';
         $password = isset($_REQUEST['password']) ? trim($_REQUEST['password']) : '';
+        $kind = isset($_REQUEST['kind']) ? trim($_REQUEST['kind']) : 'medical';
+        if(!in_array($kind, ['medical','partner'])) $kind = 'medical';
+
+        // permisos por tipo
+        if($kind === 'partner'){
+            if(!user_can('providers.partner.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+        } else {
+            if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+        }
         
         if($type === '' || ($type != 'medico' && $type != 'clinica') || $name === ''){ 
             echo json_encode(['ok'=>false,'error'=>'invalid_input','message'=>'Datos incompletos']); exit; 
@@ -126,9 +156,9 @@ try{
         
         try {
             // 1. Insertar proveedor
-            $ins = mysqli_prepare($conexion, "INSERT INTO providers (type,name,legal_name,slug,description,city,address,phone,email,website,is_verified,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+            $ins = mysqli_prepare($conexion, "INSERT INTO providers (type,kind,name,legal_name,slug,description,city,address,phone,email,website,is_verified,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
             if(!$ins){ throw new Exception('Error preparando INSERT provider'); }
-            mysqli_stmt_bind_param($ins,'ssssssssssii', $type, $name, $legal_name, $slug, $description, $city, $address, $phone, $email, $website, $is_verified, $is_active);
+            mysqli_stmt_bind_param($ins,'sssssssssssii', $type, $kind, $name, $legal_name, $slug, $description, $city, $address, $phone, $email, $website, $is_verified, $is_active);
             $exec = mysqli_stmt_execute($ins);
             if(!$exec){ throw new Exception('Error ejecutando INSERT provider: '.mysqli_stmt_error($ins)); }
             $provider_id = mysqli_insert_id($conexion);
@@ -141,10 +171,11 @@ try{
             
             // 2. Crear usuario asociado
             $password_hash = password_hash($password, PASSWORD_DEFAULT);
-            $ins_user = mysqli_prepare($conexion, "INSERT INTO usuarios (usuario, password, nombre, rol, provider_id) VALUES (?,?,?,?,?)");
+                $ins_user = mysqli_prepare($conexion, "INSERT INTO usuarios (usuario, password, nombre, rol, provider_id, role_id) VALUES (?,?,?,?,?,?)");
             if(!$ins_user){ throw new Exception('Error preparando INSERT usuario'); }
-            $rol = 'prestador';
-            mysqli_stmt_bind_param($ins_user,'ssssi', $username, $password_hash, $name, $rol, $provider_id);
+                $rol = (string)ROLE_PROVIDER;
+                $role_id = ROLE_PROVIDER;
+                mysqli_stmt_bind_param($ins_user,'ssssii', $username, $password_hash, $name, $rol, $provider_id, $role_id);
             $exec_user = mysqli_stmt_execute($ins_user);
             if(!$exec_user){ throw new Exception('Error ejecutando INSERT usuario: '.mysqli_stmt_error($ins_user)); }
             mysqli_stmt_close($ins_user);
@@ -181,6 +212,23 @@ try{
         
         $username = isset($_REQUEST['username']) ? trim($_REQUEST['username']) : '';
         $password = isset($_REQUEST['password']) ? trim($_REQUEST['password']) : '';
+        // obtener kind actual si no viene en request
+        $kind = isset($_REQUEST['kind']) ? trim($_REQUEST['kind']) : '';
+        $kind_db = 'medical';
+        $kq = mysqli_prepare($conexion, "SELECT kind FROM providers WHERE id = ? LIMIT 1");
+        mysqli_stmt_bind_param($kq,'i',$id);
+        mysqli_stmt_execute($kq);
+        $kr = mysqli_stmt_get_result($kq);
+        if($kr && $rowk = mysqli_fetch_assoc($kr)) $kind_db = $rowk['kind'] ?: 'medical';
+        mysqli_stmt_close($kq);
+        if($kind === '' || !in_array($kind, ['medical','partner'])) $kind = $kind_db;
+
+        // permisos por tipo
+        if($kind === 'partner'){
+            if(!user_can('providers.partner.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+        } else {
+            if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+        }
         
         if($username === ''){ 
             echo json_encode(['ok'=>false,'error'=>'invalid_username','message'=>'Usuario es requerido']); exit; 
@@ -203,7 +251,7 @@ try{
         }
         mysqli_stmt_close($check_user);
         
-        $allowed = ['type','name','legal_name','description','city','address','phone','email','website','is_verified','is_active'];
+        $allowed = ['type','kind','name','legal_name','description','city','address','phone','email','website','is_verified','is_active'];
         $fields=[]; $values=[];
         foreach($allowed as $k){ 
             if(isset($_REQUEST[$k])){ 
@@ -342,6 +390,18 @@ try{
 
     if($tipo == 'toggle'){
         $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0; $val = isset($_REQUEST['val']) ? (int)$_REQUEST['val'] : 0; if($id<=0){ echo json_encode(['ok'=>false,'error'=>'invalid_id']); exit; }
+        $kind = 'medical';
+        $kq = mysqli_prepare($conexion, "SELECT kind FROM providers WHERE id = ? LIMIT 1");
+        mysqli_stmt_bind_param($kq,'i',$id);
+        mysqli_stmt_execute($kq);
+        $kr = mysqli_stmt_get_result($kq);
+        if($kr && $rowk = mysqli_fetch_assoc($kr)) $kind = $rowk['kind'] ?: 'medical';
+        mysqli_stmt_close($kq);
+        if($kind === 'partner'){
+            if(!user_can('providers.partner.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+        } else {
+            if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+        }
         $st = mysqli_prepare($conexion, "UPDATE providers SET is_active = ? WHERE id = ? LIMIT 1"); mysqli_stmt_bind_param($st,'ii',$val,$id); $exec = mysqli_stmt_execute($st); if(!$exec){ error_log('providers toggle error: '.mysqli_stmt_error($st)); echo json_encode(['ok'=>false,'error'=>'db_toggle']); mysqli_stmt_close($st); exit; } mysqli_stmt_close($st); echo json_encode(['ok'=>true]); exit;
     }
 

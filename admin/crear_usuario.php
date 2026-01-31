@@ -1,5 +1,7 @@
 <?php
 include("include/include.php");
+$is_admin = is_role_admin_session();
+$provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : null;
 $id_usuario = $_SESSION['id_usuario'];
 $busca = mysqli_query($conexion,"SELECT * FROM usuarios WHERE id = '".$id_usuario."'");
 $rst   = mysqli_fetch_array($busca);
@@ -26,7 +28,12 @@ $rst   = mysqli_fetch_array($busca);
         <link href="../../assets/pages/css/profile.min.css" rel="stylesheet" type="text/css" />
         <!-- END PAGE LEVEL STYLES -->
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+        <script>
+            window.CREAR_USUARIO_CTX = {
+                isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
+                providerId: <?php echo $provider_session_id ? $provider_session_id : 'null'; ?>
+            };
+        </script>
     </head>
     <!-- END HEAD -->
 
@@ -94,11 +101,12 @@ $rst   = mysqli_fetch_array($busca);
                                     <div class="form-group" id="div-group-role">
                                         <div class="col-md-12">
                                             <label class="control-label">Rol</label>
-                                            <select id="user_role" name="role" class="form-control">
+                                            <select id="user_role" name="role" class="form-control" <?php echo $is_admin ? '' : 'disabled'; ?>>
                                                 <?php foreach (get_available_roles() as $rid => $rlabel): ?>
-                                                    <option value="<?php echo $rid; ?>" <?php echo ($rid===ROLE_PROVIDER)?'selected':''; ?>><?php echo htmlspecialchars($rlabel); ?></option>
+                                                    <option value="<?php echo $rid; ?>" <?php echo ($provider_session_id ? ($rid===ROLE_PROVIDER) : ($rid===ROLE_PROVIDER ? 'selected' : '')); ?>><?php echo htmlspecialchars($rlabel); ?></option>
                                                 <?php endforeach; ?>
                                             </select>
+                                            <?php if(!$is_admin): ?><span class="help-block">Tu rol está fijado como Proveedor</span><?php endif; ?>
                                         </div>
                                     </div>
                                     <script>
@@ -106,8 +114,11 @@ $rst   = mysqli_fetch_array($busca);
                                             function toggleProviderField(){
                                                 var sel = document.getElementById('user_role');
                                                 var provDiv = document.getElementById('div-provider');
-                                                if(!sel || !provDiv) return;
-                                                provDiv.style.display = (sel.value == '<?php echo ROLE_PROVIDER; ?>') ? '' : 'none';
+                                                var empDiv = document.getElementById('div-empresa');
+                                                if(!sel || !provDiv || !empDiv) return;
+                                                var isProv = (sel.value == '<?php echo ROLE_PROVIDER; ?>');
+                                                provDiv.style.display = isProv ? '' : 'none';
+                                                empDiv.style.display = isProv ? 'none' : '';
                                             }
                                             document.addEventListener('DOMContentLoaded', function(){
                                                 var sel = document.getElementById('user_role');
@@ -164,12 +175,12 @@ $rst   = mysqli_fetch_array($busca);
                                                                 <label class="control-label">Cedula</label>
                                                                 <input type="text" placeholder="813912390128" class="form-control" id="cedula" name="cedula" /> </div>
                                                             <div class="form-group" id="div-empresa">
-                                                                <label class="control-label">Empresa</label>
+                                                                <label class="control-label">Empresa (cliente interno)</label>
                                                                 <select id="empresa" name="empresa" placeholder="Razón Social Empresa" class="form-control"></select></div>
                                                             <div class="form-group" id="div-provider" style="display:none;">
                                                                 <label class="control-label">Prestador / Empresa <span class="required">*</span></label>
                                                                 <select id="provider_id" name="provider_id" class="form-control">
-                                                                    <option value="">-- Seleccione una empresa --</option>
+                                                                    <option value="">-- Seleccione un prestador --</option>
                                                                     <?php
                                                                     $providers = mysqli_query($conexion, "SELECT id, name, type FROM providers WHERE is_active = 1 ORDER BY name ASC");
                                                                     while($prov = mysqli_fetch_array($providers)) {
@@ -177,7 +188,7 @@ $rst   = mysqli_fetch_array($busca);
                                                                     }
                                                                     ?>
                                                                 </select>
-                                                                <span class="help-block">Seleccione la empresa a la que pertenecerá este usuario</span>
+                                                                <span class="help-block">Selecciona el prestador al que se asocia este usuario (solo rol Proveedor)</span>
                                                             </div>
                                                             <div class="form-group">
                                                                 <label class="control-label">Número Celular</label>
@@ -347,24 +358,19 @@ $rst   = mysqli_fetch_array($busca);
         <!-- END CONTAINER -->
         <!-- BEGIN QUICK SIDEBAR -->
         <?php echo $sider_bar;?>
-        <!-- BEGIN CORE PLUGINS -->
+        <?php echo $theme_layout_script;?>
+        <!-- CORE / PAGE PLUGINS (after theme so jQuery is stable) -->
         <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-        <!-- END CORE PLUGINS -->
-        <!-- BEGIN PAGE LEVEL PLUGINS -->
         <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.sparkline.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/select2/js/select2.full.min.js" type="text/javascript"></script>
-        <!-- BEGIN THEME GLOBAL SCRIPTS -->
-        <?php echo $theme_layout_script;?>
-        <!-- END THEME GLOBAL SCRIPTS -->
-        <!-- BEGIN PAGE LEVEL SCRIPTS -->
+        <!-- PAGE LEVEL SCRIPTS -->
         <script src="../../assets/pages/scripts/components-select2.min.js" type="text/javascript"></script>
         <script src="../../assets/pages/scripts/profile.min.js" type="text/javascript"></script>
-        <!-- END PAGE LEVEL SCRIPTS -->
         <script src="js/crear_usuario.js" type="text/javascript"></script>
     </body>
 </html>

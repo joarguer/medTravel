@@ -3,42 +3,48 @@ $(document).ready(function(){
     $('#tab_href_1_2').removeAttr('data-toggle').removeAttr('href');
     $('#tab_href_1_3').removeAttr('data-toggle').removeAttr('href');
     $('#tab_href_1_4').removeAttr('data-toggle').removeAttr('href');
-    $('.switch-radio1').bootstrapSwitch('readonly', true);
+    if ($('.switch-radio1').length) $('.switch-radio1').bootstrapSwitch('readonly', true);
     let url = "ajax/crear_usuario.php";
     $.post(url, { tipo: 'listar_empresas' }, function (respuesta) {
         respuesta = JSON.parse(respuesta);
-        console.log(respuesta.status);
         if(respuesta.status == true){
             let empresas = respuesta.empresas;
-            console.log(empresas);
             let options = '<option value="">Seleccione</option>';
             empresas.forEach(empresa => {
                 options += `<option value="${empresa.id}">${empresa.rasocial}</option>`;
             });
             $('#empresa').html(options);
-            $('#empresa').select2();
+            if (window.CREAR_USUARIO_CTX && window.CREAR_USUARIO_CTX.isAdmin) {
+                $('#empresa').select2();
+            }
         }
     });
     
-    // Detectar cambio en los radio buttons de rol
-    $('input[name="radio1"]').on('change', function() {
-        let rol = $(this).val();
-        // Si es rol 4 (Proveedor), mostrar dropdown de providers
-        if (rol === '4') {
+    // Detectar cambio en el select de rol (reemplaza radios)
+    function applyRoleVisibility(){
+        let ctx = window.CREAR_USUARIO_CTX || {};
+        let rol = $('#user_role').val();
+        let isProvider = rol === '4';
+        if (isProvider) {
             $('#div-provider').show();
             $('#provider_id').attr('required', true);
+            $('#div-empresa').hide();
         } else {
             $('#div-provider').hide();
-            $('#provider_id').attr('required', false);
-            $('#provider_id').val('');
+            $('#provider_id').attr('required', false).val('');
+            $('#div-empresa').show();
         }
-    });
-    
-    // Verificar rol inicial al cargar (si está marcado Proveedor)
-    if ($('#option4').is(':checked')) {
-        $('#div-provider').show();
-        $('#provider_id').attr('required', true);
+        if (!ctx.isAdmin && ctx.providerId) {
+            // For provider self-management, lock to their provider
+            $('#user_role').val('4');
+            $('#div-provider').show();
+            $('#provider_id').val(ctx.providerId);
+            $('#provider_id').attr('required', true).prop('disabled', true);
+            $('#div-empresa').hide();
+        }
     }
+    $('#user_role').on('change', applyRoleVisibility);
+    applyRoleVisibility();
 });
 
 $('#btn-crea-usuario').click(function(e){
@@ -64,7 +70,21 @@ $('#btn-crea-usuario').click(function(e){
     }
     //obtenemos los valores del formulario serialize
     var datos = $("#form-crear-usuario").serialize();
-    let rasocial = $('#empresa').find('option:selected').text();
+    let rolVal = $('#user_role').val();
+    let rasocial = '';
+    if (rolVal === '4') {
+        rasocial = $('#provider_id').find('option:selected').text();
+    } else {
+        rasocial = $('#empresa').find('option:selected').text();
+    }
+    // limpiar empresa si rol proveedor
+    if (rolVal === '4') {
+        datos = datos.replace(/(^|&)empresa=[^&]*/,'$1empresa=');
+    }
+    // asegurar provider_id vacío cuando no es proveedor
+    if (rolVal !== '4') {
+        datos = datos.replace(/(^|&)provider_id=[^&]*/,'$1provider_id=');
+    }
     //agregamos parametros
     datos += "&tipo=crear_usuario";
     datos += "&rasocial=" + rasocial;
