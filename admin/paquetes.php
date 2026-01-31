@@ -871,25 +871,16 @@ $id_usuario = $_SESSION['id_usuario'];
         </div>
         <!-- END MODAL ENVIAR COTIZACIÓN -->
 
-        <!-- BEGIN CORE PLUGINS -->
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-        <!-- END CORE PLUGINS -->
-        <!-- BEGIN PAGE LEVEL PLUGINS -->
+        <!-- THEME (incluye jQuery y núcleo) -->
+        <?php echo $theme_global_script;?>
+        <?php echo $theme_layout_script;?>
+        <!-- PAGE LEVEL PLUGINS (después de jQuery) -->
         <script src="../../assets/global/scripts/datatable.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/datatables.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-datetimepicker/js/bootstrap-datetimepicker.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-select/js/bootstrap-select.min.js" type="text/javascript"></script>
-        <!-- END PAGE LEVEL PLUGINS -->
-        <!-- BEGIN THEME GLOBAL SCRIPTS -->
-        <?php echo $theme_global_script;?>
-        <?php echo $theme_layout_script;?>
-        <!-- END THEME GLOBAL SCRIPTS -->
+        <!-- PAGE LEVEL SCRIPTS -->
         
         <!-- Toastr -->
         <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet"/>
