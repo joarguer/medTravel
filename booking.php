@@ -1,6 +1,8 @@
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 include('inc/include.php');
-include('inc/booking_form.php');
+// booking_form.php already included by include.php
 $booking_texts = get_booking_texts();
 $booking_style = booking_background_style($booking_texts);
 ?>

@@ -18,6 +18,9 @@ if (empty($booking['name']) || empty($booking['email'])) {
 // Capturar ofertas seleccionadas (nuevo sistema)
 $selected_offers = isset($_POST['selected_offers']) ? array_values(array_filter(array_map('intval', $_POST['selected_offers']))) : [];
 
+// Capturar servicios de medtravel seleccionados
+$medtravel_services = isset($_POST['medtravel_services']) ? array_values(array_filter(array_map('intval', $_POST['medtravel_services']))) : [];
+
 $budget = isset($_POST['budget']) && $_POST['budget'] !== '' ? number_format((float) $_POST['budget'], 2, '.', '') : null;
 
 // Construir timeline desde date range
@@ -33,6 +36,19 @@ if ($timeline_from && $timeline_to) {
 }
 
 $additional_notes = isset($_POST['additional_notes']) ? trim($_POST['additional_notes']) : '';
+
+// Agregar servicios de medtravel a las notas si hay alguno seleccionado
+if (!empty($medtravel_services)) {
+    $medtravel_names_query = mysqli_query($conexion, "SELECT name FROM coordination_services WHERE id IN (" . implode(',', $medtravel_services) . ")");
+    $medtravel_names = [];
+    while ($row = mysqli_fetch_assoc($medtravel_names_query)) {
+        $medtravel_names[] = $row['name'];
+    }
+    if (!empty($medtravel_names)) {
+        $additional_notes .= "\n\nMedTravel Services Requested:\n- " . implode("\n- ", $medtravel_names);
+    }
+}
+
 $origin = isset($booking['origin']) ? $booking['origin'] : 'wizard';
 
 // Preparar datos para inserción

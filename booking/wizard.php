@@ -231,10 +231,10 @@ foreach ($offers as $offer) {
                 <span class="fa fa-bars"></span>
             </button>
             <?php 
-            // Ajustar rutas del menú para subdirectorio
+            // Ajustar rutas del menú para subdirectorio (incluyendo dropdowns)
             $menu_adjusted = str_replace(
-                ['href="index.php"', 'href="about.php"', 'href="services.php"', 'href="offers.php"', 'href="packages.php"', 'href="destination.html"', 'href="tour.php"', 'href="gallery.html"', 'href="guides.html"', 'href="testimonial.php"', 'href="blog.php"', 'href="contact.php"', 'href="booking.php"'],
-                ['href="../index.php"', 'href="../about.php"', 'href="../services.php"', 'href="../offers.php"', 'href="../packages.php"', 'href="../destination.html"', 'href="../tour.php"', 'href="../gallery.html"', 'href="../guides.html"', 'href="../testimonial.php"', 'href="../blog.php"', 'href="../contact.php"', 'href="../booking.php"'],
+                ['href="index.php"', 'href="about.php"', 'href="services.php"', 'href="offers.php"', 'href="packages.php"', 'href="destination.html"', 'href="tour.php"', 'href="gallery.html"', 'href="guides.html"', 'href="testimonial.php"', 'href="blog.php"', 'href="contact.php"', 'href="booking.php"', 'href="offers.php?category='],
+                ['href="../index.php"', 'href="../about.php"', 'href="../services.php"', 'href="../offers.php"', 'href="../packages.php"', 'href="../destination.html"', 'href="../tour.php"', 'href="../gallery.html"', 'href="../guides.html"', 'href="../testimonial.php"', 'href="../blog.php"', 'href="../contact.php"', 'href="../booking.php"', 'href="../offers.php?category='],
                 $menu
             );
             echo $menu_adjusted;
@@ -293,7 +293,42 @@ foreach ($offers as $offer) {
             </div>
         <?php endif; ?>
 
+        <?php
+        // Cargar servicios de coordinación de medtravel
+        $medtravel_services = [];
+        $medtravel_query = mysqli_query($conexion, "SELECT * FROM coordination_services WHERE activo = '1' ORDER BY orden ASC");
+        if ($medtravel_query) {
+            while ($row = mysqli_fetch_assoc($medtravel_query)) {
+                $medtravel_services[] = $row;
+            }
+        }
+        ?>
+        
         <form action="submit.php" method="POST" id="booking-wizard-form">
+            <?php if (count($medtravel_services) > 0): ?>
+            <div class="wizard-stage mb-4">
+                <h3 class="mb-3">MedTravel Concierge Services</h3>
+                <p class="text-muted mb-3">Optional services to enhance your medical travel experience</p>
+                <div class="row g-3">
+                    <?php foreach ($medtravel_services as $service): ?>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="medtravel_services[]" value="<?php echo $service['id']; ?>" id="medtravel_<?php echo $service['id']; ?>">
+                                    <label class="form-check-label fw-bold" for="medtravel_<?php echo $service['id']; ?>">
+                                        <?php echo htmlspecialchars($service['name']); ?>
+                                    </label>
+                                </div>
+                                <p class="small text-muted mt-2 mb-0"><?php echo htmlspecialchars($service['description']); ?></p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
             <div class="wizard-stage">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3 class="mb-0">Stage 2 – Select Medical Services</h3>
