@@ -370,7 +370,16 @@ foreach ($offers as $offer) {
                                 case 'unavailable': $status_class = 'unavailable'; break;
                                 case 'seasonal': $status_class = 'seasonal'; break;
                             }
-                            $image_path = !empty($service['image_url']) ? htmlspecialchars($service['image_url']) : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f1f5f9" width="400" height="300"/%3E%3Ctext fill="%2399a1ab" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedTravel%3C/text%3E%3C/svg%3E';
+                            // Normalizar ruta de imagen: si es relativa (ej. img/services/...), hacerla absoluta al sitio
+                            $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f1f5f9" width="400" height="300"/%3E%3Ctext fill="%2399a1ab" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedTravel%3C/text%3E%3C/svg%3E';
+                            if (!empty($service['image_url'])) {
+                                $raw_url = $service['image_url'];
+                                if (preg_match('#^(https?:)?//#', $raw_url) || strpos($raw_url, '/') === 0) {
+                                    $image_path = htmlspecialchars($raw_url);
+                                } else {
+                                    $image_path = '/' . htmlspecialchars(ltrim($raw_url, '/'));
+                                }
+                            }
                         ?>
                         <div class="col-md-6 col-lg-4">
                             <div class="service-card card h-100" data-service-id="<?php echo (int)$service['id']; ?>">
