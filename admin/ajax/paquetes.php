@@ -53,6 +53,22 @@ try {
             sendQuoteEmail($conexion);
             break;
         
+        case 'get_catalog_services':
+            getCatalogServices($conexion);
+            break;
+        
+        case 'add_service_to_package':
+            addServiceToPackage($conexion);
+            break;
+        
+        case 'remove_service_from_package':
+            removeServiceFromPackage($conexion);
+            break;
+        
+        case 'get_package_services':
+            getPackageServices($conexion);
+            break;
+        
         default:
             echo json_encode(['ok' => false, 'message' => 'Acción no válida']);
     }
@@ -597,5 +613,168 @@ function buildQuoteEmailHTML($package, $custom_message = '', $include_details = 
 </html>';
     
     return $html;
+}
+
+// ===================================================================
+// OBTENER SERVICIOS DEL CATÁLOGO
+// ===================================================================
+function getCatalogServices($conexion) {
+    $type = isset($_GET['type']) ? mysqli_real_escape_string($conexion, $_GET['type']) : '';
+    
+    $where = "is_active = 1";
+    if(!empty($type)) {
+        $where .= " AND service_type = '$type'";
+    }
+    
+    $query = "SELECT 
+        id,
+        service_type,
+        service_name,
+        service_code,
+        short_description,
+        provider_name,
+        cost_price,
+        sale_price,
+        currency,
+        commission_amount,
+        availability_status,
+        stock_quantity
+    FROM medtravel_services_catalog
+    WHERE $where
+    ORDER BY service_type ASC, display_order ASC, service_name ASC";
+    
+    $result = mysqli_query($conexion, $query);
+    
+    if(!$result) {
+        throw new Exception("Error querying catalog: " . mysqli_error($conexion));
+    }
+    
+    $services = [];
+    while($row = mysqli_fetch_assoc($result)) {
+        $services[] = $row;
+    }
+    
+    echo json_encode([
+        'ok' => true,
+        'data' => $services
+    ]);
+}
+
+// ===================================================================
+// AGREGAR SERVICIO A PAQUETE
+// ===================================================================
+function addServiceToPackage($conexion) {
+    $package_id = isset($_POST['package_id']) ? intval($_POST['package_id']) : 0;
+    $service_id = isset($_POST['service_id']) ? intval($_POST['service_id']) : 0;
+    $quantity = isset($_POST['quantity']) ? intval($_POST['quantity']) : 1;
+    $notes = isset($_POST['notes']) ? mysqli_real_escape_string($conexion, $_POST['notes']) : '';
+    
+    if($package_id === 0 || $service_id === 0) {
+        echo json_encode(['ok' => false, 'message' => 'Invalid package or service ID']);
+        return;
+    }
+    
+    // Obtener precio del servicio
+    $service_query = "SELECT sale_price, currency FROM medtravel_services_catalog WHERE id = $service_id";
+    $service_result = mysqli_query($conexion, $service_query);
+    $service = mysqli_fetch_assoc($service_result);
+    
+    if(!$service) {
+        echo json_encode(['ok' => false, 'message' => 'Service not found']);
+        return;
+    }
+    
+    $unit_price = floatval($service['sale_price']);
+    $total_price = $unit_price * $quantity;
+    
+    // Verificar si ya existe
+    $check = mysqli_query($conexion, "SELECT id FROM package_services WHERE package_id = $package_id AND service_id = $service_id");
+    if(mysqli_num_rows($check) > 0) {
+        echo json_encode(['ok' => false, 'message' => 'Service already added to package']);
+        return;
+    }
+    
+    // Insertar
+    $insert = "INSERT INTO package_services (package_id, service_id, quantity, unit_price, total_price, notes)
+               VALUES ($package_id, $service_id, $quantity, $unit_price, $total_price, '$notes')";
+    
+    if(mysqli_query($conexion, $insert)) {
+        echo json_encode([
+            'ok' => true,
+            'message' => 'Service added successfully',
+            'total_price' => $total_price
+        ]);
+    } else {
+        throw new Exception("Error adding service: " . mysqli_error($conexion));
+    }
+}
+
+// ===================================================================
+// ELIMINAR SERVICIO DE PAQUETE
+// ===================================================================
+function removeServiceFromPackage($conexion) {
+    $package_service_id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+    
+    if($package_service_id === 0) {
+        echo json_encode(['ok' => false, 'message' => 'Invalid ID']);
+        return;
+    }
+    
+    $delete = "DELETE FROM package_services WHERE id = $package_service_id";
+    
+    if(mysqli_query($conexion, $delete)) {
+        echo json_encode([
+            'ok' => true,
+            'message' => 'Service removed successfully'
+        ]);
+    } else {
+        throw new Exception("Error removing service: " . mysqli_error($conexion));
+    }
+}
+
+// ===================================================================
+// OBTENER SERVICIOS DE UN PAQUETE
+// ===================================================================
+function getPackageServices($conexion) {
+    $package_id = isset($_GET['package_id']) ? intval($_GET['package_id']) : 0;
+    
+    if($package_id === 0) {
+        echo json_encode(['ok' => false, 'message' => 'Invalid package ID']);
+        return;
+    }
+    
+    $query = "SELECT 
+        ps.id,
+        ps.package_id,
+        ps.service_id,
+        ps.quantity,
+        ps.unit_price,
+        ps.total_price,
+        ps.notes,
+        msc.service_type,
+        msc.service_name,
+        msc.service_code,
+        msc.provider_name,
+        msc.currency
+    FROM package_services ps
+    INNER JOIN medtravel_services_catalog msc ON ps.service_id = msc.id
+    WHERE ps.package_id = $package_id
+    ORDER BY msc.service_type ASC, msc.service_name ASC";
+    
+    $result = mysqli_query($conexion, $query);
+    
+    if(!$result) {
+        throw new Exception("Error querying package services: " . mysqli_error($conexion));
+    }
+    
+    $services = [];
+    while($row = mysqli_fetch_assoc($result)) {
+        $services[] = $row;
+    }
+    
+    echo json_encode([
+        'ok' => true,
+        'data' => $services
+    ]);
 }
 ?>

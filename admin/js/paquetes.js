@@ -2,11 +2,14 @@
 var tablaPaquetes;
 var modalPaquete = $('#modalPaquete');
 var formPaquete = $('#formPaquete');
+var catalogServices = {}; // Cache de servicios del catálogo
+var selectedServices = []; // Servicios seleccionados del catálogo
 
 $(document).ready(function() {
     initDataTable();
     initEventHandlers();
     loadClientes();
+    loadCatalogServices();
 });
 
 // ===================================================================
@@ -174,6 +177,223 @@ function initEventHandlers() {
             autoCalculatePrice();
         }
     });
+}
+
+// ===================================================================
+// CARGAR SERVICIOS DEL CATÁLOGO
+// ===================================================================
+function loadCatalogServices() {
+    $.ajax({
+        url: 'ajax/paquetes.php?action=get_catalog_services',
+        type: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            if(response.ok) {
+                // Agrupar servicios por tipo
+                catalogServices = {
+                    flight: [],
+                    accommodation: [],
+                    transport: [],
+                    meals: [],
+                    support: []
+                };
+                
+                $.each(response.data, function(i, service) {
+                    if(catalogServices[service.service_type]) {
+                        catalogServices[service.service_type].push(service);
+                    }
+                });
+                
+                // Renderizar cada categoría
+                renderCatalogServices('flight', catalogServices.flight, $('#catalog_flights_list'));
+                renderCatalogServices('accommodation', catalogServices.accommodation, $('#catalog_accommodations_list'));
+                renderCatalogServices('transport', catalogServices.transport, $('#catalog_transport_list'));
+                renderCatalogServices('meals', catalogServices.meals, $('#catalog_meals_list'));
+                renderCatalogServices('support', catalogServices.support, $('#catalog_support_list'));
+            }
+        },
+        error: function() {
+            console.error('Error loading catalog services');
+        }
+    });
+}
+
+// ===================================================================
+// RENDERIZAR SERVICIOS EN CONTENEDOR
+// ===================================================================
+function renderCatalogServices(type, services, container) {
+    if(services.length === 0) {
+        container.html('<p class="text-muted"><em>No services available in this category</em></p>');
+        return;
+    }
+    
+    container.empty();
+    
+    $.each(services, function(i, service) {
+        var serviceHtml = `
+            <div class="service-item" data-service-id="${service.id}">
+                <div class="service-item-header">
+                    <div>
+                        <div class="service-item-title">${service.service_name}</div>
+                        ${service.provider_name ? `<div class="service-item-provider">Provider: ${service.provider_name}</div>` : ''}
+                    </div>
+                    <div class="service-item-price">${service.currency} $${parseFloat(service.sale_price).toFixed(2)}</div>
+                </div>
+                ${service.short_description ? `<div class="service-item-description">${service.short_description}</div>` : ''}
+                <div class="service-quantity-control" style="display:none;">
+                    <label>Quantity:</label>
+                    <input type="number" class="form-control service-quantity" value="1" min="1" max="10">
+                    <button type="button" class="btn btn-sm btn-success" onclick="addServiceToPackage(${service.id})">
+                        <i class="fa fa-plus"></i> Add
+                    </button>
+                    <button type="button" class="btn btn-sm btn-default" onclick="deselectService(${service.id})">
+                        <i class="fa fa-times"></i> Cancel
+                    </button>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary service-select-btn" onclick="selectService(${service.id})">
+                    <i class="fa fa-check"></i> Select
+                </button>
+            </div>
+        `;
+        container.append(serviceHtml);
+    });
+}
+
+// ===================================================================
+// TOGGLE MODO CATÁLOGO
+// ===================================================================
+function toggleCatalogMode() {
+    var useCatalog = $('#use_catalog_services').is(':checked');
+    $('#catalog_services_section').toggle(useCatalog);
+    
+    if(useCatalog) {
+        // Ocultar/deshabilitar tabs manuales
+        $('a[href="#tab_vuelo"], a[href="#tab_hotel"], a[href="#tab_transporte"]').parent().addClass('disabled');
+    } else {
+        $('a[href="#tab_vuelo"], a[href="#tab_hotel"], a[href="#tab_transporte"]').parent().removeClass('disabled');
+        selectedServices = [];
+        updateSelectedServicesSummary();
+    }
+}
+
+// ===================================================================
+// SELECCIONAR SERVICIO
+// ===================================================================
+function selectService(serviceId) {
+    var serviceItem = $('.service-item[data-service-id="' + serviceId + '"]');
+    serviceItem.addClass('selected');
+    serviceItem.find('.service-select-btn').hide();
+    serviceItem.find('.service-quantity-control').show();
+}
+
+// ===================================================================
+// DESELECCIONAR SERVICIO
+// ===================================================================
+function deselectService(serviceId) {
+    var serviceItem = $('.service-item[data-service-id="' + serviceId + '"]');
+    serviceItem.removeClass('selected');
+    serviceItem.find('.service-select-btn').show();
+    serviceItem.find('.service-quantity-control').hide();
+}
+
+// ===================================================================
+// AGREGAR SERVICIO AL PAQUETE
+// ===================================================================
+function addServiceToPackage(serviceId) {
+    var serviceItem = $('.service-item[data-service-id="' + serviceId + '"]');
+    var quantity = parseInt(serviceItem.find('.service-quantity').val()) || 1;
+    
+    // Buscar datos del servicio
+    var serviceData = null;
+    $.each(catalogServices, function(type, services) {
+        $.each(services, function(i, service) {
+            if(service.id == serviceId) {
+                serviceData = service;
+                return false;
+            }
+        });
+        if(serviceData) return false;
+    });
+    
+    if(!serviceData) {
+        toastr.error('Service not found');
+        return;
+    }
+    
+    // Verificar si ya está agregado
+    var alreadyAdded = selectedServices.find(function(s) { return s.id == serviceId; });
+    if(alreadyAdded) {
+        toastr.warning('Service already added');
+        return;
+    }
+    
+    // Agregar a la lista
+    selectedServices.push({
+        id: serviceData.id,
+        service_name: serviceData.service_name,
+        service_type: serviceData.service_type,
+        provider_name: serviceData.provider_name,
+        sale_price: serviceData.sale_price,
+        currency: serviceData.currency,
+        quantity: quantity,
+        total: parseFloat(serviceData.sale_price) * quantity
+    });
+    
+    // Reset UI
+    deselectService(serviceId);
+    serviceItem.find('.service-quantity').val(1);
+    
+    // Actualizar resumen
+    updateSelectedServicesSummary();
+    
+    toastr.success('Service added to package');
+}
+
+// ===================================================================
+// ELIMINAR SERVICIO DEL RESUMEN
+// ===================================================================
+function removeServiceFromSummary(serviceId) {
+    selectedServices = selectedServices.filter(function(s) { return s.id != serviceId; });
+    updateSelectedServicesSummary();
+    toastr.info('Service removed');
+}
+
+// ===================================================================
+// ACTUALIZAR RESUMEN DE SERVICIOS SELECCIONADOS
+// ===================================================================
+function updateSelectedServicesSummary() {
+    var container = $('#selected_services_summary');
+    
+    if(selectedServices.length === 0) {
+        container.html('<em class="text-muted">No services selected yet</em>');
+        $('#catalog_total_amount').text('$0.00');
+        return;
+    }
+    
+    var html = '<table class="table table-condensed"><thead><tr><th>Service</th><th>Provider</th><th>Qty</th><th>Unit Price</th><th>Total</th><th></th></tr></thead><tbody>';
+    var grandTotal = 0;
+    
+    $.each(selectedServices, function(i, service) {
+        grandTotal += service.total;
+        html += `
+            <tr>
+                <td><strong>${service.service_name}</strong></td>
+                <td><small>${service.provider_name || 'N/A'}</small></td>
+                <td>${service.quantity}</td>
+                <td>${service.currency} $${parseFloat(service.sale_price).toFixed(2)}</td>
+                <td><strong>${service.currency} $${service.total.toFixed(2)}</strong></td>
+                <td>
+                    <button type="button" class="btn btn-xs btn-danger" onclick="removeServiceFromSummary(${service.id})">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    container.html(html);
+    $('#catalog_total_amount').text('$' + grandTotal.toFixed(2));
 }
 
 // ===================================================================

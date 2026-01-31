@@ -21,6 +21,62 @@ $id_usuario = $_SESSION['id_usuario'];
         <?php echo $theme_layout_style;?>
         <link rel="shortcut icon" href="favicon.ico" /> 
         <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+        <style>
+            .service-selection-container {
+                max-height: 400px;
+                overflow-y: auto;
+            }
+            .service-item {
+                border: 1px solid #e5e5e5;
+                border-radius: 4px;
+                padding: 12px;
+                margin-bottom: 10px;
+                transition: all 0.3s;
+            }
+            .service-item:hover {
+                background: #f9f9f9;
+                border-color: #3598dc;
+            }
+            .service-item.selected {
+                background: #e7f3ff;
+                border-color: #3598dc;
+                border-width: 2px;
+            }
+            .service-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            .service-item-title {
+                font-weight: bold;
+                font-size: 14px;
+            }
+            .service-item-price {
+                color: #27ae60;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            .service-item-provider {
+                color: #7f8c8d;
+                font-size: 12px;
+                margin-bottom: 4px;
+            }
+            .service-item-description {
+                color: #555;
+                font-size: 12px;
+            }
+            .service-quantity-control {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-top: 10px;
+            }
+            .service-quantity-control input {
+                width: 60px;
+                text-align: center;
+            }
+        </style>
     </head>
     <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
         <!-- BEGIN CONTAINER -->
@@ -116,9 +172,10 @@ $id_usuario = $_SESSION['id_usuario'];
                             <div class="tabbable-line">
                                 <ul class="nav nav-tabs">
                                     <li class="active"><a href="#tab_general" data-toggle="tab">General</a></li>
-                                    <li><a href="#tab_vuelo" data-toggle="tab">Vuelo</a></li>
-                                    <li><a href="#tab_hotel" data-toggle="tab">Hotel</a></li>
-                                    <li><a href="#tab_transporte" data-toggle="tab">Transporte</a></li>
+                                    <li><a href="#tab_catalog_services" data-toggle="tab"><i class="fa fa-shopping-cart"></i> Catalog Services</a></li>
+                                    <li><a href="#tab_vuelo" data-toggle="tab">Vuelo (Manual)</a></li>
+                                    <li><a href="#tab_hotel" data-toggle="tab">Hotel (Manual)</a></li>
+                                    <li><a href="#tab_transporte" data-toggle="tab">Transporte (Manual)</a></li>
                                     <li><a href="#tab_costos" data-toggle="tab">Costos y Márgenes</a></li>
                                     <li><a href="#tab_pagos" data-toggle="tab">Pagos</a></li>
                                 </ul>
@@ -199,6 +256,132 @@ $id_usuario = $_SESSION['id_usuario'];
                                                 <label class="control-label col-md-2">Notas Internas</label>
                                                 <div class="col-md-10">
                                                     <textarea class="form-control" rows="3" id="internal_notes" name="internal_notes"></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- TAB CATALOG SERVICES -->
+                                    <div class="tab-pane" id="tab_catalog_services">
+                                        <div class="form-body">
+                                            <div class="alert alert-info">
+                                                <i class="fa fa-info-circle"></i> 
+                                                <strong>Use Catalog Services:</strong> Select services from MedTravel's catalog. Prices and providers are pre-configured.
+                                                <br><small>Alternative: Use manual tabs (Flight, Hotel, Transport) for custom entries.</small>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <div class="col-md-12">
+                                                    <label class="mt-checkbox mt-checkbox-outline">
+                                                        <input type="checkbox" id="use_catalog_services" name="use_catalog_services" value="1" onchange="toggleCatalogMode()">
+                                                        Use services from catalog (recommended)
+                                                        <span></span>
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <div id="catalog_services_section" style="display:none;">
+                                                <h4 class="form-section">Available Services</h4>
+                                                
+                                                <!-- Flights -->
+                                                <div class="panel panel-default">
+                                                    <div class="panel-heading">
+                                                        <h4 class="panel-title">
+                                                            <a data-toggle="collapse" href="#collapse_flights">
+                                                                ✈️ Flights
+                                                            </a>
+                                                        </h4>
+                                                    </div>
+                                                    <div id="collapse_flights" class="panel-collapse collapse">
+                                                        <div class="panel-body">
+                                                            <div id="catalog_flights_list" class="service-selection-container">
+                                                                <!-- Loaded by JavaScript -->
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Accommodations -->
+                                                <div class="panel panel-default">
+                                                    <div class="panel-heading">
+                                                        <h4 class="panel-title">
+                                                            <a data-toggle="collapse" href="#collapse_accommodations">
+                                                                🏨 Accommodations
+                                                            </a>
+                                                        </h4>
+                                                    </div>
+                                                    <div id="collapse_accommodations" class="panel-collapse collapse">
+                                                        <div class="panel-body">
+                                                            <div id="catalog_accommodations_list" class="service-selection-container">
+                                                                <!-- Loaded by JavaScript -->
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Transport -->
+                                                <div class="panel panel-default">
+                                                    <div class="panel-heading">
+                                                        <h4 class="panel-title">
+                                                            <a data-toggle="collapse" href="#collapse_transport">
+                                                                🚗 Transport
+                                                            </a>
+                                                        </h4>
+                                                    </div>
+                                                    <div id="collapse_transport" class="panel-collapse collapse">
+                                                        <div class="panel-body">
+                                                            <div id="catalog_transport_list" class="service-selection-container">
+                                                                <!-- Loaded by JavaScript -->
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Meals -->
+                                                <div class="panel panel-default">
+                                                    <div class="panel-heading">
+                                                        <h4 class="panel-title">
+                                                            <a data-toggle="collapse" href="#collapse_meals">
+                                                                🍽️ Meals
+                                                            </a>
+                                                        </h4>
+                                                    </div>
+                                                    <div id="collapse_meals" class="panel-collapse collapse">
+                                                        <div class="panel-body">
+                                                            <div id="catalog_meals_list" class="service-selection-container">
+                                                                <!-- Loaded by JavaScript -->
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Support -->
+                                                <div class="panel panel-default">
+                                                    <div class="panel-heading">
+                                                        <h4 class="panel-title">
+                                                            <a data-toggle="collapse" href="#collapse_support">
+                                                                🎧 Support
+                                                            </a>
+                                                        </h4>
+                                                    </div>
+                                                    <div id="collapse_support" class="panel-collapse collapse">
+                                                        <div class="panel-body">
+                                                            <div id="catalog_support_list" class="service-selection-container">
+                                                                <!-- Loaded by JavaScript -->
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Selected Services Summary -->
+                                                <div class="well" style="margin-top: 20px;">
+                                                    <h4>Selected Services Summary</h4>
+                                                    <div id="selected_services_summary">
+                                                        <em class="text-muted">No services selected yet</em>
+                                                    </div>
+                                                    <div id="catalog_services_total" style="margin-top: 10px; font-size: 18px; font-weight: bold;">
+                                                        Total from Catalog: <span id="catalog_total_amount">$0.00</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
