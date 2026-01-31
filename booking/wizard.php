@@ -9,6 +9,18 @@ unset($_SESSION['booking_request_status'], $_SESSION['booking_request_message'])
 // Capturar oferta pre-seleccionada si existe
 $preselected_offer_id = !empty($booking['preselected_offer']) ? intval($booking['preselected_offer']) : 0;
 
+// Cargar header del wizard desde la base de datos
+$wizard_header = [
+    'title' => 'Booking Wizard',
+    'subtitle_1' => 'Home',
+    'subtitle_2' => 'Booking Request',
+    'bg_image' => 'img/carousel-1.jpg'
+];
+$header_query = mysqli_query($conexion, "SELECT title, subtitle_1, subtitle_2, bg_image FROM booking_wizard_header WHERE activo = '0' LIMIT 1");
+if ($header_query && mysqli_num_rows($header_query) > 0) {
+    $wizard_header = mysqli_fetch_assoc($header_query);
+}
+
 $categories = [];
 $cat_query = "SELECT id, name, description FROM service_categories WHERE is_active = 1 ORDER BY sort_order ASC, id DESC";
 $cat_res = mysqli_query($conexion, $cat_query);
@@ -54,7 +66,15 @@ foreach ($offers as $offer) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <?php echo $head; ?>
+    <?php 
+    // Ajustar rutas relativas para subdirectorio
+    $head_adjusted = str_replace(
+        ['href="assets/', 'href="lib/', 'href="css/', 'href="index.php"'],
+        ['href="../assets/', 'href="../lib/', 'href="../css/', 'href="../index.php"'],
+        $head
+    );
+    echo $head_adjusted; 
+    ?>
     <style>
         .wizard-summary { 
             background: #f8fafc; 
@@ -137,6 +157,22 @@ foreach ($offers as $offer) {
             margin-bottom: 12px;
             line-height: 1.5;
         }
+        .btn-outline-primary {
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 6px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+        .btn-outline-primary:hover {
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+        }
         .offer-price {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -186,22 +222,34 @@ foreach ($offers as $offer) {
     <!-- Navbar Start -->
     <div class="container-fluid position-relative p-0">
         <nav class="navbar navbar-expand-lg navbar-light px-4 px-lg-5 py-3 py-lg-0">
-            <?php echo $logo; ?>
+            <?php 
+            // Ajustar rutas para subdirectorio
+            $logo_adjusted = str_replace('href="index.php"', 'href="../index.php"', $logo);
+            echo $logo_adjusted; 
+            ?>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse">
                 <span class="fa fa-bars"></span>
             </button>
-            <?php echo $menu; ?>
+            <?php 
+            // Ajustar rutas del menú para subdirectorio
+            $menu_adjusted = str_replace(
+                ['href="index.php"', 'href="about.php"', 'href="services.php"', 'href="offers.php"', 'href="packages.php"', 'href="destination.html"', 'href="tour.php"', 'href="gallery.html"', 'href="guides.html"', 'href="testimonial.php"', 'href="blog.php"', 'href="contact.php"', 'href="booking.php"'],
+                ['href="../index.php"', 'href="../about.php"', 'href="../services.php"', 'href="../offers.php"', 'href="../packages.php"', 'href="../destination.html"', 'href="../tour.php"', 'href="../gallery.html"', 'href="../guides.html"', 'href="../testimonial.php"', 'href="../blog.php"', 'href="../contact.php"', 'href="../booking.php"'],
+                $menu
+            );
+            echo $menu_adjusted;
+            ?>
         </nav>
     </div>
     <!-- Navbar End -->
 
     <!-- Header Start -->
-    <div class="container-fluid bg-breadcrumb" style="background: linear-gradient(rgba(19, 53, 123, 0.5), rgba(19, 53, 123, 0.5)), url(../img/carousel-1.jpg); background-position: center center; background-repeat: no-repeat; background-size: cover;">
+    <div class="container-fluid bg-breadcrumb" style="background: linear-gradient(rgba(19, 53, 123, 0.5), rgba(19, 53, 123, 0.5)), url(../<?php echo htmlspecialchars($wizard_header['bg_image']); ?>); background-position: center center; background-repeat: no-repeat; background-size: cover;">
         <div class="container text-center py-5" style="max-width: 900px;">
-            <h3 class="text-white display-3 mb-4">Booking Wizard</h3>
+            <h3 class="text-white display-3 mb-4"><?php echo htmlspecialchars($wizard_header['title']); ?></h3>
             <ol class="breadcrumb justify-content-center mb-0">
-                <li class="breadcrumb-item"><a href="../index.php">Home</a></li>
-                <li class="breadcrumb-item active text-white">Booking Request</li>
+                <li class="breadcrumb-item"><a href="../index.php"><?php echo htmlspecialchars($wizard_header['subtitle_1']); ?></a></li>
+                <li class="breadcrumb-item active text-white"><?php echo htmlspecialchars($wizard_header['subtitle_2']); ?></li>
             </ol>
         </div>
     </div>
@@ -245,9 +293,15 @@ foreach ($offers as $offer) {
             </div>
         <?php endif; ?>
 
-        <form action="/booking/submit.php" method="POST" id="booking-wizard-form">
+        <form action="submit.php" method="POST" id="booking-wizard-form">
             <div class="wizard-stage">
-                <h3>Stage 2 – Select Medical Services</h3>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="mb-0">Stage 2 – Select Medical Services</h3>
+                    <div id="selection-counter" class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <span id="counter-value">0</span> selected
+                    </div>
+                </div>
                 <p class="mb-4">Choose from our certified providers' available services. You can select multiple services to build your medical travel package.</p>
                 
                 <?php if (count($offers_by_category) > 0): ?>
@@ -268,12 +322,39 @@ foreach ($offers as $offer) {
                                                    <?php echo ($preselected_offer_id === $offer['id']) ? 'checked' : ''; ?>
                                                    id="offer-<?php echo $offer['id']; ?>">
                                             
+                                            <?php 
+                                            // Obtener imagen de offer_media
+                                            $img_query = mysqli_query($conexion, "SELECT path FROM offer_media WHERE offer_id = {$offer['id']} ORDER BY sort_order ASC, id ASC LIMIT 1");
+                                            if ($img_query && $img_row = mysqli_fetch_assoc($img_query)) {
+                                                $image_path = htmlspecialchars($img_row['path']);
+                                            ?>
+                                            <div class="card-img-top" style="height: 200px; overflow: hidden; position: relative;">
+                                                <img src="../<?php echo $image_path; ?>" 
+                                                     alt="<?php echo htmlspecialchars($offer['title']); ?>" 
+                                                     style="width: 100%; height: 100%; object-fit: cover;"
+                                                     onerror="this.parentElement.style.display='none';">
+                                            </div>
+                                            <?php } ?>
+                                            
                                             <div class="card-header">
-                                                <?php if (!empty($offer['provider_logo'])): ?>
-                                                    <img src="/<?php echo htmlspecialchars($offer['provider_logo']); ?>" 
-                                                         alt="<?php echo htmlspecialchars($offer['provider_name']); ?>" 
-                                                         class="provider-logo-small">
+                                                <?php 
+                                                // Los logos se guardan en img/providers/{id}/ no en admin/img/providers/
+                                                $logo_path = !empty($offer['provider_logo']) ? "../img/providers/{$offer['provider_id']}/{$offer['provider_logo']}" : '';
+                                                $has_logo = !empty($offer['provider_logo']);
+                                                ?>
+                                                
+                                                <?php if ($has_logo): ?>
+                                                    <!-- DEBUG: Logo path = <?php echo $logo_path; ?> -->
+                                                    <img src="<?php echo htmlspecialchars($logo_path); ?>" 
+                                                         alt="<?php echo htmlspecialchars($offer['provider_name']); ?>\" 
+                                                         class="provider-logo-small provider-logo-img"
+                                                         onerror="console.error('Failed to load: <?php echo $logo_path; ?>'); this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                                         onload="console.log('Loaded successfully: <?php echo $logo_path; ?>')">
+                                                    <div class="provider-logo-small provider-logo-fallback" style="display:none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">
+                                                        <?php echo strtoupper(substr($offer['provider_name'], 0, 1)); ?>
+                                                    </div>
                                                 <?php else: ?>
+                                                    <!-- DEBUG: No logo in DB for provider <?php echo $offer['provider_id']; ?> -->
                                                     <div class="provider-logo-small" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">
                                                         <?php echo strtoupper(substr($offer['provider_name'], 0, 1)); ?>
                                                     </div>
@@ -299,6 +380,13 @@ foreach ($offers as $offer) {
                                                         <?php if (strlen($offer['description']) > 120): ?>...<?php endif; ?>
                                                     </div>
                                                 <?php endif; ?>
+                                                
+                                                <a href="../offer_detail.php?id=<?php echo $offer['id']; ?>" 
+                                                   class="btn btn-sm btn-outline-primary mt-2" 
+                                                   onclick="event.stopPropagation(); return true;"
+                                                   target="_blank">
+                                                    <i class="fas fa-info-circle"></i> More details
+                                                </a>
                                                 
                                                 <?php if ($offer['price_from'] > 0): ?>
                                                     <div class="offer-price">
@@ -335,9 +423,17 @@ foreach ($offers as $offer) {
                         <small class="text-muted">Optional - helps us provide better recommendations</small>
                     </div>
                     <div class="col-md-6">
-                        <label for="timeline" class="form-label">Preferred timeline</label>
-                        <input type="text" class="form-control" name="timeline" id="timeline" placeholder="e.g. Between March 10-20">
-                        <small class="text-muted">When would you like to schedule your services?</small>
+                        <label class="form-label">Preferred timeline</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="date" class="form-control" name="timeline_from" id="timeline_from" placeholder="From">
+                                <small class="text-muted">From</small>
+                            </div>
+                            <div class="col-6">
+                                <input type="date" class="form-control" name="timeline_to" id="timeline_to" placeholder="To">
+                                <small class="text-muted">To</small>
+                            </div>
+                        </div>
                     </div>
                     <div class="col-12">
                         <label for="additional_notes" class="form-label">Additional context</label>
@@ -356,7 +452,7 @@ foreach ($offers as $offer) {
             </div>
         </form>
         <div class="mt-3">
-            <a href="/offers.php" class="btn btn-outline-primary">
+            <a href="../offers.php" class="btn btn-outline-primary">
                 <i class="fas fa-arrow-left me-2"></i>Back to catalog
             </a>
         </div>
@@ -364,11 +460,27 @@ foreach ($offers as $offer) {
     <!-- Wizard End -->
 
     <!-- Footer Start -->
-    <?php echo $footer; ?>
+    <?php 
+    // Ajustar rutas del footer para subdirectorio
+    $footer_adjusted = str_replace(
+        ['href="index.php"', 'href="about.php"', 'href="services.php"', 'href="offers.php"', 'href="packages.php"', 'href="destination.html"', 'href="tour.php"', 'href="gallery.html"', 'href="guides.html"', 'href="testimonial.php"', 'href="blog.php"', 'href="contact.php"', 'href="booking.php"'],
+        ['href="../index.php"', 'href="../about.php"', 'href="../services.php"', 'href="../offers.php"', 'href="../packages.php"', 'href="../destination.html"', 'href="../tour.php"', 'href="../gallery.html"', 'href="../guides.html"', 'href="../testimonial.php"', 'href="../blog.php"', 'href="../contact.php"', 'href="../booking.php"'],
+        $footer
+    );
+    echo $footer_adjusted;
+    ?>
     <!-- Footer End -->
 
     <!-- Copyright Start -->
-    <?php echo $copyright; ?>
+    <?php 
+    // Ajustar rutas del copyright para subdirectorio
+    $copyright_adjusted = str_replace(
+        ['href="index.php"', 'href="about.php"', 'href="services.php"', 'href="contact.php"'],
+        ['href="../index.php"', 'href="../about.php"', 'href="../services.php"', 'href="../contact.php"'],
+        $copyright
+    );
+    echo $copyright_adjusted;
+    ?>
     <!-- Copyright End -->
 
     <!-- JavaScript Libraries -->
@@ -382,6 +494,24 @@ foreach ($offers as $offer) {
     <script src="../js/main.js"></script>
 
     <script>
+        // Timeline date range validation
+        const timelineFrom = document.getElementById('timeline_from');
+        const timelineTo = document.getElementById('timeline_to');
+        
+        if (timelineFrom && timelineTo) {
+            // Set minimum date to today
+            const today = new Date().toISOString().split('T')[0];
+            timelineFrom.setAttribute('min', today);
+            timelineTo.setAttribute('min', today);
+            
+            // Validate that 'to' date is after 'from' date
+            timelineFrom.addEventListener('change', function() {
+                if (this.value) {
+                    timelineTo.setAttribute('min', this.value);
+                }
+            });
+        }
+        
         // Toggle offer card selection
         function toggleOfferSelection(card, offerId) {
             const checkbox = card.querySelector('input[type="checkbox"]');
@@ -406,12 +536,33 @@ foreach ($offers as $offer) {
             const selectedOffers = document.querySelectorAll('input[name="selected_offers[]"]:checked');
             const count = selectedOffers.length;
             
-            // You can add a summary display here if needed
+            // Actualizar contador visual
+            const counterValue = document.getElementById('counter-value');
+            const counterBadge = document.getElementById('selection-counter');
+            
+            if (counterValue) {
+                counterValue.textContent = count;
+            }
+            
+            // Cambiar color según cantidad
+            if (counterBadge) {
+                if (count === 0) {
+                    counterBadge.className = 'badge bg-secondary';
+                } else if (count <= 2) {
+                    counterBadge.className = 'badge bg-primary';
+                } else {
+                    counterBadge.className = 'badge bg-success';
+                }
+            }
+            
             console.log(`Selected ${count} offer(s)`);
         }
         
         // Initialize - mark pre-selected cards
         document.addEventListener('DOMContentLoaded', function() {
+            // Inicializar contador
+            updateSelectionSummary();
+            
             document.querySelectorAll('.offer-card input[type="checkbox"]:checked').forEach(function(checkbox) {
                 const card = checkbox.closest('.offer-card');
                 card.classList.add('selected');

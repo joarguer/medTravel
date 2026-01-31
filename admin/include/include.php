@@ -277,8 +277,8 @@ $top_header .= '</span>
 
 // Detectar página actual para activar pestaña del menú
 $current_page = basename($_SERVER['PHP_SELF']);
-$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','email_settings.php');
-$site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php');
+$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','email_settings.php','booking_requests.php');
+$site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
 $is_admin_page = in_array($current_page, $admin_pages);
 $is_site_page = $es_admin && in_array($current_page, $site_pages);
 $is_dashboard = ($current_page === 'index.php');
@@ -345,7 +345,12 @@ if ($es_admin) {
                                     <a href="./clientes.php"> 
                                     <i class="icon-users"></i> Clientes </a>
                                 </li>';
-    // link Paquetes (debajo de Clientes)
+    // link Booking Requests (debajo de Clientes)
+    $top_header_2 .=               '<li class="'.($current_page === 'booking_requests.php' ? 'active' : '').'">
+                                    <a href="./booking_requests.php"> 
+                                    <i class="icon-calendar"></i> Booking Requests </a>
+                                </li>';
+    // link Paquetes (debajo de Booking Requests)
     $top_header_2 .=               '<li class="'.($current_page === 'paquetes.php' ? 'active' : '').'">
                                     <a href="./paquetes.php"> 
                                     <i class="icon-briefcase"></i> Paquetes </a>
@@ -394,6 +399,9 @@ if ($es_admin) {
                                     </li>
                                     <li>
                                         <a href="home_edit.php?tab=booking"> Booking </a>
+                                    </li>
+                                    <li>
+                                        <a href="wizard_header_edit.php"> Wizard Header </a>
                                     </li>
                                     <li>
                                         <a href="blog_edit.php"> Blog </a>

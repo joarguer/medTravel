@@ -3,7 +3,7 @@ session_start();
 include(__DIR__ . '/../inc/include.php');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /booking/wizard.php');
+    header('Location: wizard.php');
     exit;
 }
 
@@ -11,7 +11,7 @@ $booking = isset($_SESSION['booking_request']) ? $_SESSION['booking_request'] : 
 if (empty($booking['name']) || empty($booking['email'])) {
     $_SESSION['booking_request_status'] = 'error';
     $_SESSION['booking_request_message'] = 'Please complete the contact data before selecting services.';
-    header('Location: /booking/wizard.php');
+    header('Location: wizard.php');
     exit;
 }
 
@@ -19,7 +19,19 @@ if (empty($booking['name']) || empty($booking['email'])) {
 $selected_offers = isset($_POST['selected_offers']) ? array_values(array_filter(array_map('intval', $_POST['selected_offers']))) : [];
 
 $budget = isset($_POST['budget']) && $_POST['budget'] !== '' ? number_format((float) $_POST['budget'], 2, '.', '') : null;
-$timeline = isset($_POST['timeline']) ? trim($_POST['timeline']) : '';
+
+// Construir timeline desde date range
+$timeline_from = isset($_POST['timeline_from']) ? trim($_POST['timeline_from']) : '';
+$timeline_to = isset($_POST['timeline_to']) ? trim($_POST['timeline_to']) : '';
+$timeline = '';
+if ($timeline_from && $timeline_to) {
+    $timeline = $timeline_from . ' to ' . $timeline_to;
+} elseif ($timeline_from) {
+    $timeline = 'From ' . $timeline_from;
+} elseif ($timeline_to) {
+    $timeline = 'Until ' . $timeline_to;
+}
+
 $additional_notes = isset($_POST['additional_notes']) ? trim($_POST['additional_notes']) : '';
 $origin = isset($booking['origin']) ? $booking['origin'] : 'wizard';
 
@@ -60,5 +72,5 @@ if ($stmt) {
 $_SESSION['booking_request_status'] = 'submitted';
 $offers_count = count($selected_offers);
 $_SESSION['booking_request_message'] = "Your request with {$offers_count} selected service(s) was saved. One of our coordinators will reach back soon.";
-header('Location: /booking/wizard.php');
+header('Location: wizard.php');
 exit;

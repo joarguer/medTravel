@@ -42,8 +42,8 @@ function tiene_rol_minimo_2() {
 $current = basename($_SERVER['PHP_SELF']);
 $admin_only = array(
     'crear_usuario.php','create_bd.php',
-    'home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php',
-    'service_categories.php','service_catalog.php','providers.php','clientes.php','provider_verification.php'
+    'home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php',
+    'service_categories.php','service_catalog.php','providers.php','clientes.php','provider_verification.php','booking_requests.php'
 );
 $role2_allowed = array(
     'tipo_vehiculos.php','add_info_turistico.php','edit_info_turistico.php',
