@@ -1,6 +1,19 @@
 <?php
 include('include/include.php');
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
+$ses_ppal = isset($_SESSION['ppal']) ? trim(strval($_SESSION['ppal'])) : '';
+$ses_rol = isset($_SESSION['rol']) ? trim(strval($_SESSION['rol'])) : '';
+$es_admin_principal = false;
+if ($ses_ppal !== '') {
+    if ($ses_ppal === '1' || intval($ses_ppal) === 1 || strcasecmp($ses_ppal, 'ppal') === 0) {
+        $es_admin_principal = true;
+    }
+}
+if (!$es_admin_principal && $ses_rol !== '') {
+    if (intval($ses_rol) === 1 || stripos($ses_rol, 'admin') !== false || stripos($ses_rol, 'administrador') !== false) {
+        $es_admin_principal = true;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -101,11 +114,14 @@ $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] :
                                     </div>
                                 </div>
                                 <div class="portlet-body">
-                                    <table class="table table-striped table-bordered" id="tbl-offers">
+                                    <table class="table table-striped table-bordered" id="tbl-offers" data-show-owner="<?php echo $es_admin_principal ? '1' : '0'; ?>">
                                         <thead>
                                             <tr>
                                                 <th>Servicio</th>
                                                 <th>Título</th>
+                                                <?php if ($es_admin_principal): ?>
+                                                    <th>Empresa propietaria</th>
+                                                <?php endif; ?>
                                                 <th>Precio desde</th>
                                                 <th>Activo</th>
                                                 <th>Acciones</th>

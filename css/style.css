@@ -945,7 +945,9 @@
 
 /*** Tour Booking Start ***/
 .booking {
-    background: linear-gradient(rgba(19, 53, 123, .8), rgba(19, 53, 123, .8)), url(../img/tour-booking-bg.jpg);
+    --booking-gradient: linear-gradient(rgba(19, 53, 123, .8), rgba(19, 53, 123, .8));
+    --booking-bg-image: url('../img/tour-booking-bg.jpg');
+    background: var(--booking-gradient), var(--booking-bg-image);
     background-position: center center;
     background-repeat: no-repeat;
     background-size: cover;

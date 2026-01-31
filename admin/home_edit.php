@@ -7,6 +7,9 @@ $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = 
 $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_como_funciona = mysqli_query($conexion,"SELECT * FROM home_como_funciona WHERE activo = '0' ORDER BY step_number ASC");
 $busca_services = mysqli_query($conexion,"SELECT * FROM home_services WHERE activo = '0' ORDER BY orden ASC");
+$busca_booking = mysqli_query($conexion,"SELECT * FROM home_booking WHERE activo = '1' ORDER BY id DESC");
+$initial_site_tab = isset($_GET['tab']) ? $_GET['tab'] : '';
+$initial_site_tab = ($initial_site_tab === 'booking') ? 'booking' : '';
 mysqli_data_seek($busca_como_funciona, 0);
 mysqli_data_seek($busca_services, 0);
 ?>
@@ -246,6 +249,19 @@ mysqli_data_seek($busca_services, 0);
                                             <?php $p++; } ?>
                                         </ul>
                                     </div>
+                                    <h3>Booking Widget</h3>
+                                    <div class="services-sidebar">
+                                        <ul class="nav navbar-nav margin-bottom-35 services-list">
+                                            <li class="btn-booking service-item active" id="btn-booking">
+                                                <div class="service-item__content">
+                                                    <a class="service-link" onclick="open_booking()">
+                                                        <span class="service-link__icon"><i class="fa fa-pencil-alt"></i></span>
+                                                        <span>Booking widget</span>
+                                                    </a>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </nav>
                             </div>
                             <!-- END PAGE SIDEBAR -->
@@ -279,6 +295,9 @@ mysqli_data_seek($busca_services, 0);
         <!-- BEGIN PAGE LEVEL SCRIPTS -->
         <script src="../../assets/pages/scripts/profile.min.js" type="text/javascript"></script>
         <!-- END PAGE LEVEL SCRIPTS -->
+        <script type="text/javascript">
+            var homeEditInitialTab = <?php echo json_encode($initial_site_tab); ?>;
+        </script>
         <script src="js/home_edit.js" type="text/javascript"></script>
     </body>
 </html>

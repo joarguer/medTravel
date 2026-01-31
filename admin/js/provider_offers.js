@@ -1,4 +1,5 @@
 $(function(){
+    var showOwnerColumn = Number($('#tbl-offers').data('show-owner')) === 1;
     // Inicializar Summernote
     function initSummernote(){
         if ($.fn.summernote) {
@@ -70,6 +71,9 @@ $(function(){
                 var tr = $('<tr>');
                 tr.append($('<td>').text(row.service_name));
                 tr.append($('<td>').text(row.title));
+                if (showOwnerColumn) {
+                    tr.append($('<td>').text(row.provider_name || '-'));
+                }
                 tr.append($('<td>').text(row.price_from));
                 tr.append($('<td>').text(row.is_active==1? 'Sí':'No'));
                 var actions = $('<td>');

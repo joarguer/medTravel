@@ -1,4 +1,30 @@
 let dataCarrucel = [];
+const HOME_EDIT_INITIAL_TAB = (typeof homeEditInitialTab !== 'undefined') ? homeEditInitialTab : '';
+let bookingData = null;
+let bookingPendingOpen = HOME_EDIT_INITIAL_TAB === 'booking';
+let bookingFetchCompleted = false;
+
+function escapeHtml(value){
+    if(value === undefined || value === null){
+        return '';
+    }
+    return value.toString().replace(/[&<>"'`=\/]/g, function (s) {
+        return {
+            '&' : '&amp;',
+            '<' : '&lt;',
+            '>' : '&gt;',
+            '"' : '&quot;',
+            "'" : '&#39;',
+            '/' : '&#47;',
+            '`' : '&#96;',
+            '=' : '&#61;'
+        }[s];
+    });
+}
+
+function deactivateAllEditorTabs(){
+    $('.btn-carrucel, .btn-como-funciona, .btn-service, .btn-booking').removeClass('active');
+}
 $(document).ready(function(){
     let url = 'ajax/home_edit.php';
     let data = {
@@ -53,10 +79,11 @@ $(document).ready(function(){
         $('.about-header p').css('font-weight', '400');
         $('.about-header p').css('color', '#fff');
     });
+    load_booking();
 });
 
 function open_carrucel(i,id){
-    $('.btn-carrucel').removeClass('active');
+    deactivateAllEditorTabs();
     $('#btn-select-'+i).addClass('active');
     let body = '';
     let over_title = dataCarrucel[i].over_title;
@@ -349,7 +376,7 @@ function notification(text,title,status){
 
 // ========== CÓMO FUNCIONA ==========
 function open_como_funciona(i, id){
-    $('.btn-como-funciona').removeClass('active');
+    deactivateAllEditorTabs();
     $('#btn-como-'+i).addClass('active');
     
     let url = 'ajax/home_edit.php';
@@ -422,9 +449,162 @@ function editComoFunciona(field, i, id){
     });
 }
 
+// ========== BOOKING WIDGET ==========
+
+function load_booking(){
+    let url = 'ajax/home_edit.php';
+    let data = {
+        'tipo': 'get_booking'
+    };
+    $.post(url, data, function(res){
+        bookingFetchCompleted = true;
+        bookingData = JSON.parse(res);
+        if(HOME_EDIT_INITIAL_TAB === 'booking' || bookingPendingOpen){
+            open_booking();
+        }
+    });
+}
+
+function open_booking(){
+    deactivateAllEditorTabs();
+    $('#btn-booking').addClass('active');
+    bookingPendingOpen = false;
+    if(!bookingData || !bookingData.id){
+        if(!bookingFetchCompleted){
+            bookingPendingOpen = true;
+        } else {
+            $('.page-content-col').html('<div class="alert alert-info">No booking configuration available.</div>');
+        }
+        return;
+    }
+    const previewTitle = escapeHtml(bookingData.intro_title || 'Online Booking');
+    const previewParagraph = escapeHtml(bookingData.intro_paragraph || '');
+    const previewSecondary = escapeHtml(bookingData.secondary_paragraph || '');
+    const previewBackground = bookingData.background_img || 'img/tour-booking-bg.jpg';
+    const titleValue = escapeHtml(bookingData.intro_title || '');
+    const introParagraphValue = escapeHtml(bookingData.intro_paragraph || '');
+    const secondaryParagraphValue = escapeHtml(bookingData.secondary_paragraph || '');
+    const ctaTextValue = escapeHtml(bookingData.cta_text || '');
+    const ctaSubtextValue = escapeHtml(bookingData.cta_subtext || '');
+    let body = '';
+    body += `<div class="row margin-bottom-40">
+                <div class="col-md-12">
+                    <h2>Editar Booking</h2>
+                </div>
+            </div>
+            <div class="row margin-bottom-40 about-header" id="booking-preview">
+                <div class="col-md-12">
+                    <h1>${previewTitle}</h1>
+                    <p><span>${previewParagraph}</span> / ${previewSecondary}</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <button type="button" class="btn btn-white btn-block" onclick="edit_booking_background(${bookingData.id})">Change background image</button>
+            </div>
+            <div class="form-group">
+                <label>Intro Title</label>
+                <input onchange="edit_booking('intro_title', this.value)" type="text" class="form-control" id="intro_title_input" value="${titleValue}">
+            </div>
+            <div class="form-group">
+                <label>Intro Paragraph</label>
+                <textarea onchange="edit_booking('intro_paragraph', this.value)" class="form-control" id="intro_paragraph_input" rows="3">${introParagraphValue}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Secondary Paragraph</label>
+                <textarea onchange="edit_booking('secondary_paragraph', this.value)" class="form-control" id="secondary_paragraph_input" rows="3">${secondaryParagraphValue}</textarea>
+            </div>
+            <div class="form-group">
+                <label>Button Text</label>
+                <input onchange="edit_booking('cta_text', this.value)" type="text" class="form-control" id="cta_text_input" value="${ctaTextValue}">
+            </div>
+            <div class="form-group">
+                <label>Button Subtext</label>
+                <textarea onchange="edit_booking('cta_subtext', this.value)" class="form-control" id="cta_subtext_input" rows="2">${ctaSubtextValue}</textarea>
+            </div>`;
+    $('.page-content-col').html(body);
+    const bgUrl = 'https://medtravel.com.co/' + previewBackground.replace(/^\/+/, '');
+    $('.about-header').css('background-image', 'url(' + bgUrl + ')');
+    $('.about-header').css('background-color', 'rgba(0, 0, 0, 0.5)');
+    $('.about-header').css('background-size', 'cover');
+    $('.about-header').css('background-position', 'center');
+    $('.about-header').css('height', '300px');
+    $('.about-header').css('font-family', 'Roboto');
+    $('.about-header h1').css('font-weight', '800');
+    $('.about-header p').css('font-size', '18px');
+    $('.about-header p').css('font-weight', '400');
+    $('.about-header p').css('color', '#fff');
+    $('.about-header p span').css('color', 'orange');
+}
+
+function edit_booking(field, value){
+    if(!bookingData || !bookingData.id){
+        notification('Booking content not loaded', 'Booking', 'error');
+        return;
+    }
+    let allowed = ['intro_title','intro_paragraph','secondary_paragraph','cta_text','cta_subtext'];
+    if(allowed.indexOf(field) === -1){
+        notification('Invalid field', 'Booking', 'error');
+        return;
+    }
+    let url = 'ajax/home_edit.php';
+    let data = {
+        'tipo': 'edit_booking',
+        'id': bookingData.id,
+        'field': field,
+        'value': value
+    };
+    $.post(url, data, function(res){
+        let response = JSON.parse(res);
+        if(response.status == 'success'){
+            bookingData[field] = value;
+            notification('Booking updated', 'Booking', 'success');
+        } else {
+            notification('Unable to save booking', 'Booking', 'error');
+        }
+    });
+}
+
+function edit_booking_background(id){
+    if(!id){
+        notification('Booking ID missing', 'Booking', 'error');
+        return;
+    }
+    let fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.click();
+    fileInput.onchange = function(){
+        if(!fileInput.files[0]){
+            return;
+        }
+        let form = new FormData();
+        form.append('file', fileInput.files[0]);
+        form.append('id', id);
+        form.append('tipo', 'edit_booking_img');
+        let url = 'ajax/home_edit.php';
+        $.ajax({
+            url: url,
+            type: 'POST',
+            data: form,
+            processData: false,
+            contentType: false,
+            success: function(res){
+                let response = JSON.parse(res);
+                if(response.status == 'success'){
+                    bookingData.background_img = response.ruta;
+                    notification('Booking background updated', 'Booking', 'success');
+                    open_booking();
+                } else {
+                    notification('Unable to update background', 'Booking', 'error');
+                }
+            }
+        });
+    };
+}
+
 // ========== SERVICIOS DETALLADOS ==========
 function open_service(i, id){
-    $('.btn-service').removeClass('active');
+    deactivateAllEditorTabs();
     $('#btn-service-'+i).addClass('active');
     
     let url = 'ajax/home_edit.php';

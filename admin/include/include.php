@@ -393,6 +393,9 @@ if ($es_admin) {
                                         <a href="offer_detail_edit.php"> Offer Detail </a>
                                     </li>
                                     <li>
+                                        <a href="home_edit.php?tab=booking"> Booking </a>
+                                    </li>
+                                    <li>
                                         <a href="blog_edit.php"> Blog </a>
                                     </li>
                                 </ul>

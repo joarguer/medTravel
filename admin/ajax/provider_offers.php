@@ -49,8 +49,33 @@ $tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
 
 function json_error($msg, $code = 400){ http_response_code($code); echo json_encode(['ok'=>false,'error'=>$msg]); exit(); }
 
+function generate_random_token($bytes_length = 6){
+    if (function_exists('random_bytes')) {
+        return bin2hex(random_bytes($bytes_length));
+    }
+    if (function_exists('openssl_random_pseudo_bytes')) {
+        return bin2hex(openssl_random_pseudo_bytes($bytes_length));
+    }
+    $result = '';
+    for ($i = 0; $i < $bytes_length; $i++) {
+        $result .= chr(mt_rand(0, 255));
+    }
+    return bin2hex($result);
+}
+
+function detect_mime_type($filepath){
+    if (class_exists('finfo')) {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        return $finfo->file($filepath);
+    }
+    if (function_exists('mime_content_type')) {
+        return mime_content_type($filepath);
+    }
+    return '';
+}
+
 if ($tipo === 'list') {
-    $sql = "SELECT o.id,o.title,o.price_from,o.currency,o.is_active, sc.name AS service_name FROM provider_service_offers o JOIN service_catalog sc ON sc.id = o.service_id WHERE o.provider_id = ? ORDER BY o.created_at DESC";
+    $sql = "SELECT o.id,o.title,o.price_from,o.currency,o.is_active, sc.name AS service_name, IFNULL(p.name,'') AS provider_name FROM provider_service_offers o JOIN service_catalog sc ON sc.id = o.service_id LEFT JOIN providers p ON p.id = o.provider_id WHERE o.provider_id = ? ORDER BY o.created_at DESC";
     $stmt = mysqli_prepare($conexion, $sql);
     mysqli_stmt_bind_param($stmt, 'i', $provider_id);
     mysqli_stmt_execute($stmt);
@@ -162,14 +187,22 @@ if ($tipo === 'upload_media') {
     $allowed = ['jpg','jpeg','png','webp'];
     $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, $allowed)) json_error('BAD_EXT');
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($f['tmp_name']);
+    $mime = detect_mime_type($f['tmp_name']);
+    if (!$mime) {
+        $ext_map = [
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp'
+        ];
+        $mime = isset($ext_map[$ext]) ? $ext_map[$ext] : '';
+    }
     $m_allowed = ['image/jpeg','image/png','image/webp'];
     if (!in_array($mime, $m_allowed)) json_error('BAD_MIME');
 
     $dir = __DIR__ . '/../../img/offers/';
     if (!is_dir($dir)) mkdir($dir, 0755, true);
-    $name = time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+    $name = time() . '_' . generate_random_token(6) . '.' . $ext;
     $dest = $dir . $name;
     if (!move_uploaded_file($f['tmp_name'], $dest)) json_error('MOVE_ERR');
     $rel = 'img/offers/' . $name;
