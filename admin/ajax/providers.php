@@ -19,7 +19,25 @@ function slugify($text){
 try{
     if($tipo == 'list'){
         $rows = [];
-        $sql = "SELECT p.id, p.type, p.name, p.slug, p.city, p.is_verified, p.is_active, p.created_at FROM providers p ORDER BY p.created_at DESC";
+        $sql = "SELECT 
+                    p.id, p.type, p.name, p.slug, p.city, p.is_verified, p.is_active, p.created_at,
+                    COALESCE(pv.status,'pending') AS verification_status,
+                    COALESCE(pv.verification_level,'basic') AS verification_level,
+                    COALESCE(pv.trust_score,0) AS trust_score,
+                    COALESCE(items.total_items,0) AS total_items,
+                    COALESCE(items.checked_items,0) AS checked_items,
+                    CASE WHEN COALESCE(items.total_items,0) > 0 
+                        THEN ROUND((items.checked_items / items.total_items) * 100, 0)
+                        ELSE 0 END AS completion_percent
+                FROM providers p
+                LEFT JOIN provider_verification pv ON pv.provider_id = p.id
+                LEFT JOIN (
+                    SELECT provider_id, COUNT(*) AS total_items,
+                           SUM(CASE WHEN is_checked = 1 THEN 1 ELSE 0 END) AS checked_items
+                    FROM provider_verification_items
+                    GROUP BY provider_id
+                ) items ON items.provider_id = p.id
+                ORDER BY p.created_at DESC";
         $res = mysqli_query($conexion, $sql);
         if(mysqli_errno($conexion)){ error_log('providers list error: '.mysqli_error($conexion)); echo json_encode(['ok'=>false,'error'=>'db']); exit; }
         while($r = mysqli_fetch_assoc($res)) $rows[] = $r;
@@ -115,6 +133,11 @@ try{
             if(!$exec){ throw new Exception('Error ejecutando INSERT provider: '.mysqli_stmt_error($ins)); }
             $provider_id = mysqli_insert_id($conexion);
             mysqli_stmt_close($ins);
+            
+            // 1b. Crear registro de verificación base si no existe
+            $ver_status = $is_verified ? 'verified' : 'pending';
+            $vs = mysqli_prepare($conexion, "INSERT INTO provider_verification (provider_id, status, verification_level, trust_score) VALUES (?,?, 'basic', 0)");
+            if($vs){ mysqli_stmt_bind_param($vs, 'is', $provider_id, $ver_status); mysqli_stmt_execute($vs); mysqli_stmt_close($vs); }
             
             // 2. Crear usuario asociado
             $password_hash = password_hash($password, PASSWORD_DEFAULT);

@@ -50,10 +50,21 @@ if (!empty($medtravel_services)) {
 }
 
 $origin = isset($booking['origin']) ? $booking['origin'] : 'wizard';
+$phone = isset($booking['phone']) ? $booking['phone'] : '';
 
 // Preparar datos para inserción
 $selected_offers_json = json_encode($selected_offers);
-$booking_datetime = isset($booking['datetime']) ? $booking['datetime'] : '';
+
+// Para compatibilidad, usar timeline_from como booking_datetime principal
+$booking_datetime = $timeline_from ?: (isset($booking['datetime']) ? $booking['datetime'] : '');
+
+// Sincronizar en sesión los rangos
+$booking['datetime'] = $booking_datetime;
+$booking['timeline_from'] = $timeline_from;
+$booking['timeline_to'] = $timeline_to;
+
+// Persist the updated booking context back to session for consistency on refresh
+$_SESSION['booking_request'] = $booking;
 $destination = isset($booking['destination']) ? $booking['destination'] : '';
 $persons = isset($booking['persons']) ? $booking['persons'] : '';
 $category = isset($booking['category']) ? $booking['category'] : '';
@@ -61,15 +72,16 @@ $special_request = isset($booking['special_request']) ? $booking['special_reques
 
 // Insertar en booking_requests
 $insert_sql = "INSERT INTO booking_requests 
-               (name, email, origin, booking_datetime, destination, persons, category, 
+               (name, email, phone, origin, booking_datetime, destination, persons, category, 
                 special_request, selected_offers, budget, timeline, additional_notes) 
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)";
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
 $stmt = mysqli_prepare($conexion, $insert_sql);
 
 if ($stmt) {
-    mysqli_stmt_bind_param($stmt, 'ssssssssssss',
+    mysqli_stmt_bind_param($stmt, 'sssssssssssss',
         $booking['name'],
         $booking['email'],
+        $phone,
         $origin,
         $booking_datetime,
         $destination,

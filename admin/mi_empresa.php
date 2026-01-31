@@ -18,6 +18,52 @@ $result = mysqli_stmt_get_result($stmt);
 $provider = mysqli_fetch_array($result);
 mysqli_stmt_close($stmt);
 
+// Cargar estado de verificación
+$verification = [
+    'status' => 'pending',
+    'verification_level' => 'basic',
+    'trust_score' => 0,
+    'verified_at' => null,
+    'expires_at' => null,
+    'completion_percent' => 0,
+    'checked_items' => 0,
+    'total_items' => 0
+];
+
+$ver_sql = "SELECT 
+                COALESCE(pv.status,'pending') AS status,
+                COALESCE(pv.verification_level,'basic') AS verification_level,
+                COALESCE(pv.trust_score,0) AS trust_score,
+                pv.verified_at,
+                pv.expires_at,
+                COUNT(pvi.id) AS total_items,
+                SUM(CASE WHEN pvi.is_checked = 1 THEN 1 ELSE 0 END) AS checked_items
+            FROM providers p
+            LEFT JOIN provider_verification pv ON pv.provider_id = p.id
+            LEFT JOIN provider_verification_items pvi ON pvi.provider_id = p.id
+            WHERE p.id = ?
+            GROUP BY pv.status, pv.verification_level, pv.trust_score, pv.verified_at, pv.expires_at";
+
+if ($vstmt = mysqli_prepare($conexion, $ver_sql)) {
+    mysqli_stmt_bind_param($vstmt, 'i', $provider_id);
+    if (mysqli_stmt_execute($vstmt)) {
+        $vres = mysqli_stmt_get_result($vstmt);
+        if ($row = mysqli_fetch_assoc($vres)) {
+            $verification['status'] = $row['status'];
+            $verification['verification_level'] = $row['verification_level'];
+            $verification['trust_score'] = (int)$row['trust_score'];
+            $verification['verified_at'] = $row['verified_at'];
+            $verification['expires_at'] = $row['expires_at'];
+            $verification['checked_items'] = (int)$row['checked_items'];
+            $verification['total_items'] = (int)$row['total_items'];
+            $verification['completion_percent'] = ($verification['total_items'] > 0)
+                ? round(($verification['checked_items'] / $verification['total_items']) * 100)
+                : 0;
+        }
+    }
+    mysqli_stmt_close($vstmt);
+}
+
 if (!$provider) {
     header("Location: index.php");
     exit();
@@ -88,16 +134,35 @@ if (!$provider) {
                                                                 <label class="col-md-3 control-label">Estado</label>
                                                                 <div class="col-md-9">
                                                                     <p class="form-control-static">
-                                                                        <?php 
-                                                                        if ($provider['is_verified']) {
-                                                                            echo '<span class="badge badge-success">Verificado</span> ';
-                                                                        }
+                                                                        <?php
+                                                                        $status = $verification['status'];
+                                                                        $badge_map = [
+                                                                            'verified' => 'badge-success',
+                                                                            'in_review' => 'badge-warning',
+                                                                            'pending' => 'badge-default',
+                                                                            'rejected' => 'badge-danger'
+                                                                        ];
+                                                                        $label_map = [
+                                                                            'verified' => 'Verificado',
+                                                                            'in_review' => 'En revisión',
+                                                                            'pending' => 'Pendiente',
+                                                                            'rejected' => 'Rechazado'
+                                                                        ];
+                                                                        $badge_class = isset($badge_map[$status]) ? $badge_map[$status] : 'badge-default';
+                                                                        $label = isset($label_map[$status]) ? $label_map[$status] : ucfirst($status);
+
+                                                                        echo '<span class="badge '.$badge_class.'">'.$label.'</span> ';
                                                                         if ($provider['is_active']) {
                                                                             echo '<span class="badge badge-info">Activo</span>';
                                                                         } else {
                                                                             echo '<span class="badge badge-default">Inactivo</span>';
                                                                         }
                                                                         ?>
+                                                                    </p>
+                                                                    <p class="form-control-static">
+                                                                        Nivel: <strong><?php echo htmlspecialchars($verification['verification_level'], ENT_QUOTES); ?></strong>
+                                                                        &nbsp;·&nbsp; Avance checklist: <strong><?php echo $verification['completion_percent']; ?>%</strong>
+                                                                        <?php if ($verification['verified_at']) { echo ' &nbsp;·&nbsp; Verificado: '.htmlspecialchars($verification['verified_at'], ENT_QUOTES); } ?>
                                                                     </p>
                                                                 </div>
                                                             </div>

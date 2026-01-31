@@ -1,5 +1,137 @@
 <?php
 include("include/include.php");
+
+// Helpers para métricas desde BD
+function fetch_count($conexion, $sql, $types = '', $params = []) {
+    if ($stmt = mysqli_prepare($conexion, $sql)) {
+        if (!empty($types) && !empty($params)) {
+            mysqli_stmt_bind_param($stmt, $types, ...$params);
+        }
+        if (mysqli_stmt_execute($stmt)) {
+            mysqli_stmt_bind_result($stmt, $count);
+            if (mysqli_stmt_fetch($stmt)) {
+                mysqli_stmt_close($stmt);
+                return (int)$count;
+            }
+        }
+        error_log('fetch_count error: '.mysqli_error($conexion));
+        mysqli_stmt_close($stmt);
+    }
+    return 0;
+}
+
+function month_labels() {
+    $labels = [];
+    $map = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    for ($i = 11; $i >= 0; $i--) {
+        $ts = strtotime("first day of -$i month");
+        $key = date('Y-m', $ts);
+        $labels[] = ['key' => $key, 'label' => $map[(int)date('n', $ts) - 1]];
+    }
+    return $labels;
+}
+
+function monthly_counts($conexion, $table, $where = '1', $types = '', $params = []) {
+    $sql = "SELECT DATE_FORMAT(created_at,'%Y-%m') as ym, COUNT(*) as total FROM $table WHERE $where GROUP BY ym ORDER BY ym";
+    $data = [];
+    if ($stmt = mysqli_prepare($conexion, $sql)) {
+        if (!empty($types) && !empty($params)) {
+            mysqli_stmt_bind_param($stmt, $types, ...$params);
+        }
+        if (mysqli_stmt_execute($stmt)) {
+            $res = mysqli_stmt_get_result($stmt);
+            while ($row = mysqli_fetch_assoc($res)) {
+                $data[$row['ym']] = (int)$row['total'];
+            }
+        } else {
+            error_log('monthly_counts exec error: '.mysqli_error($conexion));
+        }
+        mysqli_stmt_close($stmt);
+    }
+    return $data;
+}
+
+// Datos base
+$provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
+$series_data = [];
+$pie_data = [];
+$metric_cards = [];
+
+if ($es_admin) {
+    $metric_cards = [
+        ['label' => 'Prestadores activos', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM providers WHERE is_active = 1"), 'icon' => 'icon-heart', 'class' => 'font-green-sharp'],
+        ['label' => 'Servicios publicados', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM medtravel_services_catalog WHERE is_active = 1"), 'icon' => 'icon-grid', 'class' => 'font-red-haze'],
+        ['label' => 'Bookings pendientes', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE status = 'pending'"), 'icon' => 'icon-calendar', 'class' => 'font-blue-sharp'],
+        ['label' => 'Proveedores complementarios', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM service_providers WHERE is_active = 1"), 'icon' => 'icon-plane', 'class' => 'font-purple-soft'],
+    ];
+    $chart1_title = 'Servicios y ofertas';
+    $chart1_subtitle = 'últimos 12 meses';
+    $chart2_title = 'Mix de catálogo';
+    $chart2_subtitle = 'participación por tipo';
+
+    $services_month = monthly_counts($conexion, 'medtravel_services_catalog', '1');
+    $offers_month = monthly_counts($conexion, 'provider_service_offers', '1');
+} else {
+    $metric_cards = [
+        ['label' => 'Mis servicios publicados', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM medtravel_services_catalog WHERE is_active = 1 AND provider_id = ?", 'i', [$provider_id]), 'icon' => 'icon-grid', 'class' => 'font-green-sharp'],
+        ['label' => 'Ofertas activas', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM provider_service_offers WHERE is_active = 1 AND provider_id = ?", 'i', [$provider_id]), 'icon' => 'icon-tag', 'class' => 'font-red-haze'],
+        ['label' => 'Bookings pendientes', 'value' => 0, 'icon' => 'icon-calendar', 'class' => 'font-blue-sharp'],
+        ['label' => 'Solicitudes totales', 'value' => 0, 'icon' => 'icon-users', 'class' => 'font-purple-soft'],
+    ];
+    $chart1_title = 'Mis servicios y ofertas';
+    $chart1_subtitle = 'últimos 12 meses';
+    $chart2_title = 'Mix de mi catálogo';
+    $chart2_subtitle = 'participación por tipo';
+
+    $services_month = monthly_counts($conexion, 'medtravel_services_catalog', 'provider_id = ?', 'i', [$provider_id]);
+    $offers_month = monthly_counts($conexion, 'provider_service_offers', 'provider_id = ?', 'i', [$provider_id]);
+
+    // Calcular bookings asociados a las ofertas del proveedor (búsqueda en JSON selected_offers)
+    $offer_ids = [];
+    $offer_res = mysqli_query($conexion, "SELECT id FROM provider_service_offers WHERE provider_id = " . $provider_id);
+    if ($offer_res) {
+        while ($row = mysqli_fetch_assoc($offer_res)) {
+            $offer_ids[] = (int)$row['id'];
+        }
+    }
+    if (!empty($offer_ids)) {
+        $like_parts = [];
+        foreach ($offer_ids as $oid) {
+            $oid = (int)$oid;
+            $like_parts[] = "selected_offers LIKE '%\"$oid\"%'";
+        }
+        $like_sql = implode(' OR ', $like_parts);
+        $metric_cards[2]['value'] = fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE status = 'pending' AND ($like_sql)");
+        $metric_cards[3]['value'] = fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE ($like_sql)");
+    }
+}
+
+// Preparar series combinadas
+$series_data = [];
+$labels = month_labels();
+foreach ($labels as $lb) {
+    $key = $lb['key'];
+    $series_data[] = [
+        'month' => $lb['label'],
+        'servicios' => isset($services_month[$key]) ? $services_month[$key] : 0,
+        'ofertas' => isset($offers_month[$key]) ? $offers_month[$key] : 0,
+    ];
+}
+
+// Pie actual
+if ($es_admin) {
+    $pie_data = [
+        ['segment' => 'Servicios médicos', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM medtravel_services_catalog WHERE is_active = 1")],
+        ['segment' => 'Proveedores complementarios', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM service_providers WHERE is_active = 1")],
+        ['segment' => 'Bookings pendientes', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE status = 'pending'")],
+    ];
+} else {
+    $pie_data = [
+        ['segment' => 'Mis servicios', 'value' => $metric_cards[0]['value']],
+        ['segment' => 'Mis ofertas', 'value' => $metric_cards[1]['value']],
+        ['segment' => 'Mis bookings pendientes', 'value' => $metric_cards[2]['value']],
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -7,7 +139,7 @@ include("include/include.php");
 
     <head>
         <meta charset="utf-8" />
-        <title>GRO | Inicio</title>
+        <title>GRO | Panel</title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta content="width=device-width, initial-scale=1" name="viewport" />
         <meta content="" name="description" />
@@ -54,119 +186,31 @@ include("include/include.php");
                     <!-- END BREADCRUMBS -->
                     <!-- BEGIN PAGE BASE CONTENT -->
                     <div class="row">
+                        <?php foreach ($metric_cards as $card): ?>
                         <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
                             <div class="dashboard-stat2 bordered">
                                 <div class="display">
                                     <div class="number">
-                                        <h3 class="font-green-sharp">
-                                            <span data-counter="counterup" data-value="7800">0</span>
-                                            <small class="font-green-sharp">$</small>
+                                        <h3 class="<?php echo $card['class']; ?>">
+                                            <span data-counter="counterup" data-value="<?php echo $card['value']; ?>">0</span>
                                         </h3>
-                                        <small>TOTAL PROFIT</small>
+                                        <small><?php echo $card['label']; ?></small>
                                     </div>
                                     <div class="icon">
-                                        <i class="icon-pie-chart"></i>
-                                    </div>
-                                </div>
-                                <div class="progress-info">
-                                    <div class="progress">
-                                        <span style="width: 76%;" class="progress-bar progress-bar-success green-sharp">
-                                            <span class="sr-only">76% progress</span>
-                                        </span>
-                                    </div>
-                                    <div class="status">
-                                        <div class="status-title"> progress </div>
-                                        <div class="status-number"> 76% </div>
+                                        <i class="<?php echo $card['icon']; ?>"></i>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-                            <div class="dashboard-stat2 bordered">
-                                <div class="display">
-                                    <div class="number">
-                                        <h3 class="font-red-haze">
-                                            <span data-counter="counterup" data-value="1349">0</span>
-                                        </h3>
-                                        <small>NEW FEEDBACKS</small>
-                                    </div>
-                                    <div class="icon">
-                                        <i class="icon-like"></i>
-                                    </div>
-                                </div>
-                                <div class="progress-info">
-                                    <div class="progress">
-                                        <span style="width: 85%;" class="progress-bar progress-bar-success red-haze">
-                                            <span class="sr-only">85% change</span>
-                                        </span>
-                                    </div>
-                                    <div class="status">
-                                        <div class="status-title"> change </div>
-                                        <div class="status-number"> 85% </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-                            <div class="dashboard-stat2 bordered">
-                                <div class="display">
-                                    <div class="number">
-                                        <h3 class="font-blue-sharp">
-                                            <span data-counter="counterup" data-value="567"></span>
-                                        </h3>
-                                        <small>NEW ORDERS</small>
-                                    </div>
-                                    <div class="icon">
-                                        <i class="icon-basket"></i>
-                                    </div>
-                                </div>
-                                <div class="progress-info">
-                                    <div class="progress">
-                                        <span style="width: 45%;" class="progress-bar progress-bar-success blue-sharp">
-                                            <span class="sr-only">45% grow</span>
-                                        </span>
-                                    </div>
-                                    <div class="status">
-                                        <div class="status-title"> grow </div>
-                                        <div class="status-number"> 45% </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-                            <div class="dashboard-stat2 bordered">
-                                <div class="display">
-                                    <div class="number">
-                                        <h3 class="font-purple-soft">
-                                            <span data-counter="counterup" data-value="276"></span>
-                                        </h3>
-                                        <small>NEW USERS</small>
-                                    </div>
-                                    <div class="icon">
-                                        <i class="icon-user"></i>
-                                    </div>
-                                </div>
-                                <div class="progress-info">
-                                    <div class="progress">
-                                        <span style="width: 57%;" class="progress-bar progress-bar-success purple-soft">
-                                            <span class="sr-only">56% change</span>
-                                        </span>
-                                    </div>
-                                    <div class="status">
-                                        <div class="status-title"> change </div>
-                                        <div class="status-number"> 57% </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <?php endforeach; ?>
                     </div>
                     <div class="row">
                         <div class="col-md-6 col-sm-6">
                             <div class="portlet light bordered">
                                 <div class="portlet-title">
                                     <div class="caption">
-                                        <span class="caption-subject bold uppercase font-dark">Revenue</span>
-                                        <span class="caption-helper">distance stats...</span>
+                                        <span class="caption-subject bold uppercase font-dark"><?php echo $chart1_title; ?></span>
+                                        <span class="caption-helper"><?php echo $chart1_subtitle; ?></span>
                                     </div>
                                     <div class="actions">
                                         <a class="btn btn-circle btn-icon-only btn-default" href="#">
@@ -190,8 +234,8 @@ include("include/include.php");
                             <div class="portlet light bordered">
                                 <div class="portlet-title">
                                     <div class="caption ">
-                                        <span class="caption-subject font-dark bold uppercase">Finance</span>
-                                        <span class="caption-helper">distance stats...</span>
+                                        <span class="caption-subject font-dark bold uppercase"><?php echo $chart2_title; ?></span>
+                                        <span class="caption-helper"><?php echo $chart2_subtitle; ?></span>
                                     </div>
                                     <div class="actions">
                                         <a href="#" class="btn btn-circle green btn-outline btn-sm">
@@ -258,9 +302,62 @@ include("include/include.php");
         <!-- app.min.js and theme scripts loaded from include.php -->
         <?php echo $theme_layout_script;?>
         <!-- END THEME GLOBAL SCRIPTS -->
-        <!-- BEGIN PAGE LEVEL SCRIPTS -->
-        <script src="../../assets/pages/scripts/dashboard.min.js" type="text/javascript"></script>
-        <!-- END PAGE LEVEL SCRIPTS -->
+        <script type="text/javascript">
+        jQuery(function() {
+            var seriesData = <?php echo json_encode($series_data); ?>;
+            var pieData = <?php echo json_encode($pie_data); ?>;
+
+            AmCharts.makeChart('dashboard_amchart_1', {
+                type: 'serial',
+                theme: 'light',
+                dataProvider: seriesData,
+                categoryField: 'month',
+                startDuration: 0.4,
+                graphs: [
+                    {
+                        balloonText: 'Servicios [[category]]: [[value]]',
+                        fillAlphas: 0.7,
+                        lineAlpha: 0.2,
+                        title: 'Servicios',
+                        type: 'column',
+                        valueField: 'servicios',
+                        lineColor: '#36c6d3'
+                    },
+                    {
+                        balloonText: 'Ofertas [[category]]: [[value]]',
+                        bullet: 'round',
+                        lineThickness: 2,
+                        title: 'Ofertas',
+                        valueField: 'ofertas',
+                        lineColor: '#8E44AD'
+                    }
+                ],
+                chartCursor: {
+                    categoryBalloonEnabled: true,
+                    cursorAlpha: 0.1,
+                    zoomable: false
+                },
+                categoryAxis: {
+                    gridPosition: 'start',
+                    axisAlpha: 0
+                },
+                legend: {
+                    useGraphSettings: true
+                }
+            });
+
+            AmCharts.makeChart('dashboard_amchart_3', {
+                type: 'pie',
+                theme: 'light',
+                dataProvider: pieData,
+                titleField: 'segment',
+                valueField: 'value',
+                innerRadius: '50%',
+                balloonText: '[[title]]: [[value]]',
+                colors: ['#36c6d3', '#E7505A', '#4B77BE']
+            });
+        });
+        </script>
     </body>
 
 </html>

@@ -97,6 +97,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
     ?>
     <form method="POST" action="/booking/step-1.php" class="book-tour-form">
         <input type="hidden" name="origin" value="<?php echo htmlspecialchars($origin, ENT_QUOTES); ?>">
+        <input type="hidden" name="selected_services" id="selected-services-input" value="">
         <?php if ($preselected_offer_id): ?>
             <input type="hidden" name="preselected_offer" value="<?php echo intval($preselected_offer_id); ?>">
         <?php endif; ?>
@@ -116,14 +117,20 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
             </div>
             <div class="col-md-6">
                 <div class="form-floating">
-                    <input type="tel" name="phone" class="form-control bg-white border-0" id="book-phone" placeholder="Phone Number">
-                    <label for="book-phone"><i class="fas fa-phone me-2"></i>Phone Number (Optional)</label>
+                    <input type="date" name="timeline_from" class="form-control bg-white border-0" id="book-date-from" placeholder="Start date">
+                    <label for="book-date-from"><i class="fas fa-calendar me-2"></i>Start date</label>
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="form-floating date" id="booking-date" data-target-input="nearest">
-                    <input type="text" name="datetime" class="form-control bg-white border-0" id="book-datetime" placeholder="Preferred Date">
-                    <label for="book-datetime"><i class="fas fa-calendar me-2"></i>Preferred Date</label>
+                <div class="form-floating">
+                    <input type="date" name="timeline_to" class="form-control bg-white border-0" id="book-date-to" placeholder="End date">
+                    <label for="book-date-to"><i class="fas fa-calendar me-2"></i>End date</label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-floating">
+                    <input type="tel" name="phone" class="form-control bg-white border-0" id="book-phone" placeholder="Phone Number">
+                    <label for="book-phone"><i class="fas fa-phone me-2"></i>Phone Number (Optional)</label>
                 </div>
             </div>
             <div class="col-md-6">
@@ -186,6 +193,37 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                     notice.innerHTML = '<i class="fas fa-info-circle me-2"></i>Selected offer will be included in your booking request. <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
                     form.insertBefore(notice, form.firstChild);
                 }
+            }
+        })();
+        // Inyectar servicios complementarios seleccionados desde localStorage
+        (function() {
+            var STORAGE_KEY = 'mt_selected_services';
+            var input = document.getElementById('selected-services-input');
+            if (!input) return;
+
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return;
+
+            var parsed;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (e) {
+                parsed = [];
+            }
+            if (!Array.isArray(parsed) || !parsed.length) return;
+
+            input.value = JSON.stringify(parsed);
+
+            var message = document.getElementById('book-message');
+            if (message && (!message.value || message.value.trim() === '')) {
+                var summary = parsed.slice(0, 5).map(function(item) {
+                    var price = item.price ? ' - ' + item.price + ' ' + (item.currency || '') : '';
+                    return '- ' + (item.type || 'Servicio') + ': ' + (item.name || '') + ' (' + (item.provider || 'Proveedor') + ')' + price;
+                }).join('\n');
+                if (parsed.length > 5) {
+                    summary += '\n- + ' + (parsed.length - 5) + ' servicios adicionales';
+                }
+                message.value = 'Servicios complementarios seleccionados:\n' + summary;
             }
         })();
     </script>

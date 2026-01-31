@@ -44,6 +44,10 @@ try {
         case 'toggle_status':
             toggleStatus($conexion);
             break;
+
+        case 'upload_image':
+            uploadServiceImage();
+            break;
         
         default:
             echo json_encode(['ok' => false, 'message' => 'Invalid action']);
@@ -58,25 +62,26 @@ try {
 // ===================================================================
 function listServices($conexion) {
     $query = "SELECT 
-        id,
-        service_type,
-        service_name,
-        service_code,
-        short_description,
-        provider_name,
-        cost_price,
-        sale_price,
-        currency,
-        commission_amount,
-        commission_percentage,
-        is_active,
-        availability_status,
-        stock_quantity,
-        featured,
-        display_order,
-        created_at
-    FROM medtravel_services_catalog
-    ORDER BY service_type ASC, display_order ASC, service_name ASC";
+        s.id,
+        s.service_type,
+        s.service_name,
+        s.service_code,
+        s.short_description,
+        p.provider_name,
+        s.cost_price,
+        s.sale_price,
+        s.currency,
+        s.commission_amount,
+        s.commission_percentage,
+        s.is_active,
+        s.availability_status,
+        s.stock_quantity,
+        s.featured,
+        s.display_order,
+        s.created_at
+    FROM medtravel_services_catalog s
+    LEFT JOIN service_providers p ON s.provider_id = p.id
+    ORDER BY s.service_type ASC, s.display_order ASC, s.service_name ASC";
     
     $result = mysqli_query($conexion, $query);
     
@@ -275,6 +280,45 @@ function toggleStatus($conexion) {
 }
 
 // ===================================================================
+// SUBIR IMAGEN DEL SERVICIO
+// ===================================================================
+function uploadServiceImage() {
+    if(!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+        echo json_encode(['ok' => false, 'message' => 'Image file is required']);
+        return;
+    }
+
+    $file = $_FILES['image'];
+    $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+
+    if(!in_array($file['type'], $allowedTypes)) {
+        echo json_encode(['ok' => false, 'message' => 'Invalid file type. Use JPG, PNG, GIF or WEBP.']);
+        return;
+    }
+
+    $uploadDir = '../../img/services/';
+    if(!file_exists($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $extension = preg_replace('/[^a-zA-Z0-9]/', '', $extension);
+    if(empty($extension)) {
+        $extension = 'jpg';
+    }
+
+    $filename = 'service_' . time() . '_' . rand(1000, 9999) . '.' . strtolower($extension);
+    $filepath = $uploadDir . $filename;
+    $dbPath = 'img/services/' . $filename;
+
+    if(move_uploaded_file($file['tmp_name'], $filepath)) {
+        echo json_encode(['ok' => true, 'path' => $dbPath]);
+    } else {
+        echo json_encode(['ok' => false, 'message' => 'Error saving uploaded image']);
+    }
+}
+
+// ===================================================================
 // HELPER: CONSTRUIR ARRAY DE DATOS DESDE POST
 // ===================================================================
 function buildServiceData($conexion, $post) {
@@ -286,15 +330,13 @@ function buildServiceData($conexion, $post) {
         'description' => isset($post['description']) && !empty($post['description']) ? $post['description'] : null,
         'short_description' => isset($post['short_description']) && !empty($post['short_description']) ? $post['short_description'] : null,
         
-        // Proveedor
-        'provider_name' => isset($post['provider_name']) && !empty($post['provider_name']) ? $post['provider_name'] : null,
-        'provider_contact' => isset($post['provider_contact']) && !empty($post['provider_contact']) ? $post['provider_contact'] : null,
-        'provider_email' => isset($post['provider_email']) && !empty($post['provider_email']) ? $post['provider_email'] : null,
-        'provider_phone' => isset($post['provider_phone']) && !empty($post['provider_phone']) ? $post['provider_phone'] : null,
+        // Proveedor - ahora usa provider_id FK
+        'provider_id' => isset($post['provider_id']) && !empty($post['provider_id']) ? intval($post['provider_id']) : null,
         'provider_notes' => isset($post['provider_notes']) && !empty($post['provider_notes']) ? $post['provider_notes'] : null,
         
-        // Costos
-        'cost_price' => isset($post['cost_price']) ? floatval($post['cost_price']) : 0.00,
+        // Costos - Ahora en COP con exchange_rate
+        'cost_price_cop' => isset($post['cost_price_cop']) ? floatval($post['cost_price_cop']) : 0.00,
+        'exchange_rate' => isset($post['exchange_rate']) ? floatval($post['exchange_rate']) : null,
         'sale_price' => isset($post['sale_price']) ? floatval($post['sale_price']) : 0.00,
         'currency' => isset($post['currency']) ? $post['currency'] : 'USD',
         

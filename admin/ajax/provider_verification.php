@@ -122,6 +122,9 @@ elseif ($tipo == 'update_status') {
     }
     
     if (mysqli_query($conexion, $sql)) {
+        // Sincronizar flag de providers
+        $is_verified = ($status === 'verified') ? 1 : 0;
+        mysqli_query($conexion, "UPDATE providers SET is_verified = $is_verified WHERE id = '$provider_id'");
         echo json_encode(['success' => true, 'message' => 'Estado actualizado exitosamente']);
     } else {
         echo json_encode(['success' => false, 'message' => 'Error: ' . mysqli_error($conexion)]);

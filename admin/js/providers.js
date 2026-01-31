@@ -13,7 +13,30 @@ $(document).ready(function(){
     }
 
     function loadProviders(){
-        $.post(url, { tipo: 'list' }, function(res){ if(!res || !res.ok) return; let tbody=''; res.data.forEach(function(p){ tbody += '<tr data-id="'+p.id+'">'; tbody += '<td>'+escapeHtml(p.name)+'</td>'; tbody += '<td>'+escapeHtml(p.type)+'</td>'; tbody += '<td>'+escapeHtml(p.city||'')+'</td>'; tbody += '<td>'+(p.is_verified==1?'<span class="label label-success">Sí</span>':'<span class="label label-default">No</span>')+'</td>'; tbody += '<td>'+(p.is_active==1?'<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>':'<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>'; tbody += '<td><button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Desactivar</button></td>'; tbody += '</tr>'; }); $('#tbl-providers tbody').html(tbody); }, 'json');
+        $.post(url, { tipo: 'list' }, function(res){
+            if(!res || !res.ok) return;
+            let tbody='';
+            res.data.forEach(function(p){
+                const statusMap = {
+                    verified: { cls: 'label label-success', text: 'Verificado' },
+                    in_review: { cls: 'label label-warning', text: 'En revisión' },
+                    pending: { cls: 'label label-default', text: 'Pendiente' },
+                    rejected: { cls: 'label label-danger', text: 'Rechazado' }
+                };
+                const st = statusMap[p.verification_status] || statusMap.pending;
+                const completion = p.completion_percent ? ' ('+p.completion_percent+'%)' : '';
+                tbody += '<tr data-id="'+p.id+'">';
+                tbody += '<td>'+escapeHtml(p.name)+'</td>';
+                tbody += '<td>'+escapeHtml(p.type)+'</td>';
+                tbody += '<td>'+escapeHtml(p.city||'')+'</td>';
+                const verLink = '<a href="provider_verification.php" class="ml10">Gestionar</a>';
+                tbody += '<td><span class="'+st.cls+'">'+st.text+'</span>'+completion+' '+verLink+'</td>';
+                tbody += '<td>'+(p.is_active==1?'<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>':'<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>';
+                tbody += '<td><button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Desactivar</button></td>';
+                tbody += '</tr>';
+            });
+            $('#tbl-providers tbody').html(tbody);
+        }, 'json');
     }
 
     loadLists(); loadProviders();

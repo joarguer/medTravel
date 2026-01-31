@@ -20,7 +20,6 @@ $id_usuario = $_SESSION['id_usuario'];
         <?php echo $theme_global_style;?>
         <?php echo $theme_layout_style;?>
         <link rel="shortcut icon" href="favicon.ico" /> 
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
         <style>
             .service-selection-container {
                 max-height: 400px;
@@ -873,6 +872,7 @@ $id_usuario = $_SESSION['id_usuario'];
         <!-- END MODAL ENVIAR COTIZACIÓN -->
 
         <!-- BEGIN CORE PLUGINS -->
+        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
