@@ -430,8 +430,11 @@ $offer = mysqli_fetch_assoc($result);
                         <?php echo htmlspecialchars($offer['currency']); ?> 
                         <?php echo number_format($offer['price_from'], 2); ?>
                     </div>
-                    <a href="mailto:<?php echo htmlspecialchars($offer['email']); ?>" class="btn btn-book">
-                        <i class="fas fa-envelope me-2"></i>Request Information
+                    <a href="#booking-section" class="btn btn-book" onclick="scrollToBooking(<?php echo $offer['id']; ?>); return false;">
+                        <i class="fas fa-calendar-check me-2"></i>Book This Service
+                    </a>
+                    <a href="mailto:<?php echo htmlspecialchars($offer['email']); ?>" class="btn btn-outline-secondary mt-2" style="width: 100%; padding: 10px; text-align: center; display: block; text-decoration: none; color: #64748b; border: 1px solid #cbd5e1; border-radius: 8px;">
+                        <i class="fas fa-envelope me-2"></i>Email Provider
                     </a>
                 </div>
 

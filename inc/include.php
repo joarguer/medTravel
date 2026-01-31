@@ -1,5 +1,5 @@
 <?php
-include("admin/include/conexion.php");
+include(__DIR__ . "/../admin/include/conexion.php");
 include_once(__DIR__ . '/booking_form.php');
 $head = '<meta charset="utf-8">
     <title>MedTravel - Tourism and Health </title>
@@ -262,7 +262,7 @@ $booking_widget = (function() {
     $booking_style_attr = booking_background_style($booking_texts);
     ob_start();
     ?>
-    <div class="container-fluid booking py-5" <?php echo $booking_style_attr; ?>>
+    <div class="container-fluid booking py-5" id="booking-section" <?php echo $booking_style_attr; ?>>
         <div class="container py-5">
             <div class="row g-5 align-items-center">
                 <div class="col-lg-6">
@@ -286,6 +286,30 @@ $booking_widget = (function() {
 
 $script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
             <script>
+            // Función para hacer scroll suave al widget de booking
+            function scrollToBooking(offerId) {
+                const bookingSection = document.getElementById("booking-section");
+                if (bookingSection) {
+                    // Si hay un ID de oferta, guardarlo en sessionStorage para pre-seleccionarlo
+                    if (offerId) {
+                        sessionStorage.setItem("preselected_offer_id", offerId);
+                    }
+                    
+                    // Smooth scroll al widget
+                    bookingSection.scrollIntoView({ 
+                        behavior: "smooth", 
+                        block: "start" 
+                    });
+                    
+                    // Opcional: highlight temporal del widget
+                    bookingSection.style.transition = "box-shadow 0.3s ease";
+                    bookingSection.style.boxShadow = "0 0 20px rgba(102, 126, 234, 0.6)";
+                    setTimeout(() => {
+                        bookingSection.style.boxShadow = "none";
+                    }, 1500);
+                }
+            }
+            
             (function(d,t) {
                 var BASE_URL="https://app.conectarbot.com";
                 var g=d.createElement(t),s=d.getElementsByTagName(t)[0];

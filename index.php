@@ -75,7 +75,7 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                                     <p class="mb-5 fs-5"><?php echo $fil['parrafo'];?>
                                     </p>
                                     <div class="d-flex align-items-center justify-content-center">
-                                        <a class="btn-hover-bg btn btn-primary rounded-pill text-white py-3 px-5" href="#"><?php echo $fil['btn'];?></a>
+                                        <a class="btn-hover-bg btn btn-primary rounded-pill text-white py-3 px-5" href="#booking-section" onclick="scrollToBooking(); return false;"><?php echo $fil['btn'];?></a>
                                     </div>
                                 </div>
                             </div>

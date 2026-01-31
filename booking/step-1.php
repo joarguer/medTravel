@@ -6,7 +6,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$fields = ['name', 'email', 'datetime', 'destination', 'persons', 'category', 'special_request', 'origin'];
+$fields = ['name', 'email', 'datetime', 'destination', 'persons', 'category', 'special_request', 'origin', 'preselected_offer', 'phone'];
 $input = [];
 foreach ($fields as $field) {
     if (isset($_POST[$field])) {

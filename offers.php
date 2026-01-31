@@ -376,8 +376,11 @@ $offers_result = mysqli_stmt_get_result($stmt);
                                         </div>
                                     </div>
                                     
-                                    <a href="offer_detail.php?id=<?php echo $offer['id']; ?>" class="btn btn-view-offer">
-                                        <i class="fas fa-info-circle me-2"></i>View Details
+                                    <a href="#booking-section" class="btn btn-view-offer" onclick="scrollToBooking(<?php echo $offer['id']; ?>); return false;" style="margin-right: 10px;">
+                                        <i class="fas fa-calendar-check me-2"></i>Book Now
+                                    </a>
+                                    <a href="offer_detail.php?id=<?php echo $offer['id']; ?>" class="btn btn-outline-primary" style="padding: 10px 20px; border: 1px solid #0f766e; color: #0f766e; text-decoration: none; border-radius: 6px; display: inline-block;">
+                                        <i class="fas fa-info-circle me-2"></i>Details
                                     </a>
                                 </div>
                                 

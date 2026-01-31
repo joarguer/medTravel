@@ -102,7 +102,7 @@
                         </div>
                         <a href="contact.html" class="nav-item nav-link">Contact</a>
                     </div>
-                    <a href="" class="btn btn-primary rounded-pill py-2 px-4 ms-lg-4">Book Now</a>
+                    <a href="#booking-section" class="btn btn-primary rounded-pill py-2 px-4 ms-lg-4" onclick="scrollToBooking(); return false;">Book Now</a>
                 </div>
             </nav>
         </div>
@@ -157,7 +157,7 @@
                                     <a href="#" class="btn-hover btn text-white py-2 px-4">Read More</a>
                                 </div>
                                 <div class="col-6 text-end px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Book Now</a>
+                                    <a href="#booking-section" class="btn-hover btn text-white py-2 px-4" onclick="scrollToBooking(); return false;">Book Now</a>
                                 </div>
                             </div>
                         </div>
@@ -190,7 +190,7 @@
                                     <a href="#" class="btn-hover btn text-white py-2 px-4">Read More</a>
                                 </div>
                                 <div class="col-6 text-end px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Book Now</a>
+                                    <a href="#booking-section" class="btn-hover btn text-white py-2 px-4" onclick="scrollToBooking(); return false;">Book Now</a>
                                 </div>
                             </div>
                         </div>
@@ -223,7 +223,7 @@
                                     <a href="#" class="btn-hover btn text-white py-2 px-4">Read More</a>
                                 </div>
                                 <div class="col-6 text-end px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Book Now</a>
+                                    <a href="#booking-section" class="btn-hover btn text-white py-2 px-4" onclick="scrollToBooking(); return false;">Book Now</a>
                                 </div>
                             </div>
                         </div>
@@ -256,7 +256,7 @@
                                     <a href="#" class="btn-hover btn text-white py-2 px-4">Read More</a>
                                 </div>
                                 <div class="col-6 text-end px-0">
-                                    <a href="#" class="btn-hover btn text-white py-2 px-4">Book Now</a>
+                                    <a href="#booking-section" class="btn-hover btn text-white py-2 px-4" onclick="scrollToBooking(); return false;">Book Now</a>
                                 </div>
                             </div>
                         </div>

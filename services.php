@@ -106,7 +106,7 @@ while($service = mysqli_fetch_array($busca_services)){
                     </div>
                     <div class="col-12">
                         <div class="text-center">
-                            <a class="btn btn-primary rounded-pill py-3 px-5 mt-2" href="contact.php">Request Quote</a>
+                            <a class="btn btn-primary rounded-pill py-3 px-5 mt-2" href="#booking-section" onclick="scrollToBooking(); return false;">Request Service</a>
                         </div>
                     </div>
                 </div>
