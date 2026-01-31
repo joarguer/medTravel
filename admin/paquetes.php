@@ -6,7 +6,7 @@ $id_usuario = $_SESSION['id_usuario'];
 <html lang="es">
     <head>
         <meta charset="utf-8" />
-        <title>MedTravel - Gestión de Paquetes</title>
+        <title>MedTravel - Travel Packages Management</title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta content="width=device-width, initial-scale=1" name="viewport" />
         <?php echo $global_first_style;?>
@@ -40,17 +40,17 @@ $id_usuario = $_SESSION['id_usuario'];
                 <div class="page-content">
                     <!-- BEGIN BREADCRUMBS -->
                     <div class="breadcrumbs">
-                        <h1>Gestión de Paquetes
-                            <small>Sistema de Paquetes Todo Incluido</small>
+                        <h1>Travel Packages Management
+                            <small>Complete client packages with services and itineraries</small>
                         </h1>
                         <ol class="breadcrumb">
                             <li>
                                 <a href="index.php">Home</a>
                             </li>
                             <li>
-                                <a href="#">Administrativo</a>
+                                <a href="#">Administrative</a>
                             </li>
-                            <li class="active">Paquetes</li>
+                            <li class="active">Travel Packages</li>
                         </ol>
                     </div>
                     <!-- END BREADCRUMBS -->
@@ -63,11 +63,11 @@ $id_usuario = $_SESSION['id_usuario'];
                                 <div class="portlet-title">
                                     <div class="caption">
                                         <i class="icon-briefcase font-dark"></i>
-                                        <span class="caption-subject font-dark bold uppercase">Paquetes de Turismo Médico</span>
+                                        <span class="caption-subject font-dark bold uppercase">Travel Packages - All-Inclusive Client Solutions</span>
                                     </div>
                                     <div class="actions">
                                         <button type="button" class="btn btn-primary" id="btnNuevoPaquete">
-                                            <i class="fa fa-plus"></i> Nuevo Paquete
+                                            <i class="fa fa-plus"></i> New Package
                                         </button>
                                     </div>
                                 </div>

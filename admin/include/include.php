@@ -277,7 +277,7 @@ $top_header .= '</span>
 
 // Detectar página actual para activar pestaña del menú
 $current_page = basename($_SERVER['PHP_SELF']);
-$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','email_settings.php','booking_requests.php');
+$admin_pages = array('mis_datos.php','crear_usuario.php','informes.php','service_categories.php','service_catalog.php','providers.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','email_settings.php','booking_requests.php','medtravel_services.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
 $is_admin_page = in_array($current_page, $admin_pages);
 $is_site_page = $es_admin && in_array($current_page, $site_pages);
@@ -350,10 +350,15 @@ if ($es_admin) {
                                     <a href="./booking_requests.php"> 
                                     <i class="icon-calendar"></i> Booking Requests </a>
                                 </li>';
-    // link Paquetes (debajo de Booking Requests)
+    // link MedTravel Services (catálogo de servicios de la empresa)
+    $top_header_2 .=               '<li class="'.($current_page === 'medtravel_services.php' ? 'active' : '').'">
+                                    <a href="./medtravel_services.php"> 
+                                    <i class="icon-layers"></i> MedTravel Services </a>
+                                </li>';
+    // link Travel Packages (paquetes armados para clientes)
     $top_header_2 .=               '<li class="'.($current_page === 'paquetes.php' ? 'active' : '').'">
                                     <a href="./paquetes.php"> 
-                                    <i class="icon-briefcase"></i> Paquetes </a>
+                                    <i class="icon-briefcase"></i> Travel Packages </a>
                                 </li>';
 }
 
