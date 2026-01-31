@@ -91,31 +91,30 @@ $rst   = mysqli_fetch_array($busca);
                                     </div>
                                     <!-- END SIDEBAR USER TITLE -->
                                     <!-- SIDEBAR BUTTONS -->
-                                    <div class="form-group" id="div-group-radio">
+                                    <div class="form-group" id="div-group-role">
                                         <div class="col-md-12">
-                                            <div class="margin-bottom-10">
-                                                <label for="option1" class="col-md-7">Principal</label>
-                                                <input id="option1" type="radio" name="radio1" value="1" class="make-switch switch-radio1 col-md-5">
-                                            </div>
-                                            <div class="margin-bottom-10">
-                                                <label for="option2" class="col-md-7">Administrativo</label>
-                                                <input id="option2" type="radio" name="radio1" value="2" class="make-switch switch-radio1 col-md-5">
-                                            </div>
-                                            <div class="margin-bottom-10">
-                                                <label for="option3" class="col-md-7">Contable</label>
-                                                <input id="option3" type="radio" name="radio1" value="11" class="make-switch switch-radio1 col-md-5">
-                                            </div>
-                                            <hr>
-                                            <div class="margin-bottom-10" id="cliente-ppal">
-                                                <label for="option3" class="col-md-7">Cliente</label>
-                                                <input id="option3" type="radio" name="radio1" value="3" class="make-switch switch-radio1 col-md-5">
-                                            </div>
-                                            <div class="margin-bottom-10">
-                                                <label for="option4" class="col-md-7">Proveedor</label>
-                                                <input id="option4" type="radio" name="radio1" value="4" class="make-switch switch-radio1 col-md-5" checked>
-                                            </div>
+                                            <label class="control-label">Rol</label>
+                                            <select id="user_role" name="role" class="form-control">
+                                                <?php foreach (get_available_roles() as $rid => $rlabel): ?>
+                                                    <option value="<?php echo $rid; ?>" <?php echo ($rid===ROLE_PROVIDER)?'selected':''; ?>><?php echo htmlspecialchars($rlabel); ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
                                         </div>
                                     </div>
+                                    <script>
+                                        (function(){
+                                            function toggleProviderField(){
+                                                var sel = document.getElementById('user_role');
+                                                var provDiv = document.getElementById('div-provider');
+                                                if(!sel || !provDiv) return;
+                                                provDiv.style.display = (sel.value == '<?php echo ROLE_PROVIDER; ?>') ? '' : 'none';
+                                            }
+                                            document.addEventListener('DOMContentLoaded', function(){
+                                                var sel = document.getElementById('user_role');
+                                                if(sel){ sel.addEventListener('change', toggleProviderField); toggleProviderField(); }
+                                            });
+                                        })();
+                                    </script>
                                     <!-- END SIDEBAR BUTTONS -->
                                 </div>
                                 <!-- END PORTLET MAIN -->

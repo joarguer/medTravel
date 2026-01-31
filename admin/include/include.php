@@ -14,17 +14,9 @@ $title = 'MedTravel';
 // Determinación robusta de roles: acepta 'ppal' numérico, rol numérico o texto que contenga 'admin'
 $es_admin = false;
 $es_prestador = false;
-if (isset($_SESSION['ppal']) && intval($_SESSION['ppal']) === 1) {
-    $es_admin = true;
-}
-if (isset($_SESSION['rol'])) {
-    $rolval = (string) $_SESSION['rol'];
-    if (intval($rolval) === 1) {
-        $es_admin = true;
-    } elseif (stripos($rolval, 'admin') !== false || stripos($rolval, 'administrador') !== false) {
-        $es_admin = true;
-    }
-}
+// Load roles helpers
+require_once __DIR__ . '/roles.php';
+$es_admin = is_role_admin_session();
 if (isset($_SESSION['provider_id']) && !empty($_SESSION['provider_id'])) {
     $es_prestador = true;
 }
