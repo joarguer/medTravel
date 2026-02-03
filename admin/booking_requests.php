@@ -17,8 +17,7 @@ $rst   = mysqli_fetch_array($busca);
         <link href="../../assets/global/plugins/bootstrap-toastr/toastr.min.css" rel="stylesheet" type="text/css" />
         <?php echo $theme_global_style;?>
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
-    </head>
+        </head>
 
     <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
         <div class="wrapper">

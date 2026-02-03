@@ -10,7 +10,9 @@ include('include/include.php');
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
-    <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+    <?php echo $theme_layout_script;?>
+    <?php echo $theme_global_js;?>
+    <?php echo $theme_layout_js;?>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
     <div class="wrapper">
@@ -82,7 +84,6 @@ include('include/include.php');
             </div>
         </div>
         <?php echo $sider_bar;?>
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <?php echo $theme_layout_script;?>
         <script src="js/providers.js" type="text/javascript"></script>
 

@@ -1137,6 +1137,20 @@
 
 .blog .blog-item .blog-img .blog-img-inner img {
     transition: 0.5s;
+    height: 240px;
+    object-fit: cover;
+}
+
+.blog .blog-item {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.blog .blog-item .blog-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .blog .blog-item .blog-img:hover .blog-img-inner img {

@@ -52,8 +52,7 @@ $rst_header = mysqli_fetch_array($busca_header);
             }
         </style>
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
-    </head>
+        </head>
 
     <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
         <div class="wrapper">

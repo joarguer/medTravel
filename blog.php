@@ -1,5 +1,19 @@
 <?php
 include('inc/include.php'); 
+
+// Fetch published blog posts
+$posts = [];
+$sql_posts = "SELECT id, title, slug, excerpt, body, cover_image, author_name, DATE_FORMAT(COALESCE(published_at, created_at), '%b %e, %Y') as published_on
+              FROM blog_posts
+              WHERE status = 'published'
+              ORDER BY COALESCE(published_at, created_at) DESC
+              LIMIT 9";
+$res_posts = mysqli_query($conexion, $sql_posts);
+if ($res_posts) {
+    while ($row = mysqli_fetch_assoc($res_posts)) {
+        $posts[] = $row;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -48,80 +62,58 @@ include('inc/include.php');
             <div class="container py-5">
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
                     <h5 class="section-title px-3">Our Blog</h5>
-                    <h1 class="mb-4">Popular Travel Blogs</h1>
-                    <p class="mb-0">Lorem ipsum dolor sit amet consectetur adipisicing elit. Deleniti deserunt tenetur sapiente atque. Magni non explicabo beatae sit, vel reiciendis consectetur numquam id similique sunt error obcaecati ducimus officia maiores.
-                    </p>
+                    <h1 class="mb-4">Latest stories</h1>
+                    <p class="mb-0">Discover experiences and updates from our medical travel community.</p>
                 </div>
                 <div class="row g-4 justify-content-center">
-                    <div class="col-lg-4 col-md-6">
-                        <div class="blog-item">
-                            <div class="blog-img">
-                                <div class="blog-img-inner">
-                                    <img class="img-fluid w-100 rounded-top" src="img/blog-1.jpg" alt="Image">
-                                    <div class="blog-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
+                    <?php if (count($posts) === 0): ?>
+                        <div class="col-12 text-center text-muted">No posts published yet.</div>
+                    <?php else: ?>
+                        <?php foreach ($posts as $post): ?>
+                        <?php
+                            $coverPath = $post['cover_image'] ?: 'img/blog-1.jpg';
+                            if (!preg_match('~^https?://~', $coverPath)) {
+                                // Normalizar rutas relativas que vienen con ../ o ./ desde el admin
+                                $coverPath = ltrim($coverPath, './');
+                                if (strpos($coverPath, '../') === 0) {
+                                    $coverPath = substr($coverPath, 3);
+                                }
+                                $coverPath = '/' . ltrim($coverPath, '/');
+                            }
+                            $teaser = $post['excerpt'];
+                            if (!$teaser) {
+                                $teaser = strip_tags($post['body']);
+                                $words = explode(' ', $teaser);
+                                if (count($words) > 40) {
+                                    $teaser = implode(' ', array_slice($words, 0, 40)) . '...';
+                                }
+                            }
+                            $excerpt_safe = htmlspecialchars($teaser ?: '...', ENT_QUOTES, 'UTF-8');
+                        ?>
+                        <div class="col-lg-4 col-md-6">
+                            <div class="blog-item h-100 shadow-sm border rounded-3 overflow-hidden d-flex flex-column">
+                                <div class="blog-img">
+                                    <div class="blog-img-inner">
+                                        <img class="img-fluid w-100 rounded-top" src="<?php echo htmlspecialchars($coverPath, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?>">
+                                        <div class="blog-icon">
+                                            <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
+                                        </div>
+                                    </div>
+                                    <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
+                                        <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i><?php echo htmlspecialchars($post['published_on'], ENT_QUOTES, 'UTF-8'); ?></small>
+                                        <span class="btn-hover flex-fill text-center text-white py-2"><?php echo htmlspecialchars($post['author_name'], ENT_QUOTES, 'UTF-8'); ?></span>
                                     </div>
                                 </div>
-                                <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
-                                    <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i>28 Jan 2050</small>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white border-end py-2"><i class="fa fa-thumbs-up text-primary me-2"></i>1.7K</a>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white py-2"><i class="fa fa-comments text-primary me-2"></i>1K</a>
+                                <div class="blog-content border border-top-0 rounded-bottom p-4 flex-grow-1 d-flex flex-column">
+                                    <p class="mb-3">Posted by: <?php echo htmlspecialchars($post['author_name'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <h4 class="h4"><?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?></h4>
+                                    <p class="my-3 flex-grow-1"><?php echo $excerpt_safe; ?></p>
+                                    <a href="/blog_post.php?slug=<?php echo urlencode($post['slug']); ?>" class="btn btn-primary rounded-pill py-2 px-4 mt-auto">Read More</a>
                                 </div>
-                            </div>
-                            <div class="blog-content border border-top-0 rounded-bottom p-4">
-                                <p class="mb-3">Posted By: Royal Hamblin </p>
-                                <a href="#" class="h4">Adventures Trip</a>
-                                <p class="my-3">Tempor erat elitr rebum at clita. Diam dolor diam ipsum sit diam amet diam eos</p>
-                                <a href="#" class="btn btn-primary rounded-pill py-2 px-4">Read More</a>
                             </div>
                         </div>
-                    </div>
-                    <div class="col-lg-4 col-md-6">
-                        <div class="blog-item">
-                            <div class="blog-img">
-                                <div class="blog-img-inner">
-                                    <img class="img-fluid w-100 rounded-top" src="img/blog-2.jpg" alt="Image">
-                                    <div class="blog-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
-                                    <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i>28 Jan 2050</small>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white border-end py-2"><i class="fa fa-thumbs-up text-primary me-2"></i>1.7K</a>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white py-2"><i class="fa fa-comments text-primary me-2"></i>1K</a>
-                                </div>
-                            </div>
-                            <div class="blog-content border border-top-0 rounded-bottom p-4">
-                                <p class="mb-3">Posted By: Royal Hamblin </p>
-                                <a href="#" class="h4">Adventures Trip</a>
-                                <p class="my-3">Tempor erat elitr rebum at clita. Diam dolor diam ipsum sit diam amet diam eos</p>
-                                <a href="#" class="btn btn-primary rounded-pill py-2 px-4">Read More</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-4 col-md-6">
-                        <div class="blog-item">
-                            <div class="blog-img">
-                                <div class="blog-img-inner">
-                                    <img class="img-fluid w-100 rounded-top" src="img/blog-3.jpg" alt="Image">
-                                    <div class="blog-icon">
-                                        <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
-                                    </div>
-                                </div>
-                                <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
-                                    <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i>28 Jan 2050</small>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white border-end py-2"><i class="fa fa-thumbs-up text-primary me-2"></i>1.7K</a>
-                                    <a href="#" class="btn-hover flex-fill text-center text-white py-2"><i class="fa fa-comments text-primary me-2"></i>1K</a>
-                                </div>
-                            </div>
-                            <div class="blog-content border border-top-0 rounded-bottom p-4">
-                                <p class="mb-3">Posted By: Royal Hamblin </p>
-                                <a href="#" class="h4">Adventures Trip</a>
-                                <p class="my-3">Tempor erat elitr rebum at clita. Diam dolor diam ipsum sit diam amet diam eos</p>
-                                <a href="#" class="btn btn-primary rounded-pill py-2 px-4">Read More</a>
-                            </div>
-                        </div>
-                    </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

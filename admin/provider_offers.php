@@ -23,6 +23,9 @@ if (!$es_admin_principal && $ses_rol !== '') {
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
+    <?php echo $theme_layout_script;?>
+    <?php echo $theme_global_js;?>
+    <?php echo $theme_layout_js;?>
     <!-- Summernote CSS -->
     <link href="../../assets/global/plugins/bootstrap-summernote/summernote.css" rel="stylesheet" type="text/css" />
     <style>
@@ -67,8 +70,7 @@ if (!$es_admin_principal && $ses_rol !== '') {
             transform: scale(1.05);
         }
     </style>
-    <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
-</head>
+    </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
     <div class="wrapper">
         <header class="page-header">
@@ -153,7 +155,6 @@ if (!$es_admin_principal && $ses_rol !== '') {
             </div>
         </div>
         <?php echo $sider_bar;?>
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <?php echo $theme_layout_script;?>
         <!-- Summernote JS -->
         <script src="../../assets/global/plugins/bootstrap-summernote/summernote.min.js" type="text/javascript"></script>

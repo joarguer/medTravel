@@ -37,15 +37,18 @@ if ($timeline_from && $timeline_to) {
 
 $additional_notes = isset($_POST['additional_notes']) ? trim($_POST['additional_notes']) : '';
 
-// Agregar servicios de medtravel a las notas si hay alguno seleccionado
+// Agregar servicios de MedTravel seleccionados (usar el catálogo real de wizard)
 if (!empty($medtravel_services)) {
-    $medtravel_names_query = mysqli_query($conexion, "SELECT name FROM coordination_services WHERE id IN (" . implode(',', $medtravel_services) . ")");
-    $medtravel_names = [];
-    while ($row = mysqli_fetch_assoc($medtravel_names_query)) {
-        $medtravel_names[] = $row['name'];
+    $ids = implode(',', array_map('intval', $medtravel_services));
+    $med_query = mysqli_query($conexion, "SELECT service_name FROM medtravel_services_catalog WHERE id IN ($ids)");
+    $med_names = [];
+    if ($med_query) {
+        while ($row = mysqli_fetch_assoc($med_query)) {
+            $med_names[] = $row['service_name'];
+        }
     }
-    if (!empty($medtravel_names)) {
-        $additional_notes .= "\n\nMedTravel Services Requested:\n- " . implode("\n- ", $medtravel_names);
+    if (!empty($med_names)) {
+        $additional_notes .= "\n\nMedTravel Services Requested:\n- " . implode("\n- ", $med_names);
     }
 }
 

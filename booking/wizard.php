@@ -5,6 +5,7 @@ $booking = isset($_SESSION['booking_request']) ? $_SESSION['booking_request'] : 
 $submission_status = isset($_SESSION['booking_request_status']) ? $_SESSION['booking_request_status'] : '';
 $submission_message = isset($_SESSION['booking_request_message']) ? $_SESSION['booking_request_message'] : '';
 unset($_SESSION['booking_request_status'], $_SESSION['booking_request_message']);
+$allow_submission = ($submission_status !== 'submitted');
 
 // Capturar oferta pre-seleccionada si existe
 $preselected_offer_id = !empty($booking['preselected_offer']) ? intval($booking['preselected_offer']) : 0;
@@ -351,11 +352,22 @@ foreach ($offers as $offer) {
         }
         ?>
         
+        <?php if ($allow_submission): ?>
         <form action="submit.php" method="POST" id="booking-wizard-form">
             <?php if (count($medtravel_services) > 0): ?>
             <div class="wizard-stage mb-4">
-                <h3 class="mb-3">Stage 2 – MedTravel Complementary Services</h3>
-                <p class="text-muted mb-3">Select concierge and travel add-ons to complete your package</p>
+                <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-2">
+                    <div>
+                        <h3 class="mb-1">Stage 2 – MedTravel Complementary Services</h3>
+                        <p class="text-muted mb-0">Select concierge and travel add-ons to complete your package</p>
+                    </div>
+                    <div class="flex-grow-1" style="max-width: 360px; min-width: 240px;">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                            <input type="search" class="form-control" id="medtravel-filter" placeholder="Search complementary services...">
+                        </div>
+                    </div>
+                </div>
                 <?php foreach ($medtravel_services as $type => $services_group): ?>
                 <div class="mb-3">
                     <h5 class="text-primary mb-2" style="text-transform: capitalize;">
@@ -382,7 +394,7 @@ foreach ($offers as $offer) {
                             }
                         ?>
                         <div class="col-md-6 col-lg-4">
-                            <div class="service-card card h-100" data-service-id="<?php echo (int)$service['id']; ?>">
+                            <div class="service-card card h-100" data-service-id="<?php echo (int)$service['id']; ?>" data-name="<?php echo htmlspecialchars($service['service_name'], ENT_QUOTES); ?>" data-type="<?php echo htmlspecialchars($service['service_type'], ENT_QUOTES); ?>" data-provider="<?php echo htmlspecialchars($service['provider_name'], ENT_QUOTES); ?>">
                                 <input type="checkbox" class="d-none medtravel-checkbox" name="medtravel_services[]" value="<?php echo (int)$service['id']; ?>"
                                        data-name="<?php echo htmlspecialchars($service['service_name'], ENT_QUOTES); ?>"
                                        data-type="<?php echo htmlspecialchars($service['service_type'], ENT_QUOTES); ?>"
@@ -420,14 +432,22 @@ foreach ($offers as $offer) {
             <?php endif; ?>
             
             <div class="wizard-stage mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h3 class="mb-0">Stage 3 – Select Medical Services</h3>
-                    <div id="selection-counter" class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
-                        <i class="fas fa-check-circle me-2"></i>
-                        <span id="counter-value">0</span> selected
+                <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-2">
+                    <div>
+                        <h3 class="mb-1">Stage 3 – Select Medical Services</h3>
+                        <p class="mb-0">Choose from our certified providers' available services. You can select multiple services to build your medical travel package.</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                        <div class="input-group" style="min-width: 260px; max-width: 360px;">
+                            <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                            <input type="search" class="form-control" id="offers-filter" placeholder="Search by service, provider, or city...">
+                        </div>
+                        <div id="selection-counter" class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <span id="counter-value">0</span> selected
+                        </div>
                     </div>
                 </div>
-                <p class="mb-4">Choose from our certified providers' available services. You can select multiple services to build your medical travel package.</p>
                 
                 <?php if (count($offers_by_category) > 0): ?>
                     <?php foreach ($offers_by_category as $cat_id => $category_data): ?>
@@ -439,7 +459,7 @@ foreach ($offers as $offer) {
                             <div class="row g-3">
                                 <?php foreach ($category_data['offers'] as $offer): ?>
                                     <div class="col-md-6 col-lg-4">
-                                        <div class="card offer-card" onclick="toggleOfferSelection(this, <?php echo $offer['id']; ?>)">
+                                        <div class="card offer-card" onclick="toggleOfferSelection(this, <?php echo $offer['id']; ?>)" data-name="<?php echo htmlspecialchars($offer['title'] ?: $offer['service_name'], ENT_QUOTES); ?>" data-type="<?php echo htmlspecialchars($offer['service_name'], ENT_QUOTES); ?>" data-provider="<?php echo htmlspecialchars($offer['provider_name'], ENT_QUOTES); ?>" data-city="<?php echo htmlspecialchars($offer['provider_city'] ?: 'Colombia', ENT_QUOTES); ?>" data-category="<?php echo htmlspecialchars($category_data['category_name'], ENT_QUOTES); ?>">
                                             <input type="checkbox" 
                                                    name="selected_offers[]" 
                                                    value="<?php echo $offer['id']; ?>" 
@@ -582,22 +602,9 @@ foreach ($offers as $offer) {
                         <input type="number" step="50" min="0" class="form-control" name="budget" id="budget" placeholder="Example: 5000">
                         <small class="text-muted">Optional - helps us provide better recommendations</small>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Preferred timeline</label>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <input type="date" class="form-control" name="timeline_from" id="timeline_from" placeholder="From">
-                                <small class="text-muted">From</small>
-                            </div>
-                            <div class="col-6">
-                                <input type="date" class="form-control" name="timeline_to" id="timeline_to" placeholder="To">
-                                <small class="text-muted">To</small>
-                            </div>
-                        </div>
-                    </div>
                     <div class="col-12">
                         <label for="additional_notes" class="form-label">Additional context</label>
-                        <textarea name="additional_notes" id="additional_notes" class="form-control" rows="4" placeholder="Anything else we should know? (medical conditions, special requirements, etc.)"></textarea>
+                        <textarea name="additional_notes" id="additional_notes" class="form-control" rows="4" placeholder="Anything else we should know? (medical conditions, special requirements, etc.)"><?php echo !empty($booking['special_request']) ? htmlspecialchars($booking['special_request']) : ''; ?></textarea>
                     </div>
                 </div>
                 <div class="mt-4">
@@ -611,6 +618,16 @@ foreach ($offers as $offer) {
                 </div>
             </div>
         </form>
+        <?php else: ?>
+        <div class="wizard-stage mb-4">
+            <h3 class="mb-2 text-success"><i class="fas fa-check-circle me-2"></i>Request sent</h3>
+            <p class="mb-3">We already received your request. If you need to start a new one, return to the booking form.</p>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-primary" href="../booking.php">Start new request</a>
+                <a class="btn btn-outline-primary" href="../offers.php">Back to catalog</a>
+            </div>
+        </div>
+        <?php endif; ?>
         <div class="mt-3">
             <a href="../offers.php" class="btn btn-outline-primary">
                 <i class="fas fa-arrow-left me-2"></i>Back to catalog
@@ -655,8 +672,8 @@ foreach ($offers as $offer) {
 
     <script>
         // Timeline date range validation
-        const timelineFrom = document.getElementById('timeline_from');
-        const timelineTo = document.getElementById('timeline_to');
+        const timelineFrom = document.getElementById('wizard-date-from');
+        const timelineTo = document.getElementById('wizard-date-to');
         
         if (timelineFrom && timelineTo) {
             // Set minimum date to today
@@ -774,6 +791,43 @@ foreach ($offers as $offer) {
 
             console.log(`Selected ${count} offer(s)`);
         }
+
+        // Text filter for MedTravel services
+        function filterMedtravelServices(term) {
+            const value = term.trim().toLowerCase();
+            document.querySelectorAll('.service-card').forEach(function(card) {
+                const wrapper = card.closest('[class*="col-"]');
+                if (!value) {
+                    card.classList.remove('d-none');
+                    if (wrapper) wrapper.classList.remove('d-none');
+                    return;
+                }
+                const name = (card.dataset.name || '').toLowerCase();
+                const type = (card.dataset.type || '').toLowerCase();
+                const provider = (card.dataset.provider || '').toLowerCase();
+                const match = name.includes(value) || type.includes(value) || provider.includes(value);
+                card.classList.toggle('d-none', !match);
+                if (wrapper) wrapper.classList.toggle('d-none', !match);
+            });
+        }
+
+        // Text filter for provider offers
+        function filterOffers(term) {
+            const value = term.trim().toLowerCase();
+            document.querySelectorAll('.offer-card').forEach(function(card) {
+                const wrapper = card.closest('[class*="col-"]');
+                if (!value) {
+                    card.classList.remove('d-none');
+                    if (wrapper) wrapper.classList.remove('d-none');
+                    return;
+                }
+                const fields = [card.dataset.name, card.dataset.type, card.dataset.provider, card.dataset.city, card.dataset.category]
+                    .map(function(v){ return (v || '').toLowerCase(); });
+                const match = fields.some(function(f){ return f.includes(value); });
+                card.classList.toggle('d-none', !match);
+                if (wrapper) wrapper.classList.toggle('d-none', !match);
+            });
+        }
         
         // Initialize - mark pre-selected cards
         document.addEventListener('DOMContentLoaded', function() {
@@ -830,6 +884,22 @@ foreach ($offers as $offer) {
                     updateSelectionSummary();
                 });
             });
+
+            // Buscador de servicios complementarios
+            const medFilter = document.getElementById('medtravel-filter');
+            if (medFilter) {
+                medFilter.addEventListener('input', function() {
+                    filterMedtravelServices(medFilter.value);
+                });
+            }
+
+            // Buscador de servicios médicos
+            const offersFilter = document.getElementById('offers-filter');
+            if (offersFilter) {
+                offersFilter.addEventListener('input', function() {
+                    filterOffers(offersFilter.value);
+                });
+            }
 
             // Botones del resumen
             const clearBtn = document.getElementById('wizard-summary-clear');

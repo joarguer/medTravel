@@ -50,8 +50,7 @@ $n = 1;
             }
         </style>
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
-    </head>
+        </head>
 
     <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
         <div class="wrapper">
@@ -121,7 +120,6 @@ $n = 1;
         </div>
         
         <?php echo $sider_bar;?>
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
         <?php echo $theme_layout_script;?>
         <script src="js/services_edit.js" type="text/javascript"></script>

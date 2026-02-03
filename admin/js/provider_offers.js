@@ -79,7 +79,8 @@ $(function(){
                 var actions = $('<td>');
                 actions.append($('<button class="btn btn-xs btn-primary mr5">Editar</button>').click(function(){ openEdit(row.id); }));
                 actions.append($('<button class="btn btn-xs btn-warning mr5">Fotos</button>').click(function(){ loadGallery(row.id); }));
-                actions.append($('<button class="btn btn-xs btn-default">Activar/Desactivar</button>').click(function(){ toggle(row.id); }));
+                var toggleLabel = (row.is_active==1) ? 'Desactivar' : 'Activar';
+                actions.append($('<button class="btn btn-xs btn-default">'+toggleLabel+'</button>').click(function(){ toggle(row.id); }));
                 tr.append(actions);
                 tbody.append(tr);
             });

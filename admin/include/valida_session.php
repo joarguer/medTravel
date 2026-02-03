@@ -24,6 +24,19 @@ function es_usuario_admin() {
     return $es_admin;
 }
 
+// Helper: es prestador (tiene provider_id o rol de prestador)
+function es_usuario_prestador() {
+    if (isset($_SESSION['provider_id']) && intval($_SESSION['provider_id']) > 0) {
+        return true;
+    }
+    if (isset($_SESSION['rol'])) {
+        $rolval = strtolower((string) $_SESSION['rol']);
+        if (intval($rolval) === 4) return true;
+        if (strpos($rolval, 'provider') !== false || strpos($rolval, 'prestador') !== false) return true;
+    }
+    return false;
+}
+
 // Función helper para verificar si tiene rol 2 o superior
 function tiene_rol_minimo_2() {
     if (es_usuario_admin()) {
@@ -42,7 +55,7 @@ function tiene_rol_minimo_2() {
 $current = basename($_SERVER['PHP_SELF']);
 $admin_only = array(
     'crear_usuario.php','create_bd.php',
-    'home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php',
+    'home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','wizard_header_edit.php',
     'service_categories.php','service_catalog.php','providers.php','clientes.php','provider_verification.php','booking_requests.php'
 );
 $role2_allowed = array(
@@ -56,6 +69,11 @@ $role2_allowed = array(
 );
 
 if (in_array($current, $admin_only) && !es_usuario_admin()) {
+    header("Location: include/salir.php?error=1");
+    exit();
+}
+// Blog editable: admin o prestador
+if ($current === 'blog_edit.php' && !(es_usuario_admin() || es_usuario_prestador())) {
     header("Location: include/salir.php?error=1");
     exit();
 }

@@ -1,6 +1,40 @@
 <?php
 include(__DIR__ . "/../admin/include/conexion.php");
 include_once(__DIR__ . '/booking_form.php');
+
+// Simple guard to avoid rendering dead/legal placeholder links in the footer.
+function mt_valid_public_page(string $relativePath): bool {
+    $root = realpath(__DIR__ . '/..');
+    $fullPath = realpath($root . '/' . ltrim($relativePath, '/'));
+
+    // Resolve directories to their index.php if present.
+    if ($fullPath && is_dir($fullPath)) {
+        $indexCandidate = $fullPath . '/index.php';
+        $fullPath = file_exists($indexCandidate) ? realpath($indexCandidate) : $fullPath;
+    }
+
+    if (!$fullPath || !is_file($fullPath)) {
+        return false;
+    }
+    if (strpos($fullPath, $root) !== 0) {
+        return false;
+    }
+
+    $size = filesize($fullPath);
+    if ($size === false || $size < 300) {
+        return false; // very small files are likely placeholders
+    }
+
+    $snippet = file_get_contents($fullPath, false, null, 0, 1000);
+    $placeholders = ['lorem', 'coming soon', 'template', 'under construction'];
+    foreach ($placeholders as $needle) {
+        if (stripos($snippet, $needle) !== false) {
+            return false;
+        }
+    }
+    return true;
+}
+
 $head = '<meta charset="utf-8">
     <title>MedTravel - Tourism and Health </title>
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
@@ -33,6 +67,22 @@ $logo = '<a href="index.php" class="navbar-brand p-0">
 <h1 class="m-0"><i class="fas fa-stethoscope me-3"></i><span class="text-warning">Med</span>Travel</h1>
 <!-- <img src="img/logo.png" alt="Logo"> -->
 </a>';
+
+$company_links = [
+    ['label' => 'About',     'path' => 'about.php'],
+    ['label' => 'Services',  'path' => 'services.php'],
+    ['label' => 'Blog',      'path' => 'blog.php'],
+    ['label' => 'Press',     'path' => 'press.php'],
+    ['label' => 'Gift Cards','path' => 'gift-cards.php'],
+    ['label' => 'Magazine',  'path' => 'magazine.php'],
+];
+
+$company_links_html = '';
+foreach ($company_links as $link) {
+    if (mt_valid_public_page($link['path'])) {
+        $company_links_html .= '<a href="' . $link['path'] . '"><i class="fas fa-angle-right me-2"></i> ' . $link['label'] . '</a>';
+    }
+}
 
 $topbar = '<div class="container-fluid bg-primary px-5 d-none d-lg-block">
     <div class="row gx-0">
@@ -106,6 +156,59 @@ $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
     <a href="login.php" class="btn btn-primary rounded-pill py-2 px-4 ms-lg-4">Sign In</a>
 </div>';
 
+$contact_link = mt_valid_public_page('contact.php') ? 'contact.php' : null;
+$terms_candidates = ['terms.php', 'terms.html', 'terms-and-conditions.php', 'terms-and-conditions.html'];
+$cookie_candidates = ['cookie.php', 'cookies.php', 'cookie-policy.php', 'cookie-policy.html'];
+$legal_candidates = ['legal.php', 'legal.html', 'legal-notice.php', 'legal-notice.html'];
+$sitemap_candidates = ['sitemap.php', 'sitemap.html', 'sitemap.xml'];
+
+$terms_link = null;
+foreach ($terms_candidates as $candidate) {
+    if (mt_valid_public_page($candidate)) {
+        $terms_link = $candidate;
+        break;
+    }
+}
+$cookie_link = null;
+foreach ($cookie_candidates as $candidate) {
+    if (mt_valid_public_page($candidate)) {
+        $cookie_link = $candidate;
+        break;
+    }
+}
+$legal_link = null;
+foreach ($legal_candidates as $candidate) {
+    if (mt_valid_public_page($candidate)) {
+        $legal_link = $candidate;
+        break;
+    }
+}
+$sitemap_link = null;
+foreach ($sitemap_candidates as $candidate) {
+    if (mt_valid_public_page($candidate)) {
+        $sitemap_link = $candidate;
+        break;
+    }
+}
+
+$legal_links_html = '';
+if ($contact_link) {
+    $legal_links_html .= '<a href="' . $contact_link . '"><i class="fas fa-angle-right me-2"></i> Contact</a>';
+}
+$legal_links_html .= '<a href="/privacy/"><i class="fas fa-angle-right me-2"></i> Privacy Policy</a>';
+if ($terms_link) {
+    $legal_links_html .= '<a href="' . $terms_link . '"><i class="fas fa-angle-right me-2"></i> Terms and Conditions</a>';
+}
+if ($cookie_link) {
+    $legal_links_html .= '<a href="' . $cookie_link . '"><i class="fas fa-angle-right me-2"></i> Cookie policy</a>';
+}
+if ($legal_link) {
+    $legal_links_html .= '<a href="' . $legal_link . '"><i class="fas fa-angle-right me-2"></i> Legal Notice</a>';
+}
+if ($sitemap_link) {
+    $legal_links_html .= '<a href="' . $sitemap_link . '"><i class="fas fa-angle-right me-2"></i> Sitemap</a>';
+}
+
 $footer = '<div class="container-fluid footer py-5">
     <div class="container py-5">
         <div class="row g-5">
@@ -127,23 +230,13 @@ $footer = '<div class="container-fluid footer py-5">
             <div class="col-md-6 col-lg-6 col-xl-3">
                 <div class="footer-item d-flex flex-column">
                     <h4 class="mb-4 text-white">Company</h4>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> About</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Services</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Blog</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Press</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Gift Cards</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Magazine</a>
+                    ' . $company_links_html . '
                 </div>
             </div>
             <div class="col-md-6 col-lg-6 col-xl-3">
                 <div class="footer-item d-flex flex-column">
                     <h4 class="mb-4 text-white">Support</h4>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Contact</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Legal Notice</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Privacy Policy</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Terms and Conditions</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Sitemap</a>
-                    <a href=""><i class="fas fa-angle-right me-2"></i> Cookie policy</a>
+                    ' . $legal_links_html . '
                 </div>
             </div>
             <!--<div class="col-md-6 col-lg-6 col-xl-3">

@@ -15,7 +15,21 @@ $id_usuario = $_SESSION['id_usuario'];
         <link href="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.css" rel="stylesheet" type="text/css" />
         <?php echo $theme_global_style;?>
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+
+        <style>
+            /* Improve modal readability and scrolling */
+            #modalCliente .modal-dialog { max-width: 1024px; width: 95%; }
+            #modalCliente .modal-content { border-radius: 8px; }
+            #modalCliente .modal-header, #modalCliente .modal-footer { padding: 16px 20px; }
+            #modalCliente .modal-body { max-height: calc(100vh - 220px); overflow-y: auto; padding: 16px 24px 8px 20px; }
+            #modalCliente .form-group { margin-bottom: 14px; }
+            #modalCliente .row { margin-left: -8px; margin-right: -8px; }
+            #modalCliente .row > [class*="col-"] { padding-left: 8px; padding-right: 8px; }
+            #modalCliente label { margin-bottom: 4px; font-weight: 600; }
+            #modalCliente .form-control { height: 36px; }
+            #modalCliente textarea.form-control { height: auto; }
+            #modalCliente .form-section { margin-top: 16px; margin-bottom: 10px; font-weight: 700; }
+        </style>
     </head>
     <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
         <!-- BEGIN CONTAINER -->
@@ -384,21 +398,11 @@ $id_usuario = $_SESSION['id_usuario'];
         </div>
         <!-- END MODAL -->
         
-        <!-- BEGIN CORE PLUGINS -->
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-        <!-- END CORE PLUGINS -->
-        <!-- BEGIN PAGE LEVEL PLUGINS -->
+        <?php echo $theme_global_js;?>
         <script src="../../assets/global/scripts/datatable.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/datatables.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>
-        <!-- END PAGE LEVEL PLUGINS -->
-        <!-- BEGIN THEME GLOBAL SCRIPTS -->
-        <?php echo $theme_layout_script;?>
-        <!-- END THEME GLOBAL SCRIPTS -->
+        <?php echo $theme_layout_js;?>
         <script src="js/clientes.js" type="text/javascript"></script>
     </body>
 </html>

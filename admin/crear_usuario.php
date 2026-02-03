@@ -360,7 +360,6 @@ $rst   = mysqli_fetch_array($busca);
         <?php echo $sider_bar;?>
         <?php echo $theme_layout_script;?>
         <!-- CORE / PAGE PLUGINS (after theme so jQuery is stable) -->
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>

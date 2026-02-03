@@ -53,8 +53,7 @@ $n = 1;
             }
         </style>
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
-    </head>
+        </head>
     <!-- END HEAD -->
 
     <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -145,7 +144,6 @@ $n = 1;
         <!-- THEME (loads jQuery) -->
         <?php echo $theme_layout_script;?>
         <!-- CORE PLUGINS (after jQuery) -->
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>

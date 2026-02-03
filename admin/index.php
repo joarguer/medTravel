@@ -271,6 +271,7 @@ if ($es_admin) {
         <?php echo $theme_layout_script;?>
         <!-- CORE PLUGINS (after jQuery) -->
         <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+        <script src="../../assets/global/plugins/bootstrap-hover-dropdown/bootstrap-hover-dropdown.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>

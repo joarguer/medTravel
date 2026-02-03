@@ -10,6 +10,49 @@ $nombre_usuario_parts = explode(" ", $nombre_usuario ?: '');
 $nombre_usuario = isset($nombre_usuario_parts[0]) ? $nombre_usuario_parts[0] : '';
 $title = 'MedTravel';
 
+// Contadores y notificaciones de booking pending
+$booking_pending_count = 0;
+$booking_notifications = [];
+$booking_badge = '0';
+$booking_summary_text = 'No pending bookings';
+$booking_list_html = '';
+if (isset($conexion)) {
+    $notif_sql = "SELECT id, name, destination, created_at FROM booking_requests WHERE status = 'pending' ORDER BY id DESC LIMIT 5";
+    $notif_res = mysqli_query($conexion, $notif_sql);
+    if ($notif_res) {
+        while ($row = mysqli_fetch_assoc($notif_res)) {
+            $booking_notifications[] = $row;
+        }
+        $booking_pending_count = mysqli_num_rows($notif_res);
+        $booking_badge = (string) $booking_pending_count;
+        $booking_summary_text = $booking_pending_count > 0
+            ? '<span class="bold">' . $booking_pending_count . '</span> pending bookings'
+            : 'No pending bookings';
+
+        if ($booking_pending_count > 0) {
+            foreach ($booking_notifications as $notif) {
+                $id = (int) $notif['id'];
+                $name = htmlspecialchars($notif['name'] ?? 'Client', ENT_QUOTES, 'UTF-8');
+                $dest = htmlspecialchars($notif['destination'] ?? 'N/A', ENT_QUOTES, 'UTF-8');
+                $created = htmlspecialchars($notif['created_at'] ?? '', ENT_QUOTES, 'UTF-8');
+                $booking_list_html .= '<li>'
+                    . '<a href="booking_requests.php">'
+                    . '<span class="details">'
+                    . '<span class="label label-sm label-icon label-success md-skip">'
+                    . '<i class="fa fa-calendar"></i>'
+                    . '</span> New booking from ' . $name . ' (' . $dest . ')</span>';
+                if ($created !== '') {
+                    $booking_list_html .= '<span class="time">' . $created . '</span>';
+                }
+                $booking_list_html .= '</a></li>';
+            }
+        } else {
+            $booking_list_html = '<li><a href="booking_requests.php"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No pending bookings</span></a></li>';
+        }
+    }
+}
+
+
 // ROLE FLAGS: determinar permisos de menú
 // Determinación robusta de roles: acepta 'ppal' numérico, rol numérico o texto que contenga 'admin'
 $es_admin = false;
@@ -56,6 +99,28 @@ $theme_layout_script =  '<!-- BEGIN THEME LAYOUT SCRIPTS -->
                         <!-- END THEME LAYOUT SCRIPTS -->
                         <script src="js/global_scripts.js" type="text/javascript"></script>';
 
+// Scripts base para las vistas (se usan en la mayoría de páginas admin)
+$theme_global_js = '<!-- BEGIN CORE PLUGINS -->
+                    <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+                    <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+                    <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
+                    <script src="../../assets/global/plugins/bootstrap-hover-dropdown/bootstrap-hover-dropdown.min.js" type="text/javascript"></script>
+                    <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
+                    <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
+                    <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
+                    <!-- END CORE PLUGINS -->';
+
+$theme_layout_js = '<!-- BEGIN THEME GLOBAL SCRIPTS -->
+                    <script src="../../assets/global/scripts/app.min.js" type="text/javascript"></script>
+                    <!-- END THEME GLOBAL SCRIPTS -->
+                    <!-- BEGIN THEME LAYOUT SCRIPTS -->
+                    <script src="../../assets/layouts/layout5/scripts/layout.min.js" type="text/javascript"></script>
+                    <script src="../../assets/layouts/global/scripts/quick-sidebar.min.js" type="text/javascript"></script>
+                    <script src="../../assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
+                    <script src="../assets/pages/scripts/ui-toastr.min.js" type="text/javascript"></script>
+                    <script src="js/global_scripts.js" type="text/javascript"></script>
+                    <!-- END THEME LAYOUT SCRIPTS -->';
+
 $avatar = $_SESSION['avatar'];
 $avatar = '../'.$avatar;
 
@@ -88,97 +153,16 @@ $top_header =  '<div class="clearfix navbar-fixed-top">
                     <div class="btn-group-notification btn-group" id="header_notification_bar">
                         <button type="button" class="btn btn-sm md-skip dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
                             <i class="icon-bell"></i>
-                            <span class="badge">7</span>
+                            <span class="badge">'.$booking_badge.'</span>
                         </button>
                         <ul class="dropdown-menu-v2">
                             <li class="external">
-                                <h3>
-                                    <span class="bold">12 pending</span> notifications</h3>
-                                <a href="#">view all</a>
+                                <h3>'.$booking_summary_text.'</h3>
+                                <a href="booking_requests.php">view all</a>
                             </li>
                             <li>
                                 <ul class="dropdown-menu-list scroller" style="height: 250px; padding: 0;" data-handle-color="#637283">
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-success md-skip">
-                                                    <i class="fa fa-plus"></i>
-                                                </span> New user registered. </span>
-                                            <span class="time">just now</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-danger md-skip">
-                                                    <i class="fa fa-bolt"></i>
-                                                </span> Server #12 overloaded. </span>
-                                            <span class="time">3 mins</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-warning md-skip">
-                                                    <i class="fa fa-bell-o"></i>
-                                                </span> Server #2 not responding. </span>
-                                            <span class="time">10 mins</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-info md-skip">
-                                                    <i class="fa fa-bullhorn"></i>
-                                                </span> Application error. </span>
-                                            <span class="time">14 hrs</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-danger md-skip">
-                                                    <i class="fa fa-bolt"></i>
-                                                </span> Database overloaded 68%. </span>
-                                            <span class="time">2 days</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-danger md-skip">
-                                                    <i class="fa fa-bolt"></i>
-                                                </span> A user IP blocked. </span>
-                                            <span class="time">3 days</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-warning md-skip">
-                                                    <i class="fa fa-bell-o"></i>
-                                                </span> Storage Server #4 not responding dfdfdfd. </span>
-                                            <span class="time">4 days</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-info md-skip">
-                                                    <i class="fa fa-bullhorn"></i>
-                                                </span> System Error. </span>
-                                            <span class="time">5 days</span>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <span class="details">
-                                                <span class="label label-sm label-icon label-danger md-skip">
-                                                    <i class="fa fa-bolt"></i>
-                                                </span> Storage server failed. </span>
-                                            <span class="time">9 days</span>
-                                        </a>
-                                    </li>
+                                    '.$booking_list_html.'
                                 </ul>
                             </li>
                         </ul>
@@ -349,6 +333,14 @@ if ($es_admin || $es_prestador) {
     $top_header_2 .=               '<li class="'.($current_page === 'provider_offers.php' ? 'active' : '').'">
                                         <a href="./provider_offers.php">
                                             <i class="icon-tag"></i> Mis Ofertas </a>
+                                    </li>';
+}
+
+// Blog (admins y prestadores)
+if ($es_admin || $es_prestador) {
+    $top_header_2 .=               '<li class="'.($current_page === 'blog_edit.php' ? 'active' : '').'">
+                                        <a href="./blog_edit.php">
+                                            <i class="icon-note"></i> Blog </a>
                                     </li>';
 }
 

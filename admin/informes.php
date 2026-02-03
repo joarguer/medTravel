@@ -26,8 +26,7 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
         <link href="../assets/pages/css/about.css" rel="stylesheet" type="text/css" />
         <!-- END PAGE LEVEL STYLES -->
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
-    </head>
+        </head>
     <!-- END HEAD -->
 
     <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -123,7 +122,6 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
         <!-- THEME (loads jQuery) -->
         <?php echo $theme_layout_script;?>
         <!-- CORE PLUGINS (after jQuery) -->
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>

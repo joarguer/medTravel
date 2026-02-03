@@ -15,7 +15,6 @@ $id_usuario = $_SESSION['id_usuario'];
         <link href="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.css" rel="stylesheet" type="text/css" />
         <?php echo $theme_global_style;?>
         <?php echo $theme_layout_style;?>
-        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
         <style>
             .checklist-item {
                 padding: 10px;
@@ -268,7 +267,6 @@ $id_usuario = $_SESSION['id_usuario'];
         <!-- END MODAL -->
         
         <!-- BEGIN CORE PLUGINS -->
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
