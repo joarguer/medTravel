@@ -196,6 +196,8 @@ if ($contact_link) {
     $legal_links_html .= '<a href="' . $contact_link . '"><i class="fas fa-angle-right me-2"></i> Contact</a>';
 }
 $legal_links_html .= '<a href="/privacy/"><i class="fas fa-angle-right me-2"></i> Privacy Policy</a>';
+// Data deletion instructions (public)
+$legal_links_html .= '<a href="/data-deletion.php"><i class="fas fa-angle-right me-2"></i> Data Deletion</a>';
 if ($terms_link) {
     $legal_links_html .= '<a href="' . $terms_link . '"><i class="fas fa-angle-right me-2"></i> Terms and Conditions</a>';
 }

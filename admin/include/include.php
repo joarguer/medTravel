@@ -10,12 +10,25 @@ $nombre_usuario_parts = explode(" ", $nombre_usuario ?: '');
 $nombre_usuario = isset($nombre_usuario_parts[0]) ? $nombre_usuario_parts[0] : '';
 $title = 'MedTravel';
 
+// ROLE FLAGS: determinar permisos de menú
+// Determinación robusta de roles: acepta 'ppal' numérico, rol numérico o texto que contenga 'admin'
+$es_admin = false;
+$es_prestador = false;
+// Load roles helpers
+require_once __DIR__ . '/roles.php';
+$es_admin = is_role_admin_session();
+if (isset($_SESSION['provider_id']) && !empty($_SESSION['provider_id'])) {
+    $es_prestador = true;
+}
+
 // Contadores y notificaciones de booking pending
 $booking_pending_count = 0;
 $booking_notifications = [];
 $booking_badge = '0';
 $booking_summary_text = 'No pending bookings';
 $booking_list_html = '';
+$deletion_count = 0;
+$deletion_list_html = '';
 if (isset($conexion)) {
     $notif_sql = "SELECT id, name, destination, created_at FROM booking_requests WHERE status = 'pending' ORDER BY id DESC LIMIT 5";
     $notif_res = mysqli_query($conexion, $notif_sql);
@@ -50,22 +63,38 @@ if (isset($conexion)) {
             $booking_list_html = '<li><a href="booking_requests.php"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No pending bookings</span></a></li>';
         }
     }
-}
 
-
-// ROLE FLAGS: determinar permisos de menú
-// Determinación robusta de roles: acepta 'ppal' numérico, rol numérico o texto que contenga 'admin'
-$es_admin = false;
-$es_prestador = false;
-// Load roles helpers
-require_once __DIR__ . '/roles.php';
-$es_admin = is_role_admin_session();
-if (isset($_SESSION['provider_id']) && !empty($_SESSION['provider_id'])) {
-    $es_prestador = true;
+    // Solicitudes de eliminación de datos (solo admin)
+    if ($es_admin) {
+        $deletion_log = __DIR__ . '/../logs/data_deletion.log';
+        if (file_exists($deletion_log)) {
+            $lines = file($deletion_log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            $deletion_count = count($lines);
+            $last = array_slice($lines, -5);
+            foreach (array_reverse($last) as $line) {
+                $entry = json_decode($line, true);
+                if (!$entry) continue;
+                $req = htmlspecialchars($entry['request_id'] ?? '', ENT_QUOTES, 'UTF-8');
+                $phone = htmlspecialchars($entry['phone'] ?? '', ENT_QUOTES, 'UTF-8');
+                $email = htmlspecialchars($entry['email'] ?? '', ENT_QUOTES, 'UTF-8');
+                $time = htmlspecialchars($entry['timestamp'] ?? '', ENT_QUOTES, 'UTF-8');
+                $deletion_list_html .= '<li>'
+                    . '<a href="data_deletion_requests.php">'
+                    . '<span class="details">'
+                    . '<span class="label label-sm label-icon label-warning md-skip"><i class="fa fa-trash"></i></span>'
+                    . $req . ' • ' . $phone . ' • ' . $email . '<br><small>' . $time . '</small>'
+                    . '</span></a></li>';
+            }
+        }
+        if ($deletion_list_html === '') {
+            $deletion_list_html = '<li><a href="data_deletion_requests.php"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No deletion requests</span></a></li>';
+        }
+    }
 }
 // Sanitizar nombre de usuario para salida segura
 $nombre_usuario = htmlspecialchars($nombre_usuario, ENT_QUOTES, 'UTF-8');
-$global_first_style =  '<!-- BEGIN LAYOUT FIRST STYLES -->
+$global_first_style =  '<meta content="width=device-width, initial-scale=1" name="viewport" />
+                        <!-- BEGIN LAYOUT FIRST STYLES -->
                         <link href="//fonts.googleapis.com/css?family=Oswald:400,300,700" rel="stylesheet" type="text/css" />
                         <!-- END LAYOUT FIRST STYLES -->
                         <!-- BEGIN GLOBAL MANDATORY STYLES -->
@@ -101,8 +130,6 @@ $theme_layout_script =  '<!-- BEGIN THEME LAYOUT SCRIPTS -->
 
 // Scripts base para las vistas (se usan en la mayoría de páginas admin)
 $theme_global_js = '<!-- BEGIN CORE PLUGINS -->
-                    <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
-                    <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
                     <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
                     <script src="../../assets/global/plugins/bootstrap-hover-dropdown/bootstrap-hover-dropdown.min.js" type="text/javascript"></script>
                     <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
@@ -167,36 +194,34 @@ $top_header =  '<div class="clearfix navbar-fixed-top">
                             </li>
                         </ul>
                     </div>
-                    <!-- END GROUP NOTIFICATION -->
-                    <!-- BEGIN GROUP INFORMATION -->
-                    <div class="btn-group-red btn-group">
+                    <!-- END GROUP NOTIFICATION -->'
+                    ;
+
+// Data deletion dropdown (admin only)
+if ($es_admin) {
+    $top_header .= '
+                    <!-- BEGIN DATA DELETION ALERTS -->
+                    <div class="btn-group-notification btn-group" style="margin-left:12px; margin-right:4px;">
                         <button type="button" class="btn btn-sm md-skip dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
-                            <i class="fa fa-plus"></i>
+                            <i class="fa fa-trash"></i>
+                            <span class="badge">' . $deletion_count . '</span>
                         </button>
-                        <ul class="dropdown-menu-v2" role="menu">
-                            <li class="active">
-                                <a href="#">New Post</a>
+                        <ul class="dropdown-menu-v2">
+                            <li class="external">
+                                <h3>' . $deletion_count . ' data deletion request(s)</h3>
+                                <a href="data_deletion_requests.php">view all</a>
                             </li>
                             <li>
-                                <a href="#">New Comment</a>
-                            </li>
-                            <li>
-                                <a href="#">Share</a>
-                            </li>
-                            <li class="divider"></li>
-                            <li>
-                                <a href="#">Comments
-                                    <span class="badge badge-success">4</span>
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#">Feedbacks
-                                    <span class="badge badge-danger">2</span>
-                                </a>
+                                <ul class="dropdown-menu-list scroller" style="height: 250px; padding: 0;" data-handle-color="#637283">
+                                    ' . $deletion_list_html . '
+                                </ul>
                             </li>
                         </ul>
                     </div>
-                    <!-- END GROUP INFORMATION -->
+                    <!-- END DATA DELETION ALERTS -->';
+}
+
+$top_header .= '
                     <!-- BEGIN USER PROFILE -->
                     <div class="btn-group-img btn-group">
                         <button type="button" class="btn btn-sm md-skip dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
@@ -255,9 +280,11 @@ $top_header .= '</span>
 
 // Detectar página actual para activar pestaña del menú
 $current_page = basename($_SERVER['PHP_SELF']);
-$admin_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','informes.php','service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','email_settings.php','booking_requests.php','medtravel_services.php','roles.php');
+$admin_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php');
+$admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','informes.php','email_settings.php','data_deletion_requests.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
 $is_admin_page = in_array($current_page, $admin_pages);
+$is_admin_section = in_array($current_page, $admin_section_pages);
 $is_site_page = $es_admin && in_array($current_page, $site_pages);
 $is_dashboard = ($current_page === 'index.php');
 
@@ -357,7 +384,7 @@ $top_header_2 .=           '</ul>
 
 // ADMINISTRACIÓN (solo admins)
 if ($es_admin) {
-    $top_header_2 .=           '<li class="dropdown dropdown-fw dropdown-fw-disabled">
+    $top_header_2 .=           '<li class="dropdown dropdown-fw dropdown-fw-disabled '.($is_admin_section ? 'active open' : '').'">
                                 <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
                                     <i class="icon-settings"></i> Administración </a>
                                 <ul class="dropdown-menu dropdown-menu-fw">
@@ -379,15 +406,19 @@ if ($es_admin) {
                                             </li>
                                         </ul>
                                     </li>
-                                    <li class="'.($current_page === 'informes.php' ? 'active' : '').'">
-                                        <a href="./informes.php">
-                                            <i class="icon-bar-chart"></i> Informes </a>
-                                    </li>
-                                    <li class="'.($current_page === 'email_settings.php' ? 'active' : '').'">
-                                        <a href="./email_settings.php">
-                                            <i class="icon-envelope"></i> Configuración Email </a>
-                                    </li>
-                                </ul>
+    <li class="'.($current_page === 'informes.php' ? 'active' : '').'">
+        <a href="./informes.php">
+            <i class="icon-bar-chart"></i> Informes </a>
+    </li>
+    <li class="'.($current_page === 'data_deletion_requests.php' ? 'active' : '').'">
+        <a href="./data_deletion_requests.php">
+            <i class="icon-trash"></i> Solicitudes de eliminación </a>
+    </li>
+    <li class="'.($current_page === 'email_settings.php' ? 'active' : '').'">
+        <a href="./email_settings.php">
+            <i class="icon-envelope"></i> Configuración Email </a>
+    </li>
+</ul>
                             </li>';
 
     // CONTENIDO DEL SITIO

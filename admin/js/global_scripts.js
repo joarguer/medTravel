@@ -32,4 +32,17 @@
     };
 
     document.querySelectorAll('.navbar-nav').forEach(activateMenu);
+
+    // Ensure dropdowns work even if hover plugin fails
+    if (window.jQuery) {
+        window.jQuery(function($){
+            $('.dropdown-toggle').dropdown();
+            // Responsive tables: wrap any table not already in a .table-responsive
+            $('.page-content table.table').each(function(){
+                if ($(this).closest('.table-responsive').length === 0) {
+                    $(this).wrap('<div class="table-responsive"></div>');
+                }
+            });
+        });
+    }
 })();
