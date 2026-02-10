@@ -404,7 +404,7 @@ $script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" t
                     }, 1500);
                 }
             }
-            
+                
             (function(d,t) {
                 var BASE_URL="https://app.conectarbot.com";
                 var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
@@ -413,7 +413,7 @@ $script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" t
                 s.parentNode.insertBefore(g,s);
                 g.onload=function(){
                 window.chatwootSDK.run({
-                    websiteToken: \'gTx6gMFvwxANw2toFVHenzse\',
+                    websiteToken: \'3htHsJ7ig63EHraeYDRqgRCk\',
                     baseUrl: BASE_URL
                 })
                 }
