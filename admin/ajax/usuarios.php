@@ -26,7 +26,7 @@ function json_err($msg, $code = 400) {
 }
 
 function can_manage_users() {
-    return user_can(PERM_USERS_MANAGE) || user_can('users.edit') || user_can('users.create');
+    return is_role_admin_session() || user_can(PERM_USERS_MANAGE) || user_can('users.manage') || user_can('users.edit') || user_can('users.create');
 }
 
 function table_exists($conexion, $table) {

@@ -4,9 +4,11 @@ $(function(){
     var providers = [];
     var usersData = [];
     var filterKind = '';
-    var complementaryRoleId = parseInt((window.USERS_CTX && window.USERS_CTX.complementaryRoleId) || 12, 10);
-    var providerRoleId = parseInt((window.USERS_CTX && window.USERS_CTX.providerRoleId) || 4, 10);
-    var adminRoleId = parseInt((window.USERS_CTX && window.USERS_CTX.adminRoleId) || 1, 10);
+
+    var ctx = window.USERS_CTX || {};
+    var canEdit = !!ctx.canEdit || !!ctx.isAdmin;
+    var complementaryRoleId = parseInt(ctx.complementaryRoleId || 12, 10);
+    var providerRoleId = parseInt(ctx.providerRoleId || 4, 10);
 
     function notifyError(msg){
         if(window.toastr){ toastr.error(msg); return; }
@@ -39,6 +41,71 @@ $(function(){
         }, 'json');
     }
 
+    function roleSelect(currentId){
+        var sel = $('<select class="form-control input-sm role-select">');
+        roles.forEach(function(r){
+            var id = parseInt(r.id, 10);
+            var name = r.name || ('Rol ' + id);
+            var opt = $('<option>').val(id).text(name);
+            if(id === parseInt(currentId || 0, 10)) opt.attr('selected', 'selected');
+            sel.append(opt);
+        });
+        return sel;
+    }
+
+    function serviceProviderSelect(currentId){
+        var sel = $('<select class="form-control input-sm service-provider-select" style="margin-top:6px;">');
+        sel.append($('<option>').val('').text('Seleccione proveedor complementario'));
+        serviceProviders.forEach(function(sp){
+            var id = parseInt(sp.id, 10);
+            var name = sp.provider_name || ('Proveedor ' + id);
+            var opt = $('<option>').val(id).text(name);
+            if(id === parseInt(currentId || 0, 10)) opt.attr('selected','selected');
+            sel.append(opt);
+        });
+        return sel;
+    }
+
+    function toggleInlineServiceProviderControl(tr){
+        var roleId = parseInt(tr.find('.role-select').val() || 0, 10);
+        var sel = tr.find('.service-provider-select');
+        if(!sel.length) return;
+
+        if(roleId === complementaryRoleId){
+            sel.show().prop('disabled', false);
+        } else {
+            sel.hide().prop('disabled', true).val('');
+        }
+    }
+
+    function updateUserRoleInline(tr){
+        var id = parseInt(tr.data('id') || 0, 10);
+        var roleId = parseInt(tr.find('.role-select').val() || 0, 10);
+        if(id <= 0 || roleId <= 0) return;
+
+        var payload = { action:'update_role', id:id, role_id:roleId };
+        if(roleId === complementaryRoleId){
+            var serviceProviderId = parseInt(tr.find('.service-provider-select').val() || 0, 10);
+            if(!serviceProviderId){
+                notifyError('Selecciona un proveedor complementario para guardar el rol');
+                return;
+            }
+            payload.service_provider_id = serviceProviderId;
+        }
+
+        $.post('ajax/usuarios.php', payload, function(res){
+            if(res && res.success){
+                loadUsers();
+            } else {
+                notifyError((res && res.error) ? res.error : 'Error al actualizar rol');
+                loadUsers();
+            }
+        }, 'json').fail(function(){
+            notifyError('Error de conexión al actualizar rol');
+            loadUsers();
+        });
+    }
+
     function renderTable(data){
         if(filterKind){
             data = data.filter(function(u){
@@ -55,7 +122,15 @@ $(function(){
             tr.append($('<td>').text(u.usuario || ''));
             tr.append($('<td>').text(u.nombre || ''));
             tr.append($('<td>').text(u.email || ''));
-            tr.append($('<td>').text(u.role_name || ''));
+
+            var roleCell = $('<td>');
+            if(canEdit){
+                roleCell.append(roleSelect(u.role_id || 0));
+                roleCell.append(serviceProviderSelect(u.service_provider_id || ''));
+            } else {
+                roleCell.text(u.role_name || '');
+            }
+            tr.append(roleCell);
 
             var provText = u.provider || u.empresa || '';
             if(u.provider_kind){ provText += ' [' + u.provider_kind + ']'; }
@@ -64,11 +139,16 @@ $(function(){
             tr.append($('<td>').text(u.activo === 1 ? 'Activo' : 'Inactivo'));
 
             var actions = $('<td>');
-            if(window.USERS_CTX.canEdit){
-                actions.append('<button type="button" class="btn btn-xs btn-primary edit-user">Editar</button>');
+            if(canEdit){
+                actions.append('<button type="button" class="btn btn-xs btn-primary edit-user" style="margin-right:6px;">Editar</button>');
+                actions.append('<button type="button" class="btn btn-xs btn-default toggle-active">' + (u.activo === 1 ? 'Desactivar' : 'Activar') + '</button>');
             }
             tr.append(actions);
             tbody.append(tr);
+
+            if(canEdit){
+                toggleInlineServiceProviderControl(tr);
+            }
         });
     }
 
@@ -84,8 +164,10 @@ $(function(){
         var sel = $('#edit-role-id').empty();
         sel.append($('<option>').val('').text('Seleccione rol'));
         roles.forEach(function(r){
-            var opt = $('<option>').val(r.id).text(r.name || ('Rol ' + r.id));
-            if(parseInt(r.id, 10) === parseInt(selected || 0, 10)) opt.prop('selected', true);
+            var id = parseInt(r.id, 10);
+            var name = r.name || ('Rol ' + id);
+            var opt = $('<option>').val(id).text(name);
+            if(id === parseInt(selected || 0, 10)) opt.prop('selected', true);
             sel.append(opt);
         });
     }
@@ -94,8 +176,10 @@ $(function(){
         var sel = $('#edit-provider-id').empty();
         sel.append($('<option>').val('').text('Seleccione prestador médico'));
         providers.forEach(function(p){
-            var opt = $('<option>').val(p.id).text(p.name || ('Prestador ' + p.id));
-            if(parseInt(p.id, 10) === parseInt(selected || 0, 10)) opt.prop('selected', true);
+            var id = parseInt(p.id, 10);
+            var name = p.name || ('Prestador ' + id);
+            var opt = $('<option>').val(id).text(name);
+            if(id === parseInt(selected || 0, 10)) opt.prop('selected', true);
             sel.append(opt);
         });
     }
@@ -104,8 +188,10 @@ $(function(){
         var sel = $('#edit-service-provider-id').empty();
         sel.append($('<option>').val('').text('Seleccione proveedor complementario'));
         serviceProviders.forEach(function(sp){
-            var opt = $('<option>').val(sp.id).text(sp.provider_name || ('Proveedor ' + sp.id));
-            if(parseInt(sp.id, 10) === parseInt(selected || 0, 10)) opt.prop('selected', true);
+            var id = parseInt(sp.id, 10);
+            var name = sp.provider_name || ('Proveedor ' + id);
+            var opt = $('<option>').val(id).text(name);
+            if(id === parseInt(selected || 0, 10)) opt.prop('selected', true);
             sel.append(opt);
         });
     }
@@ -220,6 +306,38 @@ $(function(){
     $('#filter-kind-users').on('change', function(){
         filterKind = $(this).val();
         renderTable(usersData);
+    });
+
+    $('#users-table').on('change', '.role-select', function(){
+        var tr = $(this).closest('tr');
+        toggleInlineServiceProviderControl(tr);
+        updateUserRoleInline(tr);
+    });
+
+    $('#users-table').on('change', '.service-provider-select', function(){
+        var tr = $(this).closest('tr');
+        var roleId = parseInt(tr.find('.role-select').val() || 0, 10);
+        if(roleId === complementaryRoleId){
+            updateUserRoleInline(tr);
+        }
+    });
+
+    $('#users-table').on('click', '.toggle-active', function(){
+        var tr = $(this).closest('tr');
+        var id = parseInt(tr.data('id') || 0, 10);
+        if(id <= 0) return;
+        var activeText = $.trim(tr.find('td').eq(6).text()).toLowerCase();
+        var nextVal = activeText === 'activo' ? 0 : 1;
+
+        $.post('ajax/usuarios.php', {action:'toggle_active', id:id, val:nextVal}, function(res){
+            if(res && res.success){
+                loadUsers();
+            } else {
+                notifyError((res && res.error) ? res.error : 'Error al cambiar estado');
+            }
+        }, 'json').fail(function(){
+            notifyError('Error de conexión al cambiar estado');
+        });
     });
 
     $('#users-table').on('click', '.edit-user', function(){

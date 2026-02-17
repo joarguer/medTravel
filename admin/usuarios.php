@@ -1,6 +1,7 @@
 <?php
 include('include/include.php');
-$can_manage_users = user_can(PERM_USERS_MANAGE) || user_can('users.edit') || user_can('users.create');
+$is_admin = is_role_admin_session();
+$can_manage_users = $is_admin || user_can(PERM_USERS_MANAGE) || user_can('users.manage') || user_can('users.edit') || user_can('users.create');
 if (!user_can('users.view') && !$can_manage_users) {
     header('HTTP/1.1 403 Forbidden');
     echo 'Acceso denegado';
@@ -71,6 +72,11 @@ if (!user_can('users.view') && !$can_manage_users) {
                                     </thead>
                                     <tbody></tbody>
                                 </table>
+                                <?php if ($can_manage_users): ?>
+                                <div id="users-edit-btn-template" class="hide">
+                                    <button type="button" class="btn btn-xs btn-primary edit-user">Editar</button>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -135,11 +141,13 @@ if (!user_can('users.view') && !$can_manage_users) {
     <script>
         window.USERS_CTX = {
             canEdit: <?php echo $can_manage_users ? 'true' : 'false'; ?>,
+            isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
             complementaryRoleId: <?php echo ROLE_PROVIDER_ADMIN; ?>,
             providerRoleId: <?php echo ROLE_PROVIDER; ?>,
             adminRoleId: <?php echo ROLE_ADMIN; ?>
         };
     </script>
-    <script src="js/usuarios.js"></script>
+    <!-- Root cause note: force-refresh usuarios.js to avoid stale cached legacy script (inline-only actions). -->
+    <script src="js/usuarios.js?v=<?php echo @filemtime(__DIR__ . '/js/usuarios.js'); ?>"></script>
 </body>
 </html>
