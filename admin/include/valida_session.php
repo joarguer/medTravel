@@ -68,6 +68,7 @@ $required_permission = get_required_permission_for_script($current);
 if ($required_permission !== null) {
     if (!function_exists('user_can') || !user_can($required_permission)) {
         http_response_code(403);
+        header('Content-Type: text/html; charset=utf-8');
         require __DIR__ . '/../error_403.php';
         exit();
     }
