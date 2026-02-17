@@ -322,6 +322,9 @@ if ($es_admin) {
                                             <li class="'.($current_page === 'provider_verification.php' ? 'active' : '').'">
                                                 <a href="./provider_verification.php">Verificación Prestadores</a>
                                             </li>
+                                            <li class="'.($current_page === 'provider_offers.php' ? 'active' : '').'">
+                                                <a href="./provider_offers.php">Mis Ofertas</a>
+                                            </li>
                                         </ul>
                                     </li>';
 
@@ -368,21 +371,15 @@ if ($es_admin) {
                                             </li>
                                         </ul>
                                     </li>';
-}
-
-// Mis Ofertas (para prestadores y admins)
-if ($es_admin || $es_prestador) {
-    $top_header_2 .=               '<li class="'.($current_page === 'provider_offers.php' ? 'active' : '').'">
-                                        <a href="./provider_offers.php">
-                                            <i class="icon-tag"></i> Mis Ofertas </a>
-                                    </li>';
-}
-
-// Blog (admins y prestadores)
-if ($es_admin || $es_prestador) {
-    $top_header_2 .=               '<li class="'.($current_page === 'blog_edit.php' ? 'active' : '').'">
-                                        <a href="./blog_edit.php">
-                                            <i class="icon-note"></i> Blog </a>
+} elseif ($es_prestador) {
+    $top_header_2 .=               '<li class="dropdown more-dropdown-sub">
+                                        <a href="javascript:;">
+                                            <i class="icon-heart"></i> Servicios Médicos </a>
+                                        <ul class="dropdown-menu">
+                                            <li class="'.($current_page === 'provider_offers.php' ? 'active' : '').'">
+                                                <a href="./provider_offers.php">Mis Ofertas</a>
+                                            </li>
+                                        </ul>
                                     </li>';
 }
 
