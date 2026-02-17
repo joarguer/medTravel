@@ -3,7 +3,34 @@ if (!defined('RENDERING_FORBIDDEN_PAGE')) {
     define('RENDERING_FORBIDDEN_PAGE', true);
 }
 http_response_code(403);
-include('include/include.php');
+
+if (!isset($title) || $title === '') {
+    $title = 'MedTravel';
+}
+if (!isset($top_header)) {
+    $top_header = '';
+}
+if (!isset($top_header_2)) {
+    $top_header_2 = '';
+}
+if (!isset($footer)) {
+    $footer = '';
+}
+if (!isset($sider_bar)) {
+    $sider_bar = '';
+}
+if (!isset($global_first_style)) {
+    $global_first_style = '';
+}
+if (!isset($theme_global_style)) {
+    $theme_global_style = '';
+}
+if (!isset($theme_layout_style)) {
+    $theme_layout_style = '';
+}
+if (!isset($theme_layout_script)) {
+    $theme_layout_script = '';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">

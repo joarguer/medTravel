@@ -63,16 +63,52 @@ function get_required_permission_for_script($script_name) {
     return isset($map[$script_name]) ? $map[$script_name] : null;
 }
 
+function render_forbidden_page() {
+    $errorPage = __DIR__ . '/../error_403.php';
+
+    header_remove('Content-Type');
+    header('Content-Type: text/html; charset=utf-8');
+
+    if (!defined('RENDERING_FORBIDDEN_PAGE')) {
+        define('RENDERING_FORBIDDEN_PAGE', true);
+    }
+
+    if (!isset($GLOBALS['top_header_2'])) {
+        include __DIR__ . '/include.php';
+    }
+
+    if (is_file($errorPage)) {
+        ob_start();
+        try {
+            require $errorPage;
+        } catch (Throwable $e) {
+            ob_end_clean();
+            error_log('render_forbidden_page error: ' . $e->getMessage());
+        }
+
+        $html = ob_get_clean();
+        if (is_string($html) && trim($html) !== '') {
+            echo $html;
+            return;
+        }
+    }
+
+    // Fallback defensivo: nunca responder en blanco.
+    echo '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>403</title>'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1"></head><body>'
+        . '<h1>403 - Acceso Denegado</h1>'
+        . '<p>No tienes permisos para acceder a este módulo.</p>'
+        . '<p><a href="index.php">Ir al Dashboard</a></p>'
+        . '</body></html>';
+}
+
 $current = basename($_SERVER['PHP_SELF']);
 $required_permission = get_required_permission_for_script($current);
 
 if ($required_permission !== null) {
     if (!function_exists('user_can') || !user_can($required_permission)) {
         http_response_code(403);
-        if (!defined('RENDERING_FORBIDDEN_PAGE')) {
-            define('RENDERING_FORBIDDEN_PAGE', true);
-        }
-        require_once __DIR__ . '/../error_403.php';
+        render_forbidden_page();
         exit();
     }
 }
