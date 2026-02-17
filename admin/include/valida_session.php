@@ -8,6 +8,11 @@ if (!isset($_SESSION["usuario"]) || $_SESSION["usuario"] == "") {
     exit();
 }
 
+// Permite renderizar la pantalla 403 usando el layout compartido sin re-evaluar permisos.
+if (defined('RENDERING_FORBIDDEN_PAGE') && RENDERING_FORBIDDEN_PAGE === true) {
+    return;
+}
+
 if (!function_exists('user_can')) {
     require_once __DIR__ . '/roles.php';
 }
@@ -64,8 +69,10 @@ $required_permission = get_required_permission_for_script($current);
 if ($required_permission !== null) {
     if (!function_exists('user_can') || !user_can($required_permission)) {
         http_response_code(403);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo '403 Forbidden';
+        if (!defined('RENDERING_FORBIDDEN_PAGE')) {
+            define('RENDERING_FORBIDDEN_PAGE', true);
+        }
+        require_once __DIR__ . '/../error_403.php';
         exit();
     }
 }
