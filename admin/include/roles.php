@@ -93,7 +93,6 @@ function get_permission_alias_map() {
         PERM_PROVIDERS_COMPLEMENTARY_MANAGE => ['providers.partner.edit'],
         PERM_BOOKING_VIEW => ['reports.view'],
         PERM_BOOKING_MANAGE => ['reports.view'],
-        PERM_PACKAGES_MANAGE => ['providers.partner.edit'],
         PERM_USERS_MANAGE => ['users.edit', 'users.create'],
         PERM_REPORTS_VIEW => ['reports.view'],
         PERM_SETTINGS_MANAGE => ['roles.manage'],
@@ -107,7 +106,6 @@ function get_role_fallback_permissions($role_id) {
             return [
                 PERM_SERVICES_COMPLEMENTARY_MANAGE,
                 PERM_PROVIDERS_COMPLEMENTARY_MANAGE,
-                PERM_PACKAGES_MANAGE,
                 PERM_BOOKING_VIEW,
                 'users.view',
                 'users.create',
