@@ -215,6 +215,12 @@ if (mysqli_num_rows($busca_usua) > 0) {
                 }
             }
         }
+        // Ownership complementario: service_provider_id -> service_providers.id
+        if (!empty($fil['service_provider_id']) && (int)$fil['service_provider_id'] > 0) {
+            $_SESSION['service_provider_id'] = (int)$fil['service_provider_id'];
+        } else {
+            if (isset($_SESSION['service_provider_id'])) unset($_SESSION['service_provider_id']);
+        }
         $_SESSION["nombre_usuario"]	=   v($fil,'nombre','');
         $_SESSION["usuario"]		=   v($fil,'usuario','');
         $_SESSION["token"]		    =   v($fil,'token','');

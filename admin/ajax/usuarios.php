@@ -34,11 +34,31 @@ switch($action){
     case 'list':
         $rows = [];
         $roles = fetch_roles($conexion);
-        $sql = "SELECT u.id, u.usuario, u.nombre, u.email, u.role_id, u.rol, u.provider_id, u.empresa, u.activo, p.name AS provider_name, p.kind AS provider_kind FROM usuarios u LEFT JOIN providers p ON p.id = u.provider_id ORDER BY u.id DESC";
+        $has_service_provider_id = false;
+        $colRes = mysqli_query($conexion, "SHOW COLUMNS FROM usuarios LIKE 'service_provider_id'");
+        if ($colRes && mysqli_num_rows($colRes) > 0) $has_service_provider_id = true;
+        if ($has_service_provider_id) {
+            $sql = "SELECT u.id, u.usuario, u.nombre, u.email, u.role_id, u.rol, u.provider_id, u.service_provider_id, u.empresa, u.activo, p.name AS provider_name, p.kind AS provider_kind, sp.provider_name AS service_provider_name
+                    FROM usuarios u
+                    LEFT JOIN providers p ON p.id = u.provider_id
+                    LEFT JOIN service_providers sp ON sp.id = u.service_provider_id
+                    ORDER BY u.id DESC";
+        } else {
+            $sql = "SELECT u.id, u.usuario, u.nombre, u.email, u.role_id, u.rol, u.provider_id, u.empresa, u.activo, p.name AS provider_name, p.kind AS provider_kind
+                    FROM usuarios u
+                    LEFT JOIN providers p ON p.id = u.provider_id
+                    ORDER BY u.id DESC";
+        }
         $res = mysqli_query($conexion, $sql);
         if($res){
             while($r = mysqli_fetch_assoc($res)){
                 $role_id = $r['role_id'] !== null ? intval($r['role_id']) : normalize_role_value($r['rol']);
+                $provider_name = $r['provider_name'] ?? '';
+                $provider_kind = $r['provider_kind'] ?? '';
+                if ($has_service_provider_id && !empty($r['service_provider_name'])) {
+                    $provider_name = $r['service_provider_name'];
+                    $provider_kind = 'partner';
+                }
                 $rows[] = [
                     'id' => intval($r['id']),
                     'usuario' => $r['usuario'],
@@ -46,8 +66,10 @@ switch($action){
                     'email' => $r['email'],
                     'role_id' => $role_id,
                     'role_name' => isset($roles[$role_id]) ? $roles[$role_id] : ($r['rol'] ?: ''),
-                    'provider' => $r['provider_name'],
-                    'provider_kind' => $r['provider_kind'],
+                    'provider' => $provider_name,
+                    'provider_kind' => $provider_kind,
+                    'provider_id' => isset($r['provider_id']) ? intval($r['provider_id']) : 0,
+                    'service_provider_id' => ($has_service_provider_id && isset($r['service_provider_id']) && $r['service_provider_id'] !== null) ? intval($r['service_provider_id']) : null,
                     'empresa' => $r['empresa'],
                     'activo' => intval($r['activo'])
                 ];

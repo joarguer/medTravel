@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nombre VARCHAR(150) DEFAULT NULL,
   rol VARCHAR(20) NOT NULL DEFAULT 'prestador',
   provider_id INT DEFAULT NULL,
+  service_provider_id INT DEFAULT NULL,
+  KEY idx_usuarios_service_provider_id (service_provider_id),
   CONSTRAINT fk_usuario_provider FOREIGN KEY (provider_id) REFERENCES providers(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

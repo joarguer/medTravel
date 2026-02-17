@@ -24,22 +24,46 @@ $(document).ready(function(){
     function applyRoleVisibility(){
         let ctx = window.CREAR_USUARIO_CTX || {};
         let rol = $('#user_role').val();
-        let isProvider = rol === '4';
+        let providerRole = String(ctx.roleProvider || 4);
+        let complementaryRole = String(ctx.roleComplementary || 12);
+        let isProvider = rol === providerRole;
+        let isComplementary = rol === complementaryRole;
         if (isProvider) {
             $('#div-provider').show();
             $('#provider_id').attr('required', true);
+            $('#div-service-provider').hide();
+            $('#service_provider_id').attr('required', false).val('');
+            $('#div-empresa').hide();
+        } else if (isComplementary) {
+            $('#div-provider').hide();
+            $('#provider_id').attr('required', false).val('');
+            $('#div-service-provider').show();
+            $('#service_provider_id').attr('required', true);
             $('#div-empresa').hide();
         } else {
             $('#div-provider').hide();
             $('#provider_id').attr('required', false).val('');
+            $('#div-service-provider').hide();
+            $('#service_provider_id').attr('required', false).val('');
             $('#div-empresa').show();
         }
         if (!ctx.isAdmin && ctx.providerId) {
             // For provider self-management, lock to their provider
-            $('#user_role').val('4');
+            $('#user_role').val(providerRole);
             $('#div-provider').show();
             $('#provider_id').val(ctx.providerId);
             $('#provider_id').attr('required', true).prop('disabled', true);
+            $('#div-service-provider').hide();
+            $('#service_provider_id').attr('required', false).val('');
+            $('#div-empresa').hide();
+        } else if (!ctx.isAdmin && ctx.serviceProviderId) {
+            // Complementary provider scope
+            $('#user_role').val(complementaryRole);
+            $('#div-provider').hide();
+            $('#provider_id').attr('required', false).val('');
+            $('#div-service-provider').show();
+            $('#service_provider_id').val(ctx.serviceProviderId);
+            $('#service_provider_id').attr('required', true).prop('disabled', true);
             $('#div-empresa').hide();
         }
     }
@@ -71,19 +95,28 @@ $('#btn-crea-usuario').click(function(e){
     //obtenemos los valores del formulario serialize
     var datos = $("#form-crear-usuario").serialize();
     let rolVal = $('#user_role').val();
+    let ctx = window.CREAR_USUARIO_CTX || {};
+    let providerRole = String(ctx.roleProvider || 4);
+    let complementaryRole = String(ctx.roleComplementary || 12);
     let rasocial = '';
-    if (rolVal === '4') {
+    if (rolVal === providerRole) {
         rasocial = $('#provider_id').find('option:selected').text();
+    } else if (rolVal === complementaryRole) {
+        rasocial = $('#service_provider_id').find('option:selected').text();
     } else {
         rasocial = $('#empresa').find('option:selected').text();
     }
     // limpiar empresa si rol proveedor
-    if (rolVal === '4') {
+    if (rolVal === providerRole || rolVal === complementaryRole) {
         datos = datos.replace(/(^|&)empresa=[^&]*/,'$1empresa=');
     }
     // asegurar provider_id vacío cuando no es proveedor
-    if (rolVal !== '4') {
+    if (rolVal !== providerRole) {
         datos = datos.replace(/(^|&)provider_id=[^&]*/,'$1provider_id=');
+    }
+    // asegurar service_provider_id vacío cuando no es rol complementario
+    if (rolVal !== complementaryRole) {
+        datos = datos.replace(/(^|&)service_provider_id=[^&]*/,'$1service_provider_id=');
     }
     //agregamos parametros
     datos += "&tipo=crear_usuario";

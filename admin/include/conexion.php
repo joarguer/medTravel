@@ -137,7 +137,27 @@ function require_login_ajax(){
 		exit;
 	}
 
-	// hydrate provider_id in session if not present
+	// hydrate provider_id/service_provider_id in session if not present
+	if ($conexion && (empty($_SESSION['provider_id']) || empty($_SESSION['service_provider_id']))) {
+		if ($ustmt = mysqli_prepare($conexion, "SELECT provider_id, service_provider_id FROM usuarios WHERE id = ? LIMIT 1")) {
+			$uid = (int) $user_id;
+			mysqli_stmt_bind_param($ustmt, 'i', $uid);
+			if (mysqli_stmt_execute($ustmt)) {
+				mysqli_stmt_bind_result($ustmt, $db_provider_id, $db_service_provider_id);
+				if (mysqli_stmt_fetch($ustmt)) {
+					if (empty($_SESSION['provider_id']) && !empty($db_provider_id)) {
+						$_SESSION['provider_id'] = (int) $db_provider_id;
+					}
+					if (empty($_SESSION['service_provider_id']) && !empty($db_service_provider_id)) {
+						$_SESSION['service_provider_id'] = (int) $db_service_provider_id;
+					}
+				}
+			}
+			mysqli_stmt_close($ustmt);
+		}
+	}
+
+	// backward compatibility: old mapping table for medical providers
 	if (empty($_SESSION['provider_id']) && $conexion) {
 		if ($pstmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1")) {
 			$uid = (int) $user_id;

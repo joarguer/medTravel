@@ -60,6 +60,44 @@ function current_role_id(){
     return null;
 }
 
+function role_requires_service_provider_scope($role_id = null, $role_text = null){
+    if ($role_id === null) {
+        $role_id = current_role_id();
+    }
+    if ($role_text === null && isset($_SESSION['rol'])) {
+        $role_text = (string)$_SESSION['rol'];
+    }
+
+    if ($role_id !== null) {
+        if (intval($role_id) === ROLE_PROVIDER_ADMIN) {
+            return true;
+        }
+        $perms = get_role_permissions(intval($role_id));
+        if (in_array('providers.partner.view', $perms, true) || in_array('providers.partner.edit', $perms, true)) {
+            return true;
+        }
+    }
+
+    $txt = strtolower(trim((string)$role_text));
+    if ($txt !== '' && (strpos($txt, 'partner') !== false || strpos($txt, 'complement') !== false)) {
+        return true;
+    }
+    return false;
+}
+
+function current_service_provider_id(){
+    if (!empty($_SESSION['service_provider_id'])) {
+        return intval($_SESSION['service_provider_id']);
+    }
+    return 0;
+}
+
+function is_complementary_user_session(){
+    if (is_role_admin_session()) return false;
+    if (current_service_provider_id() > 0) return true;
+    return role_requires_service_provider_scope();
+}
+
 function get_role_permissions($role_id){
     static $cache = [];
     if($role_id === null) return [];

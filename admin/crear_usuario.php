@@ -2,6 +2,7 @@
 include("include/include.php");
 $is_admin = is_role_admin_session();
 $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : null;
+$service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : null;
 $id_usuario = $_SESSION['id_usuario'];
 $busca = mysqli_query($conexion,"SELECT * FROM usuarios WHERE id = '".$id_usuario."'");
 $rst   = mysqli_fetch_array($busca);
@@ -31,7 +32,10 @@ $rst   = mysqli_fetch_array($busca);
         <script>
             window.CREAR_USUARIO_CTX = {
                 isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
-                providerId: <?php echo $provider_session_id ? $provider_session_id : 'null'; ?>
+                providerId: <?php echo $provider_session_id ? $provider_session_id : 'null'; ?>,
+                serviceProviderId: <?php echo $service_provider_session_id ? $service_provider_session_id : 'null'; ?>,
+                roleProvider: <?php echo ROLE_PROVIDER; ?>,
+                roleComplementary: <?php echo ROLE_PROVIDER_ADMIN; ?>
             };
         </script>
     </head>
@@ -114,11 +118,14 @@ $rst   = mysqli_fetch_array($busca);
                                             function toggleProviderField(){
                                                 var sel = document.getElementById('user_role');
                                                 var provDiv = document.getElementById('div-provider');
+                                                var serviceProvDiv = document.getElementById('div-service-provider');
                                                 var empDiv = document.getElementById('div-empresa');
-                                                if(!sel || !provDiv || !empDiv) return;
+                                                if(!sel || !provDiv || !serviceProvDiv || !empDiv) return;
                                                 var isProv = (sel.value == '<?php echo ROLE_PROVIDER; ?>');
+                                                var isComplementary = (sel.value == '<?php echo ROLE_PROVIDER_ADMIN; ?>');
                                                 provDiv.style.display = isProv ? '' : 'none';
-                                                empDiv.style.display = isProv ? 'none' : '';
+                                                serviceProvDiv.style.display = isComplementary ? '' : 'none';
+                                                empDiv.style.display = (isProv || isComplementary) ? 'none' : '';
                                             }
                                             document.addEventListener('DOMContentLoaded', function(){
                                                 var sel = document.getElementById('user_role');
@@ -189,6 +196,22 @@ $rst   = mysqli_fetch_array($busca);
                                                                     ?>
                                                                 </select>
                                                                 <span class="help-block">Selecciona el prestador al que se asocia este usuario (solo rol Proveedor)</span>
+                                                            </div>
+                                                            <div class="form-group" id="div-service-provider" style="display:none;">
+                                                                <label class="control-label">Proveedor Complementario <span class="required">*</span></label>
+                                                                <select id="service_provider_id" name="service_provider_id" class="form-control">
+                                                                    <option value="">-- Seleccione un proveedor complementario --</option>
+                                                                    <?php
+                                                                    $service_providers = mysqli_query($conexion, "SELECT id, provider_name, provider_type FROM service_providers WHERE is_active = 1 ORDER BY provider_name ASC");
+                                                                    if ($service_providers) {
+                                                                        while($sp = mysqli_fetch_array($service_providers)) {
+                                                                            $sp_type = !empty($sp['provider_type']) ? ' ('.ucfirst($sp['provider_type']).')' : '';
+                                                                            echo '<option value="'.$sp['id'].'">'.htmlspecialchars($sp['provider_name']).$sp_type.'</option>';
+                                                                        }
+                                                                    }
+                                                                    ?>
+                                                                </select>
+                                                                <span class="help-block">Selecciona el proveedor complementario dueño del catálogo para este usuario.</span>
                                                             </div>
                                                             <div class="form-group">
                                                                 <label class="control-label">Número Celular</label>
