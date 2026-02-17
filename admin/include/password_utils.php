@@ -49,8 +49,28 @@ if (!function_exists('verify_password')) {
         if (is_bcrypt_hash($stored)) {
             return password_verify((string)$plain, $stored);
         }
-        $expected = hash_password($plain, $token);
-        return hash_equals($stored, $expected);
+        return verify_password_legacy($plain, $token, $stored);
+    }
+}
+
+if (!function_exists('verify_password_legacy')) {
+    function verify_password_legacy($plain, $token, $stored_hash) {
+        $plain = (string)$plain;
+        $token = (string)$token;
+        $stored = (string)$stored_hash;
+        if ($stored === '') {
+            return false;
+        }
+
+        // Canonical current legacy format.
+        $calc1 = hash('sha512', $token . $plain);
+        if (hash_equals($stored, $calc1)) {
+            return true;
+        }
+
+        // Backwards compatibility with historical inverse order.
+        $calc2 = hash('sha512', $plain . $token);
+        return hash_equals($stored, $calc2);
     }
 }
 

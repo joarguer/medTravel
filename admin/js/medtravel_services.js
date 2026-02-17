@@ -3,6 +3,7 @@ var servicesTable;
 var serviceModal = $('#serviceModal');
 var serviceForm = $('#serviceForm');
 var medtravelCtx = window.MEDTRAVEL_SERVICES_CTX || {};
+var canListProviders = !!medtravelCtx.canListProviders;
 var scopedComplementaryProviderId = (medtravelCtx.isComplementary && medtravelCtx.serviceProviderId)
     ? parseInt(medtravelCtx.serviceProviderId, 10)
     : 0;
@@ -675,6 +676,11 @@ function clearServiceImage() {
 // CARGAR PROVEEDORES ACTIVOS
 // ===================================================================
 function loadProviders() {
+    if (!canListProviders) {
+        loadScopedProvider();
+        return;
+    }
+
     $.ajax({
         url: 'ajax/service_providers.php?action=list&active_only=1',
         method: 'GET',
@@ -709,6 +715,44 @@ function loadProviders() {
         },
         error: function() {
             toastr.error('Error al cargar proveedores');
+        }
+    });
+}
+
+function loadScopedProvider() {
+    if (!scopedComplementaryProviderId) {
+        return;
+    }
+
+    $.ajax({
+        url: 'ajax/service_providers.php?action=get_self',
+        method: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            var select = $('#provider_id');
+            if (response.ok && response.data) {
+                var provider = response.data;
+                var typeIcon = getProviderTypeIcon(provider.provider_type);
+                select.html(
+                    '<option value="' + provider.id + '" ' +
+                    'data-name="' + (provider.provider_name || '') + '" ' +
+                    'data-contact="' + (provider.contact_name || '') + '" ' +
+                    'data-email="' + (provider.contact_email || '') + '" ' +
+                    'data-phone="' + (provider.contact_phone || '') + '">' +
+                    typeIcon + ' ' + (provider.provider_name || ('Proveedor #' + provider.id)) +
+                    '</option>'
+                );
+            } else {
+                select.html('<option value="' + scopedComplementaryProviderId + '">Proveedor #' + scopedComplementaryProviderId + '</option>');
+            }
+            select.val(String(scopedComplementaryProviderId)).prop('disabled', true);
+            onProviderSelect();
+        },
+        error: function() {
+            var select = $('#provider_id');
+            select.html('<option value="' + scopedComplementaryProviderId + '">Proveedor #' + scopedComplementaryProviderId + '</option>');
+            select.val(String(scopedComplementaryProviderId)).prop('disabled', true);
+            onProviderSelect();
         }
     });
 }

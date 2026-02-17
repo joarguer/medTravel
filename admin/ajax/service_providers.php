@@ -5,15 +5,21 @@ require_once("../include/roles.php");
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 
-// Hardening RBAC: endpoints complementarios requieren permiso canónico explícito.
-if (!is_role_admin_session() && !user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE)) {
-    json_err('forbidden', 403);
-}
-
 $action = $_GET['action'] ?? $_POST['action'] ?? 'list';
 $isAdmin = is_role_admin_session();
 $isComplementaryUser = is_complementary_user_session();
 $serviceProviderScopeId = current_service_provider_id();
+$canGetSelfScopedProvider = (
+    $action === 'get_self' &&
+    $isComplementaryUser &&
+    $serviceProviderScopeId > 0 &&
+    user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE)
+);
+
+// Hardening RBAC: endpoints complementarios requieren permiso canónico explícito.
+if (!$isAdmin && !user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE) && !$canGetSelfScopedProvider) {
+    json_err('forbidden', 403);
+}
 
 if ($isComplementaryUser && $serviceProviderScopeId <= 0) {
     json_err('forbidden', 403);
@@ -44,6 +50,9 @@ switch($action) {
         ensure_edit_permission();
         toggleStatus();
         break;
+    case 'get_self':
+        getSelfProvider();
+        break;
     default:
         json_err('invalid_action');
 }
@@ -61,13 +70,13 @@ function json_err($message, $status = 400) {
 
 function ensure_view_permission() {
     if (is_role_admin_session()) return;
-    if (user_can('providers.partner.view') || user_can('providers.view')) return;
+    if (user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE)) return;
     json_err('forbidden', 403);
 }
 
 function ensure_edit_permission() {
     if (is_role_admin_session()) return;
-    if (user_can('providers.partner.edit') || user_can('providers.edit')) return;
+    if (user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE)) return;
     json_err('forbidden', 403);
 }
 
@@ -177,6 +186,32 @@ function listProviders() {
     mysqli_stmt_close($stmt);
 
     json_ok(['data' => $providers]);
+}
+
+function getSelfProvider() {
+    global $conexion;
+    $scopeId = current_scope_id();
+    if ($scopeId <= 0) {
+        json_err('forbidden', 403);
+    }
+
+    $stmt = mysqli_prepare($conexion, "SELECT * FROM service_providers WHERE id = ? LIMIT 1");
+    if (!$stmt) json_err('db_prepare_error');
+    mysqli_stmt_bind_param($stmt, 'i', $scopeId);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        json_err('db_error: ' . $err);
+    }
+    $result = mysqli_stmt_get_result($stmt);
+    $provider = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+
+    if (!$provider) {
+        json_err('not_found', 404);
+    }
+
+    json_ok(['data' => $provider]);
 }
 
 function getProvider() {

@@ -97,11 +97,11 @@ function get_permission_alias_map() {
     // Bridge entre permisos canónicos nuevos y slugs legacy existentes en DB.
     return [
         PERM_SERVICES_MEDICAL_MANAGE => ['offers.manage', 'providers.medical.edit', 'providers.edit'],
-        // Endurecer aislamiento: no heredar acceso complementario desde providers.edit (dominio médico legacy).
-        PERM_SERVICES_COMPLEMENTARY_MANAGE => ['providers.partner.edit'],
+        // Complementarios: usar permiso canónico, sin alias legacy inseguros.
+        PERM_SERVICES_COMPLEMENTARY_MANAGE => [],
         PERM_PROVIDERS_MEDICAL_MANAGE => ['providers.medical.edit', 'providers.edit'],
-        // Endurecer aislamiento: permisos complementarios solo por slugs partner explícitos.
-        PERM_PROVIDERS_COMPLEMENTARY_MANAGE => ['providers.partner.edit'],
+        // Complementarios: usar permiso canónico, sin alias legacy inseguros.
+        PERM_PROVIDERS_COMPLEMENTARY_MANAGE => [],
         PERM_BOOKING_VIEW => ['reports.view'],
         PERM_BOOKING_MANAGE => ['reports.view'],
         PERM_USERS_MANAGE => ['users.edit', 'users.create'],
@@ -116,7 +116,6 @@ function get_role_fallback_permissions($role_id) {
         case ROLE_COMPLEMENTARY_ADMIN:
             return [
                 PERM_SERVICES_COMPLEMENTARY_MANAGE,
-                PERM_PROVIDERS_COMPLEMENTARY_MANAGE,
                 PERM_BOOKING_VIEW,
                 'users.view',
                 'users.create',
@@ -233,6 +232,12 @@ function user_can($permission_slug){
     if(is_role_admin_session()) return true; // admin principal tiene todo
     $rid = current_role_id();
     if($rid === null) return false;
+
+    // Hardening: complementary_admin no administra catálogo de proveedores complementarios.
+    if (intval($rid) === ROLE_COMPLEMENTARY_ADMIN && $permission_slug === PERM_PROVIDERS_COMPLEMENTARY_MANAGE) {
+        return false;
+    }
+
     $perms = get_role_permissions($rid);
     if (permission_match_in_list($permission_slug, $perms)) return true;
 

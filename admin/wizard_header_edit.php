@@ -107,6 +107,8 @@ $rst   = mysqli_fetch_array($busca);
             <?php echo $footer;?>
         </div>
 
+        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <?php echo $theme_global_js;?>
         <script src="../../assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>

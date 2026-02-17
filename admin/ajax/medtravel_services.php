@@ -79,13 +79,13 @@ function json_err($message, $status = 400) {
 
 function ensure_view_permission() {
     if (is_role_admin_session()) return;
-    if (user_can('providers.partner.view') || user_can('providers.view')) return;
+    if (user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE)) return;
     json_err('forbidden', 403);
 }
 
 function ensure_edit_permission() {
     if (is_role_admin_session()) return;
-    if (user_can('providers.partner.edit') || user_can('providers.edit')) return;
+    if (user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE)) return;
     json_err('forbidden', 403);
 }
 

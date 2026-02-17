@@ -94,8 +94,33 @@ function auth_log_reason($reason, $userRow = array()) {
     auth_dev_log("reason={$reason} user_id={$userId} role_id={$roleId} provider_id={$providerId} service_provider_id={$serviceProviderId}");
 }
 
-function login_redirect_error($reason, $legacyParams = array(), $userRow = array()) {
+function login_is_debug_mode() {
+    return isset($_GET['debug']) && (string)$_GET['debug'] === '1';
+}
+
+function login_debug_response($ok, $reason, $userRow = array(), $extra = array()) {
+    http_response_code($ok ? 200 : 401);
+    header('Content-Type: application/json; charset=utf-8');
+    $payload = array(
+        'ok' => (bool)$ok,
+        'reason' => (string)$reason,
+        'user_id' => is_array($userRow) ? intval($userRow['id'] ?? 0) : 0,
+        'role_id' => is_array($userRow) ? intval($userRow['role_id'] ?? 0) : 0,
+        'token_len' => is_array($userRow) ? strlen((string)($userRow['token'] ?? '')) : 0,
+        'pass_len' => isset($GLOBALS['__auth_plain_pass_len']) ? intval($GLOBALS['__auth_plain_pass_len']) : 0,
+    );
+    foreach ($extra as $k => $v) {
+        $payload[$k] = $v;
+    }
+    echo json_encode($payload);
+    exit();
+}
+
+function login_redirect_error($reason, $legacyParams = array(), $userRow = array(), $httpCode = 302) {
     auth_log_reason($reason, $userRow);
+    if (login_is_debug_mode()) {
+        login_debug_response(false, $reason, $userRow);
+    }
     $params = array('error' => $reason);
     foreach ($legacyParams as $k => $v) {
         if ($k === 'error') {
@@ -104,6 +129,7 @@ function login_redirect_error($reason, $legacyParams = array(), $userRow = array
         }
         $params[$k] = $v;
     }
+    http_response_code((int)$httpCode);
     header("location:../../login.php?" . http_build_query($params));
     exit();
 }
@@ -184,6 +210,7 @@ if (isset($_POST["password"])) {
 } elseif (isset($_POST["pass"])) {
     $password = trim((string)$_POST["pass"]);
 }
+$GLOBALS['__auth_plain_pass_len'] = strlen($password);
 
 auth_dev_log("keys=" . implode(',', array_keys($_POST)) . " user_len=" . strlen($usrname) . " pass_len=" . strlen($password));
 
@@ -403,9 +430,15 @@ if (mysqli_num_rows($busca_usua) > 0) {
         if($sess_user != v($fil,'id','') && $sess_ips != $ip) {
             mysqli_query($conexion,"INSERT INTO sessiones_activas(`fecha`, `hora`, `visitante`, `usuario`, `ip`, `latitud`, `longitud`, `cobrador`, `hora2`) VALUES('".mysqli_real_escape_string($conexion,$fecha)."', '".mysqli_real_escape_string($conexion,$time)."', '".mysqli_real_escape_string($conexion,$visitante)."', '".mysqli_real_escape_string($conexion,$usrlogin)."', '".mysqli_real_escape_string($conexion,$ip)."', '0', '0', '0', '00:00:00')");
             if(v($fil,'cambio_password',0) == 1){
+                if (login_is_debug_mode()) {
+                    login_debug_response(true, 'ok', $fil, array('next' => '../index.php#cambio_password'));
+                }
                 header("location:../index.php#cambio_password");
                 exit();
             } else {
+                if (login_is_debug_mode()) {
+                    login_debug_response(true, 'ok', $fil, array('next' => '../index.php'));
+                }
                 header("location:../index.php");
                 exit();
             }

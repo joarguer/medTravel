@@ -3,7 +3,9 @@ include("include/include.php");
 $id_usuario = $_SESSION['id_usuario'];
 $is_admin = is_role_admin_session();
 $is_complementary = is_complementary_user_session();
+$role_id = current_role_id();
 $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
+$can_list_complementary_providers = $is_admin || user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -535,7 +537,9 @@ $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_
         window.MEDTRAVEL_SERVICES_CTX = {
             isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
             isComplementary: <?php echo $is_complementary ? 'true' : 'false'; ?>,
-            serviceProviderId: <?php echo $service_provider_session_id > 0 ? $service_provider_session_id : 'null'; ?>
+            roleId: <?php echo $role_id !== null ? (int)$role_id : 'null'; ?>,
+            serviceProviderId: <?php echo $service_provider_session_id > 0 ? $service_provider_session_id : 'null'; ?>,
+            canListProviders: <?php echo $can_list_complementary_providers ? 'true' : 'false'; ?>
         };
     </script>
     <!-- PAGE LEVEL PLUGINS (después de jQuery) -->
