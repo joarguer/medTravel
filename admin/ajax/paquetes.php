@@ -6,15 +6,17 @@ ini_set('log_errors', 1);
 ini_set('error_log', __DIR__ . '/../logs/paquetes_email.log');
 
 header('Content-Type: application/json; charset=utf-8');
-session_start();
+require_once('../include/conexion.php');
+require_once('../include/roles.php');
 
-// Validación de sesión
-if(!isset($_SESSION['id_usuario'])){
-    echo json_encode(['ok' => false, 'message' => 'Sesión no válida']);
+require_login_ajax();
+
+// RBAC hardening: paquetes siempre requiere permiso canónico explícito.
+if (!user_can(PERM_PACKAGES_MANAGE)) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'message' => 'forbidden']);
     exit;
 }
-
-require_once('../include/conexion.php');
 
 $action = isset($_POST['action']) ? $_POST['action'] : (isset($_GET['action']) ? $_GET['action'] : '');
 $id_usuario = $_SESSION['id_usuario'];
