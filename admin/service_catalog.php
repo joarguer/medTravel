@@ -1,6 +1,7 @@
 <?php
 include('include/include.php');
-// TODO: proteger para SUPERADMIN si se dispone de control de roles
+$is_admin = is_role_admin_session();
+$provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -82,6 +83,12 @@ include('include/include.php');
         <?php echo $sider_bar;?>
         <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <?php echo $theme_layout_script;?>
+        <script>
+            window.SERVICE_CATALOG_CTX = {
+                isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
+                providerId: <?php echo $provider_session_id > 0 ? $provider_session_id : 'null'; ?>
+            };
+        </script>
         <script src="js/service_catalog.js" type="text/javascript"></script>
 
                 <!-- Modal (Metronic) -->
@@ -100,6 +107,14 @@ include('include/include.php');
                                                         <div class="form-group">
                                                                 <label>Categoría</label>
                                                                 <select id="svc-category" name="category_id" class="form-control select2me"></select>
+                                                        </div>
+                                                </div>
+                                                <div class="col-md-12" id="svc-provider-wrapper" style="display:none;">
+                                                        <div class="form-group">
+                                                                <label>Prestador médico</label>
+                                                                <select id="svc-provider" name="provider_id" class="form-control select2me">
+                                                                        <option value="">Seleccionar prestador...</option>
+                                                                </select>
                                                         </div>
                                                 </div>
                                                 <div class="col-md-12">
