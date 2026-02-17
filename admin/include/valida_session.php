@@ -64,10 +64,25 @@ function tiene_rol_minimo_2() {
     return false;
 }
 
+function usuario_puede_crear_usuarios() {
+    if (es_usuario_admin()) return true;
+
+    if (!function_exists('user_can')) {
+        require_once __DIR__ . '/roles.php';
+    }
+    if (!isset($GLOBALS['conexion']) || !$GLOBALS['conexion']) {
+        include_once __DIR__ . '/conexion.php';
+    }
+    if (function_exists('user_can') && user_can('users.create')) {
+        return true;
+    }
+    return false;
+}
+
 // Mejor comparación basada en el nombre del script para evitar rutas absolutas inesperadas
 $current = basename($_SERVER['PHP_SELF']);
 $admin_only = array(
-    'crear_usuario.php','create_bd.php',
+    'create_bd.php',
     'home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','wizard_header_edit.php',
     'service_categories.php','service_catalog.php','providers.php','clientes.php','provider_verification.php','booking_requests.php'
 );
@@ -86,6 +101,10 @@ $complementary_allowed = array(
 );
 
 if (in_array($current, $admin_only) && !es_usuario_admin()) {
+    header("Location: include/salir.php?error=1");
+    exit();
+}
+if ($current === 'crear_usuario.php' && !usuario_puede_crear_usuarios()) {
     header("Location: include/salir.php?error=1");
     exit();
 }

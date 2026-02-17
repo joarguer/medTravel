@@ -3,7 +3,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 include("valida_session.php");
-include("conexion.php");
+include_once("conexion.php");
 $nombre_usuario = isset($_SESSION["nombre_usuario"]) ? $_SESSION["nombre_usuario"] : '';
 //separator
 $nombre_usuario_parts = explode(" ", $nombre_usuario ?: '');
