@@ -452,6 +452,8 @@ function openCreateModal() {
     formPaquete[0].reset();
     $('#paquete_id').val('');
     $('#modalPaqueteTitle').text('Nuevo Paquete');
+    selectedServices = [];
+    updateSelectedServicesSummary();
     
     // Resetear secciones opcionales
     $('#flight_details, #hotel_details, #transport_details').hide();
@@ -489,7 +491,16 @@ function editPaquete(id) {
             if(response.ok) {
                 populateForm(response.data);
                 $('#modalPaqueteTitle').text('Editar Paquete #' + id);
-                modalPaquete.modal('show');
+                if (catalogSchemaReady) {
+                    loadPackageCatalogServices(id, function(items) {
+                        $('#use_catalog_services').prop('checked', items.length > 0);
+                        toggleCatalogMode();
+                        updateSelectedServicesSummary();
+                        modalPaquete.modal('show');
+                    });
+                } else {
+                    modalPaquete.modal('show');
+                }
             } else {
                 toastr.error(response.message || 'Error al cargar paquete');
             }
@@ -583,6 +594,19 @@ function savePaquete() {
     var action = id ? 'update' : 'create';
     
     formData += '&action=' + action;
+    if (catalogSchemaReady) {
+        var catalogItemsPayload = [];
+        if ($('#use_catalog_services').is(':checked')) {
+            catalogItemsPayload = selectedServices.map(function(service) {
+                return {
+                    service_id: parseInt(service.id || service.service_id, 10) || 0,
+                    quantity: parseInt(service.quantity, 10) || 1,
+                    unit_price: parseFloat(service.unit_price != null ? service.unit_price : service.sale_price) || 0
+                };
+            });
+        }
+        formData += '&catalog_services_json=' + encodeURIComponent(JSON.stringify(catalogItemsPayload));
+    }
     
     // Deshabilitar botón mientras procesa
     var btnGuardar = $('#btnGuardarPaquete');
@@ -761,6 +785,51 @@ function clearMarginDisplay() {
     $('#display_net_margin').text('$0.00').removeClass('text-danger text-success');
     $('#net_margin_percent').text('');
     $('#margin_warning').hide();
+}
+
+// ===================================================================
+// CARGAR SERVICIOS DE CATÁLOGO DEL PAQUETE (EDICIÓN)
+// ===================================================================
+function loadPackageCatalogServices(packageId, callback) {
+    selectedServices = [];
+    $.ajax({
+        url: 'ajax/paquetes.php?action=get_package_services&package_id=' + packageId,
+        type: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            if (response && response.ok && Array.isArray(response.data)) {
+                selectedServices = response.data.map(function(item) {
+                    var quantity = parseInt(item.quantity, 10) || 1;
+                    var unitPrice = parseFloat(item.unit_price) || 0;
+                    return {
+                        id: parseInt(item.service_id, 10) || 0,
+                        service_id: parseInt(item.service_id, 10) || 0,
+                        service_name: item.service_name || '',
+                        service_type: item.service_type || '',
+                        provider_name: item.provider_name || '',
+                        sale_price: unitPrice,
+                        unit_price: unitPrice,
+                        currency: item.currency || 'USD',
+                        quantity: quantity,
+                        total: parseFloat(item.total_price) || (quantity * unitPrice)
+                    };
+                }).filter(function(item) {
+                    return item.id > 0;
+                });
+            } else {
+                selectedServices = [];
+            }
+        },
+        error: function() {
+            selectedServices = [];
+            toastr.warning('No se pudieron cargar servicios de catálogo del paquete');
+        },
+        complete: function() {
+            if (typeof callback === 'function') {
+                callback(selectedServices);
+            }
+        }
+    });
 }
 
 // ===================================================================

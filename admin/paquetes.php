@@ -7,9 +7,16 @@ if (!user_can(PERM_PACKAGES_MANAGE)) {
     exit;
 }
 $id_usuario = $_SESSION['id_usuario'];
-// Etapa 1 (alineación): en esquema canónico travel_packages aún no incluye
-// use_catalog_services/catalog_services_total (solo existe en script opcional de integración).
+// Etapa 2: activación automática del catálogo mediante ping query real.
+// Evita dependency de information_schema en hosting compartido.
 $packages_catalog_schema_ready = false;
+if (isset($conexion) && $conexion) {
+    $catalog_schema_ping = @mysqli_query($conexion, "SELECT 1 FROM package_services LIMIT 1");
+    if ($catalog_schema_ping !== false) {
+        $packages_catalog_schema_ready = true;
+        mysqli_free_result($catalog_schema_ping);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">

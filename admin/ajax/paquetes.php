@@ -153,6 +153,161 @@ function getPaquete($conexion) {
     ]);
 }
 
+function packageServicesSchemaReady($conexion) {
+    static $ready = null;
+    if ($ready !== null) {
+        return $ready;
+    }
+
+    $ping = @mysqli_query($conexion, "SELECT 1 FROM package_services LIMIT 1");
+    if ($ping !== false) {
+        $ready = true;
+        mysqli_free_result($ping);
+        return true;
+    }
+
+    $ready = false;
+    return false;
+}
+
+function normalizeCatalogServicesPayload($conexion, $rawJson, &$errorMessage) {
+    $errorMessage = '';
+    $rawJson = trim((string)$rawJson);
+    if ($rawJson === '') {
+        $rawJson = '[]';
+    }
+
+    $decoded = json_decode($rawJson, true);
+    if (!is_array($decoded) || json_last_error() !== JSON_ERROR_NONE) {
+        $errorMessage = 'catalog_services_json inválido';
+        return null;
+    }
+
+    $normalizedByService = [];
+    $stmtExists = mysqli_prepare($conexion, "SELECT id, sale_price FROM medtravel_services_catalog WHERE id = ? LIMIT 1");
+    if (!$stmtExists) {
+        $errorMessage = 'Error preparando validación de servicios de catálogo';
+        return null;
+    }
+
+    foreach ($decoded as $item) {
+        if (!is_array($item)) {
+            mysqli_stmt_close($stmtExists);
+            $errorMessage = 'catalog_services_json inválido';
+            return null;
+        }
+
+        $serviceId = isset($item['service_id']) ? intval($item['service_id']) : intval($item['id'] ?? 0);
+        if ($serviceId <= 0) {
+            mysqli_stmt_close($stmtExists);
+            $errorMessage = 'service_id inválido en servicios de catálogo';
+            return null;
+        }
+
+        $quantity = isset($item['quantity']) ? intval($item['quantity']) : 1;
+        if ($quantity < 1) {
+            $quantity = 1;
+        }
+
+        $unitPrice = null;
+        if (isset($item['unit_price'])) {
+            $unitPrice = floatval($item['unit_price']);
+        } elseif (isset($item['sale_price'])) {
+            $unitPrice = floatval($item['sale_price']);
+        }
+        if ($unitPrice !== null && $unitPrice < 0) {
+            $unitPrice = 0.0;
+        }
+
+        mysqli_stmt_bind_param($stmtExists, 'i', $serviceId);
+        if (!mysqli_stmt_execute($stmtExists)) {
+            mysqli_stmt_close($stmtExists);
+            $errorMessage = 'Error validando servicios de catálogo';
+            return null;
+        }
+        $res = mysqli_stmt_get_result($stmtExists);
+        $service = $res ? mysqli_fetch_assoc($res) : null;
+
+        if (!$service) {
+            mysqli_stmt_close($stmtExists);
+            $errorMessage = 'Servicio de catálogo no existe: ' . $serviceId;
+            return null;
+        }
+
+        if ($unitPrice === null) {
+            $unitPrice = floatval($service['sale_price']);
+        }
+
+        $normalizedByService[$serviceId] = [
+            'service_id' => $serviceId,
+            'quantity' => $quantity,
+            'unit_price' => $unitPrice,
+            'total_price' => $quantity * $unitPrice,
+            'notes' => isset($item['notes']) ? trim((string)$item['notes']) : null,
+        ];
+    }
+
+    mysqli_stmt_close($stmtExists);
+    return array_values($normalizedByService);
+}
+
+function syncPackageServices($conexion, $packageId, $rawCatalogJson, &$errorMessage) {
+    $errorMessage = '';
+
+    if (!packageServicesSchemaReady($conexion)) {
+        return true;
+    }
+
+    $items = normalizeCatalogServicesPayload($conexion, $rawCatalogJson, $errorMessage);
+    if ($items === null) {
+        return false;
+    }
+
+    $stmtDelete = mysqli_prepare($conexion, "DELETE FROM package_services WHERE package_id = ?");
+    if (!$stmtDelete) {
+        $errorMessage = 'No se pudo limpiar servicios del paquete';
+        return false;
+    }
+    mysqli_stmt_bind_param($stmtDelete, 'i', $packageId);
+    if (!mysqli_stmt_execute($stmtDelete)) {
+        mysqli_stmt_close($stmtDelete);
+        $errorMessage = 'No se pudo limpiar servicios del paquete';
+        return false;
+    }
+    mysqli_stmt_close($stmtDelete);
+
+    if (empty($items)) {
+        return true;
+    }
+
+    $stmtInsert = mysqli_prepare(
+        $conexion,
+        "INSERT INTO package_services (package_id, service_id, quantity, unit_price, total_price, notes) VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    if (!$stmtInsert) {
+        $errorMessage = 'No se pudo preparar guardado de servicios de catálogo';
+        return false;
+    }
+
+    foreach ($items as $item) {
+        $serviceId = intval($item['service_id']);
+        $quantity = intval($item['quantity']);
+        $unitPrice = floatval($item['unit_price']);
+        $totalPrice = floatval($item['total_price']);
+        $notes = $item['notes'];
+
+        mysqli_stmt_bind_param($stmtInsert, 'iiidds', $packageId, $serviceId, $quantity, $unitPrice, $totalPrice, $notes);
+        if (!mysqli_stmt_execute($stmtInsert)) {
+            mysqli_stmt_close($stmtInsert);
+            $errorMessage = 'No se pudo guardar servicios de catálogo';
+            return false;
+        }
+    }
+
+    mysqli_stmt_close($stmtInsert);
+    return true;
+}
+
 // ===================================================================
 // CREAR PAQUETE
 // ===================================================================
@@ -204,10 +359,26 @@ function createPaquete($conexion, $id_usuario) {
     
     $query = "INSERT INTO travel_packages (" . implode(', ', $fields) . ") 
               VALUES (" . implode(', ', $values) . ")";
-    
-    if(mysqli_query($conexion, $query)) {
+
+    mysqli_begin_transaction($conexion);
+    try {
+        if(!mysqli_query($conexion, $query)) {
+            throw new Exception("Error al crear paquete: " . mysqli_error($conexion));
+        }
+
         $new_id = mysqli_insert_id($conexion);
-        
+
+        $catalogError = '';
+        $catalogJson = isset($_POST['catalog_services_json']) ? $_POST['catalog_services_json'] : '[]';
+        if (!syncPackageServices($conexion, $new_id, $catalogJson, $catalogError)) {
+            mysqli_rollback($conexion);
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'message' => $catalogError]);
+            return;
+        }
+
+        mysqli_commit($conexion);
+
         // Obtener el paquete recién creado con márgenes calculados por trigger
         $result = mysqli_query($conexion, "SELECT * FROM travel_packages WHERE id = $new_id");
         $paquete = mysqli_fetch_assoc($result);
@@ -217,8 +388,9 @@ function createPaquete($conexion, $id_usuario) {
             'message' => 'Paquete creado exitosamente',
             'data' => $paquete
         ]);
-    } else {
-        throw new Exception("Error al crear paquete: " . mysqli_error($conexion));
+    } catch (Exception $e) {
+        mysqli_rollback($conexion);
+        throw $e;
     }
 }
 
@@ -265,8 +437,24 @@ function updatePaquete($conexion, $id_usuario) {
     }
     
     $query = "UPDATE travel_packages SET " . implode(', ', $sets) . " WHERE id = $id";
-    
-    if(mysqli_query($conexion, $query)) {
+
+    mysqli_begin_transaction($conexion);
+    try {
+        if(!mysqli_query($conexion, $query)) {
+            throw new Exception("Error al actualizar paquete: " . mysqli_error($conexion));
+        }
+
+        $catalogError = '';
+        $catalogJson = isset($_POST['catalog_services_json']) ? $_POST['catalog_services_json'] : '[]';
+        if (!syncPackageServices($conexion, $id, $catalogJson, $catalogError)) {
+            mysqli_rollback($conexion);
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'message' => $catalogError]);
+            return;
+        }
+
+        mysqli_commit($conexion);
+
         // Obtener el paquete actualizado con márgenes recalculados por trigger
         $result = mysqli_query($conexion, "SELECT * FROM travel_packages WHERE id = $id");
         $paquete = mysqli_fetch_assoc($result);
@@ -276,8 +464,9 @@ function updatePaquete($conexion, $id_usuario) {
             'message' => 'Paquete actualizado exitosamente',
             'data' => $paquete
         ]);
-    } else {
-        throw new Exception("Error al actualizar paquete: " . mysqli_error($conexion));
+    } catch (Exception $e) {
+        mysqli_rollback($conexion);
+        throw $e;
     }
 }
 
@@ -334,9 +523,8 @@ function getClientes($conexion) {
 // HELPER: CONSTRUIR ARRAY DE DATOS DESDE POST
 // ===================================================================
 function buildPaqueteData($conexion, $post) {
-    // Etapa 1: campos de catálogo (use_catalog_services, catalog_services_total)
-    // no forman parte del esquema canónico actual de travel_packages.
-    // Se ignoran explícitamente hasta habilitar la integración relacional (Etapa 2).
+    // Campos de catálogo (use_catalog_services, catalog_services_total) no forman parte
+    // del esquema canónico de travel_packages; se gestionan vía package_services.
 
     // Campos opcionales con valores por defecto
     $data = [
@@ -670,6 +858,12 @@ function getCatalogServices($conexion) {
 // AGREGAR SERVICIO A PAQUETE
 // ===================================================================
 function addServiceToPackage($conexion) {
+    if (!packageServicesSchemaReady($conexion)) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'message' => 'Catalog services not enabled']);
+        return;
+    }
+
     $package_id = isset($_POST['package_id']) ? intval($_POST['package_id']) : 0;
     $service_id = isset($_POST['service_id']) ? intval($_POST['service_id']) : 0;
     $quantity = isset($_POST['quantity']) ? intval($_POST['quantity']) : 1;
@@ -719,6 +913,12 @@ function addServiceToPackage($conexion) {
 // ELIMINAR SERVICIO DE PAQUETE
 // ===================================================================
 function removeServiceFromPackage($conexion) {
+    if (!packageServicesSchemaReady($conexion)) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'message' => 'Catalog services not enabled']);
+        return;
+    }
+
     $package_service_id = isset($_POST['id']) ? intval($_POST['id']) : 0;
     
     if($package_service_id === 0) {
@@ -748,7 +948,15 @@ function getPackageServices($conexion) {
         echo json_encode(['ok' => false, 'message' => 'Invalid package ID']);
         return;
     }
-    
+
+    if (!packageServicesSchemaReady($conexion)) {
+        echo json_encode([
+            'ok' => true,
+            'data' => []
+        ]);
+        return;
+    }
+
     $query = "SELECT 
         ps.id,
         ps.package_id,
