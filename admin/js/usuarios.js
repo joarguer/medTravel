@@ -1,64 +1,45 @@
 $(function(){
-    var roles = {};
+    var roles = [];
     var serviceProviders = [];
+    var providers = [];
+    var usersData = [];
     var filterKind = '';
     var complementaryRoleId = parseInt((window.USERS_CTX && window.USERS_CTX.complementaryRoleId) || 12, 10);
+    var providerRoleId = parseInt((window.USERS_CTX && window.USERS_CTX.providerRoleId) || 4, 10);
+    var adminRoleId = parseInt((window.USERS_CTX && window.USERS_CTX.adminRoleId) || 1, 10);
+
+    function notifyError(msg){
+        if(window.toastr){ toastr.error(msg); return; }
+        alert(msg);
+    }
+
+    function notifySuccess(msg){
+        if(window.toastr){ toastr.success(msg); return; }
+        alert(msg);
+    }
 
     function loadRoles(cb){
-        $.get('ajax/usuarios.php',{action:'list_roles'}, function(res){
-            if(res && res.success && res.data){
-                roles = {};
-                res.data.forEach(function(r){ roles[r.id] = r.name; });
-            }
+        $.get('ajax/usuarios.php', {action:'list_roles'}, function(res){
+            roles = (res && res.success && Array.isArray(res.data)) ? res.data : [];
             if(cb) cb();
-        },'json');
+        }, 'json');
+    }
+
+    function loadProviders(cb){
+        $.get('ajax/usuarios.php', {action:'list_providers'}, function(res){
+            providers = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+            if(cb) cb();
+        }, 'json');
     }
 
     function loadServiceProviders(cb){
-        $.get('ajax/usuarios.php',{action:'list_service_providers'}, function(res){
-            if(res && res.success && res.data){
-                serviceProviders = res.data.slice();
-            } else {
-                serviceProviders = [];
-            }
+        $.get('ajax/usuarios.php', {action:'list_service_providers'}, function(res){
+            serviceProviders = (res && res.success && Array.isArray(res.data)) ? res.data : [];
             if(cb) cb();
-        },'json');
-    }
-
-    function roleSelect(currentId){
-        var sel = $('<select class="form-control input-sm role-select">');
-        Object.keys(roles).forEach(function(id){
-            var opt = $('<option>').val(id).text(roles[id]);
-            if(parseInt(id,10) === currentId) opt.attr('selected','selected');
-            sel.append(opt);
-        });
-        return sel;
-    }
-
-    function serviceProviderSelect(currentId){
-        var sel = $('<select class="form-control input-sm service-provider-select" style="margin-top:6px;">');
-        sel.append($('<option>').val('').text('Seleccione proveedor complementario'));
-        serviceProviders.forEach(function(sp){
-            var opt = $('<option>').val(sp.id).text(sp.provider_name);
-            if(parseInt(sp.id, 10) === parseInt(currentId || 0, 10)) opt.attr('selected','selected');
-            sel.append(opt);
-        });
-        return sel;
-    }
-
-    function toggleServiceProviderControl(tr){
-        var roleId = parseInt(tr.find('.role-select').val() || 0, 10);
-        var sel = tr.find('.service-provider-select');
-        if(!sel.length) return;
-        if(roleId === complementaryRoleId){
-            sel.show().prop('disabled', false);
-        } else {
-            sel.hide().prop('disabled', true).val('');
-        }
+        }, 'json');
     }
 
     function renderTable(data){
-        // filtrar por tipo de prestador
         if(filterKind){
             data = data.filter(function(u){
                 var pk = u.provider_kind || '';
@@ -66,6 +47,7 @@ $(function(){
                 return pk === filterKind;
             });
         }
+
         var tbody = $('#users-table tbody').empty();
         data.forEach(function(u){
             var tr = $('<tr>').attr('data-id', u.id);
@@ -73,98 +55,186 @@ $(function(){
             tr.append($('<td>').text(u.usuario || ''));
             tr.append($('<td>').text(u.nombre || ''));
             tr.append($('<td>').text(u.email || ''));
-            var roleCell = $('<td>');
-            if(window.USERS_CTX.canEdit){
-                var roleSel = roleSelect(u.role_id || 0);
-                var spSel = serviceProviderSelect(u.service_provider_id || '');
-                roleCell.append(roleSel).append(spSel);
-            } else {
-                roleCell.text(u.role_name || '');
-            }
-            tr.append(roleCell);
+            tr.append($('<td>').text(u.role_name || ''));
+
             var provText = u.provider || u.empresa || '';
-            if(u.provider_kind){ provText += ' ['+u.provider_kind+']'; }
+            if(u.provider_kind){ provText += ' [' + u.provider_kind + ']'; }
             tr.append($('<td>').text(provText));
+
             tr.append($('<td>').text(u.activo === 1 ? 'Activo' : 'Inactivo'));
+
             var actions = $('<td>');
             if(window.USERS_CTX.canEdit){
-                var toggleBtn = $('<button class="btn btn-xs btn-default toggle-active">').text(u.activo === 1 ? 'Desactivar' : 'Activar');
-                actions.append(toggleBtn);
+                actions.append('<button type="button" class="btn btn-xs btn-primary edit-user">Editar</button>');
             }
             tr.append(actions);
             tbody.append(tr);
-            if(window.USERS_CTX.canEdit){
-                toggleServiceProviderControl(tr);
-            }
         });
     }
 
-    function loadUsers(){
-        $.get('ajax/usuarios.php',{action:'list'}, function(res){
-            if(res && res.success){ renderTable(res.data || []); }
-        },'json');
+    function loadUsers(cb){
+        $.get('ajax/usuarios.php', {action:'list'}, function(res){
+            usersData = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+            renderTable(usersData);
+            if(cb) cb();
+        }, 'json');
     }
 
-    function updateUserRole(tr){
-        var id = tr.data('id');
-        var roleId = parseInt(tr.find('.role-select').val(),10);
-        var payload = { action:'update_role', id:id, role_id: roleId };
-        if(roleId === complementaryRoleId){
-            var serviceProviderId = parseInt(tr.find('.service-provider-select').val() || 0, 10);
-            if(!serviceProviderId){
-                alert('Debes seleccionar un proveedor complementario activo para este rol');
+    function fillRoleOptions(selected){
+        var sel = $('#edit-role-id').empty();
+        sel.append($('<option>').val('').text('Seleccione rol'));
+        roles.forEach(function(r){
+            var opt = $('<option>').val(r.id).text(r.name || ('Rol ' + r.id));
+            if(parseInt(r.id, 10) === parseInt(selected || 0, 10)) opt.prop('selected', true);
+            sel.append(opt);
+        });
+    }
+
+    function fillProviderOptions(selected){
+        var sel = $('#edit-provider-id').empty();
+        sel.append($('<option>').val('').text('Seleccione prestador médico'));
+        providers.forEach(function(p){
+            var opt = $('<option>').val(p.id).text(p.name || ('Prestador ' + p.id));
+            if(parseInt(p.id, 10) === parseInt(selected || 0, 10)) opt.prop('selected', true);
+            sel.append(opt);
+        });
+    }
+
+    function fillServiceProviderOptions(selected){
+        var sel = $('#edit-service-provider-id').empty();
+        sel.append($('<option>').val('').text('Seleccione proveedor complementario'));
+        serviceProviders.forEach(function(sp){
+            var opt = $('<option>').val(sp.id).text(sp.provider_name || ('Proveedor ' + sp.id));
+            if(parseInt(sp.id, 10) === parseInt(selected || 0, 10)) opt.prop('selected', true);
+            sel.append(opt);
+        });
+    }
+
+    function toggleEditOwnershipFields(){
+        var roleId = parseInt($('#edit-role-id').val() || 0, 10);
+        var showMedicalProvider = (roleId === providerRoleId);
+        var showComplementaryProvider = (roleId === complementaryRoleId);
+
+        $('#edit-provider-group').toggle(showMedicalProvider);
+        $('#edit-service-provider-group').toggle(showComplementaryProvider);
+
+        if(!showMedicalProvider){
+            $('#edit-provider-id').val('');
+        }
+        if(!showComplementaryProvider){
+            $('#edit-service-provider-id').val('');
+        }
+    }
+
+    function openEditModal(userId){
+        $.get('ajax/usuarios.php', {action:'get_user', id:userId}, function(res){
+            if(!(res && res.success && res.data)){
+                notifyError((res && res.error) ? res.error : 'No se pudo cargar el usuario');
                 return;
             }
-            payload.service_provider_id = serviceProviderId;
-        }
-        $.post('ajax/usuarios.php', payload, function(res){
-            if(res && res.success){
-                loadUsers();
-            } else {
-                alert(res && res.error ? res.error : 'Error al actualizar usuario');
-                loadUsers();
-            }
-        },'json');
+
+            var u = res.data;
+            $('#edit-id').val(u.id);
+            $('#edit-email').val(u.email || '');
+            $('#edit-usuario').val(u.usuario || '');
+            fillRoleOptions(u.role_id || '');
+            fillProviderOptions(u.provider_id || '');
+            fillServiceProviderOptions(u.service_provider_id || '');
+            $('#edit-activo').val(String(parseInt(u.activo, 10) === 1 ? 1 : 0));
+            toggleEditOwnershipFields();
+
+            $('#user-edit-modal').modal('show');
+        }, 'json').fail(function(){
+            notifyError('Error de conexión al cargar usuario');
+        });
     }
 
-    $('#users-table').on('change', '.role-select', function(){
-        var tr = $(this).closest('tr');
-        toggleServiceProviderControl(tr);
-        var roleId = parseInt($(this).val() || 0,10);
-        if(roleId === complementaryRoleId && !tr.find('.service-provider-select').val()){
-            alert('Selecciona un proveedor complementario para guardar el rol');
+    function isValidEmail(email){
+        if(email.indexOf(',') !== -1) return false;
+        var re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    }
+
+    function submitEditUser(){
+        var id = parseInt($('#edit-id').val() || 0, 10);
+        var email = $.trim($('#edit-email').val() || '');
+        var usuario = $.trim($('#edit-usuario').val() || '');
+        var roleId = parseInt($('#edit-role-id').val() || 0, 10);
+        var activo = parseInt($('#edit-activo').val() || 0, 10);
+        var providerId = $('#edit-provider-id').val() || '';
+        var serviceProviderId = $('#edit-service-provider-id').val() || '';
+
+        if(id <= 0){
+            notifyError('Usuario inválido');
             return;
         }
-        updateUserRole(tr);
-    });
-
-    $('#users-table').on('change', '.service-provider-select', function(){
-        var tr = $(this).closest('tr');
-        var roleId = parseInt(tr.find('.role-select').val() || 0,10);
-        if(roleId !== complementaryRoleId){
+        if(!isValidEmail(email)){
+            notifyError('El email es inválido. Verifica formato y que no tenga comas.');
             return;
         }
-        updateUserRole(tr);
-    });
+        if(!usuario){
+            notifyError('El usuario es obligatorio');
+            return;
+        }
+        if(roleId <= 0){
+            notifyError('El rol es obligatorio');
+            return;
+        }
+        if(roleId === providerRoleId && !providerId){
+            notifyError('Debes seleccionar un prestador médico activo');
+            return;
+        }
+        if(roleId === complementaryRoleId && !serviceProviderId){
+            notifyError('Debes seleccionar un proveedor complementario activo');
+            return;
+        }
 
-    $('#users-table').on('click', '.toggle-active', function(){
-        var tr = $(this).closest('tr');
-        var id = tr.data('id');
-        var current = tr.find('td').eq(6).text().toLowerCase().indexOf('inactivo') === -1 ? 1 : 0;
-        var next = current ? 0 : 1;
-        $.post('ajax/usuarios.php',{action:'toggle_active', id:id, val:next}, function(res){
-            if(res && res.success){ loadUsers(); }
-            else alert(res && res.error ? res.error : 'Error al cambiar estado');
-        },'json');
-    });
+        var payload = {
+            action: 'update_user',
+            id: id,
+            email: email,
+            usuario: usuario,
+            role_id: roleId,
+            activo: activo,
+            provider_id: providerId,
+            service_provider_id: serviceProviderId
+        };
+
+        $.post('ajax/usuarios.php', payload, function(res){
+            if(res && res.success){
+                $('#user-edit-modal').modal('hide');
+                notifySuccess('Usuario actualizado correctamente');
+                loadUsers();
+                return;
+            }
+            notifyError((res && res.error) ? res.error : 'Error al actualizar usuario');
+        }, 'json').fail(function(xhr){
+            var msg = 'Error al actualizar usuario';
+            if(xhr && xhr.responseJSON && xhr.responseJSON.error){
+                msg = xhr.responseJSON.error;
+            }
+            notifyError(msg);
+        });
+    }
 
     $('#filter-kind-users').on('change', function(){
-        var val = $(this).val();
-        filterKind = val;
-        loadUsers();
+        filterKind = $(this).val();
+        renderTable(usersData);
     });
 
+    $('#users-table').on('click', '.edit-user', function(){
+        var userId = parseInt($(this).closest('tr').data('id') || 0, 10);
+        if(userId > 0){
+            openEditModal(userId);
+        }
+    });
+
+    $('#edit-role-id').on('change', toggleEditOwnershipFields);
+    $('#btn-save-user-edit').on('click', submitEditUser);
+
     loadRoles(function(){
-        loadServiceProviders(loadUsers);
+        loadProviders(function(){
+            loadServiceProviders(loadUsers);
+        });
     });
 });
