@@ -124,7 +124,7 @@ if (mysqli_num_rows($busca_usua) > 0) {
     $fil = mysqli_fetch_array($busca_usua);
     
     // Verificación canónica compartida con create/reset password.
-    $password_valido = verify_password_for_user($password, $fil);
+    $password_valido = verify_password($password, v($fil, 'token', ''), v($fil, 'password', ''));
     
     if ($password_valido) {
         //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC

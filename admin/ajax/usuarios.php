@@ -289,7 +289,8 @@ switch ($action) {
         break;
 
     case 'reset_password':
-        if (!is_role_admin_session() && !can_manage_users()) {
+        $canResetPassword = is_role_admin_session() || user_can(PERM_USERS_MANAGE) || user_can('users.manage');
+        if (!$canResetPassword) {
             json_err('forbidden', 403);
         }
 
@@ -310,9 +311,8 @@ switch ($action) {
         $hasTokenColumn = usuarios_has_column($conexion, 'token');
 
         if ($hasTokenColumn) {
-            $hashedPayload = hash_password_for_storage($tempPassword, $user);
-            $newHash = $hashedPayload['password'];
-            $newToken = $hashedPayload['token'];
+            $newToken = ensure_password_token($user);
+            $newHash = hash_password($tempPassword, $newToken);
         } else {
             // Fallback sin token: bcrypt para mantener compatibilidad de login.
             $newHash = password_hash($tempPassword, PASSWORD_DEFAULT);
@@ -392,12 +392,15 @@ switch ($action) {
         }
 
         if ($mailFailed) {
-            json_ok([
+            $payload = [
                 'ok' => true,
                 'mail_failed' => true,
-                'temp_password' => $tempPassword,
                 'error' => $mailError !== '' ? $mailError : 'email_send_failed',
-            ]);
+            ];
+            if (is_role_admin_session()) {
+                $payload['temp_password'] = $tempPassword;
+            }
+            json_ok($payload);
         }
 
         json_ok([

@@ -198,11 +198,8 @@ if($tipo == 'crear_usuario'){
     $cambio_password = 1;
     $activo = 1;
     $initial_plain_password = $email !== '' ? $email : substr(md5(uniqid(rand(), true)), 0, 12);
-    $password_payload = hash_password_for_storage($initial_plain_password, array(
-        'token' => md5(uniqid(rand(), true)),
-    ));
-    $token = $password_payload['token'];
-    $password = $password_payload['password'];
+    $token = generate_user_token();
+    $password = hash_password($initial_plain_password, $token);
     $usuario_val = $email;
     $usrlogin_val = $email;
     $cargo_val = isset($_REQUEST['cargo']) ? trim($_REQUEST['cargo']) : '';
@@ -330,9 +327,8 @@ if($_REQUEST['tipo'] == 'crear_password'){
         return;
     }
 
-    $hashed_payload = hash_password_for_storage($pass1, $current_user);
-    $new_hash = $hashed_payload['password'];
-    $new_token = $hashed_payload['token'];
+    $new_token = ensure_password_token($current_user);
+    $new_hash = hash_password($pass1, $new_token);
     $has_cambio_password = usuarios_has_column($conexion, 'cambio_password');
 
     if ($has_cambio_password) {
