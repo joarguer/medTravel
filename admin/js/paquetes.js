@@ -4,12 +4,19 @@ var modalPaquete = $('#modalPaquete');
 var formPaquete = $('#formPaquete');
 var catalogServices = {}; // Cache de servicios del catálogo
 var selectedServices = []; // Servicios seleccionados del catálogo
+var packagesCtx = window.PACKAGES_CTX || {};
+var catalogSchemaReady = !!packagesCtx.catalogSchemaReady;
 
 $(document).ready(function() {
     initDataTable();
     initEventHandlers();
     loadClientes();
-    loadCatalogServices();
+    if (catalogSchemaReady) {
+        loadCatalogServices();
+    } else {
+        $('#use_catalog_services').prop('checked', false).prop('disabled', true);
+        $('#catalog_services_section').hide();
+    }
 });
 
 // ===================================================================
@@ -263,6 +270,12 @@ function renderCatalogServices(type, services, container) {
 // TOGGLE MODO CATÁLOGO
 // ===================================================================
 function toggleCatalogMode() {
+    if (!catalogSchemaReady) {
+        $('#use_catalog_services').prop('checked', false);
+        $('#catalog_services_section').hide();
+        return;
+    }
+
     var useCatalog = $('#use_catalog_services').is(':checked');
     $('#catalog_services_section').toggle(useCatalog);
     
@@ -450,6 +463,8 @@ function openCreateModal() {
     $('#currency').val('USD');
     $('#medtravel_fee_type').val('percent');
     $('#fee_unit').text('%');
+    $('#use_catalog_services').prop('checked', false);
+    toggleCatalogMode();
     
     // Limpiar márgenes
     clearMarginDisplay();

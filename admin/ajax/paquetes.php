@@ -334,6 +334,10 @@ function getClientes($conexion) {
 // HELPER: CONSTRUIR ARRAY DE DATOS DESDE POST
 // ===================================================================
 function buildPaqueteData($conexion, $post) {
+    // Etapa 1: campos de catálogo (use_catalog_services, catalog_services_total)
+    // no forman parte del esquema canónico actual de travel_packages.
+    // Se ignoran explícitamente hasta habilitar la integración relacional (Etapa 2).
+
     // Campos opcionales con valores por defecto
     $data = [
         // General

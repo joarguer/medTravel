@@ -7,6 +7,9 @@ if (!user_can(PERM_PACKAGES_MANAGE)) {
     exit;
 }
 $id_usuario = $_SESSION['id_usuario'];
+// Etapa 1 (alineación): en esquema canónico travel_packages aún no incluye
+// use_catalog_services/catalog_services_total (solo existe en script opcional de integración).
+$packages_catalog_schema_ready = false;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -269,22 +272,30 @@ $id_usuario = $_SESSION['id_usuario'];
                                     <!-- TAB CATALOG SERVICES -->
                                     <div class="tab-pane" id="tab_catalog_services">
                                         <div class="form-body">
+                                            <?php if ($packages_catalog_schema_ready): ?>
                                             <div class="alert alert-info">
                                                 <i class="fa fa-info-circle"></i> 
                                                 <strong>Use Catalog Services:</strong> Select services from MedTravel's catalog. Prices and providers are pre-configured.
                                                 <br><small>Alternative: Use manual tabs (Flight, Hotel, Transport) for custom entries.</small>
                                             </div>
+                                            <?php else: ?>
+                                            <div class="alert alert-warning">
+                                                <i class="fa fa-clock-o"></i>
+                                                <strong>Catálogo de servicios:</strong> Disponible próximamente.
+                                                <br><small>Por ahora usa las pestañas manuales (Vuelo, Hotel, Transporte).</small>
+                                            </div>
+                                            <?php endif; ?>
 
                                             <div class="form-group">
                                                 <div class="col-md-12">
                                                     <label class="mt-checkbox mt-checkbox-outline">
-                                                        <input type="checkbox" id="use_catalog_services" name="use_catalog_services" value="1" onchange="toggleCatalogMode()">
-                                                        Use services from catalog (recommended)
+                                                        <input type="checkbox" id="use_catalog_services" name="use_catalog_services" value="1" <?php echo $packages_catalog_schema_ready ? 'onchange="toggleCatalogMode()"' : 'disabled'; ?>>
+                                                        <?php echo $packages_catalog_schema_ready ? 'Use services from catalog (recommended)' : 'Use services from catalog (disponible próximamente)'; ?>
                                                         <span></span>
                                                     </label>
                                                 </div>
                                             </div>
-
+                                            <?php if ($packages_catalog_schema_ready): ?>
                                             <div id="catalog_services_section" style="display:none;">
                                                 <h4 class="form-section">Available Services</h4>
                                                 
@@ -389,6 +400,7 @@ $id_usuario = $_SESSION['id_usuario'];
                                                     </div>
                                                 </div>
                                             </div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
 
@@ -893,6 +905,11 @@ $id_usuario = $_SESSION['id_usuario'];
         <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 
         <!-- PAGE LEVEL SCRIPTS -->
+        <script>
+            window.PACKAGES_CTX = {
+                catalogSchemaReady: <?php echo $packages_catalog_schema_ready ? 'true' : 'false'; ?>
+            };
+        </script>
         <script src="js/paquetes.js" type="text/javascript"></script>
 
         <script>
