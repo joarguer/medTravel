@@ -1,6 +1,9 @@
 <?php
 include("include/include.php");
 $id_usuario = $_SESSION['id_usuario'];
+$is_admin = is_role_admin_session();
+$is_complementary = is_complementary_user_session();
+$service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -278,7 +281,7 @@ $id_usuario = $_SESSION['id_usuario'];
 
                                         <div class="form-group">
                                             <label class="control-label col-md-3">Proveedor</label>
-                                            <div class="col-md-9">
+                                            <div class="col-md-9" id="provider_selector_wrapper">
                                                 <div class="input-group">
                                                     <select class="form-control" id="provider_id" name="provider_id">
                                                         <option value="">Seleccionar proveedor...</option>
@@ -290,6 +293,7 @@ $id_usuario = $_SESSION['id_usuario'];
                                                     </span>
                                                 </div>
                                                 <small class="help-block">Aerolíneas, hoteles, empresas de transporte, etc.</small>
+                                                <small class="help-block" id="provider_scope_hint" style="display:none;">Proveedor fijado por tu sesión.</small>
                                             </div>
                                         </div>
 
@@ -527,6 +531,13 @@ $id_usuario = $_SESSION['id_usuario'];
 
     <!-- THEME (carga jQuery y núcleo) -->
     <?php echo $theme_layout_script;?>
+    <script>
+        window.MEDTRAVEL_SERVICES_CTX = {
+            isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
+            isComplementary: <?php echo $is_complementary ? 'true' : 'false'; ?>,
+            serviceProviderId: <?php echo $service_provider_session_id > 0 ? $service_provider_session_id : 'null'; ?>
+        };
+    </script>
     <!-- PAGE LEVEL PLUGINS (después de jQuery) -->
     <script src="../../assets/global/plugins/datatables/datatables.min.js" type="text/javascript"></script>
     <script src="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>

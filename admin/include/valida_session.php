@@ -37,6 +37,19 @@ function es_usuario_prestador() {
     return false;
 }
 
+// Helper: usuario de proveedor complementario (scope service_provider_id)
+function es_usuario_complementario() {
+    if (isset($_SESSION['service_provider_id']) && intval($_SESSION['service_provider_id']) > 0) {
+        return true;
+    }
+    if (isset($_SESSION['rol'])) {
+        $rolval = strtolower((string) $_SESSION['rol']);
+        if (intval($rolval) === 12) return true;
+        if (strpos($rolval, 'partner') !== false || strpos($rolval, 'complement') !== false) return true;
+    }
+    return false;
+}
+
 // Función helper para verificar si tiene rol 2 o superior
 function tiene_rol_minimo_2() {
     if (es_usuario_admin()) {
@@ -67,6 +80,10 @@ $role2_allowed = array(
     'otros_ajustes.php','cantidad_pax.php','base.php','cotizaciones.php','cotizacion.php',
     'servicios_aprobados.php','orden_servicio.php','orden_servicio_detalle.php'
 );
+$complementary_allowed = array(
+    'providers_complementary.php',
+    'medtravel_services.php'
+);
 
 if (in_array($current, $admin_only) && !es_usuario_admin()) {
     header("Location: include/salir.php?error=1");
@@ -78,6 +95,10 @@ if ($current === 'blog_edit.php' && !(es_usuario_admin() || es_usuario_prestador
     exit();
 }
 if (in_array($current, $role2_allowed) && !tiene_rol_minimo_2()) {
+    header("Location: include/salir.php?error=1");
+    exit();
+}
+if (in_array($current, $complementary_allowed) && !(es_usuario_admin() || es_usuario_complementario())) {
     header("Location: include/salir.php?error=1");
     exit();
 }

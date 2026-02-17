@@ -1,5 +1,8 @@
 <?php
 include('include/include.php');
+$is_admin = is_role_admin_session();
+$is_complementary = is_complementary_user_session();
+$service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -271,6 +274,13 @@ include('include/include.php');
     </div>
 
     <?php echo $theme_layout_script;?>
+    <script>
+        window.PROVIDERS_COMPLEMENTARY_CTX = {
+            isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
+            isComplementary: <?php echo $is_complementary ? 'true' : 'false'; ?>,
+            serviceProviderId: <?php echo $service_provider_session_id > 0 ? $service_provider_session_id : 'null'; ?>
+        };
+    </script>
     <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
     <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
     <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>

@@ -14,12 +14,14 @@ $title = 'MedTravel';
 // Determinación robusta de roles: acepta 'ppal' numérico, rol numérico o texto que contenga 'admin'
 $es_admin = false;
 $es_prestador = false;
+$es_complementario = false;
 // Load roles helpers
 require_once __DIR__ . '/roles.php';
 $es_admin = is_role_admin_session();
 if (isset($_SESSION['provider_id']) && !empty($_SESSION['provider_id'])) {
     $es_prestador = true;
 }
+$es_complementario = is_complementary_user_session();
 
 // Contadores y notificaciones de booking pending
 $booking_pending_count = 0;
@@ -350,6 +352,19 @@ if ($es_admin) {
                                             </li>
                                             <li class="'.($current_page === 'booking_requests.php' ? 'active' : '').'">
                                                 <a href="./booking_requests.php">Solicitudes de Booking</a>
+                                            </li>
+                                        </ul>
+                                    </li>';
+} elseif ($es_complementario) {
+    $top_header_2 .=               '<li class="dropdown more-dropdown-sub">
+                                        <a href="javascript:;">
+                                            <i class="icon-plane"></i> Servicios Complementarios </a>
+                                        <ul class="dropdown-menu">
+                                            <li class="'.($current_page === 'providers_complementary.php' ? 'active' : '').'">
+                                                <a href="./providers_complementary.php">Proveedores Complementarios</a>
+                                            </li>
+                                            <li class="'.($current_page === 'medtravel_services.php' ? 'active' : '').'">
+                                                <a href="./medtravel_services.php">MedTravel Services</a>
                                             </li>
                                         </ul>
                                     </li>';

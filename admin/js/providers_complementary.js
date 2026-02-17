@@ -1,4 +1,6 @@
 $(document).ready(function () {
+    const ctx = window.PROVIDERS_COMPLEMENTARY_CTX || {};
+    const scopedProviderId = (ctx.isComplementary && ctx.serviceProviderId) ? parseInt(ctx.serviceProviderId, 10) : 0;
     const apiUrl = 'ajax/service_providers.php';
     const table = $('#providers_table').DataTable({
         processing: true,
@@ -89,6 +91,13 @@ $(document).ready(function () {
     function renderActions(_val, _type, row) {
         const toggleLabel = row.is_active == 1 ? 'Desactivar' : 'Activar';
         const toggleClass = row.is_active == 1 ? 'btn-warning' : 'btn-success';
+        if (scopedProviderId) {
+            return [
+                '<button class="btn btn-xs btn-primary edit" data-id="' + row.id + '"><i class="fa fa-pencil"></i></button>',
+                ' ',
+                '<button class="btn btn-xs ' + toggleClass + ' toggle" data-id="' + row.id + '">' + toggleLabel + '</button>'
+            ].join('');
+        }
         return [
             '<button class="btn btn-xs btn-primary edit" data-id="' + row.id + '"><i class="fa fa-pencil"></i></button>',
             ' ',
@@ -108,6 +117,10 @@ $(document).ready(function () {
     }
 
     function openCreateModal() {
+        if (scopedProviderId) {
+            toastr.warning('No tienes permisos para crear nuevos proveedores.');
+            return;
+        }
         resetForm();
         $('#providerModalTitle').text('Nuevo Proveedor');
         $('#providerModal').modal('show');
@@ -177,6 +190,10 @@ $(document).ready(function () {
     function saveProvider(e) {
         e.preventDefault();
         const payload = serializeForm();
+        if (scopedProviderId && !payload.id) {
+            toastr.error('No autorizado');
+            return;
+        }
         if (!payload.provider_name) {
             toastr.warning('El nombre es obligatorio');
             return;
@@ -211,6 +228,10 @@ $(document).ready(function () {
     }
 
     function deleteProvider(id) {
+        if (scopedProviderId) {
+            toastr.error('No autorizado');
+            return;
+        }
         $.post(apiUrl, { action: 'delete', id: id }, function (res) {
             if (res && res.ok) {
                 table.ajax.reload(null, false);
@@ -221,6 +242,9 @@ $(document).ready(function () {
         }, 'json');
     }
 
+    if (scopedProviderId) {
+        $('#btnNewProvider').hide();
+    }
     $('#btnNewProvider').on('click', openCreateModal);
     $('#providerForm').on('submit', saveProvider);
 

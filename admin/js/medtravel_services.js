@@ -2,14 +2,27 @@
 var servicesTable;
 var serviceModal = $('#serviceModal');
 var serviceForm = $('#serviceForm');
+var medtravelCtx = window.MEDTRAVEL_SERVICES_CTX || {};
+var scopedComplementaryProviderId = (medtravelCtx.isComplementary && medtravelCtx.serviceProviderId)
+    ? parseInt(medtravelCtx.serviceProviderId, 10)
+    : 0;
 
 $(document).ready(function() {
+    applyProviderScopeUI();
     initDataTable();
     initEventHandlers();
     loadCurrentExchangeRate(); // Cargar tasa desde BD
     loadProviders(); // Cargar catálogo de proveedores
     updateCommissionPreview();
 });
+
+function applyProviderScopeUI() {
+    if (!scopedComplementaryProviderId) return;
+    $('#btnNewProvider').hide();
+    $('#provider_selector_wrapper .input-group').hide();
+    $('#provider_selector_wrapper .help-block').first().hide();
+    $('#provider_scope_hint').show();
+}
 
 // ===================================================================
 // DATATABLE
@@ -203,6 +216,13 @@ function openCreateModal() {
     
     // Deshabilitar botón Save hasta que se valide
     $('#btnSaveService').prop('disabled', true);
+
+    if (scopedComplementaryProviderId) {
+        $('#provider_id').val(String(scopedComplementaryProviderId)).prop('disabled', true);
+        onProviderSelect();
+    } else {
+        $('#provider_id').prop('disabled', false);
+    }
     
     updateCommissionPreview();
     serviceModal.modal('show');
@@ -254,6 +274,12 @@ function populateForm(data) {
         $('#provider_contact_display').val(data.provider_contact || '');
         $('#provider_email_display').val(data.provider_email || '');
         $('#provider_phone_display').val(data.provider_phone || '');
+    }
+    if (scopedComplementaryProviderId) {
+        $('#provider_id').val(String(scopedComplementaryProviderId)).prop('disabled', true);
+        onProviderSelect();
+    } else {
+        $('#provider_id').prop('disabled', false);
     }
     $('#provider_notes').val(data.provider_notes);
     
@@ -487,6 +513,9 @@ function saveService() {
     var formData = serviceForm.serialize();
     var serviceId = $('#service_id').val();
     var action = serviceId ? 'update' : 'create';
+    if (scopedComplementaryProviderId) {
+        formData += '&provider_id=' + encodeURIComponent(String(scopedComplementaryProviderId));
+    }
     
     formData += '&action=' + action;
     
@@ -661,6 +690,13 @@ function loadProviders() {
                         '</option>'
                     );
                 });
+                if (scopedComplementaryProviderId) {
+                    select.val(String(scopedComplementaryProviderId));
+                    select.prop('disabled', true);
+                    onProviderSelect();
+                } else {
+                    select.prop('disabled', false);
+                }
             } else {
                 toastr.warning('No se pudieron cargar los proveedores');
             }
