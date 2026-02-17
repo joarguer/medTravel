@@ -280,49 +280,8 @@ $top_header .= '</span>
                 <!-- END TOPBAR ACTIONS -->
                 </div>';
 
-// Estado global del menú: script actual sin querystring.
-$current = basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH));
-if ($current === '' || $current === '.' || $current === '/') {
-    $current = basename($_SERVER['PHP_SELF'] ?? 'index.php');
-}
-if ($current === '' || $current === '.') {
-    $current = 'index.php';
-}
-
-if (!function_exists('menu_normalize_target')) {
-    function menu_normalize_target($target) {
-        $target = basename(parse_url((string)$target, PHP_URL_PATH));
-        return $target === '' ? (string)$target : $target;
-    }
-}
-
-if (!function_exists('is_active')) {
-    function is_active($targets) {
-        global $current;
-        $targets = is_array($targets) ? $targets : array($targets);
-        foreach ($targets as $target) {
-            if (menu_normalize_target($target) === $current) {
-                return true;
-            }
-        }
-        return false;
-    }
-}
-
-if (!function_exists('li_class')) {
-    function li_class($targets, $extra = '') {
-        $classes = array();
-        $extra = trim((string)$extra);
-        if ($extra !== '') {
-            $classes = preg_split('/\s+/', $extra);
-        }
-        if (is_active($targets)) {
-            $classes = array_merge($classes, array('active', 'selected', 'open'));
-        }
-        $classes = array_values(array_unique(array_filter($classes)));
-        return empty($classes) ? '' : ' class="' . implode(' ', $classes) . '"';
-    }
-}
+require_once __DIR__ . '/menu_helpers.php';
+$current = menu_current_script();
 
 $dashboard_pages = array('index.php');
 $management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php');
@@ -338,86 +297,86 @@ $profile_pages = array('mis_datos.php');
 $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-responsive-collapse">
                     <ul class="nav navbar-nav">
                         <!-- DASHBOARD -->
-                        <li'.li_class($dashboard_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+                        <li'.menu_li_class($dashboard_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="index.php" class="text-uppercase">
                                 <i class="icon-home"></i> Dashboard </a>
                         </li>
                         
                         <!-- GESTIÓN DE SERVICIOS -->
-                        <li'.li_class($management_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+                        <li'.menu_li_class($management_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
                                 <i class="icon-layers"></i> Gestión </a>
                             <ul class="dropdown-menu dropdown-menu-fw">';
 
 // Submenú: Servicios Médicos
 if ($es_admin) {
-    $top_header_2 .=               '<li'.li_class($medical_group_pages, 'dropdown more-dropdown-sub').'>
+    $top_header_2 .=               '<li'.menu_li_class($medical_group_pages, 'dropdown more-dropdown-sub').'>
                                         <a href="javascript:;">
                                             <i class="icon-heart"></i> Servicios Médicos </a>
                                         <ul class="dropdown-menu">
-                                            <li'.li_class('service_categories.php').'>
+                                            <li'.menu_li_class('service_categories.php').'>
                                                 <a href="./service_categories.php">Categorías</a>
                                             </li>
-                                            <li'.li_class('service_catalog.php').'>
+                                            <li'.menu_li_class('service_catalog.php').'>
                                                 <a href="./service_catalog.php">Catálogo de Servicios</a>
                                             </li>
-                                            <li'.li_class('providers.php').'>
+                                            <li'.menu_li_class('providers.php').'>
                                                 <a href="./providers.php">Prestadores Médicos</a>
                                             </li>
-                                            <li'.li_class('provider_verification.php').'>
+                                            <li'.menu_li_class('provider_verification.php').'>
                                                 <a href="./provider_verification.php">Verificación Prestadores</a>
                                             </li>
-                                            <li'.li_class('provider_offers.php').'>
+                                            <li'.menu_li_class('provider_offers.php').'>
                                                 <a href="./provider_offers.php">Mis Ofertas</a>
                                             </li>
                                         </ul>
                                     </li>';
 
     // Submenú: Servicios Complementarios
-    $top_header_2 .=               '<li'.li_class($complementary_group_pages, 'dropdown more-dropdown-sub').'>
+    $top_header_2 .=               '<li'.menu_li_class($complementary_group_pages, 'dropdown more-dropdown-sub').'>
                                         <a href="javascript:;">
                                             <i class="icon-plane"></i> Servicios Complementarios </a>
                                         <ul class="dropdown-menu">
-                                            <li'.li_class('providers_complementary.php').'>
+                                            <li'.menu_li_class('providers_complementary.php').'>
                                                 <a href="./providers_complementary.php">Proveedores Complementarios</a>
                                             </li>
-                                            <li'.li_class('medtravel_services.php').'>
+                                            <li'.menu_li_class('medtravel_services.php').'>
                                                 <a href="./medtravel_services.php">MedTravel Services</a>
                                             </li>
-                                            <li'.li_class('paquetes.php').'>
+                                            <li'.menu_li_class('paquetes.php').'>
                                                 <a href="./paquetes.php">Paquetes de Viaje</a>
                                             </li>
                                         </ul>
                                     </li>';
 
     // Submenú: Clientes y Bookings
-    $top_header_2 .=               '<li'.li_class($clients_booking_pages, 'dropdown more-dropdown-sub').'>
+    $top_header_2 .=               '<li'.menu_li_class($clients_booking_pages, 'dropdown more-dropdown-sub').'>
                                         <a href="javascript:;">
                                             <i class="icon-users"></i> Clientes y Bookings </a>
                                         <ul class="dropdown-menu">
-                                            <li'.li_class('clientes.php').'>
+                                            <li'.menu_li_class('clientes.php').'>
                                                 <a href="./clientes.php">Gestión de Clientes</a>
                                             </li>
-                                            <li'.li_class('booking_requests.php').'>
+                                            <li'.menu_li_class('booking_requests.php').'>
                                                 <a href="./booking_requests.php">Solicitudes de Booking</a>
                                             </li>
                                         </ul>
                                     </li>';
 } elseif ($es_prestador) {
     // Prestador médico: dejar entrada directa para evitar menús vacíos en temas legacy.
-    $top_header_2 .=               '<li'.li_class('provider_offers.php').'>
+    $top_header_2 .=               '<li'.menu_li_class('provider_offers.php').'>
                                         <a href="./provider_offers.php">
                                             <i class="icon-tag"></i> Mis Ofertas </a>
                                     </li>';
 } elseif ($es_complementario) {
-    $top_header_2 .=               '<li'.li_class($complementary_scope_pages, 'dropdown more-dropdown-sub').'>
+    $top_header_2 .=               '<li'.menu_li_class($complementary_scope_pages, 'dropdown more-dropdown-sub').'>
                                         <a href="javascript:;">
                                             <i class="icon-plane"></i> Servicios Complementarios </a>
                                         <ul class="dropdown-menu">
-                                            <li'.li_class('providers_complementary.php').'>
+                                            <li'.menu_li_class('providers_complementary.php').'>
                                                 <a href="./providers_complementary.php">Proveedores Complementarios</a>
                                             </li>
-                                            <li'.li_class('medtravel_services.php').'>
+                                            <li'.menu_li_class('medtravel_services.php').'>
                                                 <a href="./medtravel_services.php">MedTravel Services</a>
                                             </li>
                                         </ul>
@@ -426,7 +385,7 @@ if ($es_admin) {
 
 // Mi Empresa (solo prestadores)
 if ($es_prestador && !$es_admin) {
-    $top_header_2 .=               '<li'.li_class('mi_empresa.php').'>
+    $top_header_2 .=               '<li'.menu_li_class('mi_empresa.php').'>
                                         <a href="./mi_empresa.php">
                                             <i class="icon-briefcase"></i> Mi Empresa </a>
                                     </li>';
@@ -437,37 +396,37 @@ $top_header_2 .=           '</ul>
 
 // ADMINISTRACIÓN (solo admins)
 if ($es_admin) {
-    $top_header_2 .=           '<li'.li_class($admin_section_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+    $top_header_2 .=           '<li'.menu_li_class($admin_section_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                                 <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
                                     <i class="icon-settings"></i> Administración </a>
                                 <ul class="dropdown-menu dropdown-menu-fw">
-                                    <li'.li_class($admin_users_pages, 'dropdown more-dropdown-sub').'>
+                                    <li'.menu_li_class($admin_users_pages, 'dropdown more-dropdown-sub').'>
                                         <a href="javascript:;">
                                             <i class="icon-user"></i> Usuarios y Accesos </a>
                                         <ul class="dropdown-menu">
-                                            <li'.li_class('mis_datos.php').'>
+                                            <li'.menu_li_class('mis_datos.php').'>
                                                 <a href="./mis_datos.php">Mi Perfil</a>
                                             </li>
-                                            <li'.li_class('usuarios.php').'>
+                                            <li'.menu_li_class('usuarios.php').'>
                                                 <a href="./usuarios.php">Usuarios</a>
                                             </li>
-                                            <li'.li_class('crear_usuario.php').'>
+                                            <li'.menu_li_class('crear_usuario.php').'>
                                                 <a href="./crear_usuario.php">Crear Usuarios</a>
                                             </li>
-                                            <li'.li_class('roles.php').'>
+                                            <li'.menu_li_class('roles.php').'>
                                                 <a href="./roles.php">Roles</a>
                                             </li>
                                         </ul>
                                     </li>
-    <li'.li_class('informes.php').'>
+    <li'.menu_li_class('informes.php').'>
         <a href="./informes.php">
             <i class="icon-bar-chart"></i> Informes </a>
     </li>
-    <li'.li_class('data_deletion_requests.php').'>
+    <li'.menu_li_class('data_deletion_requests.php').'>
         <a href="./data_deletion_requests.php">
             <i class="icon-trash"></i> Solicitudes de eliminación </a>
     </li>
-    <li'.li_class('email_settings.php').'>
+    <li'.menu_li_class('email_settings.php').'>
         <a href="./email_settings.php">
             <i class="icon-envelope"></i> Configuración Email </a>
     </li>
@@ -475,35 +434,35 @@ if ($es_admin) {
                             </li>';
 
     // CONTENIDO DEL SITIO
-    $top_header_2 .=           '<li'.li_class($site_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+    $top_header_2 .=           '<li'.menu_li_class($site_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                                 <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
                                     <i class="icon-globe"></i> Contenido Web </a>
                                 <ul class="dropdown-menu dropdown-menu-fw">
-                                    <li'.li_class('home_edit.php').'>
+                                    <li'.menu_li_class('home_edit.php').'>
                                         <a href="home_edit.php">
                                             <i class="icon-home"></i> Home </a>
                                     </li>
-                                    <li'.li_class('about_edit.php').'>
+                                    <li'.menu_li_class('about_edit.php').'>
                                         <a href="about_edit.php">
                                             <i class="icon-info"></i> About </a>
                                     </li>
-                                    <li'.li_class('services_edit.php').'>
+                                    <li'.menu_li_class('services_edit.php').'>
                                         <a href="services_edit.php">
                                             <i class="icon-grid"></i> Services </a>
                                     </li>
-                                    <li'.li_class('offers_header_edit.php').'>
+                                    <li'.menu_li_class('offers_header_edit.php').'>
                                         <a href="offers_header_edit.php">
                                             <i class="icon-heart"></i> Medical Services </a>
                                     </li>
-                                    <li'.li_class('offer_detail_edit.php').'>
+                                    <li'.menu_li_class('offer_detail_edit.php').'>
                                         <a href="offer_detail_edit.php">
                                             <i class="icon-docs"></i> Offer Detail </a>
                                     </li>
-                                    <li'.li_class('wizard_header_edit.php').'>
+                                    <li'.menu_li_class('wizard_header_edit.php').'>
                                         <a href="wizard_header_edit.php">
                                             <i class="icon-magic-wand"></i> Wizard Header </a>
                                     </li>
-                                    <li'.li_class('blog_edit.php').'>
+                                    <li'.menu_li_class('blog_edit.php').'>
                                         <a href="blog_edit.php">
                                             <i class="icon-speech"></i> Blog </a>
                                     </li>
@@ -511,7 +470,7 @@ if ($es_admin) {
                             </li>';
 } else {
     // Para usuarios NO admin, mostrar solo "Mi Perfil"
-    $top_header_2 .=               '<li'.li_class($profile_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+    $top_header_2 .=               '<li'.menu_li_class($profile_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                                         <a href="./mis_datos.php" class="text-uppercase">
                                             <i class="icon-user"></i> Mi Perfil </a>
                                     </li>';
