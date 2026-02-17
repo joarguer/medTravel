@@ -318,55 +318,38 @@ function restartForm(){
     notification(text,title,status);
     let id_usuario  = $('#id_usuario').val();
     let email       = $('#usuario').val();
+    let nombreUsuario = ($('#nombre').val() + ' ' + $('#apellido').val()).trim();
     let asunto      = "Creación Cuenta Administrativa";
-    
-    let mensaje     = `<tbody>
-                            <tr>
-                                <td class="esd-block-text es-p10t es-p5b" bgcolor="transparent" align="left">
-                                    <h3 style="color: #2980d9;">Hola ${nombre},</h3>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="esd-block-text es-p10t" bgcolor="transparent" align="left">
-                                    <p style="text-align: justify;">Hemos creado una cuenta a tu nombre, para ingresar utiliza las siguientes credenciales:</p>
-                                    <ul>
-                                        <li>Usuario: ${email}</li>
-                                        <li>Contraseña: ${password}'</li>
-                                    </ul>
-                                    <p>Para ingresar a la plataforma da click en el siguiente botón:</p>
-                                    <p><a href="https://ejemagicoadmin.com" class="es-button" target="_blank" style="border-style: solid; border-color: #2980d9; border-width: 10px 20px 10px 20px; background: #2980d9; border-radius: 0px; font-size: 18px; font-family: arial, helvetica, sans-serif; font-weight: normal; font-style: normal; line-height: 120%; color: #ffffff; text-decoration: none; width: auto; display: inline-block;">Ingresar</a></p>
-                                    <p>No olvides cambiar tu contraseña al ingresar por primera vez.</p>
-                                    <br><br><br>
-                                </td>
-                            </tr>
-                        </tbody>`;
-    let sBCC        = "joarguer@gmail.com";
-    let addCC       = "";
-    enviarCorreo(id_usuario,email,asunto,mensaje,sBCC,addCC,password);
+    enviarCorreo({
+        id_usuario: id_usuario,
+        to: email,
+        name: nombreUsuario,
+        username: email,
+        subject: asunto,
+        temp_password: password
+    });
     $("#form-crear-usuario").trigger("reset");
     $("#form-avatar-usuario").trigger("reset");
     $("#form-password-usuario").trigger("reset");
 }
 
-//$email,$asunto,$mensaje,$nombre,$sBCC,$addCC
-function enviarCorreo(id_usuario,email,asunto,mensaje,sBCC,addCC,password){
-    let archivoValidacion = "ajax/enviaMail.php";
-    $.post( archivoValidacion, { id_usuario: id_usuario, email: email, asunto: asunto, mensaje: mensaje, sBCC: sBCC, addCC: addCC, tipo: 'crea_usuario', password: password }, function (respuesta) {
-        respuesta = JSON.parse(respuesta);
-        if(respuesta.status == true){
-            let text = "El correo se ha enviado correctamente";
-            let title = "Envío Correo";
-            let status = "success";
-            notification(text,title,status);
+function enviarCorreo(payload){
+    let archivoValidacion = "/admin/ajax/enviaMail.php";
+    $.ajax({
+        url: archivoValidacion,
+        type: 'POST',
+        data: payload,
+        dataType: 'json'
+    }).done(function (respuesta) {
+        if(respuesta && (respuesta.ok === true || respuesta.status === true)){
+            notification("Usuario creado, correo enviado", "Envío Correo", "success");
         } else {
-            let text = "El correo no se ha enviado correctamente";
-            let title = "Envío Correo";
-            let status = "error";
-            notification(text,title,status);
+            notification("Usuario creado, correo pendiente", "Envío Correo", "error");
         }
-        App.unblockUI();
     }).fail(function () {
-        alert('error');
+        notification("Usuario creado, correo pendiente", "Envío Correo", "error");
+    }).always(function(){
+        App.unblockUI();
     });
 }
 
