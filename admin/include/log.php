@@ -18,12 +18,6 @@ function v($arr, $key, $default = '') {
         : $default;
 }
 
-// Defensa de conexión a base de datos
-if (!$conexion) {
-    error_log('DB connection is null in log.php');
-    header("location:../../login.php?error=db");
-    exit();
-}
 function sanear_string($string){
 
     $string = trim($string);
@@ -91,8 +85,53 @@ function auth_dev_log($message) {
     }
 }
 
+function auth_log_reason($reason, $userRow = array()) {
+    if (!auth_is_dev_mode()) return;
+    $userId = is_array($userRow) ? intval($userRow['id'] ?? 0) : 0;
+    $roleId = is_array($userRow) ? (string)($userRow['role_id'] ?? '') : '';
+    $providerId = is_array($userRow) ? intval($userRow['provider_id'] ?? 0) : 0;
+    $serviceProviderId = is_array($userRow) ? intval($userRow['service_provider_id'] ?? 0) : 0;
+    auth_dev_log("reason={$reason} user_id={$userId} role_id={$roleId} provider_id={$providerId} service_provider_id={$serviceProviderId}");
+}
+
+function login_redirect_error($reason, $legacyParams = array(), $userRow = array()) {
+    auth_log_reason($reason, $userRow);
+    $params = array('error' => $reason);
+    foreach ($legacyParams as $k => $v) {
+        if ($k === 'error') {
+            $params['legacy_error'] = $v;
+            continue;
+        }
+        $params[$k] = $v;
+    }
+    header("location:../../login.php?" . http_build_query($params));
+    exit();
+}
+
+function login_table_has_column($conexion, $table, $column) {
+    static $cache = array();
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) return $cache[$key];
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $q = mysqli_query($conexion, "SHOW COLUMNS FROM {$tableEsc} LIKE '{$columnEsc}'");
+    $cache[$key] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$key];
+}
+
+// Defensa de conexión a base de datos
+if (!$conexion) {
+    error_log('DB connection is null in log.php');
+    login_redirect_error('db_connection_error', array('error' => 'db'));
+}
+
 function login_fetch_medical_provider_name($conexion, $provider_id) {
-    $stmt = mysqli_prepare($conexion, "SELECT name FROM providers WHERE id = ? LIMIT 1");
+    $sql = "SELECT name FROM providers WHERE id = ?";
+    if (login_table_has_column($conexion, 'providers', 'is_active')) {
+        $sql .= " AND is_active = 1";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) return null;
     mysqli_stmt_bind_param($stmt, 'i', $provider_id);
     mysqli_stmt_execute($stmt);
@@ -106,7 +145,12 @@ function login_fetch_medical_provider_name($conexion, $provider_id) {
 }
 
 function login_fetch_active_service_provider_name($conexion, $service_provider_id) {
-    $stmt = mysqli_prepare($conexion, "SELECT provider_name FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    $sql = "SELECT provider_name FROM service_providers WHERE id = ?";
+    if (login_table_has_column($conexion, 'service_providers', 'is_active')) {
+        $sql .= " AND is_active = 1";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) return null;
     mysqli_stmt_bind_param($stmt, 'i', $service_provider_id);
     mysqli_stmt_execute($stmt);
@@ -143,37 +187,40 @@ if (isset($_POST["password"])) {
 
 auth_dev_log("keys=" . implode(',', array_keys($_POST)) . " user_len=" . strlen($usrname) . " pass_len=" . strlen($password));
 
-if ($password === '') {
-    auth_dev_log("branch=pass_vacio user_len=" . strlen($usrname));
-    header("location:../../login.php?pass=vacio");
-    exit();
+if ($usrname === '') {
+    login_redirect_error('missing_username', array('usuario' => 'nulo'));
 }
 
-$stmt_user = mysqli_prepare($conexion, "SELECT * FROM usuarios WHERE activo = '1' AND (usuario = ? OR email = ?) LIMIT 1");
+if ($password === '') {
+    login_redirect_error('missing_password', array('pass' => 'vacio'));
+}
+
+$stmt_user = mysqli_prepare($conexion, "SELECT * FROM usuarios WHERE (usuario = ? OR email = ?) LIMIT 1");
 if (!$stmt_user) {
     error_log('DB prepare error: '.mysqli_error($conexion));
-    header("location:../../login.php?error=db");
-    exit();
+    login_redirect_error('db_prepare_error', array('error' => 'db'));
 }
 mysqli_stmt_bind_param($stmt_user, 'ss', $usrname, $usrname);
 if (!mysqli_stmt_execute($stmt_user)) {
     mysqli_stmt_close($stmt_user);
     error_log('DB execute error: '.mysqli_error($conexion));
-    header("location:../../login.php?error=db");
-    exit();
+    login_redirect_error('db_execute_error', array('error' => 'db'));
 }
 $busca_usua = mysqli_stmt_get_result($stmt_user);
 if (!$busca_usua) {
     mysqli_stmt_close($stmt_user);
     error_log('DB result error: '.mysqli_error($conexion));
-    header("location:../../login.php?error=db");
-    exit();
+    login_redirect_error('db_result_error', array('error' => 'db'));
 }
 //empresa
 if (mysqli_num_rows($busca_usua) > 0) {
     $fil = mysqli_fetch_array($busca_usua);
     mysqli_stmt_close($stmt_user);
     auth_dev_log("found_user_id=" . v($fil, 'id', 0) . " role_id=" . v($fil, 'role_id', 'null') . " token_len=" . strlen((string)v($fil, 'token', '')) . " pass_len=" . strlen((string)v($fil, 'password', '')));
+
+    if (intval(v($fil, 'activo', 0)) !== 1) {
+        login_redirect_error('user_inactive', array('usuario' => 'nulo'), $fil);
+    }
     
     // Verificación canónica compartida con create/reset password.
     $password_valido = verify_password_for_user($password, $fil);
@@ -190,13 +237,11 @@ if (mysqli_num_rows($busca_usua) > 0) {
 
         if ($is_medical_role) {
             if ($provider_id_val <= 0) {
-                header("location:../../login.php?error=empresa");
-                exit();
+                login_redirect_error('provider_scope_required', array('error' => 'empresa'), $fil);
             }
             $provider_name = login_fetch_medical_provider_name($conexion, $provider_id_val);
             if ($provider_name === null || $provider_name === '') {
-                header("location:../../login.php?error=empresa");
-                exit();
+                login_redirect_error('provider_invalid_or_inactive', array('error' => 'empresa'), $fil);
             }
             if ($rasocial === '') {
                 $rasocial = $provider_name;
@@ -205,13 +250,11 @@ if (mysqli_num_rows($busca_usua) > 0) {
             $fil['service_provider_id'] = null;
         } elseif ($is_complementary_role) {
             if ($service_provider_id_val <= 0) {
-                header("location:../../login.php?error=empresa");
-                exit();
+                login_redirect_error('service_provider_scope_required', array('error' => 'empresa'), $fil);
             }
             $service_provider_name = login_fetch_active_service_provider_name($conexion, $service_provider_id_val);
             if ($service_provider_name === null || $service_provider_name === '') {
-                header("location:../../login.php?error=empresa");
-                exit();
+                login_redirect_error('service_provider_invalid_or_inactive', array('error' => 'empresa'), $fil);
             }
             if ($rasocial === '') {
                 $rasocial = $service_provider_name;
@@ -233,8 +276,7 @@ if (mysqli_num_rows($busca_usua) > 0) {
         
         if (!$query) {
             error_log('DB error: '.mysqli_error($conexion));
-            header("location:../../login.php?error=query");
-            exit();
+            login_redirect_error('empresa_query_error', array('error' => 'query'), $fil);
         }
         if (mysqli_num_rows($query) == 0) {
             // Para admin global y dominios provider/complementary, permitir empresa virtual.
@@ -247,8 +289,7 @@ if (mysqli_num_rows($busca_usua) > 0) {
                     'logo' => ''
                 ];
             } else {
-                header("location:../../login.php?error=empresa");
-                exit();
+                login_redirect_error('empresa_invalid', array('error' => 'empresa'), $fil);
             }
         } else {
             $fila = mysqli_fetch_array($query);
@@ -369,18 +410,13 @@ if (mysqli_num_rows($busca_usua) > 0) {
                 exit();
             }
         } else {
-            header("location:../../login.php?session=error");
-            exit();
+            login_redirect_error('session_conflict', array('session' => 'error'), $fil);
         }
     } else{
-        auth_dev_log("branch=usuario_nulo2 user_id=" . v($fil, 'id', 0) . " reason=password_mismatch");
-        header("location:../../login.php?usuario=nulo2");
-        exit();
+        login_redirect_error('password_mismatch', array('usuario' => 'nulo2'), $fil);
     }
 } else {
     mysqli_stmt_close($stmt_user);
-    auth_dev_log("branch=usuario_nulo reason=user_not_found user_len=" . strlen($usrname));
-    header("location:../../login.php?usuario=nulo");
-    exit();
+    login_redirect_error('user_not_found', array('usuario' => 'nulo'));
 }
 ?>
