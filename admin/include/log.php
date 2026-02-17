@@ -81,6 +81,16 @@ function sanear_string($string){
     return $string;
 }
 
+function auth_is_dev_mode() {
+    return defined('APP_ENV') && APP_ENV === 'dev';
+}
+
+function auth_dev_log($message) {
+    if (auth_is_dev_mode()) {
+        error_log('[AUTH] ' . $message);
+    }
+}
+
 function login_fetch_medical_provider_name($conexion, $provider_id) {
     $stmt = mysqli_prepare($conexion, "SELECT name FROM providers WHERE id = ? LIMIT 1");
     if (!$stmt) return null;
@@ -108,23 +118,65 @@ function login_fetch_active_service_provider_name($conexion, $service_provider_i
     mysqli_stmt_close($stmt);
     return $name;
 }
-// Recuperar y sanear input
-$usrname  = isset($_POST["username"]) ? sanear_string($_POST["username"]) : '';
-$password = isset($_POST["password"]) ? $_POST["password"] : '';
+// Recuperar input con compatibilidad de nombres legacy.
+$user_candidates = array(
+    isset($_POST["usuario"]) ? $_POST["usuario"] : '',
+    isset($_POST["username"]) ? $_POST["username"] : '',
+    isset($_POST["email"]) ? $_POST["email"] : '',
+    isset($_POST["usrlogin"]) ? $_POST["usrlogin"] : '',
+);
+$raw_user = '';
+foreach ($user_candidates as $candidate) {
+    $candidate = trim((string)$candidate);
+    if ($candidate !== '') {
+        $raw_user = $candidate;
+        break;
+    }
+}
+$usrname = sanear_string($raw_user);
+$password = '';
+if (isset($_POST["password"])) {
+    $password = trim((string)$_POST["password"]);
+} elseif (isset($_POST["pass"])) {
+    $password = trim((string)$_POST["pass"]);
+}
 
-$sql_user = "SELECT * FROM usuarios WHERE usuario = '".mysqli_real_escape_string($conexion, $usrname)."' AND activo = '1'";
-$busca_usua = mysqli_query($conexion, $sql_user);
+auth_dev_log("keys=" . implode(',', array_keys($_POST)) . " user_len=" . strlen($usrname) . " pass_len=" . strlen($password));
+
+if ($password === '') {
+    auth_dev_log("branch=pass_vacio user_len=" . strlen($usrname));
+    header("location:../../login.php?pass=vacio");
+    exit();
+}
+
+$stmt_user = mysqli_prepare($conexion, "SELECT * FROM usuarios WHERE activo = '1' AND (usuario = ? OR email = ?) LIMIT 1");
+if (!$stmt_user) {
+    error_log('DB prepare error: '.mysqli_error($conexion));
+    header("location:../../login.php?error=db");
+    exit();
+}
+mysqli_stmt_bind_param($stmt_user, 'ss', $usrname, $usrname);
+if (!mysqli_stmt_execute($stmt_user)) {
+    mysqli_stmt_close($stmt_user);
+    error_log('DB execute error: '.mysqli_error($conexion));
+    header("location:../../login.php?error=db");
+    exit();
+}
+$busca_usua = mysqli_stmt_get_result($stmt_user);
 if (!$busca_usua) {
-    error_log('DB error: '.mysqli_error($conexion));
+    mysqli_stmt_close($stmt_user);
+    error_log('DB result error: '.mysqli_error($conexion));
     header("location:../../login.php?error=db");
     exit();
 }
 //empresa
 if (mysqli_num_rows($busca_usua) > 0) {
     $fil = mysqli_fetch_array($busca_usua);
+    mysqli_stmt_close($stmt_user);
+    auth_dev_log("found_user_id=" . v($fil, 'id', 0) . " role_id=" . v($fil, 'role_id', 'null') . " token_len=" . strlen((string)v($fil, 'token', '')) . " pass_len=" . strlen((string)v($fil, 'password', '')));
     
     // Verificación canónica compartida con create/reset password.
-    $password_valido = verify_password($password, v($fil, 'token', ''), v($fil, 'password', ''));
+    $password_valido = verify_password_for_user($password, $fil);
     
     if ($password_valido) {
         //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC
@@ -321,10 +373,13 @@ if (mysqli_num_rows($busca_usua) > 0) {
             exit();
         }
     } else{
+        auth_dev_log("branch=usuario_nulo2 user_id=" . v($fil, 'id', 0) . " reason=password_mismatch");
         header("location:../../login.php?usuario=nulo2");
         exit();
     }
 } else {
+    mysqli_stmt_close($stmt_user);
+    auth_dev_log("branch=usuario_nulo reason=user_not_found user_len=" . strlen($usrname));
     header("location:../../login.php?usuario=nulo");
     exit();
 }
