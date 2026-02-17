@@ -11,6 +11,19 @@ define('ROLE_PROVIDER', 4);
 define('ROLE_ACCOUNTING', 11);
 define('ROLE_PROVIDER_ADMIN', 12);
 
+// Canonical granular permissions (RBAC hardening)
+define('PERM_SERVICES_MEDICAL_MANAGE', 'services.medical.manage');
+define('PERM_SERVICES_COMPLEMENTARY_MANAGE', 'services.complementary.manage');
+define('PERM_PROVIDERS_MEDICAL_MANAGE', 'providers.medical.manage');
+define('PERM_PROVIDERS_COMPLEMENTARY_MANAGE', 'providers.complementary.manage');
+define('PERM_BOOKING_VIEW', 'booking.view');
+define('PERM_BOOKING_MANAGE', 'booking.manage');
+define('PERM_PACKAGES_MANAGE', 'packages.manage');
+define('PERM_USERS_MANAGE', 'users.manage');
+define('PERM_REPORTS_VIEW', 'reports.view');
+define('PERM_SETTINGS_MANAGE', 'settings.manage');
+define('PERM_CONTENT_MANAGE', 'content.manage');
+
 // Return a normalized integer role or null
 function normalize_role_value($rol) {
     if ($rol === null || $rol === '') return null;
@@ -51,6 +64,83 @@ function get_available_roles() {
         ROLE_CLIENT => 'Cliente',
         ROLE_PROVIDER => 'Proveedor'
     ];
+}
+
+function get_granular_permissions_catalog() {
+    return [
+        PERM_SERVICES_MEDICAL_MANAGE => 'Gestionar servicios médicos',
+        PERM_SERVICES_COMPLEMENTARY_MANAGE => 'Gestionar servicios complementarios',
+        PERM_PROVIDERS_MEDICAL_MANAGE => 'Gestionar prestadores médicos',
+        PERM_PROVIDERS_COMPLEMENTARY_MANAGE => 'Gestionar proveedores complementarios',
+        PERM_BOOKING_VIEW => 'Ver bookings',
+        PERM_BOOKING_MANAGE => 'Gestionar bookings',
+        PERM_PACKAGES_MANAGE => 'Gestionar paquetes',
+        PERM_USERS_MANAGE => 'Gestionar usuarios',
+        PERM_REPORTS_VIEW => 'Ver reportes',
+        PERM_SETTINGS_MANAGE => 'Gestionar configuración',
+        PERM_CONTENT_MANAGE => 'Gestionar contenido web',
+    ];
+}
+
+function get_permission_alias_map() {
+    // Bridge entre permisos canónicos nuevos y slugs legacy existentes en DB.
+    return [
+        PERM_SERVICES_MEDICAL_MANAGE => ['offers.manage', 'providers.medical.edit', 'providers.edit'],
+        PERM_SERVICES_COMPLEMENTARY_MANAGE => ['providers.partner.edit', 'providers.edit'],
+        PERM_PROVIDERS_MEDICAL_MANAGE => ['providers.medical.edit', 'providers.edit'],
+        PERM_PROVIDERS_COMPLEMENTARY_MANAGE => ['providers.partner.edit', 'providers.edit'],
+        PERM_BOOKING_VIEW => ['reports.view'],
+        PERM_BOOKING_MANAGE => ['reports.view'],
+        PERM_PACKAGES_MANAGE => ['providers.partner.edit', 'providers.edit'],
+        PERM_USERS_MANAGE => ['users.edit', 'users.create'],
+        PERM_REPORTS_VIEW => ['reports.view'],
+        PERM_SETTINGS_MANAGE => ['roles.manage'],
+        PERM_CONTENT_MANAGE => ['roles.manage'],
+    ];
+}
+
+function get_role_fallback_permissions($role_id) {
+    switch (intval($role_id)) {
+        case ROLE_PROVIDER_ADMIN:
+            return [
+                PERM_SERVICES_COMPLEMENTARY_MANAGE,
+                PERM_PROVIDERS_COMPLEMENTARY_MANAGE,
+                PERM_PACKAGES_MANAGE,
+                PERM_BOOKING_VIEW,
+                'users.view',
+                'users.create',
+                'users.edit',
+            ];
+        case ROLE_PROVIDER:
+            return [
+                PERM_SERVICES_MEDICAL_MANAGE,
+                PERM_PROVIDERS_MEDICAL_MANAGE,
+                'offers.manage',
+                'providers.medical.view',
+                'providers.medical.edit',
+                'users.view',
+            ];
+        case ROLE_ACCOUNTING:
+            return [PERM_REPORTS_VIEW, PERM_BOOKING_VIEW, 'reports.view'];
+        default:
+            return [];
+    }
+}
+
+function is_granular_permission_slug($permission_slug) {
+    $catalog = get_granular_permissions_catalog();
+    return isset($catalog[$permission_slug]);
+}
+
+function permission_match_in_list($permission_slug, $perms) {
+    if (in_array($permission_slug, $perms, true)) return true;
+    $aliases = get_permission_alias_map();
+    if (!empty($aliases[$permission_slug])) {
+        foreach ($aliases[$permission_slug] as $alias) {
+            if (in_array($alias, $perms, true)) return true;
+        }
+    }
+    return false;
 }
 
 // Permission helpers
@@ -121,7 +211,14 @@ function user_can($permission_slug){
     $rid = current_role_id();
     if($rid === null) return false;
     $perms = get_role_permissions($rid);
-    return in_array($permission_slug, $perms, true);
+    if (permission_match_in_list($permission_slug, $perms)) return true;
+
+    // Fallback no destructivo para ambientes sin migración completa de permisos granulares.
+    if (is_granular_permission_slug($permission_slug)) {
+        $fallback = get_role_fallback_permissions($rid);
+        if (permission_match_in_list($permission_slug, $fallback)) return true;
+    }
+    return false;
 }
 
 ?>
