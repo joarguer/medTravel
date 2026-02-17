@@ -14,6 +14,97 @@ if (!$is_admin) {
 $id_usuario = $_SESSION['id_usuario'];
 $busca = mysqli_query($conexion,"SELECT * FROM usuarios WHERE id = '".$id_usuario."'");
 $rst   = mysqli_fetch_array($busca);
+
+$can_view_roles_help = $is_admin;
+if (!$can_view_roles_help && function_exists('user_can')) {
+    $can_view_roles_help = user_can(PERM_USERS_MANAGE) || user_can('users.create');
+}
+
+function crear_usuario_scope_type($role_id, $role_slug) {
+    $rid = (int)$role_id;
+    $slug = strtolower(trim((string)$role_slug));
+    if ($rid === ROLE_ADMIN || $rid === ROLE_ADMINISTRATIVE || strpos($slug, 'principal') !== false || strpos($slug, 'administrative') !== false) {
+        return 'admin';
+    }
+    if ($rid === ROLE_PROVIDER || $rid === ROLE_PROVIDER_ADMIN || (strpos($slug, 'provider') !== false && strpos($slug, 'complement') === false)) {
+        return 'medical_provider';
+    }
+    if ($rid === ROLE_COMPLEMENTARY_ADMIN || strpos($slug, 'complementary') !== false) {
+        return 'complementary_provider';
+    }
+    if ($rid === ROLE_CLIENT || strpos($slug, 'client') !== false || strpos($slug, 'cliente') !== false) {
+        return 'none';
+    }
+    return 'none';
+}
+
+function crear_usuario_role_requirements($scope_type) {
+    if ($scope_type === 'medical_provider') {
+        return 'Requiere Prestador médico (provider_id). Debe quedar service_provider_id en NULL.';
+    }
+    if ($scope_type === 'complementary_provider') {
+        return 'Requiere Proveedor Complementario activo (service_provider_id). Debe quedar provider_id en NULL.';
+    }
+    return 'No requiere scope de empresa.';
+}
+
+function crear_usuario_role_menu_summary($role_id, $scope_type) {
+    if ($scope_type === 'admin') {
+        return 'Gestión + Administración + Contenido Web (según permisos actuales).';
+    }
+    if ($scope_type === 'medical_provider') {
+        return 'Módulos médicos: Categorías, Catálogo, Prestadores, Mis Ofertas (según RBAC actual).';
+    }
+    if ($scope_type === 'complementary_provider') {
+        return 'Módulos complementarios: Proveedores Complementarios y MedTravel Services (según RBAC actual).';
+    }
+    if ((int)$role_id === ROLE_CLIENT) {
+        return 'Acceso mínimo: Mi Perfil / opciones habilitadas.';
+    }
+    return 'Acceso según permisos del rol.';
+}
+
+$roles_help_rows = [];
+$roles_help_map = [];
+if ($can_view_roles_help) {
+    $roles_sql = "SELECT id, slug, name, description FROM roles ORDER BY id ASC";
+    $roles_result = mysqli_query($conexion, $roles_sql);
+    if (!$roles_result) {
+        $roles_sql = "SELECT id, slug, name, '' AS description FROM roles ORDER BY id ASC";
+        $roles_result = mysqli_query($conexion, $roles_sql);
+    }
+    if ($roles_result) {
+        while ($role = mysqli_fetch_assoc($roles_result)) {
+            $rid = isset($role['id']) ? (int)$role['id'] : 0;
+            if ($rid <= 0) {
+                continue;
+            }
+            $scope_type = crear_usuario_scope_type($rid, $role['slug'] ?? '');
+            $requirements = crear_usuario_role_requirements($scope_type);
+            $menu_summary = crear_usuario_role_menu_summary($rid, $scope_type);
+
+            $roles_help_rows[] = [
+                'id' => $rid,
+                'slug' => (string)($role['slug'] ?? ''),
+                'name' => (string)($role['name'] ?? ('Rol #' . $rid)),
+                'description' => (string)($role['description'] ?? ''),
+                'requirements' => $requirements,
+                'menu_summary' => $menu_summary,
+            ];
+
+            $roles_help_map[(string)$rid] = [
+                'scope_type' => $scope_type,
+                'required_fields' => $requirements,
+                'menu_summary' => $menu_summary,
+                'hint' => $requirements,
+            ];
+        }
+    }
+}
+$roles_help_json = json_encode($roles_help_map, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+if ($roles_help_json === false) {
+    $roles_help_json = '{}';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -46,6 +137,7 @@ $rst   = mysqli_fetch_array($busca);
                 roleProviderAdmin: <?php echo ROLE_PROVIDER_ADMIN; ?>,
                 roleComplementary: <?php echo ROLE_COMPLEMENTARY_ADMIN; ?>
             };
+            window.ROLES_HELP = <?php echo $roles_help_json; ?>;
         </script>
     </head>
     <!-- END HEAD -->
@@ -119,6 +211,7 @@ $rst   = mysqli_fetch_array($busca);
                                                     <option value="<?php echo $rid; ?>" <?php echo ((int)$rid === (int)$default_role_id ? 'selected' : ''); ?>><?php echo htmlspecialchars($rlabel); ?></option>
                                                 <?php endforeach; ?>
                                             </select>
+                                            <span class="help-block" id="role-scope-help"></span>
                                             <?php if(!$is_admin): ?><span class="help-block"><?php echo $service_provider_session_id ? 'Tu rol está fijado como Proveedor Complementario' : 'Tu rol está fijado como Proveedor'; ?></span><?php endif; ?>
                                         </div>
                                     </div>
@@ -154,6 +247,38 @@ $rst   = mysqli_fetch_array($busca);
                             <div class="profile-content">
                                 <div class="row">
                                     <div class="col-md-12">
+                                        <?php if ($can_view_roles_help && !empty($roles_help_rows)): ?>
+                                        <div class="alert alert-info">
+                                            <h4 class="block">Roles y accesos</h4>
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered table-striped table-condensed">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Rol</th>
+                                                            <th>Requiere</th>
+                                                            <th>Acceso principal</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <?php foreach ($roles_help_rows as $role_help): ?>
+                                                        <tr>
+                                                            <td>
+                                                                <strong><?php echo htmlspecialchars($role_help['name'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                                                                <br>
+                                                                <small class="text-muted"><?php echo htmlspecialchars($role_help['slug'], ENT_QUOTES, 'UTF-8'); ?></small>
+                                                            </td>
+                                                            <td><?php echo htmlspecialchars($role_help['requirements'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                            <td><?php echo htmlspecialchars($role_help['menu_summary'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                                        </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <p class="mb-0">
+                                                <strong>Nota:</strong> Si asignas rol médico, debes seleccionar Prestador médico. Si asignas <code>complementary_admin</code>, debes seleccionar Proveedor Complementario activo. <code>client</code> es acceso mínimo.
+                                            </p>
+                                        </div>
+                                        <?php endif; ?>
                                         <div class="portlet light ">
                                             <div class="portlet-title tabbable-line">
                                                 <div class="caption caption-md">

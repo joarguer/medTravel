@@ -70,8 +70,20 @@ $(document).ready(function(){
             $('#div-empresa').hide();
         }
     }
-    $('#user_role').on('change', applyRoleVisibility);
+    function applyRoleHelp(){
+        let roleMap = window.ROLES_HELP || {};
+        let currentRole = String($('#user_role').val() || '');
+        let roleHelp = roleMap[currentRole] || null;
+        let defaultHelp = 'Selecciona un rol para ver qué scope/empresa requiere.';
+        let helpText = roleHelp && roleHelp.hint ? roleHelp.hint : defaultHelp;
+        $('#role-scope-help').text(helpText);
+    }
+    $('#user_role').on('change', function(){
+        applyRoleVisibility();
+        applyRoleHelp();
+    });
     applyRoleVisibility();
+    applyRoleHelp();
 });
 
 $('#btn-crea-usuario').click(function(e){

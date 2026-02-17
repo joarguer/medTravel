@@ -304,3 +304,13 @@ Usuario
 - `admin/js/crear_usuario.js`
 - `admin/usuarios.php`
 - `admin/js/usuarios.js`
+
+### G) Ayuda UI en creación de usuarios (roles y scope)
+- Se añadió ayuda informativa en `admin/crear_usuario.php` para prevenir errores de asignación de rol/dominio al crear usuarios.
+- El bloque "Roles y accesos" se muestra solo para sesiones administrativas o con permisos de usuarios (`users.manage` / `users.create`).
+- La tabla toma roles reales de BD (`roles`) y explica por rol:
+  - Scope requerido (médico/complementario/ninguno).
+  - Campo obligatorio (`provider_id` vs `service_provider_id`).
+  - Resumen de módulos visibles según RBAC.
+- Además, el selector de rol muestra una ayuda dinámica en tiempo real (frontend) usando `window.ROLES_HELP`.
+- Este cambio no altera autenticación, endpoints ni estructura de menús; solo mejora la guía operativa en UI.
