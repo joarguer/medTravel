@@ -140,7 +140,13 @@ $(function(){
 
             var actions = $('<td>');
             if(canEdit){
-                actions.append('<button type="button" class="btn btn-xs btn-primary edit-user" style="margin-right:6px;">Editar</button>');
+                var editBtn = $('#users-edit-btn-template').find('button').first().clone();
+                if(editBtn.length){
+                    editBtn.attr('data-id', u.id);
+                    actions.append(editBtn);
+                } else {
+                    actions.append('<button type="button" class="btn btn-xs btn-primary btn-user-edit edit-user" data-id="' + u.id + '" style="margin-right:6px;">EDITAR</button>');
+                }
                 actions.append('<button type="button" class="btn btn-xs btn-default toggle-active">' + (u.activo === 1 ? 'Desactivar' : 'Activar') + '</button>');
             }
             tr.append(actions);
@@ -340,8 +346,8 @@ $(function(){
         });
     });
 
-    $('#users-table').on('click', '.edit-user', function(){
-        var userId = parseInt($(this).closest('tr').data('id') || 0, 10);
+    $('#users-table').on('click', '.btn-user-edit, .edit-user', function(){
+        var userId = parseInt($(this).data('id') || $(this).closest('tr').data('id') || 0, 10);
         if(userId > 0){
             openEditModal(userId);
         }

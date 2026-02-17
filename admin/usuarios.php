@@ -74,7 +74,7 @@ if (!user_can('users.view') && !$can_manage_users) {
                                 </table>
                                 <?php if ($can_manage_users): ?>
                                 <div id="users-edit-btn-template" class="hide">
-                                    <button type="button" class="btn btn-xs btn-primary edit-user">Editar</button>
+                                    <button type="button" class="btn btn-xs btn-primary btn-user-edit edit-user" data-id="" style="margin-right:6px;">EDITAR</button>
                                 </div>
                                 <?php endif; ?>
                             </div>
@@ -148,6 +148,6 @@ if (!user_can('users.view') && !$can_manage_users) {
         };
     </script>
     <!-- Root cause note: force-refresh usuarios.js to avoid stale cached legacy script (inline-only actions). -->
-    <script src="js/usuarios.js?v=<?php echo @filemtime(__DIR__ . '/js/usuarios.js'); ?>"></script>
+    <script src="/admin/js/usuarios.js?v=<?php echo @filemtime(__DIR__ . '/js/usuarios.js'); ?>"></script>
 </body>
 </html>
