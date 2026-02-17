@@ -403,6 +403,12 @@ function validateServiceForm() {
     if(!serviceName) {
         errors.push({tab: 'Basic Info', field: 'Service Name is required', element: '#service_name'});
     }
+
+    // TAB 2: Provider - requerido para admin/global. Usuarios scoped se fuerzan server-side.
+    var selectedProviderId = parseInt($('#provider_id').val(), 10) || 0;
+    if(!scopedComplementaryProviderId && selectedProviderId <= 0) {
+        errors.push({tab: 'Provider', field: 'Provider is required', element: '#provider_id'});
+    }
     
     // TAB 3: Pricing - Validaciones de precios y tasa de cambio
     var exchangeRate = parseFloat($('#exchange_rate').val()) || 0;

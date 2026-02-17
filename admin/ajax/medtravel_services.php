@@ -94,6 +94,34 @@ function get_scope_service_provider_id() {
     return current_service_provider_id();
 }
 
+function validate_active_service_provider($conexion, $providerId) {
+    $stmt = mysqli_prepare($conexion, "SELECT id FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    if (!$stmt) json_err('db_prepare_error');
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $ok = $res && mysqli_num_rows($res) > 0;
+    mysqli_stmt_close($stmt);
+    if (!$ok) {
+        json_err('invalid_or_inactive_provider', 422);
+    }
+}
+
+function resolve_target_provider_id($conexion, $requestProviderId) {
+    $scopeId = get_scope_service_provider_id();
+    if ($scopeId > 0) {
+        validate_active_service_provider($conexion, $scopeId);
+        return $scopeId;
+    }
+
+    $providerId = intval($requestProviderId);
+    if ($providerId <= 0) {
+        json_err('provider_required', 422);
+    }
+    validate_active_service_provider($conexion, $providerId);
+    return $providerId;
+}
+
 function assert_service_scope($conexion, $serviceId) {
     $scopeId = get_scope_service_provider_id();
     if ($scopeId <= 0) return;
@@ -242,14 +270,10 @@ function createService($conexion, $id_usuario) {
         json_err('Service type and name are required');
     }
 
-    $scopeId = get_scope_service_provider_id();
-    $forcedProviderId = $scopeId > 0 ? $scopeId : null;
+    $forcedProviderId = resolve_target_provider_id($conexion, $_POST['provider_id'] ?? 0);
     $data = buildServiceData($_POST, $forcedProviderId);
     $data['created_by'] = intval($id_usuario);
-
-    if ($scopeId > 0) {
-        $data['provider_id'] = $scopeId;
-    }
+    $data['provider_id'] = $forcedProviderId;
 
     $fields = array_keys($data);
     $placeholders = implode(',', array_fill(0, count($fields), '?'));
@@ -294,12 +318,9 @@ function updateService($conexion) {
 
     assert_service_scope($conexion, $id);
 
-    $scopeId = get_scope_service_provider_id();
-    $forcedProviderId = $scopeId > 0 ? $scopeId : null;
+    $forcedProviderId = resolve_target_provider_id($conexion, $_POST['provider_id'] ?? 0);
     $data = buildServiceData($_POST, $forcedProviderId);
-    if ($scopeId > 0) {
-        $data['provider_id'] = $scopeId;
-    }
+    $data['provider_id'] = $forcedProviderId;
 
     $sets = [];
     $values = [];
