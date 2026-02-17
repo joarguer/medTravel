@@ -60,6 +60,9 @@ include('include/include.php');
                                     </div>
                                 </div>
                                 <div class="portlet-body">
+                                    <div class="alert alert-warning">
+                                        Legacy complementario — usar <strong>service_providers</strong> en el módulo de Proveedores Complementarios.
+                                    </div>
                                     <table class="table table-striped table-bordered" id="tbl-providers">
                                         <thead>
                                             <tr>
@@ -108,9 +111,9 @@ include('include/include.php');
                                 <label>Clasificación</label>
                                 <select id="prov-kind" name="kind" class="form-control select2me">
                                     <option value="medical">Prestador médico</option>
-                                    <option value="partner">Servicio complementario</option>
+                                    <option value="partner">Servicio complementario (LEGACY - congelado)</option>
                                 </select>
-                                <span class="help-block">Define si es prestador médico o un partner complementario.</span>
+                                <span class="help-block">Nuevos complementarios deben crearse en service_providers.</span>
                             </div>
                             <div class="form-group">
                                 <label>Nombre</label>

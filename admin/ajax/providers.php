@@ -112,12 +112,19 @@ try{
         $kind = isset($_REQUEST['kind']) ? trim($_REQUEST['kind']) : 'medical';
         if(!in_array($kind, ['medical','partner'])) $kind = 'medical';
 
-        // permisos por tipo
+        // Legacy freeze: no permitir nuevas altas de kind=partner.
         if($kind === 'partner'){
-            if(!user_can('providers.partner.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
-        } else {
-            if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+            http_response_code(422);
+            echo json_encode([
+                'ok'=>false,
+                'error'=>'legacy_partner_frozen',
+                'message'=>'Legacy complementario — usar service_providers'
+            ]);
+            exit;
         }
+
+        // permisos por tipo
+        if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
         
         if($type === '' || ($type != 'medico' && $type != 'clinica') || $name === ''){ 
             echo json_encode(['ok'=>false,'error'=>'invalid_input','message'=>'Datos incompletos']); exit; 
@@ -222,6 +229,17 @@ try{
         if($kr && $rowk = mysqli_fetch_assoc($kr)) $kind_db = $rowk['kind'] ?: 'medical';
         mysqli_stmt_close($kq);
         if($kind === '' || !in_array($kind, ['medical','partner'])) $kind = $kind_db;
+
+        // Legacy freeze: no permitir convertir de medical -> partner.
+        if($kind === 'partner' && $kind_db !== 'partner'){
+            http_response_code(422);
+            echo json_encode([
+                'ok'=>false,
+                'error'=>'legacy_partner_frozen',
+                'message'=>'Legacy complementario — usar service_providers'
+            ]);
+            exit;
+        }
 
         // permisos por tipo
         if($kind === 'partner'){

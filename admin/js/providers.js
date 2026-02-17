@@ -62,6 +62,7 @@ $(document).ready(function(){
         let name = $('#prov-name').val().trim(); 
         let username = $('#prov-username').val().trim();
         let password = $('#prov-password').val();
+        let selectedKind = $('#prov-kind').val() || 'medical';
         
         if(!type || !name){ 
             alert('Tipo y nombre son requeridos'); 
@@ -75,10 +76,14 @@ $(document).ready(function(){
             alert('Contraseña es requerida al crear nuevo proveedor'); 
             return; 
         }
+        if(!id && selectedKind === 'partner'){
+            alert('Legacy complementario — usar service_providers');
+            return;
+        }
         
         let data = {
             type: type,
-            kind: $('#prov-kind').val() || 'medical',
+            kind: selectedKind,
             name: name,
             legal_name: $('#prov-legal-name').val().trim(),
             username: username,
