@@ -246,19 +246,21 @@ Criterio: se listan **todos** los `.md` detectados, con el primer encabezado/lí
   - Relación de usuario: `usuarios.service_provider_id`
 - Regla de negocio vigente: un usuario solo puede pertenecer a un dominio empresarial a la vez (exclusión mutua entre `provider_id` y `service_provider_id`).
 
-### B) Jerarquía oficial de roles
+### B) Jerarquía actual de roles
 
-| role_id | slug | alcance |
-|---:|---|---|
-| 1 | `principal` | Admin Global |
-| 2 | `administrative` | Admin Global |
-| 4 | `provider` | Proveedor Médico |
-| 12 | `provider_admin` | Admin Prestador Médico |
-| 13 | `complementary_admin` | Admin Proveedor Complementario |
+| role_id | slug | dominio | scope requerido |
+|---:|---|---|---|
+| 1 | `principal` | Global | `none` |
+| 2 | `administrative` | Global | `none` |
+| 4 | `provider` | Médico | `provider_id` |
+| 12 | `provider_admin` | Médico | `provider_id` |
+| 13 | `complementary_admin` | Complementario | `service_provider_id` |
+| 3 | `client` | Público | `none` |
 
 - Roles 1 y 2: no requieren empresa asignada para login.
 - Roles 4 y 12: requieren `provider_id` válido.
 - Rol 13: requiere `service_provider_id` válido y activo.
+- Rol 3 (`client`): no requiere empresa/scope en admin.
 - El login valida empresa según dominio del rol.
 - No se permite mezclar `provider_id` y `service_provider_id` en el mismo usuario.
 
@@ -268,16 +270,39 @@ Criterio: se listan **todos** los `.md` detectados, con el primer encabezado/lí
 - Complementario (13): exige `service_provider_id` válido en `service_providers` con `is_active=1`.
 - La redirección `error=empresa` solo aplica cuando el rol requiere empresa y no tiene asignación válida.
 
-### D) Hardening aplicado hoy
-- `packages.manage` se mantiene como permiso canónico (sin alias inseguro heredado).
-- `admin/ajax/paquetes.php` exige explícitamente `packages.manage` para todas sus acciones.
-- Se formalizó rol separado `complementary_admin` (id=13) para dominio complementario.
+### D) Mi Empresa (dominio dual)
+- Dominio médico: `admin/ajax/mi_empresa.php` opera sobre `providers` usando `$_SESSION['provider_id']`.
+- Dominio complementario: `admin/ajax/mi_empresa.php` opera sobre `service_providers` usando `$_SESSION['service_provider_id']`.
+- El scope self se resuelve exclusivamente por sesión:
+  - `$_SESSION['provider_id']`
+  - `$_SESSION['service_provider_id']`
+- Admin global (roles 1/2) puede consultar la vista pero no guardar (`self_edit_forbidden`).
+- Todas las acciones de actualización son server-side y scoped al ID de sesión.
+- `update_self_company` nunca permite cambiar de ID por payload; ignora cualquier intento de override externo.
+
+### E) Login y hashing actual
+- Hash canónico vigente: `sha512(token + password)`.
+- Compatibilidad legacy activa:
+  - `sha512(password + token)` para cuentas heredadas.
+  - `password_verify` para hashes `bcrypt` (`$2y$`/`$2a$`).
+- Creación y reset de contraseña usan helper centralizado de password (`admin/include/password_utils.php`).
+- Validación de dominio en login:
+  - `provider_scope_required`
+  - `service_provider_scope_required`
+- `error=empresa` se dispara solo cuando el rol requiere scope y no tiene asignación válida.
+
+### F) Seguridad aplicada hoy
+- Eliminado bypass en paquetes: `admin/ajax/paquetes.php` exige `packages.manage` en todas las acciones.
+- Canonizado `packages.manage` como permiso real; sin alias inseguro heredado.
+- Scope obligatorio y server-side en servicios complementarios para usuarios no admin.
+- `mi_empresa` respeta dominio dual médico/complementario con validación de empresa activa.
+- `admin/ajax/service_providers.php?action=list` se mantiene protegido (rol 13 no lista globalmente).
 - En create/update de usuarios se forzan NULLs cruzados:
   - Rol médico (4/12) -> `service_provider_id = NULL`
   - Rol complementario (13) -> `provider_id = NULL`
   - Admin global (1/2) -> `provider_id = NULL` y `service_provider_id = NULL`
 
-### E) Modelo de dominio resultante
+### G) Modelo de dominio resultante
 
 ```text
 Usuario
@@ -289,7 +314,7 @@ Usuario
 - `role_id` + ownership (`provider_id`/`service_provider_id`) son la fuente de verdad de empresa.
 - `provider_id` y `service_provider_id` son mutuamente excluyentes por diseño.
 
-### F) Nota de compatibilidad legacy
+### H) Nota de compatibilidad legacy
 - El modelo legacy complementario por `providers.kind='partner'` queda congelado para entrada nueva.
 - El modelo oficial complementario activo en arquitectura es `service_providers`.
 
@@ -305,7 +330,7 @@ Usuario
 - `admin/usuarios.php`
 - `admin/js/usuarios.js`
 
-### G) Ayuda UI en creación de usuarios (roles y scope)
+### I) Ayuda UI en creación de usuarios (roles y scope)
 - Se añadió ayuda informativa en `admin/crear_usuario.php` para prevenir errores de asignación de rol/dominio al crear usuarios.
 - El bloque "Roles y accesos" se muestra solo para sesiones administrativas o con permisos de usuarios (`users.manage` / `users.create`).
 - La tabla toma roles reales de BD (`roles`) y explica por rol:
