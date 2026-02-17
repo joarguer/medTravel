@@ -142,9 +142,11 @@ if (!user_can('users.view') && !$can_manage_users) {
         window.USERS_CTX = {
             canEdit: <?php echo $can_manage_users ? 'true' : 'false'; ?>,
             isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
-            complementaryRoleId: <?php echo ROLE_PROVIDER_ADMIN; ?>,
+            complementaryRoleId: <?php echo ROLE_COMPLEMENTARY_ADMIN; ?>,
             providerRoleId: <?php echo ROLE_PROVIDER; ?>,
-            adminRoleId: <?php echo ROLE_ADMIN; ?>
+            providerAdminRoleId: <?php echo ROLE_PROVIDER_ADMIN; ?>,
+            adminRoleId: <?php echo ROLE_ADMIN; ?>,
+            administrativeRoleId: <?php echo ROLE_ADMINISTRATIVE; ?>
         };
     </script>
     <!-- Root cause note: force-refresh usuarios.js to avoid stale cached legacy script (inline-only actions). -->

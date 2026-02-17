@@ -6,10 +6,12 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 
 // Role constants
 define('ROLE_ADMIN', 1);
+define('ROLE_ADMINISTRATIVE', 2);
 define('ROLE_CLIENT', 3);
 define('ROLE_PROVIDER', 4);
 define('ROLE_ACCOUNTING', 11);
 define('ROLE_PROVIDER_ADMIN', 12);
+define('ROLE_COMPLEMENTARY_ADMIN', 13);
 
 // Canonical granular permissions (RBAC hardening)
 define('PERM_SERVICES_MEDICAL_MANAGE', 'services.medical.manage');
@@ -30,10 +32,13 @@ function normalize_role_value($rol) {
     if (is_numeric($rol)) return intval($rol);
     // try to map common text values
     $r = strtolower((string)$rol);
+    if (strpos($r, 'complementary_admin') !== false) return ROLE_COMPLEMENTARY_ADMIN;
+    if (strpos($r, 'provider_admin') !== false || strpos($r, 'prestador_admin') !== false) return ROLE_PROVIDER_ADMIN;
+    if (strpos($r, 'administrative') !== false) return ROLE_ADMINISTRATIVE;
     if (strpos($r, 'admin') !== false) return ROLE_ADMIN;
+    if (strpos($r, 'partner') !== false || strpos($r, 'complement') !== false) return ROLE_COMPLEMENTARY_ADMIN;
     if (strpos($r, 'provider') !== false || strpos($r, 'prestador') !== false) return ROLE_PROVIDER;
     if (strpos($r, 'cliente') !== false || strpos($r, 'client') !== false) return ROLE_CLIENT;
-    if (strpos($r, 'provider_admin') !== false || strpos($r, 'prestador_admin') !== false) return ROLE_PROVIDER_ADMIN;
     return null;
 }
 
@@ -41,7 +46,11 @@ function is_role_admin_session() {
     if (isset($_SESSION['ppal']) && intval($_SESSION['ppal']) === 1) return true;
     if (isset($_SESSION['rol'])) {
         $nr = normalize_role_value($_SESSION['rol']);
-        if ($nr === ROLE_ADMIN) return true;
+        if ($nr === ROLE_ADMIN || $nr === ROLE_ADMINISTRATIVE) return true;
+    }
+    if (isset($_SESSION['role_id']) && is_numeric($_SESSION['role_id'])) {
+        $rid = intval($_SESSION['role_id']);
+        if ($rid === ROLE_ADMIN || $rid === ROLE_ADMINISTRATIVE) return true;
     }
     return false;
 }
@@ -59,7 +68,9 @@ function has_minimum_role_2() {
 function get_available_roles() {
     return [
         ROLE_ADMIN => 'Principal / Admin',
+        ROLE_ADMINISTRATIVE => 'Administrativo',
         ROLE_PROVIDER_ADMIN => 'Admin Prestador',
+        ROLE_COMPLEMENTARY_ADMIN => 'Admin Proveedor Complementario',
         ROLE_ACCOUNTING => 'Contable',
         ROLE_CLIENT => 'Cliente',
         ROLE_PROVIDER => 'Proveedor'
@@ -102,10 +113,22 @@ function get_permission_alias_map() {
 
 function get_role_fallback_permissions($role_id) {
     switch (intval($role_id)) {
-        case ROLE_PROVIDER_ADMIN:
+        case ROLE_COMPLEMENTARY_ADMIN:
             return [
                 PERM_SERVICES_COMPLEMENTARY_MANAGE,
                 PERM_PROVIDERS_COMPLEMENTARY_MANAGE,
+                PERM_BOOKING_VIEW,
+                'users.view',
+                'users.create',
+                'users.edit',
+            ];
+        case ROLE_PROVIDER_ADMIN:
+            return [
+                PERM_SERVICES_MEDICAL_MANAGE,
+                PERM_PROVIDERS_MEDICAL_MANAGE,
+                'offers.manage',
+                'providers.medical.view',
+                'providers.medical.edit',
                 PERM_BOOKING_VIEW,
                 'users.view',
                 'users.create',
@@ -159,7 +182,7 @@ function role_requires_service_provider_scope($role_id = null, $role_text = null
     }
 
     if ($role_id !== null) {
-        if (intval($role_id) === ROLE_PROVIDER_ADMIN) {
+        if (intval($role_id) === ROLE_COMPLEMENTARY_ADMIN) {
             return true;
         }
         $perms = get_role_permissions(intval($role_id));

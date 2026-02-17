@@ -8,6 +8,7 @@ if (file_exists($mobileDetectPath)) {
     include $mobileDetectPath;
 }
 include(__DIR__ . '/conexion.php');
+require_once __DIR__ . '/roles.php';
 
 // Helper seguro para acceso a arrays
 function v($arr, $key, $default = '') {
@@ -78,6 +79,34 @@ function sanear_string($string){
 
     return $string;
 }
+
+function login_fetch_medical_provider_name($conexion, $provider_id) {
+    $stmt = mysqli_prepare($conexion, "SELECT name FROM providers WHERE id = ? LIMIT 1");
+    if (!$stmt) return null;
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $name = null;
+    if ($res && ($row = mysqli_fetch_assoc($res))) {
+        $name = $row['name'];
+    }
+    mysqli_stmt_close($stmt);
+    return $name;
+}
+
+function login_fetch_active_service_provider_name($conexion, $service_provider_id) {
+    $stmt = mysqli_prepare($conexion, "SELECT provider_name FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    if (!$stmt) return null;
+    mysqli_stmt_bind_param($stmt, 'i', $service_provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $name = null;
+    if ($res && ($row = mysqli_fetch_assoc($res))) {
+        $name = $row['provider_name'];
+    }
+    mysqli_stmt_close($stmt);
+    return $name;
+}
 // Recuperar y sanear input
 $usrname  = isset($_POST["username"]) ? sanear_string($_POST["username"]) : '';
 $password = isset($_POST["password"]) ? $_POST["password"] : '';
@@ -110,11 +139,52 @@ if (mysqli_num_rows($busca_usua) > 0) {
     if ($password_valido) {
         //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC
         $rasocial = v($fil,'empresa','');
+        $role_id_val = (isset($fil['role_id']) && is_numeric($fil['role_id'])) ? intval($fil['role_id']) : normalize_role_value(v($fil, 'rol', ''));
+        $is_global_admin_role = ($role_id_val === ROLE_ADMIN || $role_id_val === ROLE_ADMINISTRATIVE || v($fil, 'ppal', '') === '1');
+        $is_medical_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
+        $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
+        $provider_id_val = !empty($fil['provider_id']) ? intval($fil['provider_id']) : 0;
+        $service_provider_id_val = !empty($fil['service_provider_id']) ? intval($fil['service_provider_id']) : 0;
+
+        if ($is_medical_role) {
+            if ($provider_id_val <= 0) {
+                header("location:../../login.php?error=empresa");
+                exit();
+            }
+            $provider_name = login_fetch_medical_provider_name($conexion, $provider_id_val);
+            if ($provider_name === null || $provider_name === '') {
+                header("location:../../login.php?error=empresa");
+                exit();
+            }
+            if ($rasocial === '') {
+                $rasocial = $provider_name;
+            }
+            $fil['provider_id'] = $provider_id_val;
+            $fil['service_provider_id'] = null;
+        } elseif ($is_complementary_role) {
+            if ($service_provider_id_val <= 0) {
+                header("location:../../login.php?error=empresa");
+                exit();
+            }
+            $service_provider_name = login_fetch_active_service_provider_name($conexion, $service_provider_id_val);
+            if ($service_provider_name === null || $service_provider_name === '') {
+                header("location:../../login.php?error=empresa");
+                exit();
+            }
+            if ($rasocial === '') {
+                $rasocial = $service_provider_name;
+            }
+            $fil['service_provider_id'] = $service_provider_id_val;
+            $fil['provider_id'] = null;
+        }
+
         $rasocial_esc = mysqli_real_escape_string($conexion, $rasocial);
         
-        // NUEVO: Si no hay empresa en el campo, intentar buscar por provider_id
+        // Resolver contexto "empresa virtual" según dominio del usuario.
         if (empty($rasocial) && !empty($fil['provider_id'])) {
             $query = mysqli_query($conexion, "SELECT id, name as rasocial, name as nit, 0 as activo, '' as logo FROM providers WHERE id = ".(int)$fil['provider_id']." LIMIT 1");
+        } elseif (empty($rasocial) && !empty($fil['service_provider_id'])) {
+            $query = mysqli_query($conexion, "SELECT id, provider_name as rasocial, provider_name as nit, 0 as activo, '' as logo FROM service_providers WHERE id = ".(int)$fil['service_provider_id']." AND is_active = 1 LIMIT 1");
         } else {
             $query = mysqli_query($conexion, "SELECT * FROM empresas WHERE rasocial = '".$rasocial_esc."' LIMIT 1");
         }
@@ -125,8 +195,8 @@ if (mysqli_num_rows($busca_usua) > 0) {
             exit();
         }
         if (mysqli_num_rows($query) == 0) {
-            // NUEVO: Si es rol admin o no requiere empresa, crear una empresa virtual
-            if (v($fil,'rol','') === 'admin' || empty($rasocial)) {
+            // Para admin global y dominios provider/complementary, permitir empresa virtual.
+            if ($is_global_admin_role || $is_medical_role || $is_complementary_role || empty($rasocial)) {
                 $fila = [
                     'id' => 1,
                     'rasocial' => v($fil,'nombre','Usuario'),
@@ -235,6 +305,7 @@ if (mysqli_num_rows($busca_usua) > 0) {
         $_SESSION['avatar']    =   v($fil,'avatar','');
         $_SESSION['nombre_perfil']  =   v($fil,'nombre','');
         $_SESSION['rol']            =   v($fil,'rol','');
+        $_SESSION['role_id']        =   $role_id_val;
         $_SESSION['ppal']           =   v($fil,'ppal','');
         $_SESSION["usuario_cargo"]  =   v($fil,'cargo','');
         $_SESSION["usuario_email"]	=   v($fil,'email','');

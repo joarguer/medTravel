@@ -26,6 +26,17 @@ function fetch_provider_name($conexion, $provider_id) {
     return $name;
 }
 
+function validate_medical_provider($conexion, $provider_id) {
+    $stmt = mysqli_prepare($conexion, "SELECT id, name FROM providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    if (!$stmt) return null;
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    return $row;
+}
+
 function fetch_service_provider_name($conexion, $service_provider_id) {
     $stmt = mysqli_prepare($conexion, "SELECT provider_name FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
     if (!$stmt) return null;
@@ -70,9 +81,10 @@ if($tipo == 'crear_usuario'){
     $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : null;
     $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : null;
 
-    $role_id_val = is_numeric($rol) ? intval($rol) : null;
-    $is_complementary_role = role_requires_service_provider_scope($role_id_val, $rol);
-    $is_medical_provider_role = ($role_id_val === ROLE_PROVIDER || $rol === (string)ROLE_PROVIDER);
+    $role_id_val = is_numeric($rol) ? intval($rol) : normalize_role_value($rol);
+    $is_global_admin_role = in_array($role_id_val, [ROLE_ADMIN, ROLE_ADMINISTRATIVE], true);
+    $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
+    $is_medical_provider_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
 
     // Contexto no-admin: fijar ownership por sesión
     if (!is_role_admin_session()) {
@@ -80,18 +92,22 @@ if($tipo == 'crear_usuario'){
             $service_provider_id = $service_provider_session_id;
             $provider_id = null;
             $is_complementary_role = true;
-            if ($role_id_val === null) {
-                $role_id_val = ROLE_PROVIDER_ADMIN;
-                $rol = (string)ROLE_PROVIDER_ADMIN;
+            if ($role_id_val !== ROLE_COMPLEMENTARY_ADMIN) {
+                $role_id_val = ROLE_COMPLEMENTARY_ADMIN;
+                $rol = (string)ROLE_COMPLEMENTARY_ADMIN;
             }
             $is_medical_provider_role = false;
+            $is_global_admin_role = false;
         } elseif ($provider_session_id) {
             $provider_id = $provider_session_id;
             $service_provider_id = null;
-            $role_id_val = ROLE_PROVIDER;
-            $rol = (string)ROLE_PROVIDER;
+            if (!in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true)) {
+                $role_id_val = ROLE_PROVIDER;
+                $rol = (string)ROLE_PROVIDER;
+            }
             $is_medical_provider_role = true;
             $is_complementary_role = false;
+            $is_global_admin_role = false;
         }
     }
 
@@ -133,10 +149,23 @@ if($tipo == 'crear_usuario'){
             echo json_encode($resultados);
             return;
         }
+        $active_provider = validate_medical_provider($conexion, (int)$provider_id);
+        if (!$active_provider) {
+            http_response_code(422);
+            echo json_encode([
+                'ok' => false,
+                'status' => null,
+                'error' => 'Invalid or inactive medical provider'
+            ]);
+            return;
+        }
         $service_provider_id = null;
         if ($rasocial === '') {
-            $rasocial = fetch_provider_name($conexion, (int)$provider_id);
+            $rasocial = $active_provider['name'];
         }
+    } elseif ($is_global_admin_role) {
+        $provider_id = null;
+        $service_provider_id = null;
     } else {
         $provider_id = null;
         $service_provider_id = null;

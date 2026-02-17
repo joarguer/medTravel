@@ -3,6 +3,14 @@ include("include/include.php");
 $is_admin = is_role_admin_session();
 $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : null;
 $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : null;
+$default_role_id = ROLE_PROVIDER;
+if (!$is_admin) {
+    if ($service_provider_session_id) {
+        $default_role_id = ROLE_COMPLEMENTARY_ADMIN;
+    } elseif ($provider_session_id) {
+        $default_role_id = ROLE_PROVIDER;
+    }
+}
 $id_usuario = $_SESSION['id_usuario'];
 $busca = mysqli_query($conexion,"SELECT * FROM usuarios WHERE id = '".$id_usuario."'");
 $rst   = mysqli_fetch_array($busca);
@@ -35,7 +43,8 @@ $rst   = mysqli_fetch_array($busca);
                 providerId: <?php echo $provider_session_id ? $provider_session_id : 'null'; ?>,
                 serviceProviderId: <?php echo $service_provider_session_id ? $service_provider_session_id : 'null'; ?>,
                 roleProvider: <?php echo ROLE_PROVIDER; ?>,
-                roleComplementary: <?php echo ROLE_PROVIDER_ADMIN; ?>
+                roleProviderAdmin: <?php echo ROLE_PROVIDER_ADMIN; ?>,
+                roleComplementary: <?php echo ROLE_COMPLEMENTARY_ADMIN; ?>
             };
         </script>
     </head>
@@ -107,10 +116,10 @@ $rst   = mysqli_fetch_array($busca);
                                             <label class="control-label">Rol</label>
                                             <select id="user_role" name="role" class="form-control" <?php echo $is_admin ? '' : 'disabled'; ?>>
                                                 <?php foreach (get_available_roles() as $rid => $rlabel): ?>
-                                                    <option value="<?php echo $rid; ?>" <?php echo ($provider_session_id ? ($rid===ROLE_PROVIDER) : ($rid===ROLE_PROVIDER ? 'selected' : '')); ?>><?php echo htmlspecialchars($rlabel); ?></option>
+                                                    <option value="<?php echo $rid; ?>" <?php echo ((int)$rid === (int)$default_role_id ? 'selected' : ''); ?>><?php echo htmlspecialchars($rlabel); ?></option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <?php if(!$is_admin): ?><span class="help-block">Tu rol está fijado como Proveedor</span><?php endif; ?>
+                                            <?php if(!$is_admin): ?><span class="help-block"><?php echo $service_provider_session_id ? 'Tu rol está fijado como Proveedor Complementario' : 'Tu rol está fijado como Proveedor'; ?></span><?php endif; ?>
                                         </div>
                                     </div>
                                     <script>
@@ -121,11 +130,14 @@ $rst   = mysqli_fetch_array($busca);
                                                 var serviceProvDiv = document.getElementById('div-service-provider');
                                                 var empDiv = document.getElementById('div-empresa');
                                                 if(!sel || !provDiv || !serviceProvDiv || !empDiv) return;
-                                                var isProv = (sel.value == '<?php echo ROLE_PROVIDER; ?>');
-                                                var isComplementary = (sel.value == '<?php echo ROLE_PROVIDER_ADMIN; ?>');
-                                                provDiv.style.display = isProv ? '' : 'none';
+                                                var roleProvider = '<?php echo ROLE_PROVIDER; ?>';
+                                                var roleProviderAdmin = '<?php echo ROLE_PROVIDER_ADMIN; ?>';
+                                                var roleComplementary = '<?php echo ROLE_COMPLEMENTARY_ADMIN; ?>';
+                                                var isMedical = (sel.value == roleProvider || sel.value == roleProviderAdmin);
+                                                var isComplementary = (sel.value == roleComplementary);
+                                                provDiv.style.display = isMedical ? '' : 'none';
                                                 serviceProvDiv.style.display = isComplementary ? '' : 'none';
-                                                empDiv.style.display = (isProv || isComplementary) ? 'none' : '';
+                                                empDiv.style.display = (isMedical || isComplementary) ? 'none' : '';
                                             }
                                             document.addEventListener('DOMContentLoaded', function(){
                                                 var sel = document.getElementById('user_role');

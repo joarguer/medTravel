@@ -25,8 +25,9 @@ $(document).ready(function(){
         let ctx = window.CREAR_USUARIO_CTX || {};
         let rol = $('#user_role').val();
         let providerRole = String(ctx.roleProvider || 4);
-        let complementaryRole = String(ctx.roleComplementary || 12);
-        let isProvider = rol === providerRole;
+        let providerAdminRole = String(ctx.roleProviderAdmin || 12);
+        let complementaryRole = String(ctx.roleComplementary || 13);
+        let isProvider = (rol === providerRole || rol === providerAdminRole);
         let isComplementary = rol === complementaryRole;
         if (isProvider) {
             $('#div-provider').show();
@@ -49,7 +50,9 @@ $(document).ready(function(){
         }
         if (!ctx.isAdmin && ctx.providerId) {
             // For provider self-management, lock to their provider
-            $('#user_role').val(providerRole);
+            if ($('#user_role').val() !== providerAdminRole && $('#user_role').val() !== providerRole) {
+                $('#user_role').val(providerRole);
+            }
             $('#div-provider').show();
             $('#provider_id').val(ctx.providerId);
             $('#provider_id').attr('required', true).prop('disabled', true);
@@ -97,9 +100,11 @@ $('#btn-crea-usuario').click(function(e){
     let rolVal = $('#user_role').val();
     let ctx = window.CREAR_USUARIO_CTX || {};
     let providerRole = String(ctx.roleProvider || 4);
-    let complementaryRole = String(ctx.roleComplementary || 12);
+    let providerAdminRole = String(ctx.roleProviderAdmin || 12);
+    let complementaryRole = String(ctx.roleComplementary || 13);
+    let isMedicalRole = (rolVal === providerRole || rolVal === providerAdminRole);
     let rasocial = '';
-    if (rolVal === providerRole) {
+    if (isMedicalRole) {
         rasocial = $('#provider_id').find('option:selected').text();
     } else if (rolVal === complementaryRole) {
         rasocial = $('#service_provider_id').find('option:selected').text();
@@ -107,11 +112,11 @@ $('#btn-crea-usuario').click(function(e){
         rasocial = $('#empresa').find('option:selected').text();
     }
     // limpiar empresa si rol proveedor
-    if (rolVal === providerRole || rolVal === complementaryRole) {
+    if (isMedicalRole || rolVal === complementaryRole) {
         datos = datos.replace(/(^|&)empresa=[^&]*/,'$1empresa=');
     }
     // asegurar provider_id vacío cuando no es proveedor
-    if (rolVal !== providerRole) {
+    if (!isMedicalRole) {
         datos = datos.replace(/(^|&)provider_id=[^&]*/,'$1provider_id=');
     }
     // asegurar service_provider_id vacío cuando no es rol complementario

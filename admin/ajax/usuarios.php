@@ -121,6 +121,18 @@ function get_user_role_id($row) {
     return normalize_role_value($row['rol'] ?? null);
 }
 
+function is_medical_user_role($roleId) {
+    return in_array(intval($roleId), [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
+}
+
+function is_complementary_user_role($roleId) {
+    return intval($roleId) === ROLE_COMPLEMENTARY_ADMIN;
+}
+
+function is_global_admin_user_role($roleId) {
+    return in_array(intval($roleId), [ROLE_ADMIN, ROLE_ADMINISTRATIVE], true);
+}
+
 switch ($action) {
     case 'list_roles':
         $roles = fetch_roles($conexion);
@@ -309,9 +321,9 @@ switch ($action) {
         }
         mysqli_stmt_close($stmtUnique);
 
-        $isComplementaryRole = role_requires_service_provider_scope($roleId, (string)$roleId);
-        $isMedicalProviderRole = ($roleId === ROLE_PROVIDER);
-        $isAdminRole = ($roleId === ROLE_ADMIN);
+        $isComplementaryRole = is_complementary_user_role($roleId);
+        $isMedicalProviderRole = is_medical_user_role($roleId);
+        $isAdminRole = is_global_admin_user_role($roleId);
 
         if ($isMedicalProviderRole) {
             if ($providerId === null || $providerId <= 0) {
@@ -381,7 +393,7 @@ switch ($action) {
         $hasServiceProviderId = usuarios_has_column($conexion, 'service_provider_id');
         $serviceProviderId = isset($_POST['service_provider_id']) && $_POST['service_provider_id'] !== '' ? intval($_POST['service_provider_id']) : null;
 
-        if ($roleId === ROLE_PROVIDER_ADMIN) {
+        if (is_complementary_user_role($roleId)) {
             if (!$hasServiceProviderId) json_err('service_provider_column_missing', 422);
             if ($serviceProviderId === null || $serviceProviderId <= 0) json_err('service_provider_required', 422);
             if (!fetch_active_service_provider($conexion, $serviceProviderId)) json_err('invalid_or_inactive_complementary_provider', 422);
@@ -390,6 +402,44 @@ switch ($action) {
             if (!$stmt) json_err('db_prepare_error', 500);
             $rolText = (string)$roleId;
             mysqli_stmt_bind_param($stmt, 'isii', $roleId, $rolText, $serviceProviderId, $id);
+            if (!mysqli_stmt_execute($stmt)) json_err('db_error', 500);
+            mysqli_stmt_close($stmt);
+            json_ok();
+        }
+
+        if (is_medical_user_role($roleId)) {
+            $providerId = isset($_POST['provider_id']) && $_POST['provider_id'] !== '' ? intval($_POST['provider_id']) : null;
+            if ($providerId === null || $providerId <= 0) {
+                $stmtGet = mysqli_prepare($conexion, "SELECT provider_id FROM usuarios WHERE id = ? LIMIT 1");
+                if (!$stmtGet) json_err('db_prepare_error', 500);
+                mysqli_stmt_bind_param($stmtGet, 'i', $id);
+                if (!mysqli_stmt_execute($stmtGet)) json_err('db_error', 500);
+                $resGet = mysqli_stmt_get_result($stmtGet);
+                $rowGet = $resGet ? mysqli_fetch_assoc($resGet) : null;
+                mysqli_stmt_close($stmtGet);
+                if ($rowGet && isset($rowGet['provider_id']) && $rowGet['provider_id'] !== null) {
+                    $providerId = intval($rowGet['provider_id']);
+                }
+            }
+            if ($providerId === null || $providerId <= 0) json_err('provider_required', 422);
+            if (!fetch_active_medical_provider($conexion, $providerId)) json_err('invalid_or_inactive_medical_provider', 422);
+
+            if ($hasServiceProviderId) {
+                $sql = "UPDATE usuarios SET role_id = ?, rol = ?, provider_id = ?, service_provider_id = NULL WHERE id = ? LIMIT 1";
+                $stmt = mysqli_prepare($conexion, $sql);
+                if (!$stmt) json_err('db_prepare_error', 500);
+                $rolText = (string)$roleId;
+                mysqli_stmt_bind_param($stmt, 'isii', $roleId, $rolText, $providerId, $id);
+                if (!mysqli_stmt_execute($stmt)) json_err('db_error', 500);
+                mysqli_stmt_close($stmt);
+                json_ok();
+            }
+
+            $sql = "UPDATE usuarios SET role_id = ?, rol = ?, provider_id = ? WHERE id = ? LIMIT 1";
+            $stmt = mysqli_prepare($conexion, $sql);
+            if (!$stmt) json_err('db_prepare_error', 500);
+            $rolText = (string)$roleId;
+            mysqli_stmt_bind_param($stmt, 'isii', $roleId, $rolText, $providerId, $id);
             if (!mysqli_stmt_execute($stmt)) json_err('db_error', 500);
             mysqli_stmt_close($stmt);
             json_ok();

@@ -7,8 +7,10 @@ $(function(){
 
     var ctx = window.USERS_CTX || {};
     var canEdit = !!ctx.canEdit || !!ctx.isAdmin;
-    var complementaryRoleId = parseInt(ctx.complementaryRoleId || 12, 10);
+    var complementaryRoleId = parseInt(ctx.complementaryRoleId || 13, 10);
     var providerRoleId = parseInt(ctx.providerRoleId || 4, 10);
+    var providerAdminRoleId = parseInt(ctx.providerAdminRoleId || 12, 10);
+    var medicalRoleIds = [providerRoleId, providerAdminRoleId];
 
     function notifyError(msg){
         if(window.toastr){ toastr.error(msg); return; }
@@ -84,6 +86,15 @@ $(function(){
         if(id <= 0 || roleId <= 0) return;
 
         var payload = { action:'update_role', id:id, role_id:roleId };
+        if(medicalRoleIds.indexOf(roleId) !== -1){
+            var providerId = parseInt(tr.data('provider-id') || 0, 10);
+            if(!providerId){
+                notifyError('Selecciona un prestador médico desde Editar para guardar ese rol');
+                loadUsers();
+                return;
+            }
+            payload.provider_id = providerId;
+        }
         if(roleId === complementaryRoleId){
             var serviceProviderId = parseInt(tr.find('.service-provider-select').val() || 0, 10);
             if(!serviceProviderId){
@@ -117,7 +128,10 @@ $(function(){
 
         var tbody = $('#users-table tbody').empty();
         data.forEach(function(u){
-            var tr = $('<tr>').attr('data-id', u.id);
+            var tr = $('<tr>')
+                .attr('data-id', u.id)
+                .attr('data-provider-id', (u.provider_id || 0))
+                .attr('data-service-provider-id', (u.service_provider_id || 0));
             tr.append($('<td>').text(u.id));
             tr.append($('<td>').text(u.usuario || ''));
             tr.append($('<td>').text(u.nombre || ''));
@@ -204,7 +218,7 @@ $(function(){
 
     function toggleEditOwnershipFields(){
         var roleId = parseInt($('#edit-role-id').val() || 0, 10);
-        var showMedicalProvider = (roleId === providerRoleId);
+        var showMedicalProvider = (medicalRoleIds.indexOf(roleId) !== -1);
         var showComplementaryProvider = (roleId === complementaryRoleId);
 
         $('#edit-provider-group').toggle(showMedicalProvider);
@@ -272,7 +286,7 @@ $(function(){
             notifyError('El rol es obligatorio');
             return;
         }
-        if(roleId === providerRoleId && !providerId){
+        if(medicalRoleIds.indexOf(roleId) !== -1 && !providerId){
             notifyError('Debes seleccionar un prestador médico activo');
             return;
         }
