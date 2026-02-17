@@ -27,15 +27,26 @@ function fetch_provider_name($conexion, $provider_id) {
 }
 
 function fetch_service_provider_name($conexion, $service_provider_id) {
-    $stmt = mysqli_prepare($conexion, "SELECT provider_name FROM service_providers WHERE id = ? LIMIT 1");
-    if (!$stmt) return '';
+    $stmt = mysqli_prepare($conexion, "SELECT provider_name FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    if (!$stmt) return null;
     mysqli_stmt_bind_param($stmt, 'i', $service_provider_id);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
-    $name = '';
+    $name = null;
     if ($res && $row = mysqli_fetch_assoc($res)) $name = $row['provider_name'];
     mysqli_stmt_close($stmt);
     return $name;
+}
+
+function validate_active_service_provider($conexion, $service_provider_id) {
+    $stmt = mysqli_prepare($conexion, "SELECT id, provider_name FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    if (!$stmt) return null;
+    mysqli_stmt_bind_param($stmt, 'i', $service_provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    return $row;
 }
 
 if($tipo == 'crear_usuario'){
@@ -92,9 +103,28 @@ if($tipo == 'crear_usuario'){
             echo json_encode($resultados);
             return;
         }
+        $active_service_provider = validate_active_service_provider($conexion, (int)$service_provider_id);
+        if (!$active_service_provider) {
+            http_response_code(422);
+            echo json_encode([
+                'ok' => false,
+                'status' => null,
+                'error' => 'Invalid or inactive complementary provider'
+            ]);
+            return;
+        }
         $provider_id = null;
         if ($rasocial === '') {
-            $rasocial = fetch_service_provider_name($conexion, (int)$service_provider_id);
+            $rasocial = $active_service_provider['provider_name'];
+        }
+        if ($rasocial === null || trim((string)$rasocial) === '') {
+            http_response_code(422);
+            echo json_encode([
+                'ok' => false,
+                'status' => null,
+                'error' => 'Invalid or inactive complementary provider'
+            ]);
+            return;
         }
     } elseif ($is_medical_provider_role) {
         if ($provider_id === null || $provider_id <= 0) {
