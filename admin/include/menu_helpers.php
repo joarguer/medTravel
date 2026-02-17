@@ -59,7 +59,6 @@ if (!function_exists('menu_li_class')) {
             $targetCount = is_array($targets) ? count($targets) : 1;
             if ($targetCount > 1) {
                 $classes[] = 'selected';
-                $classes[] = 'open';
             }
         }
 
