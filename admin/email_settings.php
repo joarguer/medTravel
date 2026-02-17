@@ -1,5 +1,11 @@
 <?php
 include("include/include.php");
+// RBAC explícito para configuración sensible.
+if (!user_can(PERM_SETTINGS_MANAGE)) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
 $id_usuario = $_SESSION['id_usuario'];
 ?>
 <!DOCTYPE html>

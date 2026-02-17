@@ -1,5 +1,11 @@
 <?php
 include("include/include.php");
+// RBAC explícito para reportes.
+if (!user_can(PERM_REPORTS_VIEW)) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
 $id_usuario = $_SESSION['id_usuario'];
 $busca = mysqli_query($conexion,"SELECT * FROM usuarios WHERE id = '".$id_usuario."'");
 $rst   = mysqli_fetch_array($busca);

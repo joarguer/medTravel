@@ -1,5 +1,11 @@
 <?php
 include('include/include.php');
+// RBAC explícito para gestión de ofertas médicas.
+if (!user_can(PERM_SERVICES_MEDICAL_MANAGE)) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $ses_ppal = isset($_SESSION['ppal']) ? trim(strval($_SESSION['ppal'])) : '';
 $ses_rol = isset($_SESSION['rol']) ? trim(strval($_SESSION['rol'])) : '';

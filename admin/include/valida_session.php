@@ -2,123 +2,71 @@
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
-if (!isset($_SESSION["usuario"]) || $_SESSION["usuario"] == ""){
+
+if (!isset($_SESSION["usuario"]) || $_SESSION["usuario"] == "") {
     header("Location: include/salir.php?error=1");
     exit();
 }
 
-// Función helper para verificar si es admin (consistente con include.php)
-function es_usuario_admin() {
-    $es_admin = false;
-    if (isset($_SESSION['ppal']) && intval($_SESSION['ppal']) === 1) {
-        $es_admin = true;
-    }
-    if (isset($_SESSION['rol'])) {
-        $rolval = (string) $_SESSION['rol'];
-        if (intval($rolval) === 1) {
-            $es_admin = true;
-        } elseif (stripos($rolval, 'admin') !== false || stripos($rolval, 'administrador') !== false) {
-            $es_admin = true;
-        }
-    }
-    return $es_admin;
+if (!function_exists('user_can')) {
+    require_once __DIR__ . '/roles.php';
+}
+if (!isset($GLOBALS['conexion']) || !$GLOBALS['conexion']) {
+    include_once __DIR__ . '/conexion.php';
 }
 
-// Helper: es prestador (tiene provider_id o rol de prestador)
-function es_usuario_prestador() {
-    if (isset($_SESSION['provider_id']) && intval($_SESSION['provider_id']) > 0) {
-        return true;
-    }
-    if (isset($_SESSION['rol'])) {
-        $rolval = strtolower((string) $_SESSION['rol']);
-        if (intval($rolval) === 4) return true;
-        if (strpos($rolval, 'provider') !== false || strpos($rolval, 'prestador') !== false) return true;
-    }
-    return false;
+function get_required_permission_for_script($script_name) {
+    // RBAC hardening: mapa canónico script -> permiso requerido.
+    static $map = [
+        // Gestión médica
+        'service_categories.php' => PERM_SERVICES_MEDICAL_MANAGE,
+        'service_catalog.php' => PERM_SERVICES_MEDICAL_MANAGE,
+        'providers.php' => PERM_PROVIDERS_MEDICAL_MANAGE,
+        'provider_verification.php' => PERM_PROVIDERS_MEDICAL_MANAGE,
+        'provider_offers.php' => PERM_SERVICES_MEDICAL_MANAGE,
+
+        // Gestión complementaria
+        'providers_complementary.php' => PERM_PROVIDERS_COMPLEMENTARY_MANAGE,
+        'medtravel_services.php' => PERM_SERVICES_COMPLEMENTARY_MANAGE,
+        'paquetes.php' => PERM_PACKAGES_MANAGE,
+
+        // Booking / clientes
+        'booking_requests.php' => PERM_BOOKING_MANAGE,
+        'clientes.php' => PERM_BOOKING_VIEW,
+
+        // Usuarios / accesos
+        'crear_usuario.php' => 'users.create',
+        'usuarios.php' => PERM_USERS_MANAGE,
+        'roles.php' => PERM_USERS_MANAGE,
+
+        // Reportes / configuración
+        'informes.php' => PERM_REPORTS_VIEW,
+        'email_settings.php' => PERM_SETTINGS_MANAGE,
+        'data_deletion_requests.php' => PERM_SETTINGS_MANAGE,
+        'create_bd.php' => PERM_SETTINGS_MANAGE,
+
+        // Contenido web
+        'home_edit.php' => PERM_CONTENT_MANAGE,
+        'about_edit.php' => PERM_CONTENT_MANAGE,
+        'services_edit.php' => PERM_CONTENT_MANAGE,
+        'offers_header_edit.php' => PERM_CONTENT_MANAGE,
+        'offer_detail_edit.php' => PERM_CONTENT_MANAGE,
+        'wizard_header_edit.php' => PERM_CONTENT_MANAGE,
+        'blog_edit.php' => PERM_CONTENT_MANAGE,
+    ];
+
+    return isset($map[$script_name]) ? $map[$script_name] : null;
 }
 
-// Helper: usuario de proveedor complementario (scope service_provider_id)
-function es_usuario_complementario() {
-    if (isset($_SESSION['service_provider_id']) && intval($_SESSION['service_provider_id']) > 0) {
-        return true;
-    }
-    if (isset($_SESSION['rol'])) {
-        $rolval = strtolower((string) $_SESSION['rol']);
-        if (intval($rolval) === 12) return true;
-        if (strpos($rolval, 'partner') !== false || strpos($rolval, 'complement') !== false) return true;
-    }
-    return false;
-}
-
-// Función helper para verificar si tiene rol 2 o superior
-function tiene_rol_minimo_2() {
-    if (es_usuario_admin()) {
-        return true;
-    }
-    if (isset($_SESSION['rol'])) {
-        $rolval = intval($_SESSION['rol']);
-        if ($rolval === 2) {
-            return true;
-        }
-    }
-    return false;
-}
-
-function usuario_puede_crear_usuarios() {
-    if (es_usuario_admin()) return true;
-
-    if (!function_exists('user_can')) {
-        require_once __DIR__ . '/roles.php';
-    }
-    if (!isset($GLOBALS['conexion']) || !$GLOBALS['conexion']) {
-        include_once __DIR__ . '/conexion.php';
-    }
-    if (function_exists('user_can') && user_can('users.create')) {
-        return true;
-    }
-    return false;
-}
-
-// Mejor comparación basada en el nombre del script para evitar rutas absolutas inesperadas
 $current = basename($_SERVER['PHP_SELF']);
-$admin_only = array(
-    'create_bd.php',
-    'home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','wizard_header_edit.php',
-    'service_categories.php','service_catalog.php','providers.php','clientes.php','provider_verification.php','booking_requests.php'
-);
-$role2_allowed = array(
-    'tipo_vehiculos.php','add_info_turistico.php','edit_info_turistico.php',
-    'tipo_traslado.php','traslados.php','traslados_editar.php','add_programa.php',
-    'add_excursion.php','edit_excursion.php','add_atractivos.php','edit_atractivos.php',
-    'excursiones.php','edit_excursiones.php','add_extension.php','edit_extension.php',
-    'add_atractivos_ext.php','edit_atractivos_ext.php','rangos.php','rango_traslados.php',
-    'otros_ajustes.php','cantidad_pax.php','base.php','cotizaciones.php','cotizacion.php',
-    'servicios_aprobados.php','orden_servicio.php','orden_servicio_detalle.php'
-);
-$complementary_allowed = array(
-    'providers_complementary.php',
-    'medtravel_services.php'
-);
+$required_permission = get_required_permission_for_script($current);
 
-if (in_array($current, $admin_only) && !es_usuario_admin()) {
-    header("Location: include/salir.php?error=1");
-    exit();
-}
-if ($current === 'crear_usuario.php' && !usuario_puede_crear_usuarios()) {
-    header("Location: include/salir.php?error=1");
-    exit();
-}
-// Blog editable: admin o prestador
-if ($current === 'blog_edit.php' && !(es_usuario_admin() || es_usuario_prestador())) {
-    header("Location: include/salir.php?error=1");
-    exit();
-}
-if (in_array($current, $role2_allowed) && !tiene_rol_minimo_2()) {
-    header("Location: include/salir.php?error=1");
-    exit();
-}
-if (in_array($current, $complementary_allowed) && !(es_usuario_admin() || es_usuario_complementario())) {
-    header("Location: include/salir.php?error=1");
-    exit();
+if ($required_permission !== null) {
+    if (!function_exists('user_can') || !user_can($required_permission)) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo '403 Forbidden';
+        exit();
+    }
 }
 ?>

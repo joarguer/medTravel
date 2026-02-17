@@ -1,5 +1,11 @@
 <?php
 include("include/include.php");
+// RBAC explícito para solicitudes sensibles de datos.
+if (!user_can(PERM_SETTINGS_MANAGE)) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
 $requests = [];
 $log = __DIR__ . "/logs/data_deletion.log";
 if (file_exists($log)) {
