@@ -9,6 +9,7 @@ if (file_exists($mobileDetectPath)) {
 }
 include(__DIR__ . '/conexion.php');
 require_once __DIR__ . '/roles.php';
+require_once __DIR__ . '/password_utils.php';
 
 // Helper seguro para acceso a arrays
 function v($arr, $key, $default = '') {
@@ -122,19 +123,8 @@ if (!$busca_usua) {
 if (mysqli_num_rows($busca_usua) > 0) {
     $fil = mysqli_fetch_array($busca_usua);
     
-    // NUEVO: Verificar contraseña (soporta hash antiguo SHA512 y nuevo bcrypt)
-    $password_valido = false;
-    $stored_password = v($fil,'password','');
-    
-    // Método 1: Nuevo sistema con bcrypt (password_hash/password_verify)
-    if (substr($stored_password, 0, 4) === '$2y$' || substr($stored_password, 0, 4) === '$2a$') {
-        // Es un hash bcrypt
-        $password_valido = password_verify($password, $stored_password);
-    } 
-    // Método 2: Sistema antiguo con SHA512 + token
-    else {
-        $password_valido = ($stored_password === hash('sha512', v($fil,'token','').$password));
-    }
+    // Verificación canónica compartida con create/reset password.
+    $password_valido = verify_password_for_user($password, $fil);
     
     if ($password_valido) {
         //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC

@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../include/conexion.php';
 require_once __DIR__ . '/../include/roles.php';
+require_once __DIR__ . '/../include/password_utils.php';
+require_once __DIR__ . '/../include/email_config.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -131,6 +133,17 @@ function is_complementary_user_role($roleId) {
 
 function is_global_admin_user_role($roleId) {
     return in_array(intval($roleId), [ROLE_ADMIN, ROLE_ADMINISTRATIVE], true);
+}
+
+function generate_temp_password($length = 14) {
+    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    $charsLen = strlen($chars);
+    $length = max(12, min(16, intval($length)));
+    $out = '';
+    for ($i = 0; $i < $length; $i++) {
+        $out .= $chars[mt_rand(0, $charsLen - 1)];
+    }
+    return $out;
 }
 
 switch ($action) {
@@ -273,6 +286,124 @@ switch ($action) {
         $row['activo'] = intval($row['activo']);
 
         json_ok(['data' => $row]);
+        break;
+
+    case 'reset_password':
+        if (!is_role_admin_session() && !can_manage_users()) {
+            json_err('forbidden', 403);
+        }
+
+        $userId = intval($_POST['user_id'] ?? $_REQUEST['user_id'] ?? 0);
+        if ($userId <= 0) json_err('invalid_user_id', 422);
+
+        $stmtUser = mysqli_prepare($conexion, "SELECT id, usuario, nombre, email, token, password FROM usuarios WHERE id = ? LIMIT 1");
+        if (!$stmtUser) json_err('db_prepare_error', 500);
+        mysqli_stmt_bind_param($stmtUser, 'i', $userId);
+        if (!mysqli_stmt_execute($stmtUser)) json_err('db_error', 500);
+        $resUser = mysqli_stmt_get_result($stmtUser);
+        $user = $resUser ? mysqli_fetch_assoc($resUser) : null;
+        mysqli_stmt_close($stmtUser);
+
+        if (!$user) json_err('user_not_found', 404);
+
+        $tempPassword = generate_temp_password(14);
+        $hasTokenColumn = usuarios_has_column($conexion, 'token');
+
+        if ($hasTokenColumn) {
+            $hashedPayload = hash_password_for_storage($tempPassword, $user);
+            $newHash = $hashedPayload['password'];
+            $newToken = $hashedPayload['token'];
+        } else {
+            // Fallback sin token: bcrypt para mantener compatibilidad de login.
+            $newHash = password_hash($tempPassword, PASSWORD_DEFAULT);
+            $newToken = '';
+        }
+
+        $hasCambioPassword = usuarios_has_column($conexion, 'cambio_password');
+        if ($hasTokenColumn && $hasCambioPassword) {
+            $stmtUpdate = mysqli_prepare($conexion, "UPDATE usuarios SET password = ?, token = ?, cambio_password = 1 WHERE id = ? LIMIT 1");
+            if (!$stmtUpdate) json_err('db_prepare_error', 500);
+            mysqli_stmt_bind_param($stmtUpdate, 'ssi', $newHash, $newToken, $userId);
+        } elseif ($hasTokenColumn) {
+            $stmtUpdate = mysqli_prepare($conexion, "UPDATE usuarios SET password = ?, token = ? WHERE id = ? LIMIT 1");
+            if (!$stmtUpdate) json_err('db_prepare_error', 500);
+            mysqli_stmt_bind_param($stmtUpdate, 'ssi', $newHash, $newToken, $userId);
+        } elseif ($hasCambioPassword) {
+            $stmtUpdate = mysqli_prepare($conexion, "UPDATE usuarios SET password = ?, cambio_password = 1 WHERE id = ? LIMIT 1");
+            if (!$stmtUpdate) json_err('db_prepare_error', 500);
+            mysqli_stmt_bind_param($stmtUpdate, 'si', $newHash, $userId);
+        } else {
+            $stmtUpdate = mysqli_prepare($conexion, "UPDATE usuarios SET password = ? WHERE id = ? LIMIT 1");
+            if (!$stmtUpdate) json_err('db_prepare_error', 500);
+            mysqli_stmt_bind_param($stmtUpdate, 'si', $newHash, $userId);
+        }
+
+        if (!mysqli_stmt_execute($stmtUpdate)) {
+            mysqli_stmt_close($stmtUpdate);
+            json_err('db_error', 500);
+        }
+        mysqli_stmt_close($stmtUpdate);
+
+        $mailFailed = false;
+        $mailError = '';
+        $to = trim((string)($user['email'] ?? ''));
+        if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $mailFailed = true;
+            $mailError = 'invalid_to_email';
+        } else {
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $host = isset($_SERVER['HTTP_HOST']) && $_SERVER['HTTP_HOST'] !== '' ? $_SERVER['HTTP_HOST'] : 'medtravel.com.co';
+            $adminUrl = $scheme . '://' . $host . '/admin/';
+            $safeName = htmlspecialchars(trim((string)($user['nombre'] ?? 'usuario')), ENT_QUOTES, 'UTF-8');
+            $safeUser = htmlspecialchars(trim((string)($user['usuario'] ?? $to)), ENT_QUOTES, 'UTF-8');
+            $safePass = htmlspecialchars($tempPassword, ENT_QUOTES, 'UTF-8');
+            $safeUrl = htmlspecialchars($adminUrl, ENT_QUOTES, 'UTF-8');
+
+            $subject = 'Restablecimiento de contraseña - MedTravel';
+            $body = '<html><body style="font-family: Arial, Helvetica, sans-serif; color:#333;">'
+                . '<h2 style="color:#2980d9;">Restablecimiento de contraseña</h2>'
+                . '<p>Hola ' . $safeName . ',</p>'
+                . '<p>Se generó una contraseña temporal para tu cuenta.</p>'
+                . '<ul>'
+                . '<li><strong>Usuario:</strong> ' . $safeUser . '</li>'
+                . '<li><strong>Contraseña temporal:</strong> ' . $safePass . '</li>'
+                . '</ul>'
+                . '<p>Ingresa aquí: <a href="' . $safeUrl . '">' . $safeUrl . '</a></p>'
+                . '</body></html>';
+            $altBody = "Restablecimiento de contraseña MedTravel\n"
+                . "Usuario: " . ($user['usuario'] ?? $to) . "\n"
+                . "Contraseña temporal: " . $tempPassword . "\n"
+                . "Ingreso: " . $adminUrl;
+
+            try {
+                $sent = sendEmail($to, $subject, $body, 'patientcare', array('alt_body' => $altBody), $conexion);
+                if ($sent !== true) {
+                    $mailFailed = true;
+                    if (is_array($sent) && isset($sent['error'])) {
+                        $mailError = (string)$sent['error'];
+                    } else {
+                        $mailError = 'email_send_failed';
+                    }
+                }
+            } catch (Exception $e) {
+                $mailFailed = true;
+                $mailError = $e->getMessage();
+            }
+        }
+
+        if ($mailFailed) {
+            json_ok([
+                'ok' => true,
+                'mail_failed' => true,
+                'temp_password' => $tempPassword,
+                'error' => $mailError !== '' ? $mailError : 'email_send_failed',
+            ]);
+        }
+
+        json_ok([
+            'ok' => true,
+            'mail_failed' => false,
+        ]);
         break;
 
     case 'update_user':

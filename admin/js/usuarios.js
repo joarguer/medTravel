@@ -7,10 +7,12 @@ $(function(){
 
     var ctx = window.USERS_CTX || {};
     var canEdit = !!ctx.canEdit || !!ctx.isAdmin;
+    var isAdmin = !!ctx.isAdmin;
     var complementaryRoleId = parseInt(ctx.complementaryRoleId || 13, 10);
     var providerRoleId = parseInt(ctx.providerRoleId || 4, 10);
     var providerAdminRoleId = parseInt(ctx.providerAdminRoleId || 12, 10);
     var medicalRoleIds = [providerRoleId, providerAdminRoleId];
+    var shownTempPasswordAlerts = {};
 
     function notifyError(msg){
         if(window.toastr){ toastr.error(msg); return; }
@@ -160,6 +162,15 @@ $(function(){
                     actions.append(editBtn);
                 } else {
                     actions.append('<button type="button" class="btn btn-xs btn-primary btn-user-edit edit-user" data-id="' + u.id + '" style="margin-right:6px;">EDITAR</button>');
+                }
+                if(isAdmin){
+                    var resetBtn = $('#users-reset-btn-template').find('button').first().clone();
+                    if(resetBtn.length){
+                        resetBtn.attr('data-id', u.id);
+                        actions.append(resetBtn);
+                    } else {
+                        actions.append('<button type="button" class="btn btn-xs btn-warning btn-user-reset-pass" data-id="' + u.id + '" style="margin-right:6px;">RESET PASS</button>');
+                    }
                 }
                 actions.append('<button type="button" class="btn btn-xs btn-default toggle-active">' + (u.activo === 1 ? 'Desactivar' : 'Activar') + '</button>');
             }
@@ -365,6 +376,47 @@ $(function(){
         if(userId > 0){
             openEditModal(userId);
         }
+    });
+
+    $('#users-table').on('click', '.btn-user-reset-pass', function(){
+        if(!isAdmin){
+            notifyError('Acceso denegado');
+            return;
+        }
+
+        var userId = parseInt($(this).data('id') || $(this).closest('tr').data('id') || 0, 10);
+        if(userId <= 0){
+            notifyError('Usuario inválido');
+            return;
+        }
+
+        if(!window.confirm('¿Resetear contraseña de este usuario?')){
+            return;
+        }
+
+        $.post('ajax/usuarios.php', { action:'reset_password', user_id:userId }, function(res){
+            if(!(res && res.success)){
+                notifyError((res && res.error) ? res.error : 'Error al resetear contraseña');
+                return;
+            }
+
+            if(res.mail_failed === true && res.temp_password){
+                notifySuccess('Password temporal generado. Correo pendiente.');
+                if(!shownTempPasswordAlerts[userId]){
+                    shownTempPasswordAlerts[userId] = true;
+                    window.prompt('Password temporal generado (copiar):', res.temp_password);
+                }
+                return;
+            }
+
+            notifySuccess('Password temporal generado y enviado por correo');
+        }, 'json').fail(function(xhr){
+            var msg = 'Error al resetear contraseña';
+            if(xhr && xhr.responseJSON && xhr.responseJSON.error){
+                msg = xhr.responseJSON.error;
+            }
+            notifyError(msg);
+        });
     });
 
     $('#edit-role-id').on('change', toggleEditOwnershipFields);

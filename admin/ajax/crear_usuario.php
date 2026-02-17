@@ -1,12 +1,10 @@
 <?php
 session_start();
 include("../include/include.php");
+require_once __DIR__ . '/../include/password_utils.php';
 $resultados = array();
 $tipo = isset($_REQUEST["tipo"]) ? $_REQUEST["tipo"] : '';
 $empresa = isset($_REQUEST['empresa']) ? $_REQUEST['empresa'] : '';
-$token 	    = 	md5(uniqid(rand(), true));
-$email_req = isset($_REQUEST["email"]) ? $_REQUEST["email"] : '';
-$password  	= 	$email_req !== '' ? hash('sha512', $token.$email_req) : '';
 
 function usuarios_has_column($conexion, $column) {
     $column = mysqli_real_escape_string($conexion, $column);
@@ -199,6 +197,12 @@ if($tipo == 'crear_usuario'){
     $avatar_default = 'img/perfil/default.png';
     $cambio_password = 1;
     $activo = 1;
+    $initial_plain_password = $email !== '' ? $email : substr(md5(uniqid(rand(), true)), 0, 12);
+    $password_payload = hash_password_for_storage($initial_plain_password, array(
+        'token' => md5(uniqid(rand(), true)),
+    ));
+    $token = $password_payload['token'];
+    $password = $password_payload['password'];
     $usuario_val = $email;
     $usrlogin_val = $email;
     $cargo_val = isset($_REQUEST['cargo']) ? trim($_REQUEST['cargo']) : '';
@@ -299,19 +303,59 @@ if($tipo == 'crear_avatar'){
 
 if($_REQUEST['tipo'] == 'crear_password'){
     $id = $_REQUEST['id_usuario'];
-    $usrclave2 	= 	md5(uniqid(rand(), true));
-    $usrclave  	= 	hash('sha512', $usrclave2.$_REQUEST["pass1"]);
-    $usuario    =   $_REQUEST["usuarios"];
-    mysqli_query($conexion, "UPDATE usuarios 
-                                SET `password`  = '$usrclave', 
-                                    `token` = '$usrclave2',
-                                    `cambio_password` = 1
-                              WHERE id = '$id'");
-    if (mysqli_error($conexion)) {
+    $id = intval($id);
+    $pass1 = isset($_REQUEST["pass1"]) ? (string)$_REQUEST["pass1"] : '';
+    if ($id <= 0 || $pass1 === '') {
+        $resultados["status"] = null;
+        $resultados['error'] = 'invalid_input';
+        echo json_encode($resultados);
+        return;
+    }
+
+    $current_user = array();
+    if ($stmtUser = mysqli_prepare($conexion, "SELECT id, token, password FROM usuarios WHERE id = ? LIMIT 1")) {
+        mysqli_stmt_bind_param($stmtUser, 'i', $id);
+        mysqli_stmt_execute($stmtUser);
+        $resUser = mysqli_stmt_get_result($stmtUser);
+        if ($resUser && ($rowUser = mysqli_fetch_assoc($resUser))) {
+            $current_user = $rowUser;
+        }
+        mysqli_stmt_close($stmtUser);
+    }
+
+    if (empty($current_user)) {
+        $resultados["status"] = null;
+        $resultados['error'] = 'user_not_found';
+        echo json_encode($resultados);
+        return;
+    }
+
+    $hashed_payload = hash_password_for_storage($pass1, $current_user);
+    $new_hash = $hashed_payload['password'];
+    $new_token = $hashed_payload['token'];
+    $has_cambio_password = usuarios_has_column($conexion, 'cambio_password');
+
+    if ($has_cambio_password) {
+        $stmtUpdate = mysqli_prepare($conexion, "UPDATE usuarios SET password = ?, token = ?, cambio_password = 1 WHERE id = ? LIMIT 1");
+    } else {
+        $stmtUpdate = mysqli_prepare($conexion, "UPDATE usuarios SET password = ?, token = ? WHERE id = ? LIMIT 1");
+    }
+
+    if (!$stmtUpdate) {
+        $resultados["status"] = null;
+        $resultados['error'] = 'db_prepare_error';
+        echo json_encode($resultados);
+        return;
+    }
+
+    mysqli_stmt_bind_param($stmtUpdate, 'ssi', $new_hash, $new_token, $id);
+    if (!mysqli_stmt_execute($stmtUpdate)) {
         $resultados["status"]   = null;
-        $resultados['error']    = mysqli_error($conexion);
+        $resultados['error']    = mysqli_stmt_error($stmtUpdate);
+        mysqli_stmt_close($stmtUpdate);
     } else {
         $resultados["status"]   = true;
+        mysqli_stmt_close($stmtUpdate);
     }
 }
 

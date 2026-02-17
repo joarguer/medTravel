@@ -77,6 +77,11 @@ if (!user_can('users.view') && !$can_manage_users) {
                                     <button type="button" class="btn btn-xs btn-primary btn-user-edit edit-user" data-id="" style="margin-right:6px;">EDITAR</button>
                                 </div>
                                 <?php endif; ?>
+                                <?php if ($is_admin): ?>
+                                <div id="users-reset-btn-template" class="hide">
+                                    <button type="button" class="btn btn-xs btn-warning btn-user-reset-pass" data-id="" style="margin-right:6px;">RESET PASS</button>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
