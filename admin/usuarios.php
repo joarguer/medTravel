@@ -84,7 +84,8 @@ if (!user_can('users.view')) {
     <?php echo $theme_layout_script; ?>
     <script>
         window.USERS_CTX = {
-            canEdit: <?php echo user_can('users.edit') ? 'true' : 'false'; ?>
+            canEdit: <?php echo user_can('users.edit') ? 'true' : 'false'; ?>,
+            complementaryRoleId: <?php echo ROLE_PROVIDER_ADMIN; ?>
         };
     </script>
     <script src="js/usuarios.js"></script>
