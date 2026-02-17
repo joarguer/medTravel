@@ -5,6 +5,11 @@ require_once("../include/roles.php");
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 
+// Hardening RBAC: endpoints complementarios requieren permiso canónico explícito.
+if (!is_role_admin_session() && !user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE)) {
+    json_err('forbidden', 403);
+}
+
 $action = $_GET['action'] ?? $_POST['action'] ?? 'list';
 $isAdmin = is_role_admin_session();
 $isComplementaryUser = is_complementary_user_session();

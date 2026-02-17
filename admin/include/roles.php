@@ -86,12 +86,14 @@ function get_permission_alias_map() {
     // Bridge entre permisos canónicos nuevos y slugs legacy existentes en DB.
     return [
         PERM_SERVICES_MEDICAL_MANAGE => ['offers.manage', 'providers.medical.edit', 'providers.edit'],
-        PERM_SERVICES_COMPLEMENTARY_MANAGE => ['providers.partner.edit', 'providers.edit'],
+        // Endurecer aislamiento: no heredar acceso complementario desde providers.edit (dominio médico legacy).
+        PERM_SERVICES_COMPLEMENTARY_MANAGE => ['providers.partner.edit'],
         PERM_PROVIDERS_MEDICAL_MANAGE => ['providers.medical.edit', 'providers.edit'],
-        PERM_PROVIDERS_COMPLEMENTARY_MANAGE => ['providers.partner.edit', 'providers.edit'],
+        // Endurecer aislamiento: permisos complementarios solo por slugs partner explícitos.
+        PERM_PROVIDERS_COMPLEMENTARY_MANAGE => ['providers.partner.edit'],
         PERM_BOOKING_VIEW => ['reports.view'],
         PERM_BOOKING_MANAGE => ['reports.view'],
-        PERM_PACKAGES_MANAGE => ['providers.partner.edit', 'providers.edit'],
+        PERM_PACKAGES_MANAGE => ['providers.partner.edit'],
         PERM_USERS_MANAGE => ['users.edit', 'users.create'],
         PERM_REPORTS_VIEW => ['reports.view'],
         PERM_SETTINGS_MANAGE => ['roles.manage'],

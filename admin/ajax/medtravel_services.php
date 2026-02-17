@@ -11,6 +11,13 @@ require_once('../include/roles.php');
 
 require_login_ajax();
 
+// Hardening RBAC: servicios complementarios requieren permiso canónico explícito.
+if (!is_role_admin_session() && !user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE)) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'message' => 'forbidden']);
+    exit;
+}
+
 $action = isset($_POST['action']) ? $_POST['action'] : (isset($_GET['action']) ? $_GET['action'] : '');
 $id_usuario = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : 0;
 
