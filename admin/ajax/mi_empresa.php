@@ -1,179 +1,417 @@
 <?php
-// Habilitar reporte de errores para debug
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-// Iniciar sesión
-@session_start();
+require_once('../include/conexion.php');
+require_once('../include/roles.php');
 
-// Intentar incluir conexión
-try {
-    include_once("../include/conexion.php");
-} catch (Exception $e) {
-    header('Content-Type: application/json');
-    echo json_encode(array('ok' => false, 'error' => 'Error al incluir conexión: ' . $e->getMessage()));
-    exit();
+require_login_ajax();
+header('Content-Type: application/json; charset=utf-8');
+
+function json_ok($data = []) {
+    echo json_encode(array_merge(['ok' => true], $data));
+    exit;
 }
 
-// Verificar conexión
-if (!isset($conexion)) {
-    header('Content-Type: application/json');
-    echo json_encode(array('ok' => false, 'error' => 'Variable de conexión no definida'));
-    exit();
+function json_err($message, $status = 400, $code = 'bad_request', $extra = []) {
+    http_response_code((int)$status);
+    echo json_encode(array_merge([
+        'ok' => false,
+        'error' => $message,
+        'code' => $code,
+    ], $extra));
+    exit;
 }
 
-// Verificar conexión
-if (!isset($conexion)) {
-    header('Content-Type: application/json');
-    echo json_encode(array('ok' => false, 'error' => 'Variable de conexión no definida'));
-    exit();
+function auth_is_dev_mode() {
+    return defined('APP_ENV') && APP_ENV === 'dev';
 }
 
-// Establecer header JSON
-header('Content-Type: application/json');
-
-// Verificar sesión activa
-if (!isset($_SESSION["usuario"]) || empty($_SESSION["usuario"])) {
-    echo json_encode(array('ok' => false, 'error' => 'Sesión no válida'));
-    exit();
+function auth_dev_scope_log($action, $scope) {
+    if (!auth_is_dev_mode()) {
+        return;
+    }
+    $providerId = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
+    $serviceProviderId = isset($_SESSION['service_provider_id']) ? intval($_SESSION['service_provider_id']) : 0;
+    error_log(
+        '[MI_EMPRESA] action=' . (string)$action .
+        ' role_id=' . (string)($scope['role_id'] ?? 'null') .
+        ' provider_id=' . $providerId .
+        ' service_provider_id=' . $serviceProviderId
+    );
 }
 
-// Verificar provider_id en sesión
-if (!isset($_SESSION['provider_id']) || empty($_SESSION['provider_id'])) {
-    echo json_encode(array('ok' => false, 'error' => 'No tiene permisos de prestador'));
-    exit();
-}
+function resolve_company_scope() {
+    $isAdmin = is_role_admin_session();
+    $roleId = current_role_id();
+    $providerId = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
+    $serviceProviderId = isset($_SESSION['service_provider_id']) ? intval($_SESSION['service_provider_id']) : 0;
 
-$provider_id = (int)$_SESSION['provider_id'];
-$tipo = isset($_REQUEST["tipo"]) ? $_REQUEST["tipo"] : '';
-$resultados = array();
+    $domain = 'none';
+    $scopeId = 0;
 
-if ($tipo == 'actualizar_empresa') {
-    // Whitelist estricta de campos editables
-    $allowed_fields = array('name', 'description', 'city', 'address', 'phone', 'email', 'website');
-    
-    $updates = array();
-    
-    // Construir UPDATE con valores escapados manualmente
-    foreach ($allowed_fields as $field) {
-        if (isset($_POST[$field])) {
-            $value = mysqli_real_escape_string($conexion, $_POST[$field]);
-            $updates[] = "`$field` = '$value'";
+    if (in_array((int)$roleId, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true) && $providerId > 0) {
+        $domain = 'medical';
+        $scopeId = $providerId;
+    } elseif ((int)$roleId === ROLE_COMPLEMENTARY_ADMIN && $serviceProviderId > 0) {
+        $domain = 'complementary';
+        $scopeId = $serviceProviderId;
+    } elseif (!$isAdmin) {
+        // legacy guard - medical only: antes solo se permitía provider_id.
+        if ($providerId > 0) {
+            $domain = 'medical';
+            $scopeId = $providerId;
+        } elseif ($serviceProviderId > 0) {
+            $domain = 'complementary';
+            $scopeId = $serviceProviderId;
         }
     }
-    
-    if (empty($updates)) {
-        echo json_encode(array('ok' => false, 'error' => 'No hay campos para actualizar'));
-        exit();
-    }
-    
-    // Construir y ejecutar SQL
-    $sql = "UPDATE providers SET " . implode(', ', $updates) . " WHERE id = " . intval($provider_id);
-    
-    $exec = mysqli_query($conexion, $sql);
-    
-    if ($exec === false) {
-        $resultados['ok'] = false;
-        $resultados['error'] = 'Error al actualizar: ' . mysqli_error($conexion);
-    } else {
-        $resultados['ok'] = true;
-        $resultados['message'] = 'Datos actualizados correctamente';
-    }
-    
-    echo json_encode($resultados);
-    exit();
+
+    $canEditSelf = (!$isAdmin && ($domain === 'medical' || $domain === 'complementary'));
+    $canUploadLogo = ($canEditSelf && $domain === 'medical');
+
+    return [
+        'is_admin' => $isAdmin,
+        'role_id' => $roleId,
+        'domain' => $domain,
+        'scope_id' => $scopeId,
+        'can_edit_self' => $canEditSelf,
+        'can_upload_logo' => $canUploadLogo,
+    ];
 }
 
-if ($tipo == 'upload_logo') {
-    // Validar que se subió un archivo
-    if (!isset($_FILES['logo']) || $_FILES['logo']['error'] !== UPLOAD_ERR_OK) {
-        echo json_encode(array('ok' => false, 'error' => 'No se recibió archivo o hubo un error'));
-        exit();
+function fetch_medical_company($conexion, $providerId) {
+    $sql = "SELECT * FROM providers WHERE id = ? LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        json_err('Error al preparar consulta', 500, 'db_prepare_error');
     }
-    
-    $file = $_FILES['logo'];
-    
-    // Validar tamaño (máximo 2MB)
-    if ($file['size'] > 2 * 1024 * 1024) {
-        echo json_encode(array('ok' => false, 'error' => 'El archivo excede el tamaño máximo de 2MB'));
-        exit();
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row;
+}
+
+function fetch_complementary_company($conexion, $serviceProviderId) {
+    $sql = "SELECT * FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        json_err('Error al preparar consulta', 500, 'db_prepare_error');
     }
-    
-    // Validar tipo MIME
-    $allowed_types = array('image/jpeg', 'image/png', 'image/webp');
-    
-    // Verificar si finfo está disponible
-    if (function_exists('finfo_open')) {
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo);
+    mysqli_stmt_bind_param($stmt, 'i', $serviceProviderId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row;
+}
+
+function fetch_medical_verification($conexion, $providerId) {
+    $out = [
+        'status' => 'pending',
+        'verification_level' => 'basic',
+        'completion_percent' => 0,
+        'verified_at' => null,
+    ];
+
+    $sql = "SELECT 
+                COALESCE(pv.status,'pending') AS status,
+                COALESCE(pv.verification_level,'basic') AS verification_level,
+                pv.verified_at,
+                COUNT(pvi.id) AS total_items,
+                SUM(CASE WHEN pvi.is_checked = 1 THEN 1 ELSE 0 END) AS checked_items
+            FROM providers p
+            LEFT JOIN provider_verification pv ON pv.provider_id = p.id
+            LEFT JOIN provider_verification_items pvi ON pvi.provider_id = p.id
+            WHERE p.id = ?
+            GROUP BY pv.status, pv.verification_level, pv.verified_at";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return $out;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    if (mysqli_stmt_execute($stmt)) {
+        $res = mysqli_stmt_get_result($stmt);
+        if ($res && ($row = mysqli_fetch_assoc($res))) {
+            $total = isset($row['total_items']) ? intval($row['total_items']) : 0;
+            $checked = isset($row['checked_items']) ? intval($row['checked_items']) : 0;
+            $out['status'] = $row['status'];
+            $out['verification_level'] = $row['verification_level'];
+            $out['verified_at'] = $row['verified_at'];
+            $out['completion_percent'] = ($total > 0) ? (int)round(($checked / $total) * 100) : 0;
+        }
+    }
+    mysqli_stmt_close($stmt);
+    return $out;
+}
+
+function build_company_payload($conexion, $scope, $row) {
+    $domain = $scope['domain'];
+    $scopeId = intval($scope['scope_id']);
+
+    if ($domain === 'medical') {
+        $logoUrl = '';
+        $logoFile = isset($row['logo']) ? trim((string)$row['logo']) : '';
+        if ($logoFile !== '') {
+            $path = '../../img/providers/' . $scopeId . '/' . $logoFile;
+            if (file_exists($path)) {
+                $logoUrl = '../img/providers/' . $scopeId . '/' . $logoFile;
+            }
+        }
+
+        $verification = fetch_medical_verification($conexion, $scopeId);
+
+        return [
+            'id' => $scopeId,
+            'domain' => 'medical',
+            'type_raw' => isset($row['type']) ? (string)$row['type'] : 'medico',
+            'type_label' => ucfirst((string)($row['type'] ?? 'medico')),
+            'name' => (string)($row['name'] ?? ''),
+            'city' => (string)($row['city'] ?? ''),
+            'phone' => (string)($row['phone'] ?? ''),
+            'email' => (string)($row['email'] ?? ''),
+            'address' => (string)($row['address'] ?? ''),
+            'website' => (string)($row['website'] ?? ''),
+            'description' => (string)($row['description'] ?? ''),
+            'logo' => $logoFile,
+            'logo_url' => $logoUrl,
+            'is_active' => isset($row['is_active']) ? intval($row['is_active']) : 0,
+            'status' => $verification['status'],
+            'verification_level' => $verification['verification_level'],
+            'completion_percent' => $verification['completion_percent'],
+            'verified_at' => $verification['verified_at'],
+            'address_available' => true,
+            'logo_available' => true,
+        ];
+    }
+
+    return [
+        'id' => $scopeId,
+        'domain' => 'complementary',
+        'type_raw' => (string)($row['provider_type'] ?? 'other'),
+        'type_label' => ucfirst((string)($row['provider_type'] ?? 'other')),
+        'name' => (string)($row['provider_name'] ?? ''),
+        'city' => (string)($row['city'] ?? ''),
+        'phone' => (string)($row['contact_phone'] ?? ''),
+        'email' => (string)($row['contact_email'] ?? ''),
+        'address' => '',
+        'website' => (string)($row['website'] ?? ''),
+        'description' => (string)($row['notes'] ?? ''),
+        'logo' => '',
+        'logo_url' => '',
+        'is_active' => isset($row['is_active']) ? intval($row['is_active']) : 0,
+        'status' => ((isset($row['is_active']) && intval($row['is_active']) === 1) ? 'active' : 'inactive'),
+        'verification_level' => null,
+        'completion_percent' => null,
+        'verified_at' => null,
+        'address_available' => false,
+        'logo_available' => false,
+    ];
+}
+
+function load_scoped_company($conexion, $scope) {
+    if ($scope['domain'] === 'medical') {
+        $row = fetch_medical_company($conexion, intval($scope['scope_id']));
+        if (!$row) {
+            json_err('Prestador no encontrado', 404, 'provider_not_found');
+        }
+        if (isset($row['is_active']) && intval($row['is_active']) !== 1) {
+            json_err('Prestador inactivo', 403, 'provider_inactive');
+        }
+        return build_company_payload($conexion, $scope, $row);
+    }
+
+    if ($scope['domain'] === 'complementary') {
+        $row = fetch_complementary_company($conexion, intval($scope['scope_id']));
+        if (!$row) {
+            json_err('Proveedor complementario inválido o inactivo', 403, 'service_provider_invalid');
+        }
+        return build_company_payload($conexion, $scope, $row);
+    }
+
+    return null;
+}
+
+$action = isset($_REQUEST['action']) ? trim((string)$_REQUEST['action']) : '';
+$tipo = isset($_REQUEST['tipo']) ? trim((string)$_REQUEST['tipo']) : '';
+if ($action === '') {
+    // Compatibilidad legacy con JS antiguo (tipo=actualizar_empresa/upload_logo).
+    if ($tipo === 'actualizar_empresa') {
+        $action = 'update_self_company';
+    } elseif ($tipo === 'upload_logo') {
+        $action = 'upload_logo';
     } else {
-        // Fallback usando el tipo del archivo
-        $mime = $file['type'];
+        $action = 'get_self_company';
     }
-    
-    if (!in_array($mime, $allowed_types)) {
-        echo json_encode(array('ok' => false, 'error' => 'Formato no permitido. Use JPG, PNG o WEBP'));
-        exit();
+}
+
+$scope = resolve_company_scope();
+auth_dev_scope_log($action, $scope);
+
+if ($scope['domain'] === 'none') {
+    if ($scope['is_admin'] && $action === 'get_self_company') {
+        // permitido: admin global puede abrir vista sin scope self.
+    } else {
+        $rid = intval($scope['role_id']);
+        if (in_array($rid, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true)) {
+            json_err('Scope médico requerido en sesión', 403, 'provider_scope_required');
+        }
+        if ($rid === ROLE_COMPLEMENTARY_ADMIN) {
+            json_err('Scope complementario requerido en sesión', 403, 'service_provider_scope_required');
+        }
+        json_err('Acceso denegado', 403, 'forbidden');
     }
-    
-    // Definir extensión
-    $ext_map = array(
+}
+
+if ($action === 'get_self_company') {
+    $data = null;
+    if ($scope['domain'] !== 'none') {
+        $data = load_scoped_company($conexion, $scope);
+    }
+    json_ok([
+        'domain' => $scope['domain'],
+        'role_id' => $scope['role_id'],
+        'can_edit_self' => $scope['can_edit_self'],
+        'can_upload_logo' => $scope['can_upload_logo'],
+        'data' => $data,
+    ]);
+}
+
+if ($action === 'update_self_company') {
+    if (!$scope['can_edit_self']) {
+        json_err('No puedes editar empresa en este perfil', 403, 'self_edit_forbidden');
+    }
+
+    // Valida que el scope exista/esté activo antes de actualizar.
+    load_scoped_company($conexion, $scope);
+
+    $name = isset($_POST['name']) ? trim((string)$_POST['name']) : '';
+    $description = isset($_POST['description']) ? trim((string)$_POST['description']) : '';
+    $city = isset($_POST['city']) ? trim((string)$_POST['city']) : '';
+    $address = isset($_POST['address']) ? trim((string)$_POST['address']) : '';
+    $phone = isset($_POST['phone']) ? trim((string)$_POST['phone']) : '';
+    $email = isset($_POST['email']) ? trim((string)$_POST['email']) : '';
+    $website = isset($_POST['website']) ? trim((string)$_POST['website']) : '';
+
+    if ($name === '') {
+        json_err('El nombre es obligatorio', 422, 'name_required');
+    }
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        json_err('Email inválido', 422, 'invalid_email');
+    }
+
+    $scopeId = intval($scope['scope_id']);
+
+    if ($scope['domain'] === 'medical') {
+        $sql = "UPDATE providers SET name = ?, description = ?, city = ?, address = ?, phone = ?, email = ?, website = ? WHERE id = ? AND is_active = 1 LIMIT 1";
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            json_err('Error al preparar actualización', 500, 'db_prepare_error');
+        }
+        mysqli_stmt_bind_param($stmt, 'sssssssi', $name, $description, $city, $address, $phone, $email, $website, $scopeId);
+        if (!mysqli_stmt_execute($stmt)) {
+            $err = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            json_err('Error de base de datos', 500, 'db_error', ['detail' => $err]);
+        }
+        mysqli_stmt_close($stmt);
+    } elseif ($scope['domain'] === 'complementary') {
+        $sql = "UPDATE service_providers SET provider_name = ?, notes = ?, city = ?, contact_phone = ?, contact_email = ?, website = ? WHERE id = ? AND is_active = 1 LIMIT 1";
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            json_err('Error al preparar actualización', 500, 'db_prepare_error');
+        }
+        mysqli_stmt_bind_param($stmt, 'ssssssi', $name, $description, $city, $phone, $email, $website, $scopeId);
+        if (!mysqli_stmt_execute($stmt)) {
+            $err = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            json_err('Error de base de datos', 500, 'db_error', ['detail' => $err]);
+        }
+        mysqli_stmt_close($stmt);
+    } else {
+        json_err('Acceso denegado', 403, 'forbidden');
+    }
+
+    $data = load_scoped_company($conexion, $scope);
+    json_ok([
+        'message' => 'Datos actualizados correctamente',
+        'domain' => $scope['domain'],
+        'data' => $data,
+    ]);
+}
+
+if ($action === 'upload_logo') {
+    if (!$scope['can_upload_logo']) {
+        json_err('Logo no disponible para este dominio', 403, 'logo_not_allowed');
+    }
+
+    if (!isset($_FILES['logo']) || $_FILES['logo']['error'] !== UPLOAD_ERR_OK) {
+        json_err('Archivo requerido', 422, 'file_required');
+    }
+
+    $file = $_FILES['logo'];
+    if ($file['size'] > 2 * 1024 * 1024) {
+        json_err('Archivo excede 2MB', 422, 'file_too_large');
+    }
+
+    $allowed = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
-        'image/webp' => 'webp'
-    );
-    $ext = isset($ext_map[$mime]) ? $ext_map[$mime] : 'jpg';
-    
-    // Crear directorio si no existe - ruta correcta desde ajax/
-    $upload_dir = "../../img/providers/" . $provider_id . "/";
-    if (!is_dir($upload_dir)) {
-        if (!@mkdir($upload_dir, 0755, true)) {
-            echo json_encode(array('ok' => false, 'error' => 'No se pudo crear el directorio'));
-            exit();
+        'image/webp' => 'webp',
+    ];
+
+    $mime = $file['type'];
+    if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo) {
+            $detected = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+            if ($detected) {
+                $mime = $detected;
+            }
         }
     }
-    
-    // Nombre del archivo: logo_{timestamp}.{ext}
-    $filename = 'logo_' . time() . '.' . $ext;
-    $filepath = $upload_dir . $filename;
-    
-    // Mover archivo
-    if (!@move_uploaded_file($file['tmp_name'], $filepath)) {
-        echo json_encode(array('ok' => false, 'error' => 'Error al guardar el archivo'));
-        exit();
+
+    if (!isset($allowed[$mime])) {
+        json_err('Tipo de archivo inválido', 422, 'invalid_file_type');
     }
-    
-    // Actualizar base de datos usando query simple
-    $filename_esc = mysqli_real_escape_string($conexion, $filename);
-    $sql = "UPDATE providers SET logo = '$filename_esc' WHERE id = " . intval($provider_id);
-    $exec = mysqli_query($conexion, $sql);
-    
-    if ($exec === false) {
-        // Eliminar archivo si falla la BD
-        if (file_exists($filepath)) {
-            @unlink($filepath);
-        }
-        echo json_encode(array('ok' => false, 'error' => 'Error al actualizar la base de datos: ' . mysqli_error($conexion)));
-    } else {
-        echo json_encode(array(
-            'ok' => true,
-            'message' => 'Logo actualizado correctamente',
-            'filename' => $filename,
-            'url' => '../img/providers/' . $provider_id . '/' . $filename
-        ));
+
+    $scopeId = intval($scope['scope_id']);
+    $uploadDir = '../../img/providers/' . $scopeId . '/';
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
+        json_err('Error creando carpeta de subida', 500, 'upload_dir_error');
     }
-    exit();
+
+    $filename = 'logo_' . time() . '.' . $allowed[$mime];
+    $path = $uploadDir . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $path)) {
+        json_err('Error guardando archivo', 500, 'upload_failed');
+    }
+
+    $stmt = mysqli_prepare($conexion, "UPDATE providers SET logo = ? WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        @unlink($path);
+        json_err('Error al preparar actualización', 500, 'db_prepare_error');
+    }
+    mysqli_stmt_bind_param($stmt, 'si', $filename, $scopeId);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        @unlink($path);
+        json_err('Error de base de datos', 500, 'db_error', ['detail' => $err]);
+    }
+    mysqli_stmt_close($stmt);
+
+    json_ok([
+        'message' => 'Logo actualizado correctamente',
+        'filename' => $filename,
+        'url' => '../img/providers/' . $scopeId . '/' . $filename,
+    ]);
 }
 
-// Si no se reconoce el tipo, devolver error
-if (empty($resultados)) {
-    $resultados = array(
-        'ok' => false,
-        'error' => 'Tipo de operación no válido'
-    );
-}
-
-echo json_encode($resultados);
-?>
+json_err('Acción inválida', 400, 'invalid_action');

@@ -293,6 +293,9 @@ $admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php',
 $admin_users_pages = array('mis_datos.php','usuarios.php','crear_usuario.php','roles.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
 $profile_pages = array('mis_datos.php');
+$can_manage_complementary_providers = user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE);
+$can_manage_complementary_services = user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE);
+$can_manage_packages = user_can(PERM_PACKAGES_MANAGE);
 
 $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-responsive-collapse">
                     <ul class="nav navbar-nav">
@@ -337,15 +340,15 @@ if ($es_admin) {
                                         <a href="javascript:;">
                                             <i class="icon-plane"></i> Servicios Complementarios </a>
                                         <ul class="dropdown-menu">
-                                            <li'.menu_li_class('providers_complementary.php').'>
+                                            '.($can_manage_complementary_providers ? '<li'.menu_li_class('providers_complementary.php').'>
                                                 <a href="./providers_complementary.php">Proveedores Complementarios</a>
-                                            </li>
-                                            <li'.menu_li_class('medtravel_services.php').'>
+                                            </li>' : '').'
+                                            '.($can_manage_complementary_services ? '<li'.menu_li_class('medtravel_services.php').'>
                                                 <a href="./medtravel_services.php">MedTravel Services</a>
-                                            </li>
-                                            <li'.menu_li_class('paquetes.php').'>
+                                            </li>' : '').'
+                                            '.($can_manage_packages ? '<li'.menu_li_class('paquetes.php').'>
                                                 <a href="./paquetes.php">Paquetes de Viaje</a>
-                                            </li>
+                                            </li>' : '').'
                                         </ul>
                                     </li>';
 
@@ -369,22 +372,24 @@ if ($es_admin) {
                                             <i class="icon-tag"></i> Mis Ofertas </a>
                                     </li>';
 } elseif ($es_complementario) {
-    $top_header_2 .=               '<li'.menu_li_class($complementary_scope_pages, 'dropdown more-dropdown-sub').'>
-                                        <a href="javascript:;">
-                                            <i class="icon-plane"></i> Servicios Complementarios </a>
-                                        <ul class="dropdown-menu">
-                                            <li'.menu_li_class('providers_complementary.php').'>
-                                                <a href="./providers_complementary.php">Proveedores Complementarios</a>
-                                            </li>
-                                            <li'.menu_li_class('medtravel_services.php').'>
-                                                <a href="./medtravel_services.php">MedTravel Services</a>
-                                            </li>
-                                        </ul>
-                                    </li>';
+    if ($can_manage_complementary_providers || $can_manage_complementary_services) {
+        $top_header_2 .=               '<li'.menu_li_class($complementary_scope_pages, 'dropdown more-dropdown-sub').'>
+                                            <a href="javascript:;">
+                                                <i class="icon-plane"></i> Servicios Complementarios </a>
+                                            <ul class="dropdown-menu">
+                                                '.($can_manage_complementary_providers ? '<li'.menu_li_class('providers_complementary.php').'>
+                                                    <a href="./providers_complementary.php">Proveedores Complementarios</a>
+                                                </li>' : '').'
+                                                '.($can_manage_complementary_services ? '<li'.menu_li_class('medtravel_services.php').'>
+                                                    <a href="./medtravel_services.php">MedTravel Services</a>
+                                                </li>' : '').'
+                                            </ul>
+                                        </li>';
+    }
 }
 
-// Mi Empresa (solo prestadores)
-if ($es_prestador && !$es_admin) {
+// Mi Empresa (usuarios scoped por empresa: médico o complementario)
+if (($es_prestador || $es_complementario) && !$es_admin) {
     $top_header_2 .=               '<li'.menu_li_class('mi_empresa.php').'>
                                         <a href="./mi_empresa.php">
                                             <i class="icon-briefcase"></i> Mi Empresa </a>

@@ -1,24 +1,50 @@
 <?php
 include("include/include.php");
+$is_admin = is_role_admin_session();
+$role_id = current_role_id();
+$provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
+$service_provider_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
 
-// Bloquear si NO es prestador
-if (!isset($_SESSION['provider_id']) || empty($_SESSION['provider_id'])) {
+$domain_type = 'none';
+$scope_id = 0;
+if (in_array((int)$role_id, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true) && $provider_id > 0) {
+    $domain_type = 'medical';
+    $scope_id = $provider_id;
+} elseif ((int)$role_id === ROLE_COMPLEMENTARY_ADMIN && $service_provider_id > 0) {
+    $domain_type = 'complementary';
+    $scope_id = $service_provider_id;
+} elseif (!$is_admin) {
+    if ($provider_id > 0) {
+        $domain_type = 'medical';
+        $scope_id = $provider_id;
+    } elseif ($service_provider_id > 0) {
+        $domain_type = 'complementary';
+        $scope_id = $service_provider_id;
+    }
+}
+
+if ($domain_type === 'none' && !$is_admin) {
     header("Location: index.php");
     exit();
 }
 
-$provider_id = (int)$_SESSION['provider_id'];
+$can_edit_self = (!$is_admin && ($domain_type === 'medical' || $domain_type === 'complementary'));
+$can_upload_logo = ($can_edit_self && $domain_type === 'medical');
 
-// Cargar datos del prestador
-$sql = "SELECT * FROM providers WHERE id = ?";
-$stmt = mysqli_prepare($conexion, $sql);
-mysqli_stmt_bind_param($stmt, 'i', $provider_id);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-$provider = mysqli_fetch_array($result);
-mysqli_stmt_close($stmt);
+$company = [
+    'type' => '',
+    'name' => '',
+    'city' => '',
+    'phone' => '',
+    'email' => '',
+    'address' => '',
+    'website' => '',
+    'description' => '',
+    'logo' => '',
+    'is_active' => 0
+];
 
-// Cargar estado de verificación
+// Cargar estado de verificación (solo dominio médico)
 $verification = [
     'status' => 'pending',
     'verification_level' => 'basic',
@@ -30,44 +56,94 @@ $verification = [
     'total_items' => 0
 ];
 
-$ver_sql = "SELECT 
-                COALESCE(pv.status,'pending') AS status,
-                COALESCE(pv.verification_level,'basic') AS verification_level,
-                COALESCE(pv.trust_score,0) AS trust_score,
-                pv.verified_at,
-                pv.expires_at,
-                COUNT(pvi.id) AS total_items,
-                SUM(CASE WHEN pvi.is_checked = 1 THEN 1 ELSE 0 END) AS checked_items
-            FROM providers p
-            LEFT JOIN provider_verification pv ON pv.provider_id = p.id
-            LEFT JOIN provider_verification_items pvi ON pvi.provider_id = p.id
-            WHERE p.id = ?
-            GROUP BY pv.status, pv.verification_level, pv.trust_score, pv.verified_at, pv.expires_at";
+if ($domain_type === 'medical') {
+    $sql = "SELECT * FROM providers WHERE id = ? LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    mysqli_stmt_bind_param($stmt, 'i', $scope_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $provider = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
 
-if ($vstmt = mysqli_prepare($conexion, $ver_sql)) {
-    mysqli_stmt_bind_param($vstmt, 'i', $provider_id);
-    if (mysqli_stmt_execute($vstmt)) {
-        $vres = mysqli_stmt_get_result($vstmt);
-        if ($row = mysqli_fetch_assoc($vres)) {
-            $verification['status'] = $row['status'];
-            $verification['verification_level'] = $row['verification_level'];
-            $verification['trust_score'] = (int)$row['trust_score'];
-            $verification['verified_at'] = $row['verified_at'];
-            $verification['expires_at'] = $row['expires_at'];
-            $verification['checked_items'] = (int)$row['checked_items'];
-            $verification['total_items'] = (int)$row['total_items'];
-            $verification['completion_percent'] = ($verification['total_items'] > 0)
-                ? round(($verification['checked_items'] / $verification['total_items']) * 100)
-                : 0;
-        }
+    if (!$provider || (isset($provider['is_active']) && intval($provider['is_active']) !== 1)) {
+        header("Location: index.php");
+        exit();
     }
-    mysqli_stmt_close($vstmt);
+
+    $company['type'] = isset($provider['type']) ? $provider['type'] : 'medico';
+    $company['name'] = isset($provider['name']) ? $provider['name'] : '';
+    $company['city'] = isset($provider['city']) ? $provider['city'] : '';
+    $company['phone'] = isset($provider['phone']) ? $provider['phone'] : '';
+    $company['email'] = isset($provider['email']) ? $provider['email'] : '';
+    $company['address'] = isset($provider['address']) ? $provider['address'] : '';
+    $company['website'] = isset($provider['website']) ? $provider['website'] : '';
+    $company['description'] = isset($provider['description']) ? $provider['description'] : '';
+    $company['logo'] = isset($provider['logo']) ? $provider['logo'] : '';
+    $company['is_active'] = isset($provider['is_active']) ? intval($provider['is_active']) : 0;
+
+    $ver_sql = "SELECT 
+                    COALESCE(pv.status,'pending') AS status,
+                    COALESCE(pv.verification_level,'basic') AS verification_level,
+                    COALESCE(pv.trust_score,0) AS trust_score,
+                    pv.verified_at,
+                    pv.expires_at,
+                    COUNT(pvi.id) AS total_items,
+                    SUM(CASE WHEN pvi.is_checked = 1 THEN 1 ELSE 0 END) AS checked_items
+                FROM providers p
+                LEFT JOIN provider_verification pv ON pv.provider_id = p.id
+                LEFT JOIN provider_verification_items pvi ON pvi.provider_id = p.id
+                WHERE p.id = ?
+                GROUP BY pv.status, pv.verification_level, pv.trust_score, pv.verified_at, pv.expires_at";
+
+    if ($vstmt = mysqli_prepare($conexion, $ver_sql)) {
+        mysqli_stmt_bind_param($vstmt, 'i', $scope_id);
+        if (mysqli_stmt_execute($vstmt)) {
+            $vres = mysqli_stmt_get_result($vstmt);
+            if ($row = mysqli_fetch_assoc($vres)) {
+                $verification['status'] = $row['status'];
+                $verification['verification_level'] = $row['verification_level'];
+                $verification['trust_score'] = (int)$row['trust_score'];
+                $verification['verified_at'] = $row['verified_at'];
+                $verification['expires_at'] = $row['expires_at'];
+                $verification['checked_items'] = (int)$row['checked_items'];
+                $verification['total_items'] = (int)$row['total_items'];
+                $verification['completion_percent'] = ($verification['total_items'] > 0)
+                    ? round(($verification['checked_items'] / $verification['total_items']) * 100)
+                    : 0;
+            }
+        }
+        mysqli_stmt_close($vstmt);
+    }
+} elseif ($domain_type === 'complementary') {
+    $sql = "SELECT * FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    mysqli_stmt_bind_param($stmt, 'i', $scope_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $provider = mysqli_fetch_assoc($result);
+    mysqli_stmt_close($stmt);
+
+    if (!$provider) {
+        header("Location: index.php");
+        exit();
+    }
+
+    $company['type'] = isset($provider['provider_type']) ? $provider['provider_type'] : 'other';
+    $company['name'] = isset($provider['provider_name']) ? $provider['provider_name'] : '';
+    $company['city'] = isset($provider['city']) ? $provider['city'] : '';
+    $company['phone'] = isset($provider['contact_phone']) ? $provider['contact_phone'] : '';
+    $company['email'] = isset($provider['contact_email']) ? $provider['contact_email'] : '';
+    $company['address'] = '';
+    $company['website'] = isset($provider['website']) ? $provider['website'] : '';
+    $company['description'] = isset($provider['notes']) ? $provider['notes'] : '';
+    $company['logo'] = '';
+    $company['is_active'] = isset($provider['is_active']) ? intval($provider['is_active']) : 0;
 }
 
-if (!$provider) {
-    header("Location: index.php");
-    exit();
-}
+$company_title = ($domain_type === 'complementary') ? 'Mi Empresa / Proveedor Complementario' : 'Mi Empresa';
+$type_label = ($domain_type === 'complementary') ? 'Tipo de Proveedor' : 'Tipo';
+$name_label = ($domain_type === 'complementary') ? 'Proveedor Complementario *' : 'Nombre *';
+$description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' : 'Descripción';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -96,7 +172,7 @@ if (!$provider) {
         <div class="container-fluid">
             <div class="page-content">
                 <div class="breadcrumbs">
-                    <h1>Mi Empresa</h1>
+                    <h1><?php echo htmlspecialchars($company_title, ENT_QUOTES); ?></h1>
                     <ol class="breadcrumb">
                         <li><a href="index.php">Home</a></li>
                         <li class="active">Mi Empresa</li>
@@ -112,20 +188,20 @@ if (!$provider) {
                                         <div class="portlet-title">
                                             <div class="caption">
                                                 <i class="icon-organization font-dark"></i>
-                                                <span class="caption-subject font-dark bold uppercase">Información de la Empresa</span>
+                                                <span class="caption-subject font-dark bold uppercase"><?php echo htmlspecialchars($company_title, ENT_QUOTES); ?></span>
                                             </div>
                                         </div>
                                         <div class="portlet-body form">
                                             <form id="form-empresa" class="form-horizontal">
-                                                <input type="hidden" id="provider_id" value="<?php echo $provider_id; ?>" />
+                                                <input type="hidden" id="company_scope_id" value="<?php echo (int)$scope_id; ?>" />
                                                 
                                                 <div class="form-body">
                                                     <div class="row">
                                                         <div class="col-md-6">
                                                             <div class="form-group">
-                                                                <label class="col-md-3 control-label">Tipo</label>
+                                                                <label class="col-md-3 control-label"><?php echo htmlspecialchars($type_label, ENT_QUOTES); ?></label>
                                                                 <div class="col-md-9">
-                                                                    <p class="form-control-static"><?php echo ucfirst($provider['type']); ?></p>
+                                                                    <p class="form-control-static" id="company-type-text"><?php echo htmlspecialchars(ucfirst((string)$company['type']), ENT_QUOTES); ?></p>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -133,37 +209,57 @@ if (!$provider) {
                                                             <div class="form-group">
                                                                 <label class="col-md-3 control-label">Estado</label>
                                                                 <div class="col-md-9">
-                                                                    <p class="form-control-static">
-                                                                        <?php
-                                                                        $status = $verification['status'];
-                                                                        $badge_map = [
-                                                                            'verified' => 'badge-success',
-                                                                            'in_review' => 'badge-warning',
-                                                                            'pending' => 'badge-default',
-                                                                            'rejected' => 'badge-danger'
-                                                                        ];
-                                                                        $label_map = [
-                                                                            'verified' => 'Verificado',
-                                                                            'in_review' => 'En revisión',
-                                                                            'pending' => 'Pendiente',
-                                                                            'rejected' => 'Rechazado'
-                                                                        ];
-                                                                        $badge_class = isset($badge_map[$status]) ? $badge_map[$status] : 'badge-default';
-                                                                        $label = isset($label_map[$status]) ? $label_map[$status] : ucfirst($status);
-
-                                                                        echo '<span class="badge '.$badge_class.'">'.$label.'</span> ';
-                                                                        if ($provider['is_active']) {
-                                                                            echo '<span class="badge badge-info">Activo</span>';
-                                                                        } else {
-                                                                            echo '<span class="badge badge-default">Inactivo</span>';
-                                                                        }
-                                                                        ?>
+                                                                    <p class="form-control-static" id="company-status-badges">
+                                                                        <?php if ($domain_type === 'medical'): ?>
+                                                                            <?php
+                                                                            $status = $verification['status'];
+                                                                            $badge_map = [
+                                                                                'verified' => 'badge-success',
+                                                                                'in_review' => 'badge-warning',
+                                                                                'pending' => 'badge-default',
+                                                                                'rejected' => 'badge-danger'
+                                                                            ];
+                                                                            $label_map = [
+                                                                                'verified' => 'Verificado',
+                                                                                'in_review' => 'En revisión',
+                                                                                'pending' => 'Pendiente',
+                                                                                'rejected' => 'Rechazado'
+                                                                            ];
+                                                                            $badge_class = isset($badge_map[$status]) ? $badge_map[$status] : 'badge-default';
+                                                                            $label = isset($label_map[$status]) ? $label_map[$status] : ucfirst($status);
+                                                                            ?>
+                                                                            <span class="badge <?php echo $badge_class; ?>"><?php echo htmlspecialchars($label, ENT_QUOTES); ?></span>
+                                                                            <?php if ((int)$company['is_active'] === 1): ?>
+                                                                                <span class="badge badge-info">Activo</span>
+                                                                            <?php else: ?>
+                                                                                <span class="badge badge-default">Inactivo</span>
+                                                                            <?php endif; ?>
+                                                                        <?php elseif ($domain_type === 'complementary'): ?>
+                                                                            <span class="badge badge-info">Proveedor Complementario</span>
+                                                                            <?php if ((int)$company['is_active'] === 1): ?>
+                                                                                <span class="badge badge-success">Activo</span>
+                                                                            <?php else: ?>
+                                                                                <span class="badge badge-default">Inactivo</span>
+                                                                            <?php endif; ?>
+                                                                        <?php else: ?>
+                                                                            <span class="badge badge-default">Admin Global</span>
+                                                                        <?php endif; ?>
                                                                     </p>
-                                                                    <p class="form-control-static">
-                                                                        Nivel: <strong><?php echo htmlspecialchars($verification['verification_level'], ENT_QUOTES); ?></strong>
-                                                                        &nbsp;·&nbsp; Avance checklist: <strong><?php echo $verification['completion_percent']; ?>%</strong>
-                                                                        <?php if ($verification['verified_at']) { echo ' &nbsp;·&nbsp; Verificado: '.htmlspecialchars($verification['verified_at'], ENT_QUOTES); } ?>
-                                                                    </p>
+                                                                    <?php if ($domain_type === 'medical'): ?>
+                                                                        <p class="form-control-static" id="company-status-meta">
+                                                                            Nivel: <strong><?php echo htmlspecialchars($verification['verification_level'], ENT_QUOTES); ?></strong>
+                                                                            &nbsp;·&nbsp; Avance checklist: <strong><?php echo $verification['completion_percent']; ?>%</strong>
+                                                                            <?php if ($verification['verified_at']) { echo ' &nbsp;·&nbsp; Verificado: '.htmlspecialchars($verification['verified_at'], ENT_QUOTES); } ?>
+                                                                        </p>
+                                                                    <?php elseif ($domain_type === 'complementary'): ?>
+                                                                        <p class="form-control-static" id="company-status-meta">
+                                                                            Gestión de empresa limitada al proveedor complementario asociado a tu sesión.
+                                                                        </p>
+                                                                    <?php else: ?>
+                                                                        <p class="form-control-static" id="company-status-meta">
+                                                                            Admin global puede consultar esta vista, pero no guardar cambios como empresa propia.
+                                                                        </p>
+                                                                    <?php endif; ?>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -172,10 +268,10 @@ if (!$provider) {
                                                     <div class="row">
                                                         <div class="col-md-6">
                                                             <div class="form-group">
-                                                                <label class="col-md-3 control-label">Nombre *</label>
+                                                                <label class="col-md-3 control-label"><?php echo htmlspecialchars($name_label, ENT_QUOTES); ?></label>
                                                                 <div class="col-md-9">
                                                                     <input type="text" id="name" name="name" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars($provider['name'], ENT_QUOTES); ?>" 
+                                                                           value="<?php echo htmlspecialchars((string)$company['name'], ENT_QUOTES); ?>" 
                                                                            required maxlength="200" />
                                                                 </div>
                                                             </div>
@@ -185,7 +281,7 @@ if (!$provider) {
                                                                 <label class="col-md-3 control-label">Ciudad</label>
                                                                 <div class="col-md-9">
                                                                     <input type="text" id="city" name="city" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars($provider['city'], ENT_QUOTES); ?>" 
+                                                                           value="<?php echo htmlspecialchars((string)$company['city'], ENT_QUOTES); ?>" 
                                                                            maxlength="120" />
                                                                 </div>
                                                             </div>
@@ -198,7 +294,7 @@ if (!$provider) {
                                                                 <label class="col-md-3 control-label">Teléfono</label>
                                                                 <div class="col-md-9">
                                                                     <input type="text" id="phone" name="phone" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars($provider['phone'], ENT_QUOTES); ?>" 
+                                                                           value="<?php echo htmlspecialchars((string)$company['phone'], ENT_QUOTES); ?>" 
                                                                            maxlength="60" />
                                                                 </div>
                                                             </div>
@@ -208,7 +304,7 @@ if (!$provider) {
                                                                 <label class="col-md-3 control-label">Email</label>
                                                                 <div class="col-md-9">
                                                                     <input type="email" id="email" name="email" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars($provider['email'], ENT_QUOTES); ?>" 
+                                                                           value="<?php echo htmlspecialchars((string)$company['email'], ENT_QUOTES); ?>" 
                                                                            maxlength="160" />
                                                                 </div>
                                                             </div>
@@ -221,8 +317,12 @@ if (!$provider) {
                                                                 <label class="col-md-2 control-label">Dirección</label>
                                                                 <div class="col-md-10">
                                                                     <input type="text" id="address" name="address" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars($provider['address'], ENT_QUOTES); ?>" 
+                                                                           value="<?php echo htmlspecialchars((string)$company['address'], ENT_QUOTES); ?>" 
+                                                                           <?php echo $domain_type === 'medical' ? '' : 'readonly'; ?>
                                                                            maxlength="200" />
+                                                                    <?php if ($domain_type !== 'medical'): ?>
+                                                                    <span class="help-block" id="address-unavailable-hint">No disponible para proveedores complementarios.</span>
+                                                                    <?php endif; ?>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -234,7 +334,7 @@ if (!$provider) {
                                                                 <label class="col-md-2 control-label">Website</label>
                                                                 <div class="col-md-10">
                                                                     <input type="url" id="website" name="website" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars($provider['website'], ENT_QUOTES); ?>" 
+                                                                           value="<?php echo htmlspecialchars((string)$company['website'], ENT_QUOTES); ?>" 
                                                                            maxlength="200" placeholder="https://..." />
                                                                 </div>
                                                             </div>
@@ -244,16 +344,16 @@ if (!$provider) {
                                                     <div class="row">
                                                         <div class="col-md-12">
                                                             <div class="form-group">
-                                                                <label class="col-md-2 control-label">Descripción</label>
+                                                                <label class="col-md-2 control-label"><?php echo htmlspecialchars($description_label, ENT_QUOTES); ?></label>
                                                                 <div class="col-md-10">
                                                                     <textarea id="description" name="description" class="form-control" 
-                                                                              rows="5"><?php echo htmlspecialchars($provider['description'], ENT_QUOTES); ?></textarea>
+                                                                              rows="5"><?php echo htmlspecialchars((string)$company['description'], ENT_QUOTES); ?></textarea>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <div class="row">
+                                                    <div class="row" <?php echo $can_upload_logo ? '' : 'style="display:none;"'; ?>>
                                                         <div class="col-md-12">
                                                             <div class="form-group">
                                                                 <label class="col-md-2 control-label">Logo</label>
@@ -262,9 +362,9 @@ if (!$provider) {
                                                                         <div class="fileinput-new thumbnail" style="width: 200px; height: 150px;">
                                                                             <?php 
                                                                             $logo_path = 'https://via.placeholder.com/200x150?text=Sin+Logo';
-                                                                            if (!empty($provider['logo'])) {
+                                                                            if (!empty($company['logo'])) {
                                                                                 // Construir path correcto
-                                                                                $logo_file = 'img/providers/' . $provider_id . '/' . $provider['logo'];
+                                                                                $logo_file = 'img/providers/' . $scope_id . '/' . $company['logo'];
                                                                                 if (file_exists('../' . $logo_file)) {
                                                                                     $logo_path = '../' . $logo_file . '?v=' . time();
                                                                                 }
@@ -282,20 +382,29 @@ if (!$provider) {
                                                                             <a href="javascript:;" class="btn red fileinput-exists" data-dismiss="fileinput">Eliminar</a>
                                                                         </div>
                                                                         <span class="help-block">Formatos permitidos: JPG, PNG, WEBP. Máximo 2MB.</span>
-                                                                        <?php if (!empty($provider['logo'])): ?>
-                                                                        <span class="help-block">Archivo actual: <?php echo htmlspecialchars($provider['logo']); ?></span>
+                                                                        <?php if (!empty($company['logo'])): ?>
+                                                                        <span class="help-block">Archivo actual: <?php echo htmlspecialchars((string)$company['logo']); ?></span>
                                                                         <?php endif; ?>
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    <?php if (!$can_upload_logo): ?>
+                                                    <div class="row">
+                                                        <div class="col-md-12">
+                                                            <div class="alert alert-info">
+                                                                <i class="fa fa-info-circle"></i> La gestión de logo no está disponible para este dominio de empresa.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <?php endif; ?>
                                                 </div>
 
                                                 <div class="form-actions">
                                                     <div class="row">
                                                         <div class="col-md-offset-2 col-md-10">
-                                                            <button type="submit" class="btn blue" id="btn-guardar">
+                                                            <button type="submit" class="btn blue" id="btn-guardar" <?php echo $can_edit_self ? '' : 'disabled'; ?>>
                                                                 <i class="fa fa-save"></i> Guardar Cambios
                                                             </button>
                                                             <button type="button" class="btn default" onclick="location.reload();">
@@ -322,6 +431,15 @@ if (!$provider) {
     <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
     <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
     <?php echo $theme_layout_script;?>
+    <script>
+        window.MI_EMPRESA_CTX = {
+            domainType: <?php echo json_encode($domain_type); ?>,
+            roleId: <?php echo $role_id !== null ? (int)$role_id : 'null'; ?>,
+            scopeId: <?php echo (int)$scope_id; ?>,
+            canEditSelf: <?php echo $can_edit_self ? 'true' : 'false'; ?>,
+            canUploadLogo: <?php echo $can_upload_logo ? 'true' : 'false'; ?>
+        };
+    </script>
     <script src="js/mi_empresa.js" type="text/javascript"></script>
 </body>
 </html>
