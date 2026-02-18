@@ -624,21 +624,23 @@ CREATE TABLE notifications (
 ### 2. Flujo de pago oficial
 
 ```text
-Paciente
-  -> selecciona servicio
-  -> genera booking
-  -> paga directamente al PayPal del prestador
-  -> PayPal confirma pago
-  -> MedTravel registra:
-     - paid_to_provider = true
-     - commission_amount
-     - commission_status = pending
+Booking (caso)
+  -> selección inicial de servicios médicos/complementarios
+  -> validación de disponibilidad por item
+  -> agendamiento de valoración virtual (si aplica)
+  -> valoración completada
+  -> ajuste y envío de cotización por item
+  -> aceptación de cotización
+  -> agendamiento de compromisos (calendario proveedor + global)
+  -> item_status = ready_for_payment
+  -> pago por proveedor (PayPal propio o pago en destino)
+  -> MedTravel registra comisión y estado operativo
 ```
 
-MedTravel NO:
-- retiene fondos
-- procesa pagos
-- actúa como money transmitter
+Regla operativa:
+- El pago no se habilita al crear el booking.
+- El pago se habilita solo cuando el item está en `ready_for_payment`.
+- MedTravel sigue sin actuar como procesador financiero central.
 
 ### 3. Responsabilidad de cuentas de pago
 - Cada `service_provider` debe:
@@ -672,10 +674,176 @@ Modelo Fase 2 (futuro):
 ### 7. Impacto técnico en desarrollo
 - Extender tabla `service_providers`.
 - Agregar sección “Integración de pagos” en Mi Empresa.
-- Adaptar flujo booking para usar `client_id` dinámico por proveedor.
+- Adaptar flujo booking para operar por item y usar `client_id` dinámico por proveedor.
 - Implementar webhook de confirmación de pago.
 - Registrar comisión por booking.
 - Crear módulo futuro de liquidaciones.
+
+---
+
+## Flujo operativo end-to-end (booking como caso multiproveedor)
+
+### Intake (booking actual)
+- El paciente crea una solicitud en el flujo público (`booking_requests`).
+- La solicitud actúa como **caso** y puede incluir múltiples items:
+  - médicos (ofertas de `provider_service_offers`)
+  - complementarios (`medtravel_services_catalog`)
+
+### Distribución/asignación por proveedor
+- Cada item del caso debe quedar asociado a su proveedor responsable:
+  - Médico: `providers` (vía oferta médica)
+  - Complementario: `service_providers` (vía servicio complementario)
+- La operación y seguimiento se hace por item, no solo por estado global del caso.
+
+### Pipeline por item (operación objetivo)
+
+| `item_status` | Objetivo operativo |
+|---|---|
+| `availability_checked` | Fechas y capacidad validadas con proveedor |
+| `virtual_assessment_scheduled` | Valoración virtual agendada |
+| `assessment_completed` | Valoración cerrada con resultado |
+| `quote_sent` | Cotización enviada al paciente |
+| `quote_accepted` | Cotización aceptada |
+| `scheduled` | Compromiso agendado en calendario |
+| `ready_for_payment` | Item habilitado para pago |
+| `paid` | Pago confirmado |
+| `pay_on_arrival` | Pago pactado en destino |
+| `cancelled` | Item cancelado |
+
+### Reglas mínimas previas a pago
+1. Validar disponibilidad de fechas.
+2. Agendar valoración virtual (médico y/o complementario si aplica).
+3. Ajustar presupuesto/cotización.
+4. Agendar compromiso en MedTravel (calendario por proveedor + vista global).
+5. Solo entonces habilitar pago por proveedor.
+
+### Roles por actor
+- **Admin global**
+  - Consolida el caso, supervisa pipeline por item y desbloquea escalaciones.
+  - Ve calendario global y estado agregado de coordinación.
+- **Proveedor médico**
+  - Confirma disponibilidad, agenda valoración, emite/ajusta cotización médica.
+  - Gestiona agenda del item médico y lo mueve a `ready_for_payment`.
+- **Proveedor complementario**
+  - Confirma disponibilidad logística (hotel/transporte/soporte).
+  - Emite/ajusta cotización complementaria y agenda su compromiso.
+- **Paciente**
+  - Aporta datos clínicos/logísticos, acepta cotización y ejecuta pago cuando aplique.
+
+---
+
+## Modelo de datos mínimo a agregar (sin SQL aún)
+
+### Base existente (referencia)
+- `booking_requests` como cabecera del caso.
+- `provider_service_offers` para items médicos.
+- `medtravel_services_catalog` para items complementarios.
+- `service_providers.preferred_payment_method` como antecedente de configuración de pago.
+
+### Estructuras mínimas nuevas
+- `booking_request_items`
+  - Relación item por caso/proveedor.
+  - Campos mínimos: `booking_request_id`, tipo de item, `provider_id`/`service_provider_id`, `item_status`, snapshot de precio/moneda.
+- `booking_request_events`
+  - Bitácora y calendario operativo por item.
+  - Campos mínimos: tipo de evento, fecha/hora, proveedor responsable, estado.
+- `booking_request_quotes`
+  - Cotización por item y versión.
+  - Campos mínimos: monto, moneda, vigencia, versión, estado de aceptación.
+- `provider_payment_configuration`
+  - Configuración de cobro por proveedor.
+  - Campos mínimos: modo (`paypal_provider` o `pay_on_arrival`), estado, metadatos de cuenta.
+
+Nota:
+- Donde ya exista configuración parcial en `service_providers`, se debe reutilizar y normalizar antes de duplicar campos.
+
+---
+
+## Calendario
+
+### Eventos mínimos
+- `virtual_assessment`
+- `service_appointment`
+- `complementary_service_event`
+
+### Vistas mínimas
+- **Mi calendario** por proveedor (médico/complementario).
+- **Calendario global** para admin.
+
+### Reglas mínimas de conflicto/overbooking
+- No permitir dos eventos activos del mismo proveedor con cruce horario.
+- `scheduled` solo se permite si el slot está libre.
+- Reagendamiento debe registrar evento previo como reemplazado/cancelado.
+
+---
+
+## Pagos por proveedor
+
+### Regla de habilitación
+- El pago solo se habilita cuando `item_status = ready_for_payment`.
+
+### Métodos
+- `paypal_provider`: checkout contra credenciales propias del proveedor.
+- `pay_on_arrival`: sin checkout online; se registra compromiso de pago en destino.
+
+### Estados mínimos de pago por item
+- `not_applicable`
+- `pending`
+- `payment_link_generated`
+- `paid`
+- `failed`
+- `refunded`
+- `pay_on_arrival`
+
+### Nota de compliance (alto nivel)
+- MedTravel opera como intermediario comercial y coordinador, no como adquirente financiero central.
+- Credenciales de pago deben permanecer bajo control seguro en backend/admin.
+
+---
+
+## Backlog – Nueva integración booking -> coordinación -> calendario -> pago
+
+### Fase 0: hardening del booking actual (sin romper)
+- [ ] Bloquear borrado físico de `booking_requests` en operación estándar.
+- [ ] Normalizar seguridad/RBAC en endpoints de booking.
+- [ ] Mantener compatibilidad del flujo actual de wizard.
+Done:
+- El flujo actual sigue operando y queda auditado/sin pérdida de datos.
+
+### Fase 1: estructurar items (incluye complementarios)
+- [ ] Definir estructura de `booking_request_items`.
+- [ ] Persistir items médicos y complementarios de forma relacional.
+- [ ] Mantener compatibilidad temporal con campos legacy (`selected_offers`, notas).
+Done:
+- Cada caso tiene items trazables por proveedor con estado independiente.
+
+### Fase 2: vista “Mis Solicitudes” por proveedor (médico y complementario)
+- [ ] Vista por `provider_id` para médicos.
+- [ ] Vista por `service_provider_id` para complementarios.
+- [ ] Acciones de pipeline por item con trazabilidad.
+Done:
+- Cada proveedor ve y opera solo sus items.
+
+### Fase 3: calendario MVP
+- [ ] Registrar `virtual_assessment`, `service_appointment` y `complementary_service_event`.
+- [ ] Construir vista “Mi calendario” y “Calendario global”.
+- [ ] Aplicar reglas mínimas de conflicto/overbooking.
+Done:
+- Los items en `scheduled` quedan visibles y sin cruces inválidos.
+
+### Fase 4: cotización/ajuste presupuesto
+- [ ] Versionado de cotización por item.
+- [ ] Flujo `quote_sent` -> `quote_accepted`.
+- [ ] Snapshot de precio/moneda para auditoría.
+Done:
+- Cotización aprobada por item antes de habilitar pago.
+
+### Fase 5: pagos por proveedor (PayPal/pago en destino)
+- [ ] Configurar modo de pago por proveedor.
+- [ ] Habilitar checkout solo para `ready_for_payment`.
+- [ ] Registrar estados de pago por item (`paid`/`pay_on_arrival`/errores).
+Done:
+- Operación híbrida estable: proveedores con PayPal propio y proveedores con pago en destino.
 
 ---
 

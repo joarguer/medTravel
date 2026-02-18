@@ -361,3 +361,28 @@ Usuario
   - Providers médicos (`providers`)
   - Service providers (`service_providers`)
   - MedTravel services (`medtravel_services_catalog`)
+
+### K) Documentación canónica vigente (operación booking 2026)
+- Canónico 1: `MODELO_NEGOCIO_ACTUALIZADO.md`
+  - Fuente principal de modelo operativo, roles, reglas previas a pago y backlog por fases.
+- Canónico 2: `NEXT_STEPS_SERVICES.md`
+  - Secuencia de ejecución técnica y control de avance por etapas.
+- Canónico 3: `DEV_CONTEXT.md` (este documento)
+  - Contexto técnico y trazabilidad de evidencia del estado real.
+
+Documentos operativos alineados:
+- `SERVICES_CATALOG.md` (catálogos y su integración con booking por item).
+
+Reglas operativas actualizadas (documentadas):
+- Booking tratado como **caso** con múltiples proveedores.
+- Pipeline por **item** (no solo `booking_requests.status`).
+- Precondiciones de pago por item:
+  1. disponibilidad validada
+  2. valoración virtual agendada
+  3. valoración completada
+  4. cotización ajustada y aceptada
+  5. compromiso agendado en calendario
+  6. `ready_for_payment` antes de cobro
+
+Nota de alcance:
+- Esta actualización es documental; no implica que todas las estructuras nuevas ya existan en base de datos/runtime.

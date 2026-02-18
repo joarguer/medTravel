@@ -13,6 +13,45 @@ En el repo no existe un único “catálogo de servicios”; hay **tres** estruc
 
 ---
 
+## Integración operativa con booking (modelo 2026)
+
+### Booking como caso multiproveedor
+- `booking_requests` se mantiene como cabecera del caso.
+- El caso puede contener items médicos y complementarios.
+- La operación recomendada pasa de `status` global a **pipeline por item**.
+
+### Pipeline por item (objetivo)
+- `availability_checked`
+- `virtual_assessment_scheduled`
+- `assessment_completed`
+- `quote_sent`
+- `quote_accepted`
+- `scheduled`
+- `ready_for_payment`
+- `paid` / `pay_on_arrival`
+- `cancelled`
+
+### Regla de pago
+- El pago no se habilita al crear el booking.
+- El pago se habilita solo cuando el item está en `ready_for_payment`.
+- Métodos por proveedor:
+  - `paypal_provider`
+  - `pay_on_arrival`
+
+### Modelo mínimo pendiente (sin SQL en este documento)
+- `booking_request_items` (detalle por proveedor/item)
+- `booking_request_events` (agenda operativa por item)
+- `booking_request_quotes` (cotización/versionado por item)
+- `provider_payment_configuration` (modo de pago por proveedor)
+
+### Referencias existentes en repo (base para migración incremental)
+- Cabecera de caso: `booking_requests`.
+- Médico: `provider_service_offers` + `providers`.
+- Complementario: `medtravel_services_catalog` + `service_providers`.
+- Configuración de pago parcial existente: `service_providers.preferred_payment_method`.
+
+---
+
 ## 1) Servicios médicos (core)
 
 ### 1.1 Fuente de datos y modelo

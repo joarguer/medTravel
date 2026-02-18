@@ -23,6 +23,57 @@ Cerrar el flujo completo de catálogo de servicios con operación consistente:
 
 ---
 
+## Backlog operativo alineado (booking -> coordinación -> calendario -> pago)
+
+Fuente canónica de detalle:
+- `MODELO_NEGOCIO_ACTUALIZADO.md` -> sección `Backlog – Nueva integración booking -> coordinación -> calendario -> pago`.
+
+Resumen de ejecución recomendado:
+
+### Fase 0: hardening del booking actual (sin romper)
+- [ ] Endpoints de booking con RBAC homogéneo.
+- [ ] Sin borrado físico operativo de solicitudes.
+- [ ] Mantener compatibilidad del wizard actual.
+Done:
+- Operación actual estable y auditable.
+
+### Fase 1: estructurar items (incluye complementarios)
+- [ ] Estructura relacional por item del caso.
+- [ ] Persistencia de selección médica y complementaria por proveedor.
+- [ ] Compatibilidad temporal con campos legacy.
+Done:
+- Caso con múltiples items trazables por proveedor.
+
+### Fase 2: “Mis Solicitudes” por proveedor
+- [ ] Vista médica filtrada por `provider_id`.
+- [ ] Vista complementaria filtrada por `service_provider_id`.
+- [ ] Pipeline de item editable por proveedor.
+Done:
+- Cada proveedor opera solo sus items.
+
+### Fase 3: calendario MVP
+- [ ] Eventos mínimos: `virtual_assessment`, `service_appointment`, `complementary_service_event`.
+- [ ] Vista proveedor y vista global admin.
+- [ ] Regla mínima anti-overbooking.
+Done:
+- Item `scheduled` siempre respaldado por evento válido.
+
+### Fase 4: cotización y ajuste de presupuesto
+- [ ] Cotización versionada por item.
+- [ ] Flujo `quote_sent` -> `quote_accepted`.
+- [ ] Snapshot de precio/moneda por item.
+Done:
+- Cada item aprobado con cotización vigente.
+
+### Fase 5: pagos por proveedor
+- [ ] Habilitar pago solo en `ready_for_payment`.
+- [ ] Modo por proveedor: `paypal_provider` o `pay_on_arrival`.
+- [ ] Estados de pago por item y trazabilidad.
+Done:
+- Flujo de cobro híbrido operativo por proveedor.
+
+---
+
 ## Prioridad alta (P0)
 
 ### P0.1 Unificar esquema real de `service_catalog` y `service_categories`
