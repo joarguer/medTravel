@@ -12,8 +12,21 @@ function usuarios_has_column($conexion, $column) {
     return $q && mysqli_num_rows($q) > 0;
 }
 
+function table_has_column($conexion, $table, $column) {
+    $table = mysqli_real_escape_string($conexion, $table);
+    $column = mysqli_real_escape_string($conexion, $column);
+    $q = mysqli_query($conexion, "SHOW COLUMNS FROM {$table} LIKE '{$column}'");
+    return $q && mysqli_num_rows($q) > 0;
+}
+
 function fetch_provider_name($conexion, $provider_id) {
-    $stmt = mysqli_prepare($conexion, "SELECT name FROM providers WHERE id = ? LIMIT 1");
+    $hasDeleted = table_has_column($conexion, 'providers', 'is_deleted');
+    $sql = "SELECT name FROM providers WHERE id = ?";
+    if ($hasDeleted) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) return '';
     mysqli_stmt_bind_param($stmt, 'i', $provider_id);
     mysqli_stmt_execute($stmt);
@@ -25,7 +38,13 @@ function fetch_provider_name($conexion, $provider_id) {
 }
 
 function validate_medical_provider($conexion, $provider_id) {
-    $stmt = mysqli_prepare($conexion, "SELECT id, name FROM providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    $hasDeleted = table_has_column($conexion, 'providers', 'is_deleted');
+    $sql = "SELECT id, name FROM providers WHERE id = ? AND is_active = 1";
+    if ($hasDeleted) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) return null;
     mysqli_stmt_bind_param($stmt, 'i', $provider_id);
     mysqli_stmt_execute($stmt);
@@ -36,7 +55,13 @@ function validate_medical_provider($conexion, $provider_id) {
 }
 
 function fetch_service_provider_name($conexion, $service_provider_id) {
-    $stmt = mysqli_prepare($conexion, "SELECT provider_name FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    $hasDeleted = table_has_column($conexion, 'service_providers', 'is_deleted');
+    $sql = "SELECT provider_name FROM service_providers WHERE id = ? AND is_active = 1";
+    if ($hasDeleted) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) return null;
     mysqli_stmt_bind_param($stmt, 'i', $service_provider_id);
     mysqli_stmt_execute($stmt);
@@ -48,7 +73,13 @@ function fetch_service_provider_name($conexion, $service_provider_id) {
 }
 
 function validate_active_service_provider($conexion, $service_provider_id) {
-    $stmt = mysqli_prepare($conexion, "SELECT id, provider_name FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    $hasDeleted = table_has_column($conexion, 'service_providers', 'is_deleted');
+    $sql = "SELECT id, provider_name FROM service_providers WHERE id = ? AND is_active = 1";
+    if ($hasDeleted) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) return null;
     mysqli_stmt_bind_param($stmt, 'i', $service_provider_id);
     mysqli_stmt_execute($stmt);
@@ -310,7 +341,13 @@ if($_REQUEST['tipo'] == 'crear_password'){
     }
 
     $current_user = array();
-    if ($stmtUser = mysqli_prepare($conexion, "SELECT id, token, password FROM usuarios WHERE id = ? LIMIT 1")) {
+    $has_users_soft_delete = usuarios_has_column($conexion, 'is_deleted');
+    $sql_user = "SELECT id, token, password FROM usuarios WHERE id = ?";
+    if ($has_users_soft_delete) {
+        $sql_user .= " AND is_deleted = 0";
+    }
+    $sql_user .= " LIMIT 1";
+    if ($stmtUser = mysqli_prepare($conexion, $sql_user)) {
         mysqli_stmt_bind_param($stmtUser, 'i', $id);
         mysqli_stmt_execute($stmtUser);
         $resUser = mysqli_stmt_get_result($stmtUser);

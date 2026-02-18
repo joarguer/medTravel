@@ -68,6 +68,19 @@ function json_err($message, $status = 400) {
     exit;
 }
 
+function table_has_column($conexion, $table, $column) {
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $q = mysqli_query($conexion, "SHOW COLUMNS FROM {$tableEsc} LIKE '{$columnEsc}'");
+    $cache[$key] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$key];
+}
+
 function ensure_view_permission() {
     if (is_role_admin_session()) return;
     if (user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE)) return;
@@ -139,6 +152,7 @@ function listProviders() {
 
     $activeOnly = isset($_GET['active_only']) ? intval($_GET['active_only']) : 0;
     $type = trim((string)($_GET['type'] ?? ''));
+    $hasSoftDelete = table_has_column($conexion, 'service_providers', 'is_deleted');
 
     $sql = "SELECT 
                 id, provider_name, provider_type, country, city,
@@ -152,6 +166,9 @@ function listProviders() {
 
     if ($activeOnly) {
         $sql .= " AND is_active = 1";
+    }
+    if ($hasSoftDelete) {
+        $sql .= " AND is_deleted = 0";
     }
     if ($type !== '') {
         $sql .= " AND provider_type = ?";
@@ -195,7 +212,14 @@ function getSelfProvider() {
         json_err('forbidden', 403);
     }
 
-    $stmt = mysqli_prepare($conexion, "SELECT * FROM service_providers WHERE id = ? LIMIT 1");
+    $hasSoftDelete = table_has_column($conexion, 'service_providers', 'is_deleted');
+    $sql = "SELECT * FROM service_providers WHERE id = ?";
+    if ($hasSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) json_err('db_prepare_error');
     mysqli_stmt_bind_param($stmt, 'i', $scopeId);
     if (!mysqli_stmt_execute($stmt)) {
@@ -221,8 +245,28 @@ function getProvider() {
     if($id <= 0) json_err('invalid_id');
 
     assert_owned_provider_id($id);
+    $hasSoftDelete = table_has_column($conexion, 'service_providers', 'is_deleted');
 
-    $stmt = mysqli_prepare($conexion, "SELECT * FROM service_providers WHERE id = ? LIMIT 1");
+    if ($hasSoftDelete) {
+        $deletedStmt = mysqli_prepare($conexion, "SELECT id FROM service_providers WHERE id = ? AND is_deleted = 1 LIMIT 1");
+        if ($deletedStmt) {
+            mysqli_stmt_bind_param($deletedStmt, 'i', $id);
+            mysqli_stmt_execute($deletedStmt);
+            $deletedRes = mysqli_stmt_get_result($deletedStmt);
+            $isDeleted = ($deletedRes && mysqli_fetch_assoc($deletedRes)) ? true : false;
+            mysqli_stmt_close($deletedStmt);
+            if ($isDeleted) {
+                json_err('registro eliminado', 410);
+            }
+        }
+    }
+
+    $sql = "SELECT * FROM service_providers WHERE id = ?";
+    if ($hasSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) json_err('db_prepare_error');
     mysqli_stmt_bind_param($stmt, 'i', $id);
     if (!mysqli_stmt_execute($stmt)) {
@@ -305,13 +349,14 @@ function updateProvider() {
     if($id <= 0) json_err('invalid_id');
 
     assert_owned_provider_id($id);
+    $hasSoftDelete = table_has_column($conexion, 'service_providers', 'is_deleted');
 
     $data = buildProviderData();
     if ($data['provider_name'] === '') {
         json_err('El nombre del proveedor es obligatorio');
     }
 
-    $stmt = mysqli_prepare($conexion, "UPDATE service_providers SET
+    $sql = "UPDATE service_providers SET
                 provider_name = ?,
                 provider_type = ?,
                 tax_id = ?,
@@ -331,7 +376,11 @@ function updateProvider() {
                 is_preferred = ?,
                 notes = ?,
                 contract_details = ?
-            WHERE id = ?");
+            WHERE id = ?";
+    if ($hasSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) json_err('db_prepare_error');
 
     mysqli_stmt_bind_param(
@@ -364,7 +413,12 @@ function updateProvider() {
         mysqli_stmt_close($stmt);
         json_err('db_error: ' . $err);
     }
+    $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
+
+    if ($hasSoftDelete && $affected < 1) {
+        json_err('registro eliminado', 410);
+    }
 
     json_ok(['message' => 'Proveedor actualizado exitosamente']);
 }
@@ -378,6 +432,12 @@ function deleteProvider() {
 
     $id = intval($_POST['id'] ?? 0);
     if($id <= 0) json_err('invalid_id');
+    $hasSoftDelete = table_has_column($conexion, 'service_providers', 'is_deleted');
+    $hasDeletedAt = table_has_column($conexion, 'service_providers', 'deleted_at');
+    $hasDeletedBy = table_has_column($conexion, 'service_providers', 'deleted_by');
+    if (!$hasSoftDelete || !$hasDeletedAt || !$hasDeletedBy) {
+        json_err('soft_delete_columns_missing');
+    }
 
     $checkStmt = mysqli_prepare($conexion, "SELECT COUNT(*) FROM medtravel_services_catalog WHERE provider_id = ?");
     if (!$checkStmt) json_err('db_prepare_error');
@@ -391,17 +451,22 @@ function deleteProvider() {
         json_err("No se puede eliminar. El proveedor tiene {$count} servicio(s) asociado(s)");
     }
 
-    $stmt = mysqli_prepare($conexion, "DELETE FROM service_providers WHERE id = ?");
+    $sessionUserId = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : 0;
+    $stmt = mysqli_prepare($conexion, "UPDATE service_providers SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?, is_active = 0 WHERE id = ? AND is_deleted = 0");
     if (!$stmt) json_err('db_prepare_error');
-    mysqli_stmt_bind_param($stmt, 'i', $id);
+    mysqli_stmt_bind_param($stmt, 'ii', $sessionUserId, $id);
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
         json_err('db_error: ' . $err);
     }
+    $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
+    if ($affected < 1) {
+        json_err('registro eliminado', 410);
+    }
 
-    json_ok(['message' => 'Proveedor eliminado exitosamente']);
+    json_ok(['message' => 'Proveedor eliminado (soft) exitosamente']);
 }
 
 function toggleStatus() {
@@ -411,18 +476,48 @@ function toggleStatus() {
     if($id <= 0) json_err('invalid_id');
 
     assert_owned_provider_id($id);
+    $hasSoftDelete = table_has_column($conexion, 'service_providers', 'is_deleted');
 
-    $stmt = mysqli_prepare($conexion, "UPDATE service_providers SET is_active = IF(is_active = 1, 0, 1) WHERE id = ?");
-    if (!$stmt) json_err('db_prepare_error');
-    mysqli_stmt_bind_param($stmt, 'i', $id);
+    $valRaw = $_POST['val'] ?? null;
+    $hasExplicitValue = ($valRaw !== null && $valRaw !== '');
+    if ($hasExplicitValue) {
+        $val = intval($valRaw);
+        if (!in_array($val, [0, 1], true)) {
+            json_err('invalid_val', 422);
+        }
+        $sql = "UPDATE service_providers SET is_active = ? WHERE id = ?";
+        if ($hasSoftDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) json_err('db_prepare_error');
+        mysqli_stmt_bind_param($stmt, 'ii', $val, $id);
+    } else {
+        $sql = "UPDATE service_providers SET is_active = IF(is_active = 1, 0, 1) WHERE id = ?";
+        if ($hasSoftDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) json_err('db_prepare_error');
+        mysqli_stmt_bind_param($stmt, 'i', $id);
+    }
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
         json_err('db_error: ' . $err);
     }
+    $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
+    if ($hasSoftDelete && $affected < 1) {
+        json_err('registro eliminado', 410);
+    }
 
-    $statusStmt = mysqli_prepare($conexion, "SELECT is_active FROM service_providers WHERE id = ? LIMIT 1");
+    $statusSql = "SELECT is_active FROM service_providers WHERE id = ?";
+    if ($hasSoftDelete) {
+        $statusSql .= " AND is_deleted = 0";
+    }
+    $statusSql .= " LIMIT 1";
+    $statusStmt = mysqli_prepare($conexion, $statusSql);
     if (!$statusStmt) json_err('db_prepare_error');
     mysqli_stmt_bind_param($statusStmt, 'i', $id);
     mysqli_stmt_execute($statusStmt);

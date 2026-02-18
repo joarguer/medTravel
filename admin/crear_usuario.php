@@ -326,7 +326,13 @@ if ($roles_help_json === false) {
                                                                 <select id="provider_id" name="provider_id" class="form-control">
                                                                     <option value="">-- Seleccione un prestador --</option>
                                                                     <?php
-                                                                    $providers = mysqli_query($conexion, "SELECT id, name, type FROM providers WHERE is_active = 1 ORDER BY name ASC");
+                                                                    $providers_sql = "SELECT id, name, type FROM providers WHERE is_active = 1";
+                                                                    $providers_has_deleted = mysqli_query($conexion, "SHOW COLUMNS FROM providers LIKE 'is_deleted'");
+                                                                    if ($providers_has_deleted && mysqli_num_rows($providers_has_deleted) > 0) {
+                                                                        $providers_sql .= " AND is_deleted = 0";
+                                                                    }
+                                                                    $providers_sql .= " ORDER BY name ASC";
+                                                                    $providers = mysqli_query($conexion, $providers_sql);
                                                                     while($prov = mysqli_fetch_array($providers)) {
                                                                         echo '<option value="'.$prov['id'].'">'.htmlspecialchars($prov['name']).' ('.ucfirst($prov['type']).')</option>';
                                                                     }
@@ -339,7 +345,13 @@ if ($roles_help_json === false) {
                                                                 <select id="service_provider_id" name="service_provider_id" class="form-control">
                                                                     <option value="">-- Seleccione un proveedor complementario --</option>
                                                                     <?php
-                                                                    $service_providers = mysqli_query($conexion, "SELECT id, provider_name, provider_type FROM service_providers WHERE is_active = 1 ORDER BY provider_name ASC");
+                                                                    $service_providers_sql = "SELECT id, provider_name, provider_type FROM service_providers WHERE is_active = 1";
+                                                                    $service_providers_has_deleted = mysqli_query($conexion, "SHOW COLUMNS FROM service_providers LIKE 'is_deleted'");
+                                                                    if ($service_providers_has_deleted && mysqli_num_rows($service_providers_has_deleted) > 0) {
+                                                                        $service_providers_sql .= " AND is_deleted = 0";
+                                                                    }
+                                                                    $service_providers_sql .= " ORDER BY provider_name ASC";
+                                                                    $service_providers = mysqli_query($conexion, $service_providers_sql);
                                                                     if ($service_providers) {
                                                                         while($sp = mysqli_fetch_array($service_providers)) {
                                                                             $sp_type = !empty($sp['provider_type']) ? ' ('.ucfirst($sp['provider_type']).')' : '';

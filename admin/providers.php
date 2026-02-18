@@ -10,9 +10,6 @@ include('include/include.php');
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
-    <?php echo $theme_layout_script;?>
-    <?php echo $theme_global_js;?>
-    <?php echo $theme_layout_js;?>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
     <div class="wrapper">

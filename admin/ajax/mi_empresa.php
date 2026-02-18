@@ -24,6 +24,36 @@ function json_err($message, $status = 400, $code = 'bad_request', $extra = []) {
     exit;
 }
 
+function table_has_column($conexion, $table, $column) {
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $q = mysqli_query($conexion, "SHOW COLUMNS FROM {$tableEsc} LIKE '{$columnEsc}'");
+    $cache[$key] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$key];
+}
+
+function record_is_soft_deleted($conexion, $table, $id) {
+    if (!table_has_column($conexion, $table, 'is_deleted')) {
+        return false;
+    }
+    $sql = "SELECT id FROM {$table} WHERE id = ? AND is_deleted = 1 LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $found = ($res && mysqli_fetch_assoc($res)) ? true : false;
+    mysqli_stmt_close($stmt);
+    return $found;
+}
+
 function auth_is_dev_mode() {
     return defined('APP_ENV') && APP_ENV === 'dev';
 }
@@ -82,7 +112,11 @@ function resolve_company_scope() {
 }
 
 function fetch_medical_company($conexion, $providerId) {
-    $sql = "SELECT * FROM providers WHERE id = ? LIMIT 1";
+    $sql = "SELECT * FROM providers WHERE id = ?";
+    if (table_has_column($conexion, 'providers', 'is_deleted')) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
         json_err('Error al preparar consulta', 500, 'db_prepare_error');
@@ -96,7 +130,11 @@ function fetch_medical_company($conexion, $providerId) {
 }
 
 function fetch_complementary_company($conexion, $serviceProviderId) {
-    $sql = "SELECT * FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1";
+    $sql = "SELECT * FROM service_providers WHERE id = ? AND is_active = 1";
+    if (table_has_column($conexion, 'service_providers', 'is_deleted')) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
         json_err('Error al preparar consulta', 500, 'db_prepare_error');
@@ -215,6 +253,9 @@ function build_company_payload($conexion, $scope, $row) {
 
 function load_scoped_company($conexion, $scope) {
     if ($scope['domain'] === 'medical') {
+        if (record_is_soft_deleted($conexion, 'providers', intval($scope['scope_id']))) {
+            json_err('registro eliminado', 410, 'record_deleted');
+        }
         $row = fetch_medical_company($conexion, intval($scope['scope_id']));
         if (!$row) {
             json_err('Prestador no encontrado', 404, 'provider_not_found');
@@ -226,6 +267,9 @@ function load_scoped_company($conexion, $scope) {
     }
 
     if ($scope['domain'] === 'complementary') {
+        if (record_is_soft_deleted($conexion, 'service_providers', intval($scope['scope_id']))) {
+            json_err('registro eliminado', 410, 'record_deleted');
+        }
         $row = fetch_complementary_company($conexion, intval($scope['scope_id']));
         if (!$row) {
             json_err('Proveedor complementario inválido o inactivo', 403, 'service_provider_invalid');

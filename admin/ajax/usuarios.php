@@ -50,7 +50,13 @@ function usuarios_has_column($conexion, $column) {
 
 function fetch_active_service_provider($conexion, $serviceProviderId) {
     if (!table_exists($conexion, 'service_providers')) return null;
-    $stmt = mysqli_prepare($conexion, "SELECT id, provider_name FROM service_providers WHERE id = ? AND is_active = 1 LIMIT 1");
+    $hasDeleted = table_has_column($conexion, 'service_providers', 'is_deleted');
+    $sql = "SELECT id, provider_name FROM service_providers WHERE id = ? AND is_active = 1";
+    if ($hasDeleted) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) return null;
     mysqli_stmt_bind_param($stmt, 'i', $serviceProviderId);
     mysqli_stmt_execute($stmt);
@@ -65,10 +71,14 @@ function fetch_active_medical_provider($conexion, $providerId) {
 
     $hasKind = table_has_column($conexion, 'providers', 'kind');
     $hasActive = table_has_column($conexion, 'providers', 'is_active');
+    $hasDeleted = table_has_column($conexion, 'providers', 'is_deleted');
 
     $sql = "SELECT id, name FROM providers WHERE id = ?";
     if ($hasActive) {
         $sql .= " AND is_active = 1";
+    }
+    if ($hasDeleted) {
+        $sql .= " AND is_deleted = 0";
     }
     if ($hasKind) {
         $sql .= " AND (kind IS NULL OR kind <> 'partner')";
@@ -157,10 +167,14 @@ switch ($action) {
         if (table_exists($conexion, 'providers')) {
             $hasKind = table_has_column($conexion, 'providers', 'kind');
             $hasActive = table_has_column($conexion, 'providers', 'is_active');
+            $hasDeleted = table_has_column($conexion, 'providers', 'is_deleted');
 
             $sql = "SELECT id, name FROM providers WHERE 1=1";
             if ($hasActive) {
                 $sql .= " AND is_active = 1";
+            }
+            if ($hasDeleted) {
+                $sql .= " AND is_deleted = 0";
             }
             if ($hasKind) {
                 $sql .= " AND (kind IS NULL OR kind <> 'partner')";
@@ -183,7 +197,13 @@ switch ($action) {
     case 'list_service_providers':
         $rows = [];
         if (table_exists($conexion, 'service_providers')) {
-            $stmt = mysqli_prepare($conexion, "SELECT id, provider_name FROM service_providers WHERE is_active = 1 ORDER BY provider_name ASC");
+            $hasDeleted = table_has_column($conexion, 'service_providers', 'is_deleted');
+            $sql = "SELECT id, provider_name FROM service_providers WHERE is_active = 1";
+            if ($hasDeleted) {
+                $sql .= " AND is_deleted = 0";
+            }
+            $sql .= " ORDER BY provider_name ASC";
+            $stmt = mysqli_prepare($conexion, $sql);
             if ($stmt) {
                 if (mysqli_stmt_execute($stmt)) {
                     $res = mysqli_stmt_get_result($stmt);
@@ -204,20 +224,40 @@ switch ($action) {
         $rows = [];
         $roles = fetch_roles($conexion);
         $hasServiceProviderId = usuarios_has_column($conexion, 'service_provider_id');
+        $hasUsersSoftDelete = usuarios_has_column($conexion, 'is_deleted');
+        $hasProvidersSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
+        $hasServiceProvidersSoftDelete = table_has_column($conexion, 'service_providers', 'is_deleted');
 
         if ($hasServiceProviderId) {
             $sql = "SELECT u.id, u.usuario, u.nombre, u.email, u.role_id, u.rol, u.provider_id, u.service_provider_id, u.empresa, u.activo,
                            p.name AS provider_name, p.kind AS provider_kind, sp.provider_name AS service_provider_name
                     FROM usuarios u
-                    LEFT JOIN providers p ON p.id = u.provider_id
-                    LEFT JOIN service_providers sp ON sp.id = u.service_provider_id
-                    ORDER BY u.id DESC";
+                    LEFT JOIN providers p ON p.id = u.provider_id";
+            if ($hasProvidersSoftDelete) {
+                $sql .= " AND p.is_deleted = 0";
+            }
+            $sql .= " LEFT JOIN service_providers sp ON sp.id = u.service_provider_id";
+            if ($hasServiceProvidersSoftDelete) {
+                $sql .= " AND sp.is_deleted = 0";
+            }
+            $sql .= " WHERE 1=1";
+            if ($hasUsersSoftDelete) {
+                $sql .= " AND u.is_deleted = 0";
+            }
+            $sql .= " ORDER BY u.id DESC";
         } else {
             $sql = "SELECT u.id, u.usuario, u.nombre, u.email, u.role_id, u.rol, u.provider_id, u.empresa, u.activo,
                            p.name AS provider_name, p.kind AS provider_kind
                     FROM usuarios u
-                    LEFT JOIN providers p ON p.id = u.provider_id
-                    ORDER BY u.id DESC";
+                    LEFT JOIN providers p ON p.id = u.provider_id";
+            if ($hasProvidersSoftDelete) {
+                $sql .= " AND p.is_deleted = 0";
+            }
+            $sql .= " WHERE 1=1";
+            if ($hasUsersSoftDelete) {
+                $sql .= " AND u.is_deleted = 0";
+            }
+            $sql .= " ORDER BY u.id DESC";
         }
 
         $res = mysqli_query($conexion, $sql);
@@ -259,11 +299,16 @@ switch ($action) {
         if ($id <= 0) json_err('invalid_input', 422);
 
         $hasServiceProviderId = usuarios_has_column($conexion, 'service_provider_id');
+        $hasUsersSoftDelete = usuarios_has_column($conexion, 'is_deleted');
         if ($hasServiceProviderId) {
-            $sql = "SELECT id, usuario, nombre, email, role_id, rol, provider_id, service_provider_id, activo FROM usuarios WHERE id = ? LIMIT 1";
+            $sql = "SELECT id, usuario, nombre, email, role_id, rol, provider_id, service_provider_id, activo FROM usuarios WHERE id = ?";
         } else {
-            $sql = "SELECT id, usuario, nombre, email, role_id, rol, provider_id, activo FROM usuarios WHERE id = ? LIMIT 1";
+            $sql = "SELECT id, usuario, nombre, email, role_id, rol, provider_id, activo FROM usuarios WHERE id = ?";
         }
+        if ($hasUsersSoftDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        $sql .= " LIMIT 1";
 
         $stmt = mysqli_prepare($conexion, $sql);
         if (!$stmt) json_err('db_prepare_error', 500);
@@ -297,7 +342,13 @@ switch ($action) {
         $userId = intval($_POST['user_id'] ?? $_REQUEST['user_id'] ?? 0);
         if ($userId <= 0) json_err('invalid_user_id', 422);
 
-        $stmtUser = mysqli_prepare($conexion, "SELECT id, usuario, nombre, email, token, password FROM usuarios WHERE id = ? LIMIT 1");
+        $hasUsersSoftDelete = usuarios_has_column($conexion, 'is_deleted');
+        $sqlUser = "SELECT id, usuario, nombre, email, token, password FROM usuarios WHERE id = ?";
+        if ($hasUsersSoftDelete) {
+            $sqlUser .= " AND is_deleted = 0";
+        }
+        $sqlUser .= " LIMIT 1";
+        $stmtUser = mysqli_prepare($conexion, $sqlUser);
         if (!$stmtUser) json_err('db_prepare_error', 500);
         mysqli_stmt_bind_param($stmtUser, 'i', $userId);
         if (!mysqli_stmt_execute($stmtUser)) json_err('db_error', 500);
@@ -438,13 +489,19 @@ switch ($action) {
 
         $hasRoleId = usuarios_has_column($conexion, 'role_id');
         $hasServiceProviderId = usuarios_has_column($conexion, 'service_provider_id');
+        $hasUsersSoftDelete = usuarios_has_column($conexion, 'is_deleted');
 
         if (!$hasRoleId) {
             json_err('role_id_column_missing', 500);
         }
 
         // Unicidad email/usuario
-        $stmtUnique = mysqli_prepare($conexion, "SELECT id FROM usuarios WHERE (email = ? OR usuario = ?) AND id <> ? LIMIT 1");
+        $sqlUnique = "SELECT id FROM usuarios WHERE (email = ? OR usuario = ?) AND id <> ?";
+        if ($hasUsersSoftDelete) {
+            $sqlUnique .= " AND is_deleted = 0";
+        }
+        $sqlUnique .= " LIMIT 1";
+        $stmtUnique = mysqli_prepare($conexion, $sqlUnique);
         if (!$stmtUnique) json_err('db_prepare_error', 500);
         mysqli_stmt_bind_param($stmtUnique, 'ssi', $email, $usuario, $id);
         if (!mysqli_stmt_execute($stmtUnique)) json_err('db_error', 500);
@@ -495,12 +552,16 @@ switch ($action) {
         if ($hasServiceProviderId) {
             $sql = "UPDATE usuarios
                     SET email = ?, usuario = ?, role_id = ?, rol = ?, activo = ?, provider_id = {$providerSql}, service_provider_id = {$serviceProviderSql}
-                    WHERE id = ? LIMIT 1";
+                    WHERE id = ?";
         } else {
             $sql = "UPDATE usuarios
                     SET email = ?, usuario = ?, role_id = ?, rol = ?, activo = ?, provider_id = {$providerSql}
-                    WHERE id = ? LIMIT 1";
+                    WHERE id = ?";
         }
+        if ($hasUsersSoftDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        $sql .= " LIMIT 1";
 
         $stmt = mysqli_prepare($conexion, $sql);
         if (!$stmt) json_err('db_prepare_error', 500);
@@ -525,13 +586,18 @@ switch ($action) {
         if (!isset($roles[$roleId])) json_err('role_not_found', 422);
 
         $hasServiceProviderId = usuarios_has_column($conexion, 'service_provider_id');
+        $hasUsersSoftDelete = usuarios_has_column($conexion, 'is_deleted');
         $serviceProviderId = isset($_POST['service_provider_id']) && $_POST['service_provider_id'] !== '' ? intval($_POST['service_provider_id']) : null;
 
         if (is_complementary_user_role($roleId)) {
             if (!$hasServiceProviderId) json_err('service_provider_column_missing', 422);
             if ($serviceProviderId === null || $serviceProviderId <= 0) json_err('service_provider_required', 422);
             if (!fetch_active_service_provider($conexion, $serviceProviderId)) json_err('invalid_or_inactive_complementary_provider', 422);
-            $sql = "UPDATE usuarios SET role_id = ?, rol = ?, provider_id = NULL, service_provider_id = ? WHERE id = ? LIMIT 1";
+            $sql = "UPDATE usuarios SET role_id = ?, rol = ?, provider_id = NULL, service_provider_id = ? WHERE id = ?";
+            if ($hasUsersSoftDelete) {
+                $sql .= " AND is_deleted = 0";
+            }
+            $sql .= " LIMIT 1";
             $stmt = mysqli_prepare($conexion, $sql);
             if (!$stmt) json_err('db_prepare_error', 500);
             $rolText = (string)$roleId;
@@ -544,7 +610,12 @@ switch ($action) {
         if (is_medical_user_role($roleId)) {
             $providerId = isset($_POST['provider_id']) && $_POST['provider_id'] !== '' ? intval($_POST['provider_id']) : null;
             if ($providerId === null || $providerId <= 0) {
-                $stmtGet = mysqli_prepare($conexion, "SELECT provider_id FROM usuarios WHERE id = ? LIMIT 1");
+                $sqlGet = "SELECT provider_id FROM usuarios WHERE id = ?";
+                if ($hasUsersSoftDelete) {
+                    $sqlGet .= " AND is_deleted = 0";
+                }
+                $sqlGet .= " LIMIT 1";
+                $stmtGet = mysqli_prepare($conexion, $sqlGet);
                 if (!$stmtGet) json_err('db_prepare_error', 500);
                 mysqli_stmt_bind_param($stmtGet, 'i', $id);
                 if (!mysqli_stmt_execute($stmtGet)) json_err('db_error', 500);
@@ -559,7 +630,11 @@ switch ($action) {
             if (!fetch_active_medical_provider($conexion, $providerId)) json_err('invalid_or_inactive_medical_provider', 422);
 
             if ($hasServiceProviderId) {
-                $sql = "UPDATE usuarios SET role_id = ?, rol = ?, provider_id = ?, service_provider_id = NULL WHERE id = ? LIMIT 1";
+                $sql = "UPDATE usuarios SET role_id = ?, rol = ?, provider_id = ?, service_provider_id = NULL WHERE id = ?";
+                if ($hasUsersSoftDelete) {
+                    $sql .= " AND is_deleted = 0";
+                }
+                $sql .= " LIMIT 1";
                 $stmt = mysqli_prepare($conexion, $sql);
                 if (!$stmt) json_err('db_prepare_error', 500);
                 $rolText = (string)$roleId;
@@ -569,7 +644,11 @@ switch ($action) {
                 json_ok();
             }
 
-            $sql = "UPDATE usuarios SET role_id = ?, rol = ?, provider_id = ? WHERE id = ? LIMIT 1";
+            $sql = "UPDATE usuarios SET role_id = ?, rol = ?, provider_id = ? WHERE id = ?";
+            if ($hasUsersSoftDelete) {
+                $sql .= " AND is_deleted = 0";
+            }
+            $sql .= " LIMIT 1";
             $stmt = mysqli_prepare($conexion, $sql);
             if (!$stmt) json_err('db_prepare_error', 500);
             $rolText = (string)$roleId;
@@ -580,7 +659,11 @@ switch ($action) {
         }
 
         if ($hasServiceProviderId) {
-            $sql = "UPDATE usuarios SET role_id = ?, rol = ?, service_provider_id = NULL WHERE id = ? LIMIT 1";
+            $sql = "UPDATE usuarios SET role_id = ?, rol = ?, service_provider_id = NULL WHERE id = ?";
+            if ($hasUsersSoftDelete) {
+                $sql .= " AND is_deleted = 0";
+            }
+            $sql .= " LIMIT 1";
             $stmt = mysqli_prepare($conexion, $sql);
             if (!$stmt) json_err('db_prepare_error', 500);
             $rolText = (string)$roleId;
@@ -590,7 +673,11 @@ switch ($action) {
             json_ok();
         }
 
-        $sql = "UPDATE usuarios SET role_id = ?, rol = ? WHERE id = ? LIMIT 1";
+        $sql = "UPDATE usuarios SET role_id = ?, rol = ? WHERE id = ?";
+        if ($hasUsersSoftDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        $sql .= " LIMIT 1";
         $stmt = mysqli_prepare($conexion, $sql);
         if (!$stmt) json_err('db_prepare_error', 500);
         $rolText = (string)$roleId;
@@ -604,13 +691,56 @@ switch ($action) {
         if (!can_manage_users()) json_err('forbidden', 403);
         $id = intval($_POST['id'] ?? 0);
         $val = isset($_POST['val']) ? intval($_POST['val']) : 0;
+        if (!in_array($val, [0, 1], true)) json_err('invalid_val', 422);
         if ($id <= 0) json_err('invalid_input', 422);
-        $stmt = mysqli_prepare($conexion, "UPDATE usuarios SET activo = ? WHERE id = ? LIMIT 1");
+        $hasUsersSoftDelete = usuarios_has_column($conexion, 'is_deleted');
+        $sql = "UPDATE usuarios SET activo = ? WHERE id = ?";
+        if ($hasUsersSoftDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        $sql .= " LIMIT 1";
+        $stmt = mysqli_prepare($conexion, $sql);
         if (!$stmt) json_err('db_prepare_error', 500);
         mysqli_stmt_bind_param($stmt, 'ii', $val, $id);
         if (!mysqli_stmt_execute($stmt)) json_err('db_error', 500);
         mysqli_stmt_close($stmt);
         json_ok();
+        break;
+
+    case 'soft_delete_user':
+        if (!can_manage_users()) json_err('forbidden', 403);
+        $id = intval($_POST['id'] ?? $_POST['user_id'] ?? 0);
+        if ($id <= 0) json_err('invalid_input', 422);
+        $sessionUserId = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : 0;
+        if ($sessionUserId > 0 && $id === $sessionUserId) {
+            json_err('cannot_soft_delete_logged_user', 422);
+        }
+
+        $hasUsersSoftDelete = usuarios_has_column($conexion, 'is_deleted');
+        $hasDeletedAt = usuarios_has_column($conexion, 'deleted_at');
+        $hasDeletedBy = usuarios_has_column($conexion, 'deleted_by');
+        if (!$hasUsersSoftDelete || !$hasDeletedAt || !$hasDeletedBy) {
+            json_err('soft_delete_columns_missing', 500);
+        }
+
+        $sql = "UPDATE usuarios
+                SET is_deleted = 1,
+                    deleted_at = NOW(),
+                    deleted_by = ?,
+                    activo = 0
+                WHERE id = ? AND is_deleted = 0
+                LIMIT 1";
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) json_err('db_prepare_error', 500);
+        mysqli_stmt_bind_param($stmt, 'ii', $sessionUserId, $id);
+        if (!mysqli_stmt_execute($stmt)) {
+            mysqli_stmt_close($stmt);
+            json_err('db_error', 500);
+        }
+        $affected = mysqli_stmt_affected_rows($stmt);
+        mysqli_stmt_close($stmt);
+        if ($affected < 1) json_err('user_not_found_or_already_deleted', 404);
+        json_ok(['message' => 'deleted_soft']);
         break;
 
     default:

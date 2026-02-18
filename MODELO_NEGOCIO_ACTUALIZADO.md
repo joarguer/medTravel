@@ -613,6 +613,72 @@ CREATE TABLE notifications (
 
 ---
 
+## Modelo de Pagos – Marketplace Light (Fase Inicial)
+
+### 1. Principio estratégico
+- MedTravel NO gestiona dinero de pacientes.
+- MedTravel actúa como intermediario comercial comisionista.
+- El pago ocurre directamente entre paciente y prestador.
+- MedTravel registra la operación y calcula comisión.
+
+### 2. Flujo de pago oficial
+
+```text
+Paciente
+  -> selecciona servicio
+  -> genera booking
+  -> paga directamente al PayPal del prestador
+  -> PayPal confirma pago
+  -> MedTravel registra:
+     - paid_to_provider = true
+     - commission_amount
+     - commission_status = pending
+```
+
+MedTravel NO:
+- retiene fondos
+- procesa pagos
+- actúa como money transmitter
+
+### 3. Responsabilidad de cuentas de pago
+- Cada `service_provider` debe:
+  - Crear su propia cuenta PayPal Business.
+  - Configurar sus credenciales en el panel admin.
+- MedTravel no crea cuentas PayPal para los prestadores.
+
+### 4. Campos requeridos en `service_providers`
+- `paypal_client_id`
+- `paypal_mode` (`sandbox`/`live`)
+- `paypal_merchant_email`
+- (opcional futuro) `paypal_webhook_id`
+
+Regla de seguridad:
+- No se deben exponer credenciales sensibles en frontend.
+
+### 5. Comisión
+
+Modelo Fase 1:
+- Comisión registrada en BD.
+- Pago de comisión manual (liquidación mensual).
+
+Modelo Fase 2 (futuro):
+- Split automático vía Stripe Connect o PayPal Partner.
+
+### 6. Implicaciones legales y fiscales
+- MedTravel no actúa como entidad financiera.
+- Se reduce la exposición regulatoria en EE.UU.
+- Permite operar sin empresa formal en etapa inicial.
+
+### 7. Impacto técnico en desarrollo
+- Extender tabla `service_providers`.
+- Agregar sección “Integración de pagos” en Mi Empresa.
+- Adaptar flujo booking para usar `client_id` dinámico por proveedor.
+- Implementar webhook de confirmación de pago.
+- Registrar comisión por booking.
+- Crear módulo futuro de liquidaciones.
+
+---
+
 ## 🚀 Roadmap de Implementación
 
 ### FASE 1: CRM y Agendamiento (Semanas 1-2) 🔴 CRÍTICO
@@ -784,6 +850,9 @@ Google Calendar actualizado → Webhook notifica → BD actualizada
 
 ---
 
-**Última actualización:** 29 de enero de 2026  
+**Última actualización:** 17 de febrero de 2026  
+**Nota:** Actualización derivada de decisión estratégica – Fase Marketplace Light.  
+**Estado:** Aprobado para implementación técnica  
+**Fecha:** 17 de febrero de 2026  
 **Documento creado por:** GitHub Copilot AI Assistant  
 **Revisado por:** Equipo MedTravel

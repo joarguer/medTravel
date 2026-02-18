@@ -29,9 +29,6 @@ if (!$es_admin_principal && $ses_rol !== '') {
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
-    <?php echo $theme_layout_script;?>
-    <?php echo $theme_global_js;?>
-    <?php echo $theme_layout_js;?>
     <!-- Summernote CSS -->
     <link href="../../assets/global/plugins/bootstrap-summernote/summernote.css" rel="stylesheet" type="text/css" />
     <style>

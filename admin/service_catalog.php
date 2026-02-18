@@ -11,7 +11,6 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
-    <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
     <div class="wrapper">
@@ -81,7 +80,6 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
             </div>
         </div>
         <?php echo $sider_bar;?>
-        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <?php echo $theme_layout_script;?>
         <script>
             window.SERVICE_CATALOG_CTX = {

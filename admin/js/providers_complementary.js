@@ -216,8 +216,8 @@ $(document).ready(function () {
         }, 'json');
     }
 
-    function toggleStatus(id) {
-        $.post(apiUrl, { action: 'toggle_status', id: id }, function (res) {
+    function toggleStatus(id, nextVal) {
+        $.post(apiUrl, { action: 'toggle_status', id: id, val: nextVal }, function (res) {
             if (res && res.ok) {
                 table.ajax.reload(null, false);
                 toastr.success('Estado actualizado');
@@ -255,12 +255,19 @@ $(document).ready(function () {
 
     $('#providers_table').on('click', '.toggle', function () {
         const id = $(this).data('id');
-        toggleStatus(id);
+        const tr = $(this).closest('tr');
+        const statusText = $.trim(tr.find('td').eq(8).text()).toLowerCase();
+        const isActive = statusText === 'activo';
+        const nextVal = isActive ? 0 : 1;
+        if (nextVal === 0 && !window.confirm('¿Deseas desactivar?')) {
+            return;
+        }
+        toggleStatus(id, nextVal);
     });
 
     $('#providers_table').on('click', '.delete', function () {
         const id = $(this).data('id');
-        if (confirm('¿Eliminar este proveedor? (Debe no tener servicios asociados)')) {
+        if (confirm('¿Deseas eliminar (soft)?')) {
             deleteProvider(id);
         }
     });

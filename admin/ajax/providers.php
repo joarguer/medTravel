@@ -16,6 +16,17 @@ function slugify($text){
     return $text;
 }
 
+function table_has_column($conexion, $table, $column){
+    static $cache = array();
+    $key = $table.'.'.$column;
+    if(array_key_exists($key, $cache)) return $cache[$key];
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $q = mysqli_query($conexion, "SHOW COLUMNS FROM {$tableEsc} LIKE '{$columnEsc}'");
+    $cache[$key] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$key];
+}
+
 try{
     if($tipo == 'list'){
         $kind_filter = isset($_REQUEST['kind']) ? $_REQUEST['kind'] : '';
@@ -27,6 +38,7 @@ try{
         $can_view_partner = user_can('providers.partner.view');
         if(!$can_view_any && !$can_view_med && !$can_view_partner){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
         $rows = [];
+        $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
         $sql = "SELECT 
                     p.id, p.type, p.kind, p.name, p.slug, p.city, p.is_verified, p.is_active, p.created_at,
                     COALESCE(pv.status,'pending') AS verification_status,
@@ -46,6 +58,7 @@ try{
                     GROUP BY provider_id
                 ) items ON items.provider_id = p.id
                 WHERE 1=1";
+        if($hasSoftDelete){ $sql .= " AND p.is_deleted = 0"; }
         if($kind_filter){ $sql .= " AND p.kind = '".mysqli_real_escape_string($conexion,$kind_filter)."'"; }
         $sql .= " ORDER BY p.created_at DESC";
         $res = mysqli_query($conexion, $sql);
@@ -65,7 +78,10 @@ try{
     if($tipo == 'get'){
         $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
         if($id <= 0){ echo json_encode(['ok'=>false,'error'=>'invalid_id']); exit; }
-        $sql = "SELECT * FROM providers WHERE id = ? LIMIT 1";
+        $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
+        $sql = "SELECT * FROM providers WHERE id = ?";
+        if($hasSoftDelete){ $sql .= " AND is_deleted = 0"; }
+        $sql .= " LIMIT 1";
         if($st = mysqli_prepare($conexion, $sql)){
             mysqli_stmt_bind_param($st, 'i', $id);
             mysqli_stmt_execute($st);
@@ -216,18 +232,26 @@ try{
     if($tipo == 'update'){
         $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
         if($id<=0){ echo json_encode(['ok'=>false,'error'=>'invalid_id','message'=>'ID inválido']); exit; }
+        $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
         
         $username = isset($_REQUEST['username']) ? trim($_REQUEST['username']) : '';
         $password = isset($_REQUEST['password']) ? trim($_REQUEST['password']) : '';
         // obtener kind actual si no viene en request
         $kind = isset($_REQUEST['kind']) ? trim($_REQUEST['kind']) : '';
         $kind_db = 'medical';
-        $kq = mysqli_prepare($conexion, "SELECT kind FROM providers WHERE id = ? LIMIT 1");
+        $providerFound = false;
+        $kindSql = "SELECT kind FROM providers WHERE id = ?";
+        if($hasSoftDelete){ $kindSql .= " AND is_deleted = 0"; }
+        $kindSql .= " LIMIT 1";
+        $kq = mysqli_prepare($conexion, $kindSql);
         mysqli_stmt_bind_param($kq,'i',$id);
         mysqli_stmt_execute($kq);
         $kr = mysqli_stmt_get_result($kq);
-        if($kr && $rowk = mysqli_fetch_assoc($kr)) $kind_db = $rowk['kind'] ?: 'medical';
+        if($kr && $rowk = mysqli_fetch_assoc($kr)){ $kind_db = $rowk['kind'] ?: 'medical'; $providerFound = true; }
         mysqli_stmt_close($kq);
+        if($hasSoftDelete && !$providerFound){
+            echo json_encode(['ok'=>false,'error'=>'record_deleted','message'=>'registro eliminado']); exit;
+        }
         if($kind === '' || !in_array($kind, ['medical','partner'])) $kind = $kind_db;
 
         // Legacy freeze: no permitir convertir de medical -> partner.
@@ -304,7 +328,9 @@ try{
         
         try {
             // 1. Actualizar proveedor
-            $sql = 'UPDATE providers SET '.implode(', ', $fields).' WHERE id = ? LIMIT 1'; 
+            $sql = 'UPDATE providers SET '.implode(', ', $fields).' WHERE id = ?';
+            if($hasSoftDelete){ $sql .= ' AND is_deleted = 0'; }
+            $sql .= ' LIMIT 1';
             $values[] = $id; 
             $types=''; 
             foreach($values as $v){ $types .= is_int($v)?'i':'s'; }
@@ -320,6 +346,7 @@ try{
                 call_user_func_array(array($stmt,'bind_param'), $bind_names);
                 $exec = mysqli_stmt_execute($stmt);
                 if(!$exec){ throw new Exception('Error actualizando provider: '.mysqli_stmt_error($stmt)); }
+                if(mysqli_stmt_affected_rows($stmt) < 1){ throw new Exception('registro eliminado'); }
                 mysqli_stmt_close($stmt);
             } else { 
                 throw new Exception('Error preparando UPDATE provider: '.mysqli_error($conexion)); 
@@ -408,19 +435,64 @@ try{
 
     if($tipo == 'toggle'){
         $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0; $val = isset($_REQUEST['val']) ? (int)$_REQUEST['val'] : 0; if($id<=0){ echo json_encode(['ok'=>false,'error'=>'invalid_id']); exit; }
+        if(!in_array($val, [0,1], true)){ echo json_encode(['ok'=>false,'error'=>'invalid_val']); exit; }
+        $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
         $kind = 'medical';
-        $kq = mysqli_prepare($conexion, "SELECT kind FROM providers WHERE id = ? LIMIT 1");
+        $kindSql = "SELECT kind FROM providers WHERE id = ?";
+        if($hasSoftDelete){ $kindSql .= " AND is_deleted = 0"; }
+        $kindSql .= " LIMIT 1";
+        $kq = mysqli_prepare($conexion, $kindSql);
         mysqli_stmt_bind_param($kq,'i',$id);
         mysqli_stmt_execute($kq);
         $kr = mysqli_stmt_get_result($kq);
         if($kr && $rowk = mysqli_fetch_assoc($kr)) $kind = $rowk['kind'] ?: 'medical';
         mysqli_stmt_close($kq);
+        if($hasSoftDelete && (!$kr || mysqli_num_rows($kr) === 0)){ echo json_encode(['ok'=>false,'error'=>'record_deleted','message'=>'registro eliminado']); exit; }
         if($kind === 'partner'){
             if(!user_can('providers.partner.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
         } else {
             if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
         }
-        $st = mysqli_prepare($conexion, "UPDATE providers SET is_active = ? WHERE id = ? LIMIT 1"); mysqli_stmt_bind_param($st,'ii',$val,$id); $exec = mysqli_stmt_execute($st); if(!$exec){ error_log('providers toggle error: '.mysqli_stmt_error($st)); echo json_encode(['ok'=>false,'error'=>'db_toggle']); mysqli_stmt_close($st); exit; } mysqli_stmt_close($st); echo json_encode(['ok'=>true]); exit;
+        $toggleSql = "UPDATE providers SET is_active = ? WHERE id = ?";
+        if($hasSoftDelete){ $toggleSql .= " AND is_deleted = 0"; }
+        $toggleSql .= " LIMIT 1";
+        $st = mysqli_prepare($conexion, $toggleSql); mysqli_stmt_bind_param($st,'ii',$val,$id); $exec = mysqli_stmt_execute($st); if(!$exec){ error_log('providers toggle error: '.mysqli_stmt_error($st)); echo json_encode(['ok'=>false,'error'=>'db_toggle']); mysqli_stmt_close($st); exit; } mysqli_stmt_close($st); echo json_encode(['ok'=>true]); exit;
+    }
+
+    if($tipo == 'soft_delete'){
+        $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
+        if($id<=0){ echo json_encode(['ok'=>false,'error'=>'invalid_id']); exit; }
+        $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
+        $hasDeletedAt = table_has_column($conexion, 'providers', 'deleted_at');
+        $hasDeletedBy = table_has_column($conexion, 'providers', 'deleted_by');
+        if(!$hasSoftDelete || !$hasDeletedAt || !$hasDeletedBy){ echo json_encode(['ok'=>false,'error'=>'soft_delete_columns_missing']); exit; }
+
+        $kind = 'medical';
+        $kindSql = "SELECT kind FROM providers WHERE id = ? AND is_deleted = 0 LIMIT 1";
+        $kq = mysqli_prepare($conexion, $kindSql);
+        mysqli_stmt_bind_param($kq,'i',$id);
+        mysqli_stmt_execute($kq);
+        $kr = mysqli_stmt_get_result($kq);
+        if($kr && $rowk = mysqli_fetch_assoc($kr)) $kind = $rowk['kind'] ?: 'medical';
+        mysqli_stmt_close($kq);
+        if(!$kr || mysqli_num_rows($kr) === 0){ echo json_encode(['ok'=>false,'error'=>'record_deleted','message'=>'registro eliminado']); exit; }
+
+        if($kind === 'partner'){
+            if(!user_can('providers.partner.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+        } else {
+            if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+        }
+
+        $sessionUserId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+        $sql = "UPDATE providers SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?, is_active = 0 WHERE id = ? AND is_deleted = 0 LIMIT 1";
+        $st = mysqli_prepare($conexion, $sql);
+        if(!$st){ echo json_encode(['ok'=>false,'error'=>'db_prepare']); exit; }
+        mysqli_stmt_bind_param($st, 'ii', $sessionUserId, $id);
+        $exec = mysqli_stmt_execute($st);
+        if(!$exec){ error_log('providers soft delete error: '.mysqli_stmt_error($st)); echo json_encode(['ok'=>false,'error'=>'db_soft_delete']); mysqli_stmt_close($st); exit; }
+        if(mysqli_stmt_affected_rows($st) < 1){ echo json_encode(['ok'=>false,'error'=>'record_deleted','message'=>'registro eliminado']); mysqli_stmt_close($st); exit; }
+        mysqli_stmt_close($st);
+        echo json_encode(['ok'=>true]); exit;
     }
 
     echo json_encode(['ok'=>false,'error'=>'unknown_tipo']); exit;

@@ -34,7 +34,7 @@ $(document).ready(function(){
                 const verLink = '<a href="provider_verification.php" class="ml10">Gestionar</a>';
                 tbody += '<td><span class="'+st.cls+'">'+st.text+'</span>'+completion+' '+verLink+'</td>';
                 tbody += '<td>'+(p.is_active==1?'<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>':'<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>';
-                tbody += '<td><button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Desactivar</button></td>';
+                tbody += '<td><button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger soft-delete" title="Eliminar (Soft)"><i class="fa fa-trash"></i></button></td>';
                 tbody += '</tr>';
             });
             $('#tbl-providers tbody').html(tbody);
@@ -176,9 +176,25 @@ $(document).ready(function(){
         }, 'json'); 
     });
 
-    $('#tbl-providers').on('click', '.delete', function(){ if(!confirm('Desactivar este prestador?')) return; let id = $(this).closest('tr').data('id'); $.post(url, { tipo: 'toggle', id: id, val: 0 }, function(res){ if(res && res.ok) loadProviders(); else alert('Error'); }, 'json'); });
+    $('#tbl-providers').on('click', '.soft-delete', function(){
+        if(!confirm('¿Deseas eliminar (soft)?')) return;
+        let id = $(this).closest('tr').data('id');
+        $.post(url, { tipo: 'soft_delete', id: id }, function(res){
+            if(res && res.ok) loadProviders();
+            else alert('Error');
+        }, 'json');
+    });
 
-    $('#tbl-providers').on('click', '.toggle-active', function(){ let btn = $(this); let id = btn.closest('tr').data('id'); let val = btn.data('val'); $.post(url, { tipo: 'toggle', id: id, val: val }, function(res){ if(res && res.ok) loadProviders(); else alert('Error'); }, 'json'); });
+    $('#tbl-providers').on('click', '.toggle-active', function(){
+        let btn = $(this);
+        let id = btn.closest('tr').data('id');
+        let val = btn.data('val');
+        if(parseInt(val,10) === 0 && !confirm('¿Deseas desactivar?')) return;
+        $.post(url, { tipo: 'toggle', id: id, val: val }, function(res){
+            if(res && res.ok) loadProviders();
+            else alert('Error');
+        }, 'json');
+    });
 
     $('#filter-kind').on('change', function(){
         currentKindFilter = $(this).val();

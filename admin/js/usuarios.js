@@ -172,7 +172,8 @@ $(function(){
                         actions.append('<button type="button" class="btn btn-xs btn-warning btn-user-reset-pass" data-id="' + u.id + '" style="margin-right:6px;">RESET PASS</button>');
                     }
                 }
-                actions.append('<button type="button" class="btn btn-xs btn-default toggle-active">' + (u.activo === 1 ? 'Desactivar' : 'Activar') + '</button>');
+                actions.append('<button type="button" class="btn btn-xs btn-default toggle-active" style="margin-right:6px;">' + (u.activo === 1 ? 'Desactivar' : 'Activar') + '</button>');
+                actions.append('<button type="button" class="btn btn-xs btn-danger delete-user" title="Eliminar (Soft)"><i class="fa fa-trash"></i></button>');
             }
             tr.append(actions);
             tbody.append(tr);
@@ -359,6 +360,9 @@ $(function(){
         if(id <= 0) return;
         var activeText = $.trim(tr.find('td').eq(6).text()).toLowerCase();
         var nextVal = activeText === 'activo' ? 0 : 1;
+        if(nextVal === 0 && !window.confirm('¿Deseas desactivar?')){
+            return;
+        }
 
         $.post('ajax/usuarios.php', {action:'toggle_active', id:id, val:nextVal}, function(res){
             if(res && res.success){
@@ -368,6 +372,30 @@ $(function(){
             }
         }, 'json').fail(function(){
             notifyError('Error de conexión al cambiar estado');
+        });
+    });
+
+    $('#users-table').on('click', '.delete-user', function(){
+        var tr = $(this).closest('tr');
+        var id = parseInt(tr.data('id') || 0, 10);
+        if(id <= 0) return;
+        if(!window.confirm('¿Deseas eliminar (soft)?')){
+            return;
+        }
+
+        $.post('ajax/usuarios.php', {action:'soft_delete_user', id:id}, function(res){
+            if(res && res.success){
+                notifySuccess('Usuario eliminado (soft)');
+                loadUsers();
+            } else {
+                notifyError((res && res.error) ? res.error : 'Error al eliminar usuario');
+            }
+        }, 'json').fail(function(xhr){
+            var msg = 'Error al eliminar usuario';
+            if(xhr && xhr.responseJSON && xhr.responseJSON.error){
+                msg = xhr.responseJSON.error;
+            }
+            notifyError(msg);
         });
     });
 
