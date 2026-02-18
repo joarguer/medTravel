@@ -84,10 +84,12 @@ function initDataTable() {
             { 
                 data: 'is_active',
                 render: function(data, type, row) {
-                    var checked = data == 1 ? 'checked' : '';
-                    return '<label class="mt-checkbox mt-checkbox-outline">' +
-                           '<input type="checkbox" ' + checked + ' onchange="toggleStatus(' + row.id + ')">' +
-                           '<span></span></label>';
+                    if (type === 'filter' || type === 'sort') {
+                        return String(data);
+                    }
+                    return data == 1
+                        ? '<span class="label label-success">Activo</span>'
+                        : '<span class="label label-default">Inactivo</span>';
                 }
             },
             { 
@@ -106,8 +108,13 @@ function initDataTable() {
                 data: null,
                 orderable: false,
                 render: function(data, type, row) {
+                    var isActive = parseInt(row.is_active, 10) === 1;
+                    var nextVal = isActive ? 0 : 1;
+                    var toggleLabel = isActive ? 'DESACTIVAR' : 'ACTIVAR';
+                    var toggleClass = isActive ? 'btn-warning' : 'btn-success';
                     return '<button class="btn btn-xs btn-primary" onclick="editService(' + row.id + ')" title="Edit">' +
                            '<i class="fa fa-edit"></i></button> ' +
+                           '<button class="btn btn-xs ' + toggleClass + '" onclick="toggleStatus(' + row.id + ', ' + nextVal + ')" title="' + toggleLabel + '">' + toggleLabel + '</button> ' +
                            '<button class="btn btn-xs btn-danger" onclick="deleteService(' + row.id + ')" title="Delete">' +
                            '<i class="fa fa-trash"></i></button>';
                 }
@@ -551,7 +558,7 @@ function saveService() {
 // ELIMINAR SERVICIO
 // ===================================================================
 function deleteService(id) {
-    if(!confirm('Are you sure you want to delete this service? This action cannot be undone.')) {
+    if(!confirm('¿Deseas eliminar (soft)?')) {
         return;
     }
     
@@ -562,10 +569,10 @@ function deleteService(id) {
         dataType: 'json',
         success: function(response) {
             if(response.ok) {
-                toastr.success(response.message || 'Service deleted successfully');
+                toastr.success(response.message || 'Servicio eliminado (soft)');
                 servicesTable.ajax.reload(null, false);
             } else {
-                toastr.error(response.message || 'Error deleting service');
+                toastr.error(response.message || 'Error eliminando servicio');
             }
         },
         error: function() {
@@ -577,16 +584,30 @@ function deleteService(id) {
 // ===================================================================
 // TOGGLE ESTADO
 // ===================================================================
-function toggleStatus(id) {
+function toggleStatus(id, val) {
+    var hasExplicitValue = (typeof val !== 'undefined' && val !== null && val !== '');
+    var payload = { action: 'toggle_status', id: id };
+    if (hasExplicitValue) {
+        var normalized = parseInt(val, 10);
+        if (normalized !== 0 && normalized !== 1) {
+            toastr.error('Valor de estado inválido');
+            return;
+        }
+        if (normalized === 0 && !window.confirm('¿Deseas desactivar?')) {
+            return;
+        }
+        payload.val = normalized;
+    }
+
     $.ajax({
         url: 'ajax/medtravel_services.php',
         method: 'POST',
-        data: { action: 'toggle_status', id: id },
+        data: payload,
         dataType: 'json',
         success: function(response) {
             if(response.ok) {
-                var statusText = response.is_active == 1 ? 'activated' : 'deactivated';
-                toastr.success('Service ' + statusText);
+                var statusText = response.is_active == 1 ? 'activado' : 'desactivado';
+                toastr.success('Servicio ' + statusText);
                 servicesTable.ajax.reload(null, false);
             } else {
                 toastr.error(response.message || 'Error updating status');

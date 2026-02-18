@@ -146,6 +146,18 @@ Además del catálogo complementario transaccional, existe un bloque editorial d
 - `booking/wizard.php:345-352` y `booking/wizard.php:361-363`
 - `booking/submit.php:41-52`
 
+### 2.6 Estado actual de soft delete (2026-02-18)
+- `medtravel_services_catalog` opera con soft delete (`is_deleted`, `deleted_at`, `deleted_by`) y desactivación legacy (`is_active=0`).
+- El endpoint admin `admin/ajax/medtravel_services.php`:
+  - Lista/lecturas filtran `is_deleted=0` cuando la columna existe.
+  - Acción `delete` aplica soft delete si existen columnas; si faltan, hace fallback legacy (`is_active=0`) sin romper runtime.
+- El módulo `admin/cleanup.php` permite soft delete/restore para:
+  - `usuarios`
+  - `providers`
+  - `service_providers`
+  - `medtravel_services_catalog`
+- Las operaciones de restore reactivan (`activo/is_active=1`) y limpian metadatos de borrado lógico.
+
 ---
 
 ## 3) Implementación técnica del catálogo (tablas, CRUD, endpoints)

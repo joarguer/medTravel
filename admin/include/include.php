@@ -289,7 +289,7 @@ $medical_group_pages = array('service_categories.php','service_catalog.php','pro
 $complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php');
 $complementary_scope_pages = array('providers_complementary.php','medtravel_services.php');
 $clients_booking_pages = array('clientes.php','booking_requests.php');
-$admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','informes.php','email_settings.php','data_deletion_requests.php');
+$admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','informes.php','email_settings.php','data_deletion_requests.php','cleanup.php');
 $admin_users_pages = array('mis_datos.php','usuarios.php','crear_usuario.php','roles.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
 $profile_pages = array('mis_datos.php');
@@ -430,6 +430,10 @@ if ($es_admin) {
     <li'.menu_li_class('data_deletion_requests.php').'>
         <a href="./data_deletion_requests.php">
             <i class="icon-trash"></i> Solicitudes de eliminación </a>
+    </li>
+    <li'.menu_li_class('cleanup.php').'>
+        <a href="./cleanup.php">
+            <i class="fa fa-trash"></i> Limpieza (DEV) </a>
     </li>
     <li'.menu_li_class('email_settings.php').'>
         <a href="./email_settings.php">

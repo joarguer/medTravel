@@ -77,6 +77,35 @@ function json_err($message, $status = 400) {
     exit;
 }
 
+function table_has_column($conexion, $table, $column) {
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $q = mysqli_query($conexion, "SHOW COLUMNS FROM {$tableEsc} LIKE '{$columnEsc}'");
+    $cache[$key] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$key];
+}
+
+function service_is_soft_deleted($conexion, $serviceId) {
+    if (!table_has_column($conexion, 'medtravel_services_catalog', 'is_deleted')) {
+        return false;
+    }
+    $stmt = mysqli_prepare($conexion, "SELECT id FROM medtravel_services_catalog WHERE id = ? AND is_deleted = 1 LIMIT 1");
+    if (!$stmt) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $serviceId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $isDeleted = ($res && mysqli_fetch_assoc($res)) ? true : false;
+    mysqli_stmt_close($stmt);
+    return $isDeleted;
+}
+
 function ensure_view_permission() {
     if (is_role_admin_session()) return;
     if (user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE)) return;
@@ -126,7 +155,14 @@ function assert_service_scope($conexion, $serviceId) {
     $scopeId = get_scope_service_provider_id();
     if ($scopeId <= 0) return;
 
-    $stmt = mysqli_prepare($conexion, "SELECT provider_id FROM medtravel_services_catalog WHERE id = ? LIMIT 1");
+    $hasSoftDelete = table_has_column($conexion, 'medtravel_services_catalog', 'is_deleted');
+    $sql = "SELECT provider_id FROM medtravel_services_catalog WHERE id = ?";
+    if ($hasSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) json_err('db_prepare_error');
     mysqli_stmt_bind_param($stmt, 'i', $serviceId);
     mysqli_stmt_execute($stmt);
@@ -135,6 +171,9 @@ function assert_service_scope($conexion, $serviceId) {
     mysqli_stmt_close($stmt);
 
     if (!$row) {
+        if ($hasSoftDelete && service_is_soft_deleted($conexion, $serviceId)) {
+            json_err('registro eliminado', 410);
+        }
         json_err('not_found', 404);
     }
     if (intval($row['provider_id']) !== $scopeId) {
@@ -189,6 +228,7 @@ function buildServiceData($post, $forcedProviderId = null) {
 
 function listServices($conexion) {
     $scopeId = get_scope_service_provider_id();
+    $hasSoftDelete = table_has_column($conexion, 'medtravel_services_catalog', 'is_deleted');
     $sql = "SELECT 
         s.id,
         s.service_type,
@@ -217,6 +257,9 @@ function listServices($conexion) {
         $sql .= " AND s.provider_id = ?";
         $types .= 'i';
         $params[] = $scopeId;
+    }
+    if ($hasSoftDelete) {
+        $sql .= " AND s.is_deleted = 0";
     }
     $sql .= " ORDER BY s.service_type ASC, s.display_order ASC, s.service_name ASC";
 
@@ -247,7 +290,13 @@ function getService($conexion) {
 
     assert_service_scope($conexion, $id);
 
-    $stmt = mysqli_prepare($conexion, "SELECT * FROM medtravel_services_catalog WHERE id = ? LIMIT 1");
+    $hasSoftDelete = table_has_column($conexion, 'medtravel_services_catalog', 'is_deleted');
+    $sql = "SELECT * FROM medtravel_services_catalog WHERE id = ?";
+    if ($hasSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) json_err('db_prepare_error');
     mysqli_stmt_bind_param($stmt, 'i', $id);
     if (!mysqli_stmt_execute($stmt)) {
@@ -259,7 +308,12 @@ function getService($conexion) {
     $service = mysqli_fetch_assoc($result);
     mysqli_stmt_close($stmt);
 
-    if(!$service) json_err('not_found', 404);
+    if(!$service) {
+        if ($hasSoftDelete && service_is_soft_deleted($conexion, $id)) {
+            json_err('registro eliminado', 410);
+        }
+        json_err('not_found', 404);
+    }
     json_ok(['data' => $service]);
 }
 
@@ -317,6 +371,7 @@ function updateService($conexion) {
     if ($id <= 0) json_err('invalid_id');
 
     assert_service_scope($conexion, $id);
+    $hasSoftDelete = table_has_column($conexion, 'medtravel_services_catalog', 'is_deleted');
 
     $forcedProviderId = resolve_target_provider_id($conexion, $_POST['provider_id'] ?? 0);
     $data = buildServiceData($_POST, $forcedProviderId);
@@ -332,6 +387,9 @@ function updateService($conexion) {
     }
 
     $sql = "UPDATE medtravel_services_catalog SET " . implode(', ', $sets) . " WHERE id = ?";
+    if ($hasSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
     $values[] = $id;
     $types .= 'i';
 
@@ -344,9 +402,19 @@ function updateService($conexion) {
         mysqli_stmt_close($stmt);
         json_err('db_error: ' . $err);
     }
+    $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
 
-    $getStmt = mysqli_prepare($conexion, "SELECT * FROM medtravel_services_catalog WHERE id = ? LIMIT 1");
+    if ($hasSoftDelete && $affected < 1 && service_is_soft_deleted($conexion, $id)) {
+        json_err('registro eliminado', 410);
+    }
+
+    $getSql = "SELECT * FROM medtravel_services_catalog WHERE id = ?";
+    if ($hasSoftDelete) {
+        $getSql .= " AND is_deleted = 0";
+    }
+    $getSql .= " LIMIT 1";
+    $getStmt = mysqli_prepare($conexion, $getSql);
     if (!$getStmt) json_err('db_prepare_error');
     mysqli_stmt_bind_param($getStmt, 'i', $id);
     mysqli_stmt_execute($getStmt);
@@ -366,17 +434,50 @@ function deleteService($conexion) {
 
     assert_service_scope($conexion, $id);
 
-    $stmt = mysqli_prepare($conexion, "DELETE FROM medtravel_services_catalog WHERE id = ?");
-    if (!$stmt) json_err('db_prepare_error');
-    mysqli_stmt_bind_param($stmt, 'i', $id);
+    $hasSoftDelete = table_has_column($conexion, 'medtravel_services_catalog', 'is_deleted');
+    $hasDeletedAt = table_has_column($conexion, 'medtravel_services_catalog', 'deleted_at');
+    $hasDeletedBy = table_has_column($conexion, 'medtravel_services_catalog', 'deleted_by');
+    $hasFullSoftDelete = ($hasSoftDelete && $hasDeletedAt && $hasDeletedBy);
+
+    if ($hasFullSoftDelete) {
+        $sessionUserId = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : 0;
+        $stmt = mysqli_prepare(
+            $conexion,
+            "UPDATE medtravel_services_catalog
+             SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?, is_active = 0
+             WHERE id = ? AND is_deleted = 0"
+        );
+        if (!$stmt) json_err('db_prepare_error');
+        mysqli_stmt_bind_param($stmt, 'ii', $sessionUserId, $id);
+    } else {
+        $legacySql = "UPDATE medtravel_services_catalog SET is_active = 0 WHERE id = ?";
+        if ($hasSoftDelete) {
+            $legacySql .= " AND is_deleted = 0";
+        }
+        $stmt = mysqli_prepare($conexion, $legacySql);
+        if (!$stmt) json_err('db_prepare_error');
+        mysqli_stmt_bind_param($stmt, 'i', $id);
+    }
+
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
         json_err('db_error: ' . $err);
     }
+    $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
 
-    json_ok(['message' => 'Service deleted successfully']);
+    if ($affected < 1) {
+        if (service_is_soft_deleted($conexion, $id)) {
+            json_err('registro eliminado', 410);
+        }
+        json_err('not_found', 404);
+    }
+
+    if ($hasFullSoftDelete) {
+        json_ok(['message' => 'Service deleted (soft) successfully']);
+    }
+    json_ok(['message' => 'Soft delete columns missing; service deactivated (legacy fallback)']);
 }
 
 function toggleStatus($conexion) {
@@ -384,24 +485,63 @@ function toggleStatus($conexion) {
     if ($id <= 0) json_err('invalid_id');
 
     assert_service_scope($conexion, $id);
+    $hasSoftDelete = table_has_column($conexion, 'medtravel_services_catalog', 'is_deleted');
 
-    $stmt = mysqli_prepare($conexion, "UPDATE medtravel_services_catalog SET is_active = IF(is_active = 1, 0, 1) WHERE id = ?");
-    if (!$stmt) json_err('db_prepare_error');
-    mysqli_stmt_bind_param($stmt, 'i', $id);
+    $valRaw = $_POST['val'] ?? null;
+    $hasExplicitValue = ($valRaw !== null && $valRaw !== '');
+    if ($hasExplicitValue) {
+        $val = intval($valRaw);
+        if (!in_array($val, [0, 1], true)) {
+            json_err('invalid_val', 422);
+        }
+        $sql = "UPDATE medtravel_services_catalog SET is_active = ? WHERE id = ?";
+        if ($hasSoftDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) json_err('db_prepare_error');
+        mysqli_stmt_bind_param($stmt, 'ii', $val, $id);
+    } else {
+        $sql = "UPDATE medtravel_services_catalog SET is_active = IF(is_active = 1, 0, 1) WHERE id = ?";
+        if ($hasSoftDelete) {
+            $sql .= " AND is_deleted = 0";
+        }
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) json_err('db_prepare_error');
+        mysqli_stmt_bind_param($stmt, 'i', $id);
+    }
+
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
         json_err('db_error: ' . $err);
     }
+    $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
 
-    $statusStmt = mysqli_prepare($conexion, "SELECT is_active FROM medtravel_services_catalog WHERE id = ? LIMIT 1");
+    if ($hasSoftDelete && $affected < 1 && service_is_soft_deleted($conexion, $id)) {
+        json_err('registro eliminado', 410);
+    }
+
+    $statusSql = "SELECT is_active FROM medtravel_services_catalog WHERE id = ?";
+    if ($hasSoftDelete) {
+        $statusSql .= " AND is_deleted = 0";
+    }
+    $statusSql .= " LIMIT 1";
+    $statusStmt = mysqli_prepare($conexion, $statusSql);
     if (!$statusStmt) json_err('db_prepare_error');
     mysqli_stmt_bind_param($statusStmt, 'i', $id);
     mysqli_stmt_execute($statusStmt);
     mysqli_stmt_bind_result($statusStmt, $isActive);
-    mysqli_stmt_fetch($statusStmt);
+    $found = mysqli_stmt_fetch($statusStmt);
     mysqli_stmt_close($statusStmt);
+
+    if (!$found) {
+        if ($hasSoftDelete && service_is_soft_deleted($conexion, $id)) {
+            json_err('registro eliminado', 410);
+        }
+        json_err('not_found', 404);
+    }
 
     json_ok([
         'message' => 'Status updated',

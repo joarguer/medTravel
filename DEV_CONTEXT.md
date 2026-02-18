@@ -339,3 +339,25 @@ Usuario
   - Resumen de módulos visibles según RBAC.
 - Además, el selector de rol muestra una ayuda dinámica en tiempo real (frontend) usando `window.ROLES_HELP`.
 - Este cambio no altera autenticación, endpoints ni estructura de menús; solo mejora la guía operativa en UI.
+
+### J) Soft delete + cleanup DEV (estado vigente)
+- Migración idempotente de soft delete centralizada en `sql/2026_02_18_soft_delete.sql` para:
+  - `usuarios`
+  - `providers`
+  - `service_providers`
+  - `medtravel_services_catalog`
+- Columnas estándar: `is_deleted`, `deleted_at`, `deleted_by` + índice por `is_deleted`.
+- Módulo admin de limpieza: `admin/cleanup.php`.
+  - Visible solo para admin global (sesión validada con `is_role_admin_session()`).
+  - Menú: item `Limpieza (DEV)` dentro de Administración (`admin/include/include.php`).
+- Endpoints de cleanup:
+  - `admin/ajax/cleanup_users.php`
+  - `admin/ajax/cleanup_companies.php`
+- Operaciones disponibles:
+  - Soft delete (desactiva `activo/is_active` y marca `is_deleted=1`).
+  - Restore (reactiva `activo/is_active=1` y limpia `is_deleted/deleted_at/deleted_by`).
+- Entidades con restore operativo:
+  - Usuarios (`usuarios`)
+  - Providers médicos (`providers`)
+  - Service providers (`service_providers`)
+  - MedTravel services (`medtravel_services_catalog`)
