@@ -39,7 +39,7 @@ if (!function_exists('renderMedTravelEmail')) {
       <td align="center">
         <table role="presentation" width="600" border="0" cellspacing="0" cellpadding="0" style="width:100%; max-width:600px; background:#ffffff; border:1px solid #d9e4f1;">
           <tr>
-            <td style="padding:24px 32px 16px 32px; background:#0b4ea2; text-align:left;">
+            <td style="padding:24px 32px 16px 32px; background:#0B1F3A; text-align:left;">
               ' . ($hasLogo
                 ? '<img src="' . htmlspecialchars($logoAbsoluteUrl, ENT_QUOTES, 'UTF-8') . '" alt="MedTravel" width="160" style="display:block; border:0; outline:none; text-decoration:none; width:160px; max-width:100%; height:auto;">'
                 : '<div style="font-family:Arial,Helvetica,sans-serif; color:#ffffff; font-size:28px; font-weight:700;">MedTravel</div>') . '

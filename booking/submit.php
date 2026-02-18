@@ -604,10 +604,11 @@ function build_submission_summary_payload($bookingRequestId, $booking, $timeline
     ];
 }
 
-function build_booking_confirmation_content_html($summaryPayload, $setPasswordLink, $loginLink)
+function build_booking_confirmation_content_html($summaryPayload, $passwordResetUrl, $loginLink)
 {
     $bookingId = (int)($summaryPayload['booking_id'] ?? 0);
     $patientName = trim((string)($summaryPayload['patient_name'] ?? ''));
+    $patientEmail = trim((string)($summaryPayload['patient_email'] ?? ''));
     if ($patientName === '') {
         $patientName = 'Patient';
     }
@@ -634,11 +635,26 @@ function build_booking_confirmation_content_html($summaryPayload, $setPasswordLi
         $itemRowsHtml = '<tr><td colspan="4" style="padding:10px; border:1px solid #dbe4f0; font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#64748b;">No services were itemized yet. A coordinator will complete details with you.</td></tr>';
     }
 
-    $setPasswordBlock = '';
-    if ($setPasswordLink !== '') {
-        $setPasswordBlock = '<p style="margin:0 0 14px 0;">To access your patient portal, create your password using the button below or this secure link:<br>'
-            . '<a href="' . escape_html_local($setPasswordLink) . '" style="color:#0b4ea2; text-decoration:none;">' . escape_html_local($setPasswordLink) . '</a></p>';
+    $portalAccessBlock = ''
+        . '<h3 style="margin:0 0 10px 0; font-family:Arial,Helvetica,sans-serif; font-size:18px; color:#13357b;">Access your MedTravel Patient Portal</h3>'
+        . '<p style="margin:0 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">We have created a secure patient account for you.</p>'
+        . '<p style="margin:0 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;"><strong>Username:</strong> ' . escape_html_local($patientEmail !== '' ? $patientEmail : 'Not available') . '</p>'
+        . '<p style="margin:0 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">To activate your access, please create your password using the secure link below.</p>';
+
+    if ($passwordResetUrl !== '') {
+        $portalAccessBlock .= '<p style="margin:0 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;"><strong>Create your password:</strong> <a href="' . escape_html_local($passwordResetUrl) . '" style="color:#0b4ea2; text-decoration:none;">' . escape_html_local($passwordResetUrl) . '</a></p>'
+            . '<p style="margin:0 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">If the button does not work, copy and paste this link:<br><a href="' . escape_html_local($passwordResetUrl) . '" style="color:#0b4ea2; text-decoration:none;">' . escape_html_local($passwordResetUrl) . '</a></p>';
     }
+
+    $portalAccessBlock .= ''
+        . '<p style="margin:0 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">For security reasons, this link expires in 24 hours. If it expires, you can request a new one on the same page.</p>'
+        . '<p style="margin:0 0 10px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">In your portal you can:</p>'
+        . '<ul style="margin:0 0 16px 18px; padding:0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">'
+        . '<li style="margin:0 0 6px 0;">Track the status of each requested service</li>'
+        . '<li style="margin:0 0 6px 0;">See provider confirmations or proposed changes</li>'
+        . '<li style="margin:0 0 6px 0;">Review updates from MedTravel</li>'
+        . '<li style="margin:0;">Follow your case progress in real time</li>'
+        . '</ul>';
 
     $content = ''
         . '<p style="margin:0 0 14px 0;">Hello ' . escape_html_local($patientName) . ',</p>'
@@ -646,7 +662,7 @@ function build_booking_confirmation_content_html($summaryPayload, $setPasswordLi
         . '<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse; margin:0 0 16px 0;">'
         . '<tr><td style="padding:6px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;"><strong>Booking ID:</strong> #' . $bookingId . '</td></tr>'
         . '<tr><td style="padding:6px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;"><strong>Patient:</strong> ' . escape_html_local($patientName) . '</td></tr>'
-        . '<tr><td style="padding:6px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;"><strong>Email:</strong> ' . escape_html_local($summaryPayload['patient_email'] ?? '') . '</td></tr>'
+        . '<tr><td style="padding:6px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;"><strong>Email:</strong> ' . escape_html_local($patientEmail) . '</td></tr>'
         . '<tr><td style="padding:6px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;"><strong>Destination:</strong> ' . escape_html_local($destination !== '' ? $destination : 'Not specified') . '</td></tr>'
         . '<tr><td style="padding:6px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;"><strong>Timeline:</strong> ' . escape_html_local($timeline !== '' ? $timeline : 'To be defined') . '</td></tr>'
         . '</table>'
@@ -661,14 +677,14 @@ function build_booking_confirmation_content_html($summaryPayload, $setPasswordLi
         . $itemRowsHtml
         . '</table>'
         . '<p style="margin:0 0 16px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#0f172a;"><strong>Total estimated:</strong> ' . escape_html_local($totalDisplay) . '</p>'
+        . $portalAccessBlock
         . '<h3 style="margin:0 0 10px 0; font-family:Arial,Helvetica,sans-serif; font-size:18px; color:#13357b;">Next steps</h3>'
         . '<table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin:0 0 16px 0;">'
         . '<tr><td style="padding:4px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">1. MedTravel reviews your request.</td></tr>'
         . '<tr><td style="padding:4px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">2. We coordinate providers.</td></tr>'
         . '<tr><td style="padding:4px 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">3. You will receive confirmation updates.</td></tr>'
         . '</table>'
-        . $setPasswordBlock
-        . '<p style="margin:0;">Login: <a href="' . escape_html_local($loginLink) . '" style="color:#0b4ea2; text-decoration:none;">' . escape_html_local($loginLink) . '</a></p>';
+        . '<p style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;">After creating your password, you can sign in here: <a href="' . escape_html_local($loginLink) . '" style="color:#0b4ea2; text-decoration:none;">' . escape_html_local($loginLink) . '</a></p>';
 
     return $content;
 }
@@ -683,22 +699,22 @@ function send_booking_confirmation_email($conexion, $email, $summaryPayload, $re
     $bookingId = (int)($summaryPayload['booking_id'] ?? 0);
     $subject = "MedTravel – Request received (ID #{$bookingId})";
 
-    $setPasswordLink = $resetToken !== ''
+    $passwordResetUrl = $resetToken !== ''
         ? 'https://medtravel.com.co/set_password.php?token=' . urlencode($resetToken)
         : '';
     $loginLink = 'https://medtravel.com.co/login.php';
 
     $body = '';
     if (function_exists('renderMedTravelEmail')) {
-        $contentHtml = build_booking_confirmation_content_html($summaryPayload, $setPasswordLink, $loginLink);
+        $contentHtml = build_booking_confirmation_content_html($summaryPayload, $passwordResetUrl, $loginLink);
         $body = renderMedTravelEmail(
             'Request received',
             'We received your request and opened your MedTravel case.',
             $contentHtml,
             'This is an automated message.',
-            ($setPasswordLink !== '' ? [
+            ($passwordResetUrl !== '' ? [
                 'text' => 'Create your password',
-                'url' => $setPasswordLink,
+                'url' => $passwordResetUrl,
             ] : null)
         );
     }
@@ -712,8 +728,9 @@ function send_booking_confirmation_email($conexion, $email, $summaryPayload, $re
             . '<strong>Email:</strong> ' . htmlspecialchars((string)($summaryPayload['patient_email'] ?? ''), ENT_QUOTES, 'UTF-8') . '</p>'
             . '<p><strong>Total estimated:</strong> ' . htmlspecialchars((string)($summaryPayload['total_display'] ?? 'Price on request'), ENT_QUOTES, 'UTF-8') . '</p>'
             . '<p><strong>Login:</strong> <a href="' . htmlspecialchars($loginLink, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($loginLink, ENT_QUOTES, 'UTF-8') . '</a></p>';
-        if ($setPasswordLink !== '') {
-            $body .= '<p><strong>Create your password:</strong> <a href="' . htmlspecialchars($setPasswordLink, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($setPasswordLink, ENT_QUOTES, 'UTF-8') . '</a></p>';
+        if ($passwordResetUrl !== '') {
+            $body .= '<p><strong>Create your password:</strong> <a href="' . htmlspecialchars($passwordResetUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($passwordResetUrl, ENT_QUOTES, 'UTF-8') . '</a></p>'
+                . '<p>If the button does not work, copy and paste this link:<br><a href="' . htmlspecialchars($passwordResetUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($passwordResetUrl, ENT_QUOTES, 'UTF-8') . '</a></p>';
         }
     }
 

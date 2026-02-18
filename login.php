@@ -89,8 +89,7 @@
                 </div>
                 <div class="forget-password">
                     <h4>Forgot your password ?</h4>
-                    <p> no worries, click
-                        <a href="javascript:;" id="forget-password"> here </a> to reset your password. </p>
+                    <p>Forgot your password? <a href="https://medtravel.com.co/set_password.php">Click here to request a secure access link.</a></p>
                 </div>
                 <div class="create-account">
                     <p> Don't have an account yet ?&nbsp;
@@ -100,17 +99,17 @@
             </form>
             <!-- END LOGIN FORM -->
             <!-- BEGIN FORGOT PASSWORD FORM -->
-            <form class="forget-form" action="index.html" method="post">
+            <form class="forget-form" action="https://medtravel.com.co/set_password.php" method="get">
                 <h3>Forget Password ?</h3>
                 <p> Enter your e-mail address below to reset your password. </p>
                 <div class="form-group">
                     <div class="input-icon">
                         <i class="fa fa-envelope"></i>
-                        <input class="form-control placeholder-no-fix" type="text" autocomplete="off" placeholder="Email" name="email" /> </div>
+                        <input class="form-control placeholder-no-fix" type="text" autocomplete="off" placeholder="Email" name="email" disabled /> </div>
                 </div>
                 <div class="form-actions">
                     <button type="button" id="back-btn" class="btn grey-salsa btn-outline"> Back </button>
-                    <button type="submit" class="btn green pull-right"> Submit </button>
+                    <a href="https://medtravel.com.co/set_password.php" class="btn green pull-right"> Go to secure access </a>
                 </div>
             </form>
             <!-- END FORGOT PASSWORD FORM -->
