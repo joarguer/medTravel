@@ -1024,3 +1024,58 @@ Google Calendar actualizado → Webhook notifica → BD actualizada
 **Fecha:** 17 de febrero de 2026  
 **Documento creado por:** GitHub Copilot AI Assistant  
 **Revisado por:** Equipo MedTravel
+
+---
+
+## 2026-02 – Booking Multiproveedor (Provider-First Model)
+
+### 1. Modelo operativo actualizado
+- MedTravel NO controla disponibilidad.
+- Cada item en `booking_request_items` inicia en: `item_status = pending_provider`.
+- El proveedor responde con estados:
+  - `provider_confirmed`
+  - `provider_rejected`
+  - `provider_proposed_change`
+- El cliente verá estado tipo semáforo por servicio.
+- Admin puede forzar cancelación.
+
+### 2. Fuente de verdad
+- Tabla fuente de verdad: `booking_request_items`.
+- Estados canónicos definidos a nivel item.
+- Flujo por item independiente del estado global del booking.
+
+### 3. Seguridad y privacidad
+- El proveedor NO ve:
+  - email
+  - teléfono
+  - nombre completo
+- El proveedor solo ve:
+  - destino
+  - fechas
+  - notas necesarias
+  - servicio solicitado
+
+### 4. Email profesional unificado
+- Helper unificado: `renderMedTravelEmail()`.
+- Template único reusable para notificaciones.
+- Booking confirmation usa plantilla profesional.
+- No se envían contraseñas en texto plano.
+- Acceso por token seguro (24h).
+
+### 5. Expiración y reenvío de acceso
+- `set_password.php` maneja token válido.
+- `set_password.php` maneja token expirado o inválido.
+- Reenvío seguro con respuesta genérica (anti-enumeración).
+
+### 6. Sesión 24 horas
+- Cookie de sesión configurada en `86400` segundos.
+- `session_regenerate_id(true)` en login exitoso.
+- Expiración real server-side con control de actividad.
+
+### 7. Estado actual
+- Booking multiproveedor funcional.
+- Provider-first aprobado e implementado.
+- Email profesional implementado.
+- Portal cliente seguro operativo.
+
+**Fecha de actualización de esta sección:** 18 de febrero de 2026.

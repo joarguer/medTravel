@@ -484,3 +484,57 @@ Evidencia:
 - Booking guarda complementarios en modelo relacional consultable (con compatibilidad controlada de legado).
 - Pruebas funcionales y de seguridad ejecutadas y aprobadas.
 - Documentación operativa y de despliegue actualizada en repo.
+
+---
+
+## 2026-02 – Booking Multiproveedor (Provider-First Model)
+
+### 1. Modelo operativo actualizado
+- MedTravel NO controla disponibilidad.
+- Cada item en `booking_request_items` inicia en: `item_status = pending_provider`.
+- Proveedor responde con:
+  - `provider_confirmed`
+  - `provider_rejected`
+  - `provider_proposed_change`
+- Cliente verá estado tipo semáforo por servicio.
+- Admin puede forzar cancelación.
+
+### 2. Fuente de verdad
+- Tabla: `booking_request_items`.
+- Estados canónicos definidos.
+- Flujo por item independiente.
+
+### 3. Seguridad y privacidad
+- Proveedor NO ve email, teléfono ni nombre completo del paciente.
+- Proveedor solo ve destino, fechas, notas necesarias y servicio solicitado.
+
+### 4. Email profesional unificado
+- Nuevo helper: `renderMedTravelEmail()`.
+- Template único reusable.
+- Booking confirmation migrado a plantilla profesional.
+- Sin contraseñas en texto plano.
+- Acceso por token seguro de 24h.
+
+### 5. Expiración y reenvío de acceso
+- `set_password.php` gestiona token válido e inválido/expirado.
+- Reenvío seguro con respuesta genérica para anti-enumeración.
+
+### 6. Sesión 24 horas
+- Cookie en 86400 segundos.
+- Regeneración de sesión en login.
+- Expiración server-side.
+
+### 7. Estado actual
+- Booking multiproveedor funcional.
+- Provider-first aprobado.
+- Email profesional implementado.
+- Portal cliente seguro operativo.
+
+### Próximos pasos
+- [ ] Semáforo visual en portal cliente por item.
+- [ ] Notificación automática al cliente cuando proveedor responda.
+- [ ] Panel cliente para ver estado por servicio.
+- [ ] Historial de eventos por booking.
+- [ ] Notificación admin cuando proveedor responda.
+
+**Fecha de actualización de esta sección:** 18 de febrero de 2026.

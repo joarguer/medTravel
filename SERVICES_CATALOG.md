@@ -358,3 +358,48 @@ Además del catálogo complementario transaccional, existe un bloque editorial d
 - `offers.php:41-64`, `services.php:17-23`, `booking/wizard.php:345-352`
 - `sql/service_catalog.sql:2-14`, `sql/INSTALL.sql:99-107`, `sql/bolsacar_medtravel.sql:276-285`
 - `sql/services_coordination_table.sql:2-11` y `index.php:110-183`
+
+---
+
+## 2026-02 – Booking Multiproveedor (Provider-First Model)
+
+### 1. Modelo operativo actualizado
+- MedTravel NO controla disponibilidad.
+- Cada item en `booking_request_items` inicia en `pending_provider`.
+- Proveedor responde con:
+  - `provider_confirmed`
+  - `provider_rejected`
+  - `provider_proposed_change`
+- Cliente verá estado tipo semáforo por servicio.
+- Admin puede forzar cancelación.
+
+### 2. Fuente de verdad
+- Tabla fuente de verdad: `booking_request_items`.
+- Estados canónicos por item.
+- Flujo de negocio por item independiente del booking global.
+
+### 3. Seguridad y privacidad
+- En panel proveedor no se expone email/teléfono/nombre completo del paciente.
+- Se expone solo contexto operativo mínimo por item: destino, fechas, notas relevantes y servicio.
+
+### 4. Email profesional unificado
+- Envíos de booking usan `renderMedTravelEmail()`.
+- Template reusable único para confirmaciones.
+- Acceso de cliente por token seguro; sin password en texto plano.
+
+### 5. Expiración y reenvío de acceso
+- `set_password.php` maneja token válido/expirado/inválido.
+- Reenvío seguro con respuesta genérica anti-enumeración.
+
+### 6. Sesión 24 horas
+- Cookie de sesión a 86400 segundos.
+- Regeneración de sesión en login.
+- Expiración real server-side.
+
+### 7. Estado actual
+- Booking multiproveedor funcional.
+- Provider-first operativo.
+- Email profesional implementado.
+- Portal cliente seguro operativo.
+
+**Fecha de actualización de esta sección:** 18 de febrero de 2026.

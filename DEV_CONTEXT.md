@@ -386,3 +386,51 @@ Reglas operativas actualizadas (documentadas):
 
 Nota de alcance:
 - Esta actualización es documental; no implica que todas las estructuras nuevas ya existan en base de datos/runtime.
+
+---
+
+## 2026-02 – Booking Multiproveedor (Provider-First Model)
+
+### 1. Modelo operativo actualizado
+- MedTravel NO controla disponibilidad.
+- Cada item en `booking_request_items` inicia en `pending_provider`.
+- Proveedor responde con `provider_confirmed`, `provider_rejected` o `provider_proposed_change`.
+- Cliente consumirá estado tipo semáforo por servicio.
+- Admin conserva capacidad de cancelación forzada.
+
+### 2. Fuente de verdad
+- Fuente canónica: `booking_request_items`.
+- Flujo por item independiente del `booking_requests.status` global.
+
+### 3. Seguridad y privacidad
+- Scope de proveedor limitado a sus items.
+- Se evita exposición de email/teléfono/nombre completo del paciente en vistas de proveedor.
+
+### 4. Email profesional unificado
+- Helper activo: `renderMedTravelEmail()`.
+- Confirmación de booking usa template profesional unificado.
+- Acceso cliente por token seguro; no se envía contraseña en texto plano.
+
+### 5. Expiración y reenvío de acceso
+- `set_password.php` cubre token válido, inválido y expirado.
+- Reenvío con mensaje genérico anti-enumeración.
+
+### 6. Sesión 24 horas
+- Cookie de sesión a 24h.
+- Regeneración de ID al autenticar.
+- Expiración real server-side.
+
+### 7. Estado actual
+- Booking multiproveedor funcional.
+- Provider-first operativo.
+- Email profesional operativo.
+- Portal cliente seguro operativo.
+
+## Estado técnico actual (2026-02)
+- `booking_request_items` es la fuente de verdad de items.
+- Eliminado flujo `pending_admin` para operación provider-first.
+- Migración SQL de estados ejecutable: `2026_02_18_item_status_provider_first.sql`.
+- Migración de seguridad cliente ejecutable: `2026_02_18_booking_client_security.sql`.
+- Migración de throttling de reenvío ejecutable: `2026_02_18_password_reset_sent_at.sql`.
+
+**Fecha de actualización de esta sección:** 18 de febrero de 2026.
