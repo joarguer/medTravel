@@ -98,9 +98,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
     <form method="POST" action="/booking/step-1.php" class="book-tour-form">
         <input type="hidden" name="origin" value="<?php echo htmlspecialchars($origin, ENT_QUOTES); ?>">
         <input type="hidden" name="selected_services" id="selected-services-input" value="">
-        <?php if ($preselected_offer_id): ?>
-            <input type="hidden" name="preselected_offer" value="<?php echo intval($preselected_offer_id); ?>">
-        <?php endif; ?>
+        <input type="hidden" name="preselected_offer" value="<?php echo $preselected_offer_id ? intval($preselected_offer_id) : ''; ?>">
         
         <div class="row g-3">
             <div class="col-md-6">
@@ -173,57 +171,171 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
         </div>
     </form>
     <script>
-        // Auto-rellenar el campo preselected_offer si existe en sessionStorage
         (function() {
-            var offerId = sessionStorage.getItem('preselected_offer_id');
-            if (offerId) {
-                var input = document.querySelector('input[name="preselected_offer"]');
-                if (input) {
-                    input.value = offerId;
-                }
-                // Limpiar sessionStorage después de usarlo
-                sessionStorage.removeItem('preselected_offer_id');
-                
-                // Opcional: Mostrar notificación al usuario
-                var form = document.querySelector('.book-tour-form');
-                if (form) {
-                    var notice = document.createElement('div');
-                    notice.className = 'alert alert-info alert-dismissible fade show';
-                    notice.style.cssText = 'margin-bottom: 15px; background: #e0f2fe; border: 1px solid #0369a1; color: #0c4a6e;';
-                    notice.innerHTML = '<i class="fas fa-info-circle me-2"></i>Selected offer will be included in your booking request. <button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-                    form.insertBefore(notice, form.firstChild);
-                }
+            var KEY_STARTED = 'mt_booking_started';
+            var KEY_DRAFT = 'mt_booking_draft';
+            var KEY_STEP1_SUBMITTED = 'mt_booking_step1_submitted';
+            var KEY_SELECTED_SERVICES = 'mt_selected_services';
+            var KEY_PRESELECTED_OFFER = 'mt_preselected_offer_id';
+            var RETRY_DELAYS = [0, 250, 1000];
+            var DEBUG = !!window.MT_DEBUG;
+
+            function logDebug() {
+                if (!DEBUG || !window.console || !console.log) return;
+                var args = Array.prototype.slice.call(arguments);
+                args.unshift('[MT booking hydration]');
+                console.log.apply(console, args);
             }
-        })();
-        // Inyectar servicios complementarios seleccionados desde localStorage
-        (function() {
-            var STORAGE_KEY = 'mt_selected_services';
-            var input = document.getElementById('selected-services-input');
-            if (!input) return;
 
-            var raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return;
-
-            var parsed;
-            try {
-                parsed = JSON.parse(raw);
-            } catch (e) {
-                parsed = [];
+            function parseJson(raw) {
+                if (!raw) return null;
+                try { return JSON.parse(raw); } catch (e) { return null; }
             }
-            if (!Array.isArray(parsed) || !parsed.length) return;
 
-            input.value = JSON.stringify(parsed);
+            function isDateCompatible(value) {
+                return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+            }
 
-            var message = document.getElementById('book-message');
-            if (message && (!message.value || message.value.trim() === '')) {
-                var summary = parsed.slice(0, 5).map(function(item) {
+            function emitFieldEvents(field) {
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            function setFieldIfEmpty(form, name, value) {
+                if (value === null || value === undefined) return;
+                var field = form.querySelector('[name="' + name + '"]');
+                if (!field) return;
+
+                var current = String(field.value || '').trim();
+                if (current !== '') return;
+
+                var normalized = String(value);
+                if (normalized.trim() === '') return;
+                if (field.type === 'date' && !isDateCompatible(normalized)) return;
+
+                field.value = normalized;
+                emitFieldEvents(field);
+            }
+
+            function writeComplementarySummary(form, items) {
+                if (!Array.isArray(items) || !items.length) return;
+                var message = form.querySelector('[name="special_request"]');
+                if (!message || String(message.value || '').trim() !== '') return;
+
+                var summary = items.slice(0, 5).map(function(item) {
                     var price = item.price ? ' - ' + item.price + ' ' + (item.currency || '') : '';
                     return '- ' + (item.type || 'Servicio') + ': ' + (item.name || '') + ' (' + (item.provider || 'Proveedor') + ')' + price;
                 }).join('\n');
-                if (parsed.length > 5) {
-                    summary += '\n- + ' + (parsed.length - 5) + ' servicios adicionales';
+                if (items.length > 5) {
+                    summary += '\n- + ' + (items.length - 5) + ' servicios adicionales';
                 }
                 message.value = 'Servicios complementarios seleccionados:\n' + summary;
+                emitFieldEvents(message);
+            }
+
+            function bindSubmitPersistence(form) {
+                if (!form || form.dataset.mtSubmitBound === '1') return;
+                form.dataset.mtSubmitBound = '1';
+
+                form.addEventListener('submit', function() {
+                    try {
+                        function getFieldValue(name) {
+                            var field = form.querySelector('[name="' + name + '"]');
+                            return field ? (field.value || '') : '';
+                        }
+                        var payload = {
+                            name: getFieldValue('name'),
+                            email: getFieldValue('email'),
+                            phone: getFieldValue('phone'),
+                            origin: getFieldValue('origin'),
+                            destination: getFieldValue('destination'),
+                            category: getFieldValue('category'),
+                            special_request: getFieldValue('special_request'),
+                            timeline_from: getFieldValue('timeline_from'),
+                            timeline_to: getFieldValue('timeline_to'),
+                            persons: getFieldValue('persons'),
+                            budget: getFieldValue('budget'),
+                            additional_notes: getFieldValue('additional_notes'),
+                            preselected_offer: getFieldValue('preselected_offer'),
+                            updated_at: new Date().toISOString()
+                        };
+                        localStorage.setItem(KEY_STARTED, '1');
+                        localStorage.setItem(KEY_STEP1_SUBMITTED, '1');
+                        localStorage.setItem(KEY_DRAFT, JSON.stringify(payload));
+                        window.dispatchEvent(new Event('mt-booking-state-changed'));
+                    } catch (e) {
+                        logDebug('submit persistence error', e);
+                    }
+                });
+            }
+
+            function hydrateBookingForm(attemptIndex) {
+                var tryIndex = typeof attemptIndex === 'number' ? attemptIndex : 0;
+                var form = document.querySelector('.book-tour-form');
+                if (!form) {
+                    if (tryIndex < RETRY_DELAYS.length - 1) {
+                        var next = tryIndex + 1;
+                        setTimeout(function() { hydrateBookingForm(next); }, RETRY_DELAYS[next]);
+                    }
+                    return;
+                }
+
+                var draft = parseJson(localStorage.getItem(KEY_DRAFT)) || {};
+                var hasProgressData = false;
+                var supportedKeys = [
+                    'name', 'email', 'phone', 'origin', 'destination', 'category',
+                    'special_request', 'timeline_from', 'timeline_to', 'persons',
+                    'budget', 'additional_notes', 'preselected_offer'
+                ];
+                supportedKeys.forEach(function(key) {
+                    if (Object.prototype.hasOwnProperty.call(draft, key)) {
+                        hasProgressData = true;
+                        setFieldIfEmpty(form, key, draft[key]);
+                    }
+                });
+                if ((draft.additional_notes || '').toString().trim() !== '') {
+                    hasProgressData = true;
+                    setFieldIfEmpty(form, 'special_request', draft.additional_notes);
+                }
+
+                var persistedOffer = localStorage.getItem(KEY_PRESELECTED_OFFER) || sessionStorage.getItem('preselected_offer_id');
+                if (persistedOffer) {
+                    hasProgressData = true;
+                    setFieldIfEmpty(form, 'preselected_offer', persistedOffer);
+                    try {
+                        localStorage.setItem(KEY_PRESELECTED_OFFER, String(persistedOffer));
+                    } catch (e) {}
+                }
+
+                var selectedServicesRaw = localStorage.getItem(KEY_SELECTED_SERVICES);
+                if (selectedServicesRaw) {
+                    hasProgressData = true;
+                    setFieldIfEmpty(form, 'selected_services', selectedServicesRaw);
+                    var parsedServices = parseJson(selectedServicesRaw);
+                    writeComplementarySummary(form, parsedServices);
+                }
+
+                if (hasProgressData) {
+                    try {
+                        localStorage.setItem(KEY_STARTED, '1');
+                        window.dispatchEvent(new Event('mt-booking-state-changed'));
+                    } catch (e) {}
+                }
+
+                bindSubmitPersistence(form);
+                logDebug('hydrated form', form);
+            }
+
+            window.hydrateBookingForm = hydrateBookingForm;
+
+            if (!window.__mtBookingHydrationBootstrapped) {
+                window.__mtBookingHydrationBootstrapped = true;
+                document.addEventListener('DOMContentLoaded', function() {
+                    hydrateBookingForm(0);
+                });
+                setTimeout(function() {
+                    hydrateBookingForm(0);
+                }, 250);
             }
         })();
     </script>

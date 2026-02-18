@@ -1,8 +1,7 @@
 <?php
 // Central roles helpers and constants
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+require_once __DIR__ . '/session_security.php';
+medtravel_session_start();
 
 // Role constants
 define('ROLE_ADMIN', 1);
@@ -140,6 +139,7 @@ function get_role_fallback_permissions($role_id) {
                 'offers.manage',
                 'providers.medical.view',
                 'providers.medical.edit',
+                PERM_BOOKING_VIEW,
                 'users.view',
             ];
         case ROLE_ACCOUNTING:

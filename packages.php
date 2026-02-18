@@ -416,6 +416,8 @@ render_booking_form('packages_page');
         </div>
         <!-- Copyright End -->
 
+        <?php include __DIR__ . '/inc/wizard_package_summary.php'; ?>
+
         <!-- Back to Top -->
         <a href="#" class="btn btn-primary btn-primary-outline-0 btn-md-square back-to-top"><i class="fa fa-arrow-up"></i></a>   
 
@@ -427,6 +429,7 @@ render_booking_form('packages_page');
         <script src="lib/waypoints/waypoints.min.js"></script>
         <script src="lib/owlcarousel/owl.carousel.min.js"></script>
         <script src="lib/lightbox/js/lightbox.min.js"></script>
+        <script src="/js/booking_summary.js"></script>
         
 
         <!-- Template Javascript -->

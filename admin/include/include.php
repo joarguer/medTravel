@@ -1,7 +1,6 @@
 <?php  
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+require_once __DIR__ . '/session_security.php';
+medtravel_session_start();
 include("valida_session.php");
 include_once("conexion.php");
 $nombre_usuario = isset($_SESSION["nombre_usuario"]) ? $_SESSION["nombre_usuario"] : '';
@@ -29,41 +28,204 @@ $booking_notifications = [];
 $booking_badge = '0';
 $booking_summary_text = 'No pending bookings';
 $booking_list_html = '';
+$booking_notifications_href = 'booking_requests.php';
+if (!$es_admin && (!empty($_SESSION['provider_id']) || !empty($_SESSION['service_provider_id']))) {
+    $booking_notifications_href = 'my_booking_requests.php';
+}
 $deletion_count = 0;
 $deletion_list_html = '';
 if (isset($conexion)) {
-    $notif_sql = "SELECT id, name, destination, created_at FROM booking_requests WHERE status = 'pending' ORDER BY id DESC LIMIT 5";
-    $notif_res = mysqli_query($conexion, $notif_sql);
-    if ($notif_res) {
-        while ($row = mysqli_fetch_assoc($notif_res)) {
-            $booking_notifications[] = $row;
-        }
-        $booking_pending_count = mysqli_num_rows($notif_res);
-        $booking_badge = (string) $booking_pending_count;
-        $booking_summary_text = $booking_pending_count > 0
-            ? '<span class="bold">' . $booking_pending_count . '</span> pending bookings'
-            : 'No pending bookings';
+    $provider_id = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
+    $service_provider_id = isset($_SESSION['service_provider_id']) ? intval($_SESSION['service_provider_id']) : 0;
+    $is_provider_scope = (!$es_admin && ($provider_id > 0 || $service_provider_id > 0) && user_can(PERM_BOOKING_VIEW));
 
-        if ($booking_pending_count > 0) {
-            foreach ($booking_notifications as $notif) {
-                $id = (int) $notif['id'];
-                $name = htmlspecialchars($notif['name'] ?? 'Client', ENT_QUOTES, 'UTF-8');
-                $dest = htmlspecialchars($notif['destination'] ?? 'N/A', ENT_QUOTES, 'UTF-8');
-                $created = htmlspecialchars($notif['created_at'] ?? '', ENT_QUOTES, 'UTF-8');
-                $booking_list_html .= '<li>'
-                    . '<a href="booking_requests.php">'
-                    . '<span class="details">'
-                    . '<span class="label label-sm label-icon label-success md-skip">'
-                    . '<i class="fa fa-calendar"></i>'
-                    . '</span> New booking from ' . $name . ' (' . $dest . ')</span>';
-                if ($created !== '') {
-                    $booking_list_html .= '<span class="time">' . $created . '</span>';
-                }
-                $booking_list_html .= '</a></li>';
-            }
-        } else {
-            $booking_list_html = '<li><a href="booking_requests.php"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No pending bookings</span></a></li>';
+    $booking_has_soft_delete = false;
+    $booking_soft_delete_check = mysqli_query($conexion, "SHOW COLUMNS FROM booking_requests LIKE 'is_deleted'");
+    if ($booking_soft_delete_check && mysqli_num_rows($booking_soft_delete_check) > 0) {
+        $booking_has_soft_delete = true;
+    }
+
+    if ($is_provider_scope) {
+        $items_table_exists = false;
+        $items_table_check = mysqli_query($conexion, "SHOW TABLES LIKE 'booking_request_items'");
+        if ($items_table_check && mysqli_num_rows($items_table_check) > 0) {
+            $items_table_exists = true;
         }
+
+        if ($items_table_exists) {
+            $items_has_soft_delete = false;
+            $items_soft_delete_check = mysqli_query($conexion, "SHOW COLUMNS FROM booking_request_items LIKE 'is_deleted'");
+            if ($items_soft_delete_check && mysqli_num_rows($items_soft_delete_check) > 0) {
+                $items_has_soft_delete = true;
+            }
+
+            $items_has_status = false;
+            $items_status_check = mysqli_query($conexion, "SHOW COLUMNS FROM booking_request_items LIKE 'item_status'");
+            if ($items_status_check && mysqli_num_rows($items_status_check) > 0) {
+                $items_has_status = true;
+            }
+            $item_status_expr = $items_has_status
+                ? "CASE WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin','pending_review') THEN 'pending_provider' ELSE bri.item_status END"
+                : "'pending_provider'";
+
+            // Misma lógica de scope/filtros que admin/ajax/my_booking_requests.php (list).
+            $scope_where = '';
+            $scope_types = '';
+            $scope_values = [];
+            if ($provider_id > 0 && $service_provider_id > 0) {
+                $scope_where = ' AND (bri.provider_id = ? OR bri.service_provider_id = ?)';
+                $scope_types = 'ii';
+                $scope_values = [$provider_id, $service_provider_id];
+            } elseif ($provider_id > 0) {
+                $scope_where = ' AND bri.provider_id = ?';
+                $scope_types = 'i';
+                $scope_values = [$provider_id];
+            } elseif ($service_provider_id > 0) {
+                $scope_where = ' AND bri.service_provider_id = ?';
+                $scope_types = 'i';
+                $scope_values = [$service_provider_id];
+            }
+
+            $count_sql = "SELECT COUNT(*) AS total
+                          FROM booking_request_items bri
+                          INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                          WHERE 1=1";
+            if ($items_has_soft_delete) {
+                $count_sql .= " AND bri.is_deleted = 0";
+            }
+            if ($booking_has_soft_delete) {
+                $count_sql .= " AND br.is_deleted = 0";
+            }
+            $count_sql .= $scope_where;
+
+            $stmt_count = mysqli_prepare($conexion, $count_sql);
+            if ($stmt_count) {
+                if ($scope_types !== '') {
+                    $bind_types = $scope_types;
+                    $bind_values = $scope_values;
+                    $bind_params = [];
+                    $bind_params[] = $stmt_count;
+                    $bind_params[] = &$bind_types;
+                    foreach ($bind_values as $k => $v) {
+                        $bind_values[$k] = (int)$v;
+                        $bind_params[] = &$bind_values[$k];
+                    }
+                    call_user_func_array('mysqli_stmt_bind_param', $bind_params);
+                }
+                if (mysqli_stmt_execute($stmt_count)) {
+                    mysqli_stmt_bind_result($stmt_count, $total_count);
+                    if (mysqli_stmt_fetch($stmt_count)) {
+                        $booking_pending_count = intval($total_count);
+                    }
+                }
+                mysqli_stmt_close($stmt_count);
+            }
+
+            $list_sql = "SELECT
+                            bri.id AS item_id,
+                            bri.item_type,
+                            {$item_status_expr} AS item_status,
+                            br.name,
+                            br.destination,
+                            br.created_at,
+                            COALESCE(o.title, ms.service_name, CONCAT('Item #', bri.id)) AS item_name
+                         FROM booking_request_items bri
+                         INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                         LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                         LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                         WHERE 1=1";
+            if ($items_has_soft_delete) {
+                $list_sql .= " AND bri.is_deleted = 0";
+            }
+            if ($booking_has_soft_delete) {
+                $list_sql .= " AND br.is_deleted = 0";
+            }
+            $list_sql .= $scope_where . " ORDER BY br.created_at DESC, bri.id DESC LIMIT 5";
+
+            $stmt_list = mysqli_prepare($conexion, $list_sql);
+            if ($stmt_list) {
+                if ($scope_types !== '') {
+                    $bind_types = $scope_types;
+                    $bind_values = $scope_values;
+                    $bind_params = [];
+                    $bind_params[] = $stmt_list;
+                    $bind_params[] = &$bind_types;
+                    foreach ($bind_values as $k => $v) {
+                        $bind_values[$k] = (int)$v;
+                        $bind_params[] = &$bind_values[$k];
+                    }
+                    call_user_func_array('mysqli_stmt_bind_param', $bind_params);
+                }
+                if (mysqli_stmt_execute($stmt_list)) {
+                    mysqli_stmt_bind_result(
+                        $stmt_list,
+                        $item_id,
+                        $item_type,
+                        $item_status,
+                        $name_raw,
+                        $destination_raw,
+                        $created_at_raw,
+                        $item_name_raw
+                    );
+                    while (mysqli_stmt_fetch($stmt_list)) {
+                        $booking_notifications[] = [
+                            'item_id' => $item_id,
+                            'item_type' => $item_type,
+                            'item_status' => $item_status,
+                            'name' => $name_raw,
+                            'destination' => $destination_raw,
+                            'created_at' => $created_at_raw,
+                            'item_name' => $item_name_raw,
+                        ];
+                    }
+                }
+                mysqli_stmt_close($stmt_list);
+            }
+        }
+    } else {
+        $notif_sql = "SELECT id, name, destination, created_at FROM booking_requests WHERE status = 'pending'";
+        if ($booking_has_soft_delete) {
+            $notif_sql .= " AND is_deleted = 0";
+        }
+        $notif_sql .= " ORDER BY id DESC LIMIT 5";
+        $notif_res = mysqli_query($conexion, $notif_sql);
+        if ($notif_res) {
+            while ($row = mysqli_fetch_assoc($notif_res)) {
+                $booking_notifications[] = $row;
+            }
+            $booking_pending_count = mysqli_num_rows($notif_res);
+        }
+    }
+
+    $booking_badge = (string) $booking_pending_count;
+    $booking_summary_text = $booking_pending_count > 0
+        ? '<span class="bold">' . $booking_pending_count . '</span> pending bookings'
+        : 'No pending bookings';
+
+    if ($booking_pending_count > 0) {
+        foreach ($booking_notifications as $notif) {
+            $name = htmlspecialchars($notif['name'] ?? 'Client', ENT_QUOTES, 'UTF-8');
+            $dest = htmlspecialchars($notif['destination'] ?? 'N/A', ENT_QUOTES, 'UTF-8');
+            $created = htmlspecialchars($notif['created_at'] ?? '', ENT_QUOTES, 'UTF-8');
+            $item_name = htmlspecialchars($notif['item_name'] ?? '', ENT_QUOTES, 'UTF-8');
+            $item_status = htmlspecialchars($notif['item_status'] ?? '', ENT_QUOTES, 'UTF-8');
+            $details_text = ($item_name !== '')
+                ? ('Item: ' . $item_name . ' · ' . ($item_status !== '' ? $item_status : 'pending'))
+                : ('New booking from ' . $name . ' (' . $dest . ')');
+
+            $booking_list_html .= '<li>'
+                . '<a href="' . $booking_notifications_href . '">'
+                . '<span class="details">'
+                . '<span class="label label-sm label-icon label-success md-skip">'
+                . '<i class="fa fa-calendar"></i>'
+                . '</span> ' . $details_text . '</span>';
+            if ($created !== '') {
+                $booking_list_html .= '<span class="time">' . $created . '</span>';
+            }
+            $booking_list_html .= '</a></li>';
+        }
+    } else {
+        $booking_list_html = '<li><a href="' . $booking_notifications_href . '"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No pending bookings</span></a></li>';
     }
 
     // Solicitudes de eliminación de datos (solo admin)
@@ -179,15 +341,15 @@ $top_header =  '<div class="clearfix navbar-fixed-top">
                 <!-- BEGIN TOPBAR ACTIONS -->
                 <div class="topbar-actions">
                     <!-- BEGIN GROUP NOTIFICATION -->
-                    <div class="btn-group-notification btn-group" id="header_notification_bar">
+                    <div class="btn-group-notification btn-group" id="header_notification_bar" style="margin-right:10px;">
                         <button type="button" class="btn btn-sm md-skip dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
-                            <i class="icon-bell"></i>
+                            <i class="fa fa-shopping-cart"></i>
                             <span class="badge">'.$booking_badge.'</span>
                         </button>
                         <ul class="dropdown-menu-v2">
                             <li class="external">
                                 <h3>'.$booking_summary_text.'</h3>
-                                <a href="booking_requests.php">view all</a>
+                                <a href="'.$booking_notifications_href.'">view all</a>
                             </li>
                             <li>
                                 <ul class="dropdown-menu-list scroller" style="height: 250px; padding: 0;" data-handle-color="#637283">
@@ -225,7 +387,7 @@ if ($es_admin) {
 
 $top_header .= '
                     <!-- BEGIN USER PROFILE -->
-                    <div class="btn-group-img btn-group">
+                    <div class="btn-group-img btn-group" style="margin-left:8px;">
                         <button type="button" class="btn btn-sm md-skip dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
                             <span>Hi, '.$nombre_usuario.' ';
 if ($es_admin) {
@@ -284,10 +446,10 @@ require_once __DIR__ . '/menu_helpers.php';
 $current = menu_current_script();
 
 $dashboard_pages = array('index.php');
-$management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php');
-$medical_group_pages = array('service_categories.php','service_catalog.php','providers.php','provider_verification.php','provider_offers.php');
-$complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php');
-$complementary_scope_pages = array('providers_complementary.php','medtravel_services.php');
+$management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php','my_booking_requests.php');
+$medical_group_pages = array('service_categories.php','service_catalog.php','providers.php','provider_verification.php','provider_offers.php','my_booking_requests.php');
+$complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php','my_booking_requests.php');
+$complementary_scope_pages = array('providers_complementary.php','medtravel_services.php','my_booking_requests.php');
 $clients_booking_pages = array('clientes.php','booking_requests.php');
 $admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','informes.php','email_settings.php','data_deletion_requests.php','cleanup.php');
 $admin_users_pages = array('mis_datos.php','usuarios.php','crear_usuario.php','roles.php');
@@ -296,6 +458,18 @@ $profile_pages = array('mis_datos.php');
 $can_manage_complementary_providers = user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE);
 $can_manage_complementary_services = user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE);
 $can_manage_packages = user_can(PERM_PACKAGES_MANAGE);
+$can_view_clients = (
+    !$es_admin &&
+    user_can(PERM_BOOKING_VIEW)
+);
+$can_view_my_bookings = (
+    !$es_admin &&
+    user_can(PERM_BOOKING_VIEW) &&
+    (
+        ($es_prestador && !empty($_SESSION['provider_id'])) ||
+        ($es_complementario && current_service_provider_id() > 0)
+    )
+);
 
 $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-responsive-collapse">
                     <ul class="nav navbar-nav">
@@ -371,6 +545,18 @@ if ($es_admin) {
                                         <a href="./provider_offers.php">
                                             <i class="icon-tag"></i> Mis Ofertas </a>
                                     </li>';
+    if ($can_view_clients) {
+        $top_header_2 .=           '<li'.menu_li_class('clientes.php').'>
+                                        <a href="./clientes.php">
+                                            <i class="icon-users"></i> Clientes </a>
+                                    </li>';
+    }
+    if ($can_view_my_bookings) {
+        $top_header_2 .=           '<li'.menu_li_class('my_booking_requests.php').'>
+                                        <a href="./my_booking_requests.php">
+                                            <i class="icon-calendar"></i> Mis Solicitudes </a>
+                                    </li>';
+    }
 } elseif ($es_complementario) {
     if ($can_manage_complementary_providers || $can_manage_complementary_services) {
         $top_header_2 .=               '<li'.menu_li_class($complementary_scope_pages, 'dropdown more-dropdown-sub').'>
@@ -383,8 +569,17 @@ if ($es_admin) {
                                                 '.($can_manage_complementary_services ? '<li'.menu_li_class('medtravel_services.php').'>
                                                     <a href="./medtravel_services.php">MedTravel Services</a>
                                                 </li>' : '').'
+                                                '.($can_view_my_bookings ? '<li'.menu_li_class('my_booking_requests.php').'>
+                                                    <a href="./my_booking_requests.php">Mis Solicitudes</a>
+                                                </li>' : '').'
                                             </ul>
                                         </li>';
+    }
+    if ($can_view_clients) {
+        $top_header_2 .=           '<li'.menu_li_class('clientes.php').'>
+                                        <a href="./clientes.php">
+                                            <i class="icon-users"></i> Clientes </a>
+                                    </li>';
     }
 }
 

@@ -379,30 +379,54 @@ $booking_widget = (function() {
     return ob_get_clean();
 })();
 
+$current_path = parse_url($_SERVER['PHP_SELF'] ?? '', PHP_URL_PATH);
+$is_booking_wizard_page = ($current_page === 'wizard.php' && strpos((string)$current_path, '/booking/') !== false);
+$wizard_package_summary_markup = '';
+if (!$is_booking_wizard_page) {
+    ob_start();
+    include __DIR__ . '/wizard_package_summary.php';
+    $wizard_package_summary_markup = ob_get_clean();
+}
+
+// Inyectar el resumen canónico en el layout global (footer) para que exista cross-page.
+$footer .= $wizard_package_summary_markup;
+
 $script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
             <script>
             // Función para hacer scroll suave al widget de booking
             function scrollToBooking(offerId) {
+                try {
+                    localStorage.setItem("mt_booking_started", "1");
+                    if (offerId) {
+                        localStorage.setItem("mt_preselected_offer_id", String(offerId));
+                    }
+                    window.dispatchEvent(new Event("mt-booking-state-changed"));
+                } catch (e) {}
+
                 const bookingSection = document.getElementById("booking-section");
                 if (bookingSection) {
                     // Si hay un ID de oferta, guardarlo en sessionStorage para pre-seleccionarlo
                     if (offerId) {
                         sessionStorage.setItem("preselected_offer_id", offerId);
                     }
-                    
+
                     // Smooth scroll al widget
-                    bookingSection.scrollIntoView({ 
-                        behavior: "smooth", 
-                        block: "start" 
+                    bookingSection.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start"
                     });
-                    
+
                     // Opcional: highlight temporal del widget
                     bookingSection.style.transition = "box-shadow 0.3s ease";
                     bookingSection.style.boxShadow = "0 0 20px rgba(102, 126, 234, 0.6)";
                     setTimeout(() => {
                         bookingSection.style.boxShadow = "none";
                     }, 1500);
+                    return;
                 }
+
+                // Fallback cross-page: llevar al booking central si esta página no tiene widget.
+                window.location.href = "/booking.php#booking-section";
             }
                 
             (function(d,t) {
@@ -418,7 +442,8 @@ $script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" t
                 })
                 }
             })(document,"script");
-            </script>';
+            </script>
+            <script src="/js/booking_summary.js"></script>';
 
 $copyright = <<<HTML
 <div class="container-fluid copyright text-body py-4">

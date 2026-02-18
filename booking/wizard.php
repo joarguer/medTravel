@@ -4,7 +4,10 @@ include(__DIR__ . '/../inc/include.php');
 $booking = isset($_SESSION['booking_request']) ? $_SESSION['booking_request'] : [];
 $submission_status = isset($_SESSION['booking_request_status']) ? $_SESSION['booking_request_status'] : '';
 $submission_message = isset($_SESSION['booking_request_message']) ? $_SESSION['booking_request_message'] : '';
-unset($_SESSION['booking_request_status'], $_SESSION['booking_request_message']);
+$submission_summary = (isset($_SESSION['booking_submission_summary']) && is_array($_SESSION['booking_submission_summary']))
+    ? $_SESSION['booking_submission_summary']
+    : [];
+unset($_SESSION['booking_request_status'], $_SESSION['booking_request_message'], $_SESSION['booking_submission_summary']);
 $allow_submission = ($submission_status !== 'submitted');
 
 // Capturar oferta pre-seleccionada si existe
@@ -22,13 +25,40 @@ if ($header_query && mysqli_num_rows($header_query) > 0) {
     $wizard_header = mysqli_fetch_assoc($header_query);
 }
 
-$categories = [];
-$cat_query = "SELECT id, name, description FROM service_categories WHERE is_active = 1 ORDER BY sort_order ASC, id DESC";
-$cat_res = mysqli_query($conexion, $cat_query);
-if ($cat_res) {
-    while ($row = mysqli_fetch_assoc($cat_res)) {
-        $categories[] = $row;
+function mt_slugify($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return 'general';
     }
+    $value = strtolower($value);
+    $value = preg_replace('/[^a-z0-9]+/', '-', $value);
+    $value = trim($value, '-');
+    return $value !== '' ? $value : 'general';
+}
+
+function mt_column_exists($conexion, $table, $column) {
+    $table_escaped = mysqli_real_escape_string($conexion, $table);
+    $column_escaped = mysqli_real_escape_string($conexion, $column);
+    $sql = "SHOW COLUMNS FROM `{$table_escaped}` LIKE '{$column_escaped}'";
+    $res = mysqli_query($conexion, $sql);
+    return ($res && mysqli_num_rows($res) > 0);
+}
+
+function mt_wizard_url($flow, $cat = '') {
+    $url = 'wizard.php?flow=' . urlencode($flow);
+    if ($cat !== '') {
+        $url .= '&cat=' . urlencode($cat);
+    }
+    return $url;
+}
+
+function mt_find_route_index($route, $slug) {
+    foreach ($route as $i => $item) {
+        if (!empty($item['slug']) && $item['slug'] === $slug) {
+            return $i;
+        }
+    }
+    return 0;
 }
 
 // Cargar ofertas activas de proveedores con información completa
@@ -37,13 +67,14 @@ $offers_sql = "SELECT
                 o.id, o.title, o.description, o.price_from, o.currency, o.provider_id,
                 p.name AS provider_name, p.city AS provider_city, p.logo AS provider_logo,
                 sc.name AS service_name, sc.category_id,
-                cat.name AS category_name
+                cat.name AS category_name,
+                cat.sort_order AS category_sort_order
                FROM provider_service_offers o
                INNER JOIN providers p ON o.provider_id = p.id
                INNER JOIN service_catalog sc ON o.service_id = sc.id
                LEFT JOIN service_categories cat ON sc.category_id = cat.id
                WHERE o.is_active = 1
-               ORDER BY cat.name ASC, sc.sort_order ASC, o.id DESC";
+               ORDER BY COALESCE(cat.sort_order, 9999) ASC, cat.name ASC, sc.sort_order ASC, o.id DESC";
 $offers_res = mysqli_query($conexion, $offers_sql);
 if ($offers_res) {
     while ($row = mysqli_fetch_assoc($offers_res)) {
@@ -62,6 +93,175 @@ foreach ($offers as $offer) {
         ];
     }
     $offers_by_category[$cat_id]['offers'][] = $offer;
+}
+
+$medical_route = [];
+$medical_offers_by_slug = [];
+foreach ($offers_by_category as $cat_id => $category_data) {
+    $category_name = trim((string)($category_data['category_name'] ?: 'General Medical'));
+    $base_slug = mt_slugify($category_name);
+    $slug = $base_slug;
+    $suffix = 2;
+    while (isset($medical_offers_by_slug[$slug])) {
+        $slug = $base_slug . '-' . $suffix;
+        $suffix++;
+    }
+    $medical_route[] = [
+        'slug' => $slug,
+        'name' => $category_name,
+        'count' => count($category_data['offers']),
+    ];
+    $medical_offers_by_slug[$slug] = $category_data['offers'];
+}
+
+$addon_route = [];
+$addon_services_by_slug = [];
+$addon_type_order = ['accommodation', 'transport', 'meals', 'support', 'flight', 'other'];
+$addon_type_labels = [
+    'accommodation' => 'Accommodation',
+    'transport' => 'Transport',
+    'meals' => 'Meals',
+    'support' => 'Support',
+    'flight' => 'Flight',
+    'other' => 'Other',
+];
+$addon_has_soft_delete = mt_column_exists($conexion, 'medtravel_services_catalog', 'is_deleted');
+$addon_counts = [];
+$addon_counts_sql = "SELECT s.service_type, COUNT(*) AS total
+                     FROM medtravel_services_catalog s
+                     WHERE s.is_active = 1 AND s.availability_status = 'available'";
+if ($addon_has_soft_delete) {
+    $addon_counts_sql .= " AND s.is_deleted = 0";
+}
+$addon_counts_sql .= " GROUP BY s.service_type";
+$addon_counts_res = mysqli_query($conexion, $addon_counts_sql);
+if ($addon_counts_res) {
+    while ($row = mysqli_fetch_assoc($addon_counts_res)) {
+        $type = strtolower(trim((string)$row['service_type']));
+        if ($type !== '') {
+            $addon_counts[$type] = (int)$row['total'];
+        }
+    }
+}
+foreach ($addon_type_order as $type) {
+    if (!isset($addon_counts[$type]) || $addon_counts[$type] <= 0) {
+        continue;
+    }
+    $addon_route[] = [
+        'slug' => $type,
+        'name' => isset($addon_type_labels[$type]) ? $addon_type_labels[$type] : ucfirst($type),
+        'count' => (int)$addon_counts[$type],
+    ];
+    $addon_services_by_slug[$type] = [];
+}
+
+$addon_field_order = "'accommodation','transport','meals','support','flight','other'";
+$addon_services_sql = "SELECT
+                        s.id,
+                        s.service_type,
+                        s.service_name,
+                        s.short_description,
+                        s.sale_price,
+                        s.currency,
+                        s.availability_status,
+                        s.image_url,
+                        COALESCE(p.provider_name, 'MedTravel') AS provider_name
+                      FROM medtravel_services_catalog s
+                      LEFT JOIN service_providers p ON s.provider_id = p.id
+                      WHERE s.is_active = 1 AND s.availability_status = 'available'
+                      " . ($addon_has_soft_delete ? "AND s.is_deleted = 0" : "") . "
+                      ORDER BY FIELD(s.service_type, {$addon_field_order}), s.display_order ASC, s.service_name ASC";
+$addon_services_res = mysqli_query($conexion, $addon_services_sql);
+if ($addon_services_res) {
+    while ($row = mysqli_fetch_assoc($addon_services_res)) {
+        $type = strtolower(trim((string)$row['service_type']));
+        if (!isset($addon_services_by_slug[$type])) {
+            continue;
+        }
+        $row['category_name'] = isset($addon_type_labels[$type]) ? $addon_type_labels[$type] : ucfirst($type);
+        $addon_services_by_slug[$type][] = $row;
+    }
+}
+if (!empty($addon_route)) {
+    $filtered_addon_route = [];
+    foreach ($addon_route as $route_item) {
+        $slug = $route_item['slug'];
+        $count = isset($addon_services_by_slug[$slug]) ? count($addon_services_by_slug[$slug]) : 0;
+        if ($count <= 0) {
+            continue;
+        }
+        $route_item['count'] = $count;
+        $filtered_addon_route[] = $route_item;
+    }
+    $addon_route = $filtered_addon_route;
+}
+
+$requested_flow = isset($_GET['flow']) ? strtolower(trim((string)$_GET['flow'])) : '';
+$flow = in_array($requested_flow, ['addon', 'medical', 'review'], true) ? $requested_flow : '';
+if ($flow === '') {
+    if (!empty($addon_route)) {
+        $flow = 'addon';
+    } elseif (!empty($medical_route)) {
+        $flow = 'medical';
+    } else {
+        $flow = 'review';
+    }
+}
+
+if ($flow === 'addon' && empty($addon_route)) {
+    $flow = !empty($medical_route) ? 'medical' : 'review';
+}
+if ($flow === 'medical' && empty($medical_route)) {
+    $flow = 'review';
+}
+
+$requested_cat = isset($_GET['cat']) ? trim((string)$_GET['cat']) : '';
+$current_category_name = '';
+$current_addon_services = [];
+$current_medical_offers = [];
+$prev_step_url = '';
+$next_step_url = '';
+
+if ($flow === 'addon' && !empty($addon_route)) {
+    $current_index = mt_find_route_index($addon_route, $requested_cat);
+    $current_route = $addon_route[$current_index];
+    $current_category_name = $current_route['name'];
+    $current_addon_services = isset($addon_services_by_slug[$current_route['slug']]) ? $addon_services_by_slug[$current_route['slug']] : [];
+
+    if ($current_index > 0) {
+        $prev_step_url = mt_wizard_url('addon', $addon_route[$current_index - 1]['slug']);
+    }
+    if ($current_index < count($addon_route) - 1) {
+        $next_step_url = mt_wizard_url('addon', $addon_route[$current_index + 1]['slug']);
+    } elseif (!empty($medical_route)) {
+        $next_step_url = mt_wizard_url('medical', $medical_route[0]['slug']);
+    } else {
+        $next_step_url = mt_wizard_url('review');
+    }
+} elseif ($flow === 'medical' && !empty($medical_route)) {
+    $current_index = mt_find_route_index($medical_route, $requested_cat);
+    $current_route = $medical_route[$current_index];
+    $current_category_name = $current_route['name'];
+    $current_medical_offers = isset($medical_offers_by_slug[$current_route['slug']]) ? $medical_offers_by_slug[$current_route['slug']] : [];
+
+    if ($current_index > 0) {
+        $prev_step_url = mt_wizard_url('medical', $medical_route[$current_index - 1]['slug']);
+    } elseif (!empty($addon_route)) {
+        $prev_step_url = mt_wizard_url('addon', $addon_route[count($addon_route) - 1]['slug']);
+    }
+
+    if ($current_index < count($medical_route) - 1) {
+        $next_step_url = mt_wizard_url('medical', $medical_route[$current_index + 1]['slug']);
+    } else {
+        $next_step_url = mt_wizard_url('review');
+    }
+} else {
+    $flow = 'review';
+    if (!empty($medical_route)) {
+        $prev_step_url = mt_wizard_url('medical', $medical_route[count($medical_route) - 1]['slug']);
+    } elseif (!empty($addon_route)) {
+        $prev_step_url = mt_wizard_url('addon', $addon_route[count($addon_route) - 1]['slug']);
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -108,6 +308,10 @@ foreach ($offers as $offer) {
             position: relative;
             overflow: hidden;
             background: white;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
         }
         .offer-card:hover {
             border-color: #667eea;
@@ -145,18 +349,27 @@ foreach ($offers as $offer) {
         }
         .offer-card .card-body {
             padding: 16px;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
         }
         .offer-title {
             font-size: 16px;
             font-weight: 600;
             color: #1e293b;
             margin-bottom: 8px;
+            min-height: 48px;
+            max-height: 48px;
+            overflow: hidden;
         }
         .offer-description {
             font-size: 13px;
             color: #64748b;
             margin-bottom: 12px;
             line-height: 1.5;
+            min-height: 60px;
+            max-height: 60px;
+            overflow: hidden;
         }
         .btn-outline-primary {
             border: 2px solid #667eea;
@@ -184,6 +397,7 @@ foreach ($offers as $offer) {
             gap: 6px;
             font-weight: 700;
             font-size: 18px;
+            margin-top: auto;
         }
         .offer-price small {
             font-size: 12px;
@@ -209,28 +423,29 @@ foreach ($offers as $offer) {
             margin-bottom: 16px;
             font-weight: 600;
         }
-        /* MedTravel services cards */
-        .service-card {
-            transition: all 0.3s ease;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            background: #fff;
+        /* MedTravel services cards (same layout base as Stage 3 cards) */
+        .service-card .card-img-top { height: 200px; overflow: hidden; position: relative; background: #f1f5f9; }
+        .service-card .card-img-top img { width: 100%; height: 100%; object-fit: cover; }
+        .category-header-complementary {
+            background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
         }
-        .service-card:hover { transform: translateY(-5px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); border-color: #d1d5db; }
-        .service-card .card-img-top { height: 200px; object-fit: cover; background: #f1f5f9; }
+        .card-complementary.selected {
+            border-color: #0f766e;
+            background: #ecfdf5;
+        }
+        .card-complementary:hover {
+            border-color: #0f766e;
+            box-shadow: 0 4px 12px rgba(15, 118, 110, 0.2);
+        }
+        .card-complementary .offer-price {
+            background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+        }
         .service-badge { background: #e0f2fe; color: #0369a1; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
         .availability-badge { padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; text-transform: capitalize; border: 1px solid #e2e8f0; color: #475569; background: #f8fafc; }
         .availability-badge.available { color: #15803d; background: #ecfdf3; border-color: #bbf7d0; }
         .availability-badge.limited { color: #b45309; background: #fef3c7; border-color: #fde68a; }
         .availability-badge.unavailable { color: #0f172a; background: #e2e8f0; border-color: #cbd5e1; }
         .availability-badge.seasonal { color: #0369a1; background: #e0f2fe; border-color: #bae6fd; }
-        .provider-info i { color: #0f766e; }
-        .provider-name { color: #334155; font-weight: 600; font-size: 14px; margin: 0; }
-        .price-info { background: #f8fafc; padding: 12px 16px; border: 1px solid #e5e7eb; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .price-label { color: #64748b; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; }
-        .price-amount { color: #0f766e; font-size: 18px; font-weight: 700; }
         .btn-add-service { background: #0f766e; border: none; color: white; padding: 10px 14px; border-radius: 10px; font-weight: 700; width: 100%; transition: all 0.3s ease; }
         .btn-add-service:hover { background: #0d9488; color: #fff; box-shadow: 0 4px 12px rgba(15,118,110,0.25); }
         .btn-add-service.active { background: #2563eb; box-shadow: 0 4px 12px rgba(37,99,235,0.25); }
@@ -341,287 +556,334 @@ foreach ($offers as $offer) {
             </div>
         <?php endif; ?>
 
-        <?php
-        // Cargar servicios complementarios de MedTravel (catálogo)
-        $medtravel_services = [];
-        $medtravel_query = mysqli_query($conexion, "SELECT s.id, s.service_type, s.service_name, s.short_description, s.sale_price, s.currency, s.availability_status, s.image_url, COALESCE(p.provider_name, 'MedTravel') AS provider_name FROM medtravel_services_catalog s LEFT JOIN service_providers p ON s.provider_id = p.id WHERE s.is_active = 1 ORDER BY s.service_type, s.display_order, s.service_name");
-        if ($medtravel_query) {
-            while ($row = mysqli_fetch_assoc($medtravel_query)) {
-                $medtravel_services[$row['service_type']][] = $row;
-            }
-        }
-        ?>
-        
         <?php if ($allow_submission): ?>
-        <form action="submit.php" method="POST" id="booking-wizard-form">
-            <?php if (count($medtravel_services) > 0): ?>
-            <div class="wizard-stage mb-4">
-                <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-2">
-                    <div>
-                        <h3 class="mb-1">Stage 2 – MedTravel Complementary Services</h3>
-                        <p class="text-muted mb-0">Select concierge and travel add-ons to complete your package</p>
-                    </div>
-                    <div class="flex-grow-1" style="max-width: 360px; min-width: 240px;">
-                        <div class="input-group">
-                            <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
-                            <input type="search" class="form-control" id="medtravel-filter" placeholder="Search complementary services...">
+            <?php if ($flow === 'addon'): ?>
+                <div class="wizard-stage mb-4">
+                    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-2">
+                        <div>
+                            <h3 class="mb-1">Stage 2 – Complementary Services</h3>
+                            <p class="text-muted mb-0">Category: <strong><?php echo htmlspecialchars($current_category_name); ?></strong></p>
+                        </div>
+                        <div class="flex-grow-1" style="max-width: 360px; min-width: 240px;">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                                <input type="search" class="form-control" id="medtravel-filter" placeholder="Search complementary services...">
+                            </div>
                         </div>
                     </div>
-                </div>
-                <?php foreach ($medtravel_services as $type => $services_group): ?>
-                <div class="mb-3">
-                    <h5 class="text-primary mb-2" style="text-transform: capitalize;">
-                        <i class="fas fa-briefcase-medical me-2"></i><?php echo htmlspecialchars($type); ?>
-                    </h5>
-                    <div class="row g-3">
-                        <?php foreach ($services_group as $service): 
-                            $status_class = '';
-                            switch($service['availability_status']){
-                                case 'available': $status_class = 'available'; break;
-                                case 'limited': $status_class = 'limited'; break;
-                                case 'unavailable': $status_class = 'unavailable'; break;
-                                case 'seasonal': $status_class = 'seasonal'; break;
-                            }
-                            // Normalizar ruta de imagen: si es relativa (ej. img/services/...), hacerla absoluta al sitio
-                            $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f1f5f9" width="400" height="300"/%3E%3Ctext fill="%2399a1ab" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedTravel%3C/text%3E%3C/svg%3E';
-                            if (!empty($service['image_url'])) {
-                                $raw_url = $service['image_url'];
-                                if (preg_match('#^(https?:)?//#', $raw_url) || strpos($raw_url, '/') === 0) {
-                                    $image_path = htmlspecialchars($raw_url);
-                                } else {
-                                    $image_path = '/' . htmlspecialchars(ltrim($raw_url, '/'));
+                    <div class="category-header category-header-complementary">
+                        <i class="fas fa-briefcase-medical me-2"></i><?php echo htmlspecialchars($current_category_name); ?>
+                    </div>
+                    <?php if (count($current_addon_services) > 0): ?>
+                        <div class="row g-3">
+                            <?php foreach ($current_addon_services as $service):
+                                $status_class = '';
+                                switch ($service['availability_status']) {
+                                    case 'available': $status_class = 'available'; break;
+                                    case 'limited': $status_class = 'limited'; break;
+                                    case 'unavailable': $status_class = 'unavailable'; break;
+                                    case 'seasonal': $status_class = 'seasonal'; break;
                                 }
-                            }
-                        ?>
-                        <div class="col-md-6 col-lg-4">
-                            <div class="service-card card h-100" data-service-id="<?php echo (int)$service['id']; ?>" data-name="<?php echo htmlspecialchars($service['service_name'], ENT_QUOTES); ?>" data-type="<?php echo htmlspecialchars($service['service_type'], ENT_QUOTES); ?>" data-provider="<?php echo htmlspecialchars($service['provider_name'], ENT_QUOTES); ?>">
-                                <input type="checkbox" class="d-none medtravel-checkbox" name="medtravel_services[]" value="<?php echo (int)$service['id']; ?>"
-                                       data-name="<?php echo htmlspecialchars($service['service_name'], ENT_QUOTES); ?>"
-                                       data-type="<?php echo htmlspecialchars($service['service_type'], ENT_QUOTES); ?>"
-                                       data-price="<?php echo htmlspecialchars($service['sale_price'], ENT_QUOTES); ?>"
-                                       data-currency="<?php echo htmlspecialchars($service['currency'], ENT_QUOTES); ?>">
-                                <img src="<?php echo $image_path; ?>" class="card-img-top" alt="<?php echo htmlspecialchars($service['service_name']); ?>" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f1f5f9%22 width=%22400%22 height=%22300%22/%3E%3Ctext fill=%22%2399a1ab%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-family=%22Arial%22 font-size=%2218%22%3EMedTravel%3C/text%3E%3C/svg%3E';">
-                                <div class="card-body d-flex flex-column">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="service-badge"><i class="fas fa-stethoscope"></i><?php echo htmlspecialchars(ucfirst($service['service_type'])); ?></span>
-                                        <?php if(!empty($service['availability_status'])): ?><span class="availability-badge <?php echo $status_class; ?>"><?php echo htmlspecialchars($service['availability_status']); ?></span><?php endif; ?>
-                                    </div>
-                                    <h5 class="card-title mb-2"><?php echo htmlspecialchars($service['service_name']); ?></h5>
-                                    <p class="card-text mb-3" style="min-height:60px; color:#64748b; line-height:1.5;">
-                                        <?php echo htmlspecialchars($service['short_description']); ?>
-                                    </p>
-                                    <div class="provider-info d-flex align-items-center gap-2">
-                                        <i class="fas fa-building"></i>
-                                        <p class="provider-name mb-0"><?php echo htmlspecialchars($service['provider_name']); ?></p>
-                                    </div>
-                                    <div class="mt-auto">
-                                        <div class="price-info">
-                                            <span class="price-label">Starting from</span>
-                                            <span class="price-amount"><?php echo ($service['currency']==='USD'?'$':'') . number_format((float)$service['sale_price'], 0, '.', ',') . ' ' . htmlspecialchars($service['currency']); ?></span>
+                                $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f1f5f9" width="400" height="300"/%3E%3Ctext fill="%2399a1ab" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedTravel%3C/text%3E%3C/svg%3E';
+                                if (!empty($service['image_url'])) {
+                                    $raw_url = $service['image_url'];
+                                    if (preg_match('#^(https?:)?//#', $raw_url) || strpos($raw_url, '/') === 0) {
+                                        $image_path = htmlspecialchars($raw_url);
+                                    } else {
+                                        $image_path = '/' . htmlspecialchars(ltrim($raw_url, '/'));
+                                    }
+                                }
+                            ?>
+                                <div class="col-md-6 col-lg-4 d-flex">
+                                    <div class="card offer-card service-card card-complementary"
+                                         onclick="toggleMedService(<?php echo (int)$service['id']; ?>)"
+                                         data-service-id="<?php echo (int)$service['id']; ?>"
+                                         data-name="<?php echo htmlspecialchars($service['service_name'], ENT_QUOTES); ?>"
+                                         data-type="<?php echo htmlspecialchars($service['service_type'], ENT_QUOTES); ?>"
+                                         data-provider="<?php echo htmlspecialchars($service['provider_name'], ENT_QUOTES); ?>">
+                                        <input type="checkbox" class="d-none medtravel-checkbox" name="medtravel_services[]" value="<?php echo (int)$service['id']; ?>"
+                                               data-name="<?php echo htmlspecialchars($service['service_name'], ENT_QUOTES); ?>"
+                                               data-type="<?php echo htmlspecialchars($service['service_type'], ENT_QUOTES); ?>"
+                                               data-price="<?php echo htmlspecialchars($service['sale_price'], ENT_QUOTES); ?>"
+                                               data-currency="<?php echo htmlspecialchars($service['currency'], ENT_QUOTES); ?>">
+                                        <div class="card-img-top">
+                                            <img src="<?php echo $image_path; ?>" alt="<?php echo htmlspecialchars($service['service_name']); ?>" onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f1f5f9%22 width=%22400%22 height=%22300%22/%3E%3Ctext fill=%22%2399a1ab%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-family=%22Arial%22 font-size=%2218%22%3EMedTravel%3C/text%3E%3C/svg%3E';">
                                         </div>
-                                        <button type="button" class="btn-add-service" data-service-trigger="<?php echo (int)$service['id']; ?>">Agregar</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-            
-            <div class="wizard-stage mb-4">
-                <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-2">
-                    <div>
-                        <h3 class="mb-1">Stage 3 – Select Medical Services</h3>
-                        <p class="mb-0">Choose from our certified providers' available services. You can select multiple services to build your medical travel package.</p>
-                    </div>
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <div class="input-group" style="min-width: 260px; max-width: 360px;">
-                            <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
-                            <input type="search" class="form-control" id="offers-filter" placeholder="Search by service, provider, or city...">
-                        </div>
-                        <div id="selection-counter" class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <span id="counter-value">0</span> selected
-                        </div>
-                    </div>
-                </div>
-                
-                <?php if (count($offers_by_category) > 0): ?>
-                    <?php foreach ($offers_by_category as $cat_id => $category_data): ?>
-                        <div class="category-section">
-                            <div class="category-header">
-                                <i class="fas fa-heartbeat me-2"></i>
-                                <?php echo htmlspecialchars($category_data['category_name']); ?>
-                            </div>
-                            <div class="row g-3">
-                                <?php foreach ($category_data['offers'] as $offer): ?>
-                                    <div class="col-md-6 col-lg-4">
-                                        <div class="card offer-card" onclick="toggleOfferSelection(this, <?php echo $offer['id']; ?>)" data-name="<?php echo htmlspecialchars($offer['title'] ?: $offer['service_name'], ENT_QUOTES); ?>" data-type="<?php echo htmlspecialchars($offer['service_name'], ENT_QUOTES); ?>" data-provider="<?php echo htmlspecialchars($offer['provider_name'], ENT_QUOTES); ?>" data-city="<?php echo htmlspecialchars($offer['provider_city'] ?: 'Colombia', ENT_QUOTES); ?>" data-category="<?php echo htmlspecialchars($category_data['category_name'], ENT_QUOTES); ?>">
-                                            <input type="checkbox" 
-                                                   name="selected_offers[]" 
-                                                   value="<?php echo $offer['id']; ?>" 
-                                                   class="offer-checkbox"
-                                                   data-name="<?php echo htmlspecialchars($offer['title'] ?: $offer['service_name'], ENT_QUOTES); ?>"
-                                                   data-type="<?php echo htmlspecialchars($offer['service_name'], ENT_QUOTES); ?>"
-                                                   data-price="<?php echo htmlspecialchars($offer['price_from'], ENT_QUOTES); ?>"
-                                                   data-currency="<?php echo htmlspecialchars($offer['currency'], ENT_QUOTES); ?>"
-                                                   <?php echo ($preselected_offer_id === $offer['id']) ? 'checked' : ''; ?>
-                                                   id="offer-<?php echo $offer['id']; ?>">
-                                            
-                                            <?php 
-                                            // Obtener imagen de offer_media
-                                            $img_query = mysqli_query($conexion, "SELECT path FROM offer_media WHERE offer_id = {$offer['id']} ORDER BY sort_order ASC, id ASC LIMIT 1");
-                                            if ($img_query && $img_row = mysqli_fetch_assoc($img_query)) {
-                                                $image_path = htmlspecialchars($img_row['path']);
-                                            ?>
-                                            <div class="card-img-top" style="height: 200px; overflow: hidden; position: relative;">
-                                                <img src="../<?php echo $image_path; ?>" 
-                                                     alt="<?php echo htmlspecialchars($offer['title']); ?>" 
-                                                     style="width: 100%; height: 100%; object-fit: cover;"
-                                                     onerror="this.parentElement.style.display='none';">
+                                        <div class="card-header">
+                                            <div class="provider-logo-small" style="background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">
+                                                <?php echo strtoupper(substr(($service['provider_name'] ?: 'M'), 0, 1)); ?>
                                             </div>
-                                            <?php } ?>
-                                            
-                                            <div class="card-header">
-                                                <?php 
-                                                // Los logos se guardan en img/providers/{id}/ no en admin/img/providers/
-                                                $logo_path = !empty($offer['provider_logo']) ? "../img/providers/{$offer['provider_id']}/{$offer['provider_logo']}" : '';
-                                                $has_logo = !empty($offer['provider_logo']);
-                                                ?>
-                                                
-                                                <?php if ($has_logo): ?>
-                                                    <!-- DEBUG: Logo path = <?php echo $logo_path; ?> -->
-                                                    <img src="<?php echo htmlspecialchars($logo_path); ?>" 
-                                                         alt="<?php echo htmlspecialchars($offer['provider_name']); ?>\" 
-                                                         class="provider-logo-small provider-logo-img"
-                                                         onerror="console.error('Failed to load: <?php echo $logo_path; ?>'); this.style.display='none'; this.nextElementSibling.style.display='flex';"
-                                                         onload="console.log('Loaded successfully: <?php echo $logo_path; ?>')">
-                                                    <div class="provider-logo-small provider-logo-fallback" style="display:none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">
-                                                        <?php echo strtoupper(substr($offer['provider_name'], 0, 1)); ?>
-                                                    </div>
-                                                <?php else: ?>
-                                                    <!-- DEBUG: No logo in DB for provider <?php echo $offer['provider_id']; ?> -->
-                                                    <div class="provider-logo-small" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">
-                                                        <?php echo strtoupper(substr($offer['provider_name'], 0, 1)); ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                                
-                                                <div class="provider-info flex-grow-1">
-                                                    <h6><?php echo htmlspecialchars($offer['provider_name']); ?></h6>
-                                                    <small>
-                                                        <i class="fas fa-map-marker-alt me-1"></i>
-                                                        <?php echo htmlspecialchars($offer['provider_city'] ?: 'Colombia'); ?>
-                                                    </small>
-                                                </div>
+                                            <div class="provider-info flex-grow-1">
+                                                <h6><?php echo htmlspecialchars($service['provider_name']); ?></h6>
+                                                <small>
+                                                    <i class="fas fa-briefcase-medical me-1"></i>
+                                                    <?php echo htmlspecialchars(ucfirst($service['service_type'])); ?>
+                                                </small>
                                             </div>
-                                            
-                                            <div class="card-body">
-                                                <div class="offer-title">
-                                                    <?php echo htmlspecialchars($offer['title'] ?: $offer['service_name']); ?>
+                                            <?php if (!empty($service['availability_status'])): ?>
+                                                <span class="availability-badge <?php echo $status_class; ?>"><?php echo htmlspecialchars($service['availability_status']); ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="card-body d-flex flex-column">
+                                            <div class="offer-title">
+                                                <?php echo htmlspecialchars($service['service_name']); ?>
+                                            </div>
+                                            <?php if (!empty($service['short_description'])): ?>
+                                                <div class="offer-description">
+                                                    <?php echo htmlspecialchars(substr($service['short_description'], 0, 120)); ?>
+                                                    <?php if (strlen($service['short_description']) > 120): ?>...<?php endif; ?>
                                                 </div>
-                                                
-                                                <?php if (!empty($offer['description'])): ?>
-                                                    <div class="offer-description">
-                                                        <?php echo htmlspecialchars(substr($offer['description'], 0, 120)); ?>
-                                                        <?php if (strlen($offer['description']) > 120): ?>...<?php endif; ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                                
-                                                <a href="../offer_detail.php?id=<?php echo $offer['id']; ?>" 
-                                                   class="btn btn-sm btn-outline-primary mt-2" 
-                                                   onclick="event.stopPropagation(); return true;"
-                                                   target="_blank">
-                                                    <i class="fas fa-info-circle"></i> More details
-                                                </a>
-                                                
-                                                <?php if ($offer['price_from'] > 0): ?>
+                                            <?php endif; ?>
+                                            <div class="service-badge mb-3">
+                                                <i class="fas fa-stethoscope"></i><?php echo htmlspecialchars(ucfirst($service['service_type'])); ?>
+                                            </div>
+                                            <div class="mt-auto">
+                                                <?php if ((float)$service['sale_price'] > 0): ?>
                                                     <div class="offer-price">
                                                         <small>From</small>
-                                                        <?php echo htmlspecialchars($offer['currency']); ?> 
-                                                        $<?php echo number_format($offer['price_from'], 0); ?>
+                                                        <?php echo htmlspecialchars($service['currency']); ?>
+                                                        $<?php echo number_format((float)$service['sale_price'], 0); ?>
                                                     </div>
                                                 <?php else: ?>
                                                     <div class="offer-price" style="background: #64748b;">
                                                         <small>Price on request</small>
                                                     </div>
                                                 <?php endif; ?>
+                                                <button type="button" class="btn-add-service mt-2" data-service-trigger="<?php echo (int)$service['id']; ?>" onclick="event.stopPropagation();">Agregar</button>
                                             </div>
                                         </div>
                                     </div>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        No active service offers are currently available. Please check back later or contact us directly.
-                    </div>
-                <?php endif; ?>
-            </div>
-                <div id="wizard-package-summary" class="package-summary d-none">
-                    <div class="d-flex flex-wrap align-items-center gap-3">
-                        <div class="flex-grow-1">
-                            <h5 class="mb-1">Tu paquete</h5>
-                            <div id="wizard-summary-list" class="small text-muted">No has añadido servicios.</div>
-                        </div>
-                        <div id="wizard-summary-total" class="summary-total"></div>
-                        <div class="summary-actions d-flex gap-2 flex-wrap">
-                            <button type="button" class="btn btn-primary" id="wizard-summary-continue">Continuar al booking</button>
-                            <button type="button" class="btn btn-outline-primary" id="wizard-summary-clear">Limpiar</button>
-                        </div>
-                    </div>
-                </div>
-            <div class="wizard-stage mb-4">
-                <h3 id="stage4-header">Stage 4 – Finalize Context</h3>
-                <p>Add any budget, urgency or additional notes before sending the request.</p>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Preferred dates</label>
-                        <div class="row g-2 align-items-center">
-                            <div class="col-6">
-                                <div class="form-floating">
-                                    <input type="date" class="form-control bg-white border-0" name="timeline_from" id="wizard-date-from" placeholder="Start" value="<?php echo isset($booking['timeline_from']) ? htmlspecialchars($booking['timeline_from']) : ''; ?>">
-                                    <label for="wizard-date-from"><i class="fas fa-calendar me-2"></i>Start</label>
                                 </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="alert alert-info mb-0">
+                            <i class="fas fa-info-circle me-2"></i>No available complementary services found in this category.
+                        </div>
+                    <?php endif; ?>
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <div>
+                            <?php if ($prev_step_url !== ''): ?>
+                                <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
+                            <?php endif; ?>
+                        </div>
+                        <a class="btn btn-primary" href="<?php echo htmlspecialchars($next_step_url); ?>">Siguiente<i class="fas fa-arrow-right ms-2"></i></a>
+                    </div>
+                </div>
+            <?php elseif ($flow === 'medical'): ?>
+                <div class="wizard-stage mb-4">
+                    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-center mb-2">
+                        <div>
+                            <h3 class="mb-1">Stage 3 – Medical Services</h3>
+                            <p class="mb-0">Category: <strong><?php echo htmlspecialchars($current_category_name); ?></strong></p>
+                        </div>
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <div class="input-group" style="min-width: 260px; max-width: 360px;">
+                                <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
+                                <input type="search" class="form-control" id="offers-filter" placeholder="Search by service, provider, or city...">
                             </div>
-                            <div class="col-6">
-                                <div class="form-floating">
-                                    <input type="date" class="form-control bg-white border-0" name="timeline_to" id="wizard-date-to" placeholder="End" value="<?php echo isset($booking['timeline_to']) ? htmlspecialchars($booking['timeline_to']) : ''; ?>">
-                                    <label for="wizard-date-to"><i class="fas fa-calendar me-2"></i>End</label>
-                                </div>
+                            <div id="selection-counter" class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                                <i class="fas fa-check-circle me-2"></i>
+                                <span id="counter-value">0</span> selected
                             </div>
                         </div>
-                        <small class="text-muted">Select the period you plan to use the service.</small>
                     </div>
-                    <div class="col-md-6">
-                        <label for="budget" class="form-label">Budget (USD)</label>
-                        <input type="number" step="50" min="0" class="form-control" name="budget" id="budget" placeholder="Example: 5000">
-                        <small class="text-muted">Optional - helps us provide better recommendations</small>
+                    <div class="category-header">
+                        <i class="fas fa-heartbeat me-2"></i>
+                        <?php echo htmlspecialchars($current_category_name); ?>
                     </div>
-                    <div class="col-12">
-                        <label for="additional_notes" class="form-label">Additional context</label>
-                        <textarea name="additional_notes" id="additional_notes" class="form-control" rows="4" placeholder="Anything else we should know? (medical conditions, special requirements, etc.)"><?php echo !empty($booking['special_request']) ? htmlspecialchars($booking['special_request']) : ''; ?></textarea>
+                    <?php if (count($current_medical_offers) > 0): ?>
+                        <div class="row g-3">
+                            <?php foreach ($current_medical_offers as $offer): ?>
+                                <div class="col-md-6 col-lg-4 d-flex">
+                                    <div class="card offer-card" onclick="toggleOfferSelection(this, <?php echo $offer['id']; ?>)" data-name="<?php echo htmlspecialchars($offer['title'] ?: $offer['service_name'], ENT_QUOTES); ?>" data-type="<?php echo htmlspecialchars($offer['service_name'], ENT_QUOTES); ?>" data-provider="<?php echo htmlspecialchars($offer['provider_name'], ENT_QUOTES); ?>" data-city="<?php echo htmlspecialchars($offer['provider_city'] ?: 'Colombia', ENT_QUOTES); ?>" data-category="<?php echo htmlspecialchars($current_category_name, ENT_QUOTES); ?>">
+                                        <input type="checkbox"
+                                               name="selected_offers[]"
+                                               value="<?php echo $offer['id']; ?>"
+                                               class="offer-checkbox"
+                                               data-name="<?php echo htmlspecialchars($offer['title'] ?: $offer['service_name'], ENT_QUOTES); ?>"
+                                               data-type="<?php echo htmlspecialchars($offer['service_name'], ENT_QUOTES); ?>"
+                                               data-price="<?php echo htmlspecialchars($offer['price_from'], ENT_QUOTES); ?>"
+                                               data-currency="<?php echo htmlspecialchars($offer['currency'], ENT_QUOTES); ?>"
+                                               <?php echo ($preselected_offer_id === (int)$offer['id']) ? 'checked' : ''; ?>
+                                               id="offer-<?php echo $offer['id']; ?>">
+
+                                        <?php
+                                        $img_query = mysqli_query($conexion, "SELECT path FROM offer_media WHERE offer_id = {$offer['id']} ORDER BY sort_order ASC, id ASC LIMIT 1");
+                                        if ($img_query && $img_row = mysqli_fetch_assoc($img_query)) {
+                                            $image_path = htmlspecialchars($img_row['path']);
+                                        ?>
+                                            <div class="card-img-top" style="height: 200px; overflow: hidden; position: relative;">
+                                                <img src="../<?php echo $image_path; ?>"
+                                                     alt="<?php echo htmlspecialchars($offer['title']); ?>"
+                                                     style="width: 100%; height: 100%; object-fit: cover;"
+                                                     onerror="this.parentElement.style.display='none';">
+                                            </div>
+                                        <?php } ?>
+
+                                        <div class="card-header">
+                                            <?php
+                                            $logo_path = !empty($offer['provider_logo']) ? "../img/providers/{$offer['provider_id']}/{$offer['provider_logo']}" : '';
+                                            $has_logo = !empty($offer['provider_logo']);
+                                            ?>
+                                            <?php if ($has_logo): ?>
+                                                <img src="<?php echo htmlspecialchars($logo_path); ?>"
+                                                     alt="<?php echo htmlspecialchars($offer['provider_name']); ?>"
+                                                     class="provider-logo-small provider-logo-img"
+                                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                <div class="provider-logo-small provider-logo-fallback" style="display:none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">
+                                                    <?php echo strtoupper(substr($offer['provider_name'], 0, 1)); ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="provider-logo-small" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">
+                                                    <?php echo strtoupper(substr($offer['provider_name'], 0, 1)); ?>
+                                                </div>
+                                            <?php endif; ?>
+
+                                            <div class="provider-info flex-grow-1">
+                                                <h6><?php echo htmlspecialchars($offer['provider_name']); ?></h6>
+                                                <small>
+                                                    <i class="fas fa-map-marker-alt me-1"></i>
+                                                    <?php echo htmlspecialchars($offer['provider_city'] ?: 'Colombia'); ?>
+                                                </small>
+                                            </div>
+                                        </div>
+
+                                        <div class="card-body">
+                                            <div class="offer-title">
+                                                <?php echo htmlspecialchars($offer['title'] ?: $offer['service_name']); ?>
+                                            </div>
+                                            <?php if (!empty($offer['description'])): ?>
+                                                <div class="offer-description">
+                                                    <?php echo htmlspecialchars(substr($offer['description'], 0, 120)); ?>
+                                                    <?php if (strlen($offer['description']) > 120): ?>...<?php endif; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <a href="../offer_detail.php?id=<?php echo $offer['id']; ?>"
+                                               class="btn btn-sm btn-outline-primary mt-2"
+                                               onclick="event.stopPropagation(); return true;"
+                                               target="_blank">
+                                                <i class="fas fa-info-circle"></i> More details
+                                            </a>
+                                            <?php if ($offer['price_from'] > 0): ?>
+                                                <div class="offer-price">
+                                                    <small>From</small>
+                                                    <?php echo htmlspecialchars($offer['currency']); ?>
+                                                    $<?php echo number_format($offer['price_from'], 0); ?>
+                                                </div>
+                                            <?php else: ?>
+                                                <div class="offer-price" style="background: #64748b;">
+                                                    <small>Price on request</small>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="alert alert-info mb-0">
+                            <i class="fas fa-info-circle me-2"></i>No active offers found in this category.
+                        </div>
+                    <?php endif; ?>
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <div>
+                            <?php if ($prev_step_url !== ''): ?>
+                                <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
+                            <?php endif; ?>
+                        </div>
+                        <a class="btn btn-primary" href="<?php echo htmlspecialchars($next_step_url); ?>">Siguiente<i class="fas fa-arrow-right ms-2"></i></a>
                     </div>
                 </div>
-                <div class="mt-4">
-                    <button type="submit" class="btn btn-primary px-4 py-3">
-                        <i class="fas fa-paper-plane me-2"></i>Submit Request
-                    </button>
-                    <small class="d-block mt-2 text-muted">
-                        <i class="fas fa-shield-alt me-1"></i>
-                        Your information is secure. Our team will review your request within 24 hours.
-                    </small>
-                </div>
-            </div>
-        </form>
+            <?php else: ?>
+                <form action="submit.php" method="POST" id="booking-wizard-form">
+                    <div class="wizard-stage mb-4">
+                        <h3 id="stage4-header">Stage 4 – Final Review & Submit</h3>
+                        <p>Review selected services and complete context before sending your request.</p>
+                        <div id="wizard-selected-hidden"></div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Preferred dates</label>
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-6">
+                                        <div class="form-floating">
+                                            <input type="date" class="form-control bg-white border-0" name="timeline_from" id="wizard-date-from" placeholder="Start" value="<?php echo isset($booking['timeline_from']) ? htmlspecialchars($booking['timeline_from']) : ''; ?>">
+                                            <label for="wizard-date-from"><i class="fas fa-calendar me-2"></i>Start</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="form-floating">
+                                            <input type="date" class="form-control bg-white border-0" name="timeline_to" id="wizard-date-to" placeholder="End" value="<?php echo isset($booking['timeline_to']) ? htmlspecialchars($booking['timeline_to']) : ''; ?>">
+                                            <label for="wizard-date-to"><i class="fas fa-calendar me-2"></i>End</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <small class="text-muted">Select the period you plan to use the service.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="budget" class="form-label">Budget (USD)</label>
+                                <input type="number" step="50" min="0" class="form-control" name="budget" id="budget" placeholder="Example: 5000">
+                                <small class="text-muted">Optional - helps us provide better recommendations</small>
+                            </div>
+                            <div class="col-12">
+                                <label for="additional_notes" class="form-label">Additional context</label>
+                                <textarea name="additional_notes" id="additional_notes" class="form-control" rows="4" placeholder="Anything else we should know? (medical conditions, special requirements, etc.)"><?php echo !empty($booking['special_request']) ? htmlspecialchars($booking['special_request']) : ''; ?></textarea>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-4">
+                            <div>
+                                <?php if ($prev_step_url !== ''): ?>
+                                    <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
+                                <?php endif; ?>
+                            </div>
+                            <button type="submit" class="btn btn-primary px-4 py-3">
+                                <i class="fas fa-paper-plane me-2"></i>Submit Request
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            <?php endif; ?>
+            <?php include __DIR__ . '/../inc/wizard_package_summary.php'; ?>
         <?php else: ?>
         <div class="wizard-stage mb-4">
             <h3 class="mb-2 text-success"><i class="fas fa-check-circle me-2"></i>Request sent</h3>
             <p class="mb-3">We already received your request. If you need to start a new one, return to the booking form.</p>
+            <?php if (!empty($submission_summary)): ?>
+                <div class="alert alert-info" style="margin-bottom:15px;">
+                    <p class="mb-1"><strong>Booking ID:</strong> #<?php echo intval($submission_summary['booking_id'] ?? 0); ?></p>
+                    <?php if (!empty($submission_summary['total_display'])): ?>
+                        <p class="mb-1"><strong>Total estimated:</strong> <?php echo htmlspecialchars((string)$submission_summary['total_display']); ?></p>
+                    <?php endif; ?>
+                    <?php if (!empty($submission_summary['items']) && is_array($submission_summary['items'])): ?>
+                        <hr style="margin:10px 0;">
+                        <p class="mb-1"><strong>Requested items:</strong></p>
+                        <ul style="padding-left:20px; margin-bottom:8px;">
+                            <?php foreach ($submission_summary['items'] as $summary_item): ?>
+                                <li>
+                                    <?php echo htmlspecialchars((string)($summary_item['name'] ?? 'Service')); ?>
+                                    <?php if (!empty($summary_item['provider'])): ?>
+                                        - <?php echo htmlspecialchars((string)$summary_item['provider']); ?>
+                                    <?php endif; ?>
+                                    <?php if (!empty($summary_item['category'])): ?>
+                                        (<?php echo htmlspecialchars((string)$summary_item['category']); ?>)
+                                    <?php endif; ?>
+                                    <?php if (!empty($summary_item['price_display'])): ?>
+                                        - <?php echo htmlspecialchars((string)$summary_item['price_display']); ?>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                    <p class="mb-1"><strong>Next steps:</strong></p>
+                    <ol style="padding-left:20px; margin-bottom:0;">
+                        <li>Availability check</li>
+                        <li>Virtual consultation scheduling</li>
+                        <li>Budget confirmation</li>
+                        <li>Schedule coordination</li>
+                        <li>Payment</li>
+                    </ol>
+                </div>
+            <?php endif; ?>
             <div class="d-flex flex-wrap gap-2">
                 <a class="btn btn-primary" href="../booking.php">Start new request</a>
                 <a class="btn btn-outline-primary" href="../offers.php">Back to catalog</a>
@@ -671,128 +933,244 @@ foreach ($offers as $offer) {
     <script src="../js/main.js"></script>
 
     <script>
-        // Timeline date range validation
+        const KEY_SELECTED_SERVICES = 'mt_selected_services';
+        const KEY_SELECTED_OFFERS = 'mt_selected_offers';
+        const KEY_PRESELECTED_OFFER = 'mt_preselected_offer_id';
+        const WAS_SUBMITTED = <?php echo ($submission_status === 'submitted') ? 'true' : 'false'; ?>;
+
+        function clearBookingStorage() {
+            const keys = [
+                'mt_selected_services',
+                'mt_selected_offers',
+                'mt_preselected_offer_id',
+                'mt_booking_draft',
+                'mt_booking_started',
+                'mt_booking_step1_submitted'
+            ];
+            keys.forEach(function(k) { localStorage.removeItem(k); });
+            sessionStorage.removeItem('preselected_offer_id');
+        }
+
         const timelineFrom = document.getElementById('wizard-date-from');
         const timelineTo = document.getElementById('wizard-date-to');
-        
         if (timelineFrom && timelineTo) {
-            // Set minimum date to today
             const today = new Date().toISOString().split('T')[0];
             timelineFrom.setAttribute('min', today);
             timelineTo.setAttribute('min', today);
-            
-            // Validate that 'to' date is after 'from' date
             timelineFrom.addEventListener('change', function() {
-                if (this.value) {
-                    timelineTo.setAttribute('min', this.value);
-                }
+                if (this.value) timelineTo.setAttribute('min', this.value);
             });
         }
-        
-        // Toggle offer card selection
-        function toggleOfferSelection(card, offerId) {
-            const checkbox = card.querySelector('input[type="checkbox"]');
-            const wasChecked = checkbox.checked;
-            
-            // Toggle checkbox
-            checkbox.checked = !wasChecked;
-            
-            // Toggle card visual state
-            if (checkbox.checked) {
-                card.classList.add('selected');
-            } else {
-                card.classList.remove('selected');
+
+        function parseStoredJson(raw) {
+            if (!raw) return [];
+            try {
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+                return [];
             }
-            
-            // Update selection summary
+        }
+
+        function getStoredServices() {
+            return parseStoredJson(localStorage.getItem(KEY_SELECTED_SERVICES));
+        }
+
+        function getStoredOffers() {
+            return parseStoredJson(localStorage.getItem(KEY_SELECTED_OFFERS));
+        }
+
+        function ensureBookingStarted() {
+            try {
+                localStorage.setItem('mt_booking_started', '1');
+                window.dispatchEvent(new Event('mt-booking-state-changed'));
+            } catch (e) {}
+        }
+
+        function setStoredServices(items) {
+            localStorage.setItem(KEY_SELECTED_SERVICES, JSON.stringify(items));
+            ensureBookingStarted();
+        }
+
+        function setStoredOffers(items) {
+            localStorage.setItem(KEY_SELECTED_OFFERS, JSON.stringify(items));
+            ensureBookingStarted();
+        }
+
+        function buildOfferItemFromCheckbox(cb) {
+            return {
+                id: String(cb.value),
+                name: String(cb.dataset.name || cb.value || ''),
+                type: String(cb.dataset.type || 'medical_offer'),
+                price: String(cb.dataset.price || '0'),
+                currency: String(cb.dataset.currency || '')
+            };
+        }
+
+        function buildServiceItemFromCheckbox(cb) {
+            return {
+                id: String(cb.value),
+                name: String(cb.dataset.name || cb.value || ''),
+                type: String(cb.dataset.type || 'complementary_service'),
+                price: String(cb.dataset.price || '0'),
+                currency: String(cb.dataset.currency || '')
+            };
+        }
+
+        function setWizardFieldIfEmpty(name, value) {
+            if (value === null || value === undefined) return;
+            const field = document.querySelector('[name="' + name + '"]');
+            if (!field || String(field.value || '').trim() !== '') return;
+            const normalized = String(value);
+            if (normalized.trim() === '') return;
+            if (field.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return;
+            field.value = normalized;
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function updateMedButtonState(card, checked) {
+            if (!card) return;
+            const button = card.querySelector('[data-service-trigger]');
+            if (!button) return;
+            button.classList.toggle('active', checked);
+            button.textContent = checked ? 'Quitar' : 'Agregar';
+        }
+
+        function syncOfferCheckbox(checkbox) {
+            if (!checkbox) return;
+            const card = checkbox.closest('.offer-card');
+            if (card) card.classList.toggle('selected', checkbox.checked);
+            let items = getStoredOffers();
+            const id = String(checkbox.value);
+            items = items.filter(function(item) { return String(item.id) !== id; });
+            if (checkbox.checked) {
+                items.push(buildOfferItemFromCheckbox(checkbox));
+            }
+            setStoredOffers(items);
             updateSelectionSummary();
         }
 
-        // Toggle MedTravel complementary service card
+        function syncMedCheckbox(checkbox) {
+            if (!checkbox) return;
+            const card = checkbox.closest('.service-card');
+            if (card) card.classList.toggle('selected', checkbox.checked);
+            updateMedButtonState(card, checkbox.checked);
+            let items = getStoredServices();
+            const id = String(checkbox.value);
+            items = items.filter(function(item) { return String(item.id) !== id; });
+            if (checkbox.checked) {
+                items.push(buildServiceItemFromCheckbox(checkbox));
+            }
+            setStoredServices(items);
+            updateSelectionSummary();
+        }
+
+        function toggleOfferSelection(card) {
+            if (!card) return;
+            const checkbox = card.querySelector('.offer-checkbox');
+            if (!checkbox) return;
+            checkbox.checked = !checkbox.checked;
+            syncOfferCheckbox(checkbox);
+        }
+
         function toggleMedService(serviceId) {
             const checkbox = document.querySelector('.medtravel-checkbox[value="' + serviceId + '"]');
             if (!checkbox) return;
             checkbox.checked = !checkbox.checked;
-            const card = checkbox.closest('.service-card');
-            const button = card ? card.querySelector('[data-service-trigger]') : null;
-            if (card) card.classList.toggle('selected', checkbox.checked);
-            if (button) button.classList.toggle('active', checkbox.checked);
-            updateSelectionSummary();
+            syncMedCheckbox(checkbox);
         }
-        
-        // Update selection summary
-        function updateSelectionSummary() {
-            const selectedOffers = Array.from(document.querySelectorAll('input[name="selected_offers[]"]:checked'));
-            const selectedMed = Array.from(document.querySelectorAll('.medtravel-checkbox:checked'));
-            const allSelected = selectedOffers.concat(selectedMed);
-            const count = allSelected.length;
 
-            // Actualizar contador visual
+        function applyStoredSelectionsToCurrentStep() {
+            const preOffer = String(localStorage.getItem(KEY_PRESELECTED_OFFER) || '').trim();
+            const offerMap = {};
+            getStoredOffers().forEach(function(item) { offerMap[String(item.id)] = true; });
+            if (/^\d+$/.test(preOffer)) {
+                offerMap[preOffer] = true;
+            }
+
+            document.querySelectorAll('.offer-checkbox').forEach(function(cb) {
+                const checked = !!offerMap[String(cb.value)];
+                cb.checked = checked;
+                const card = cb.closest('.offer-card');
+                if (card) card.classList.toggle('selected', checked);
+            });
+
+            const servicesMap = {};
+            getStoredServices().forEach(function(item) { servicesMap[String(item.id)] = true; });
+            document.querySelectorAll('.medtravel-checkbox').forEach(function(cb) {
+                const checked = !!servicesMap[String(cb.value)];
+                cb.checked = checked;
+                const card = cb.closest('.service-card');
+                if (card) card.classList.toggle('selected', checked);
+                updateMedButtonState(card, checked);
+            });
+        }
+
+        function buildSummaryItemsFromStorage() {
+            const summaryItems = [];
+            getStoredServices().forEach(function(item) {
+                summaryItems.push({
+                    value: String(item.id || ''),
+                    dataset: {
+                        name: String(item.name || ('Service #' + item.id)),
+                        type: String(item.type || 'complementary_service'),
+                        price: String(item.price || '0'),
+                        currency: String(item.currency || '')
+                    }
+                });
+            });
+
+            const storedOffers = getStoredOffers();
+            storedOffers.forEach(function(item) {
+                summaryItems.push({
+                    value: String(item.id || ''),
+                    dataset: {
+                        name: String(item.name || ('Offer #' + item.id)),
+                        type: String(item.type || 'medical_offer'),
+                        price: String(item.price || '0'),
+                        currency: String(item.currency || '')
+                    }
+                });
+            });
+
+            const preOffer = String(localStorage.getItem(KEY_PRESELECTED_OFFER) || '').trim();
+            if (/^\d+$/.test(preOffer) && !storedOffers.some(function(item){ return String(item.id) === preOffer; })) {
+                summaryItems.push({
+                    value: preOffer,
+                    dataset: {
+                        name: 'Oferta médica preseleccionada #' + preOffer,
+                        type: 'medical_offer',
+                        price: '0',
+                        currency: ''
+                    }
+                });
+            }
+            return summaryItems;
+        }
+
+        function updateSelectionSummary() {
+            const allSelected = buildSummaryItemsFromStorage();
+            const count = allSelected.length;
             const counterValue = document.getElementById('counter-value');
             const counterBadge = document.getElementById('selection-counter');
 
-            if (counterValue) {
-                counterValue.textContent = count;
+            if (counterValue) counterValue.textContent = count;
+            if (counterBadge) {
+                if (count === 0) counterBadge.className = 'badge bg-secondary';
+                else if (count <= 2) counterBadge.className = 'badge bg-primary';
+                else counterBadge.className = 'badge bg-success';
             }
 
-            if (counterBadge) {
-                if (count === 0) {
-                    counterBadge.className = 'badge bg-secondary';
-                } else if (count <= 2) {
-                    counterBadge.className = 'badge bg-primary';
-                } else {
-                    counterBadge.className = 'badge bg-success';
+            if (window.BookingSummary && typeof window.BookingSummary.renderFromSelections === 'function') {
+                if (allSelected.length > 0) {
+                    window.BookingSummary.renderFromSelections(allSelected, { addBodyClass: true });
+                } else if (typeof window.BookingSummary.hide === 'function') {
+                    window.BookingSummary.hide();
                 }
             }
-
-            // Resumen flotante
-            const summary = document.getElementById('wizard-package-summary');
-            const summaryList = document.getElementById('wizard-summary-list');
-            const summaryTotal = document.getElementById('wizard-summary-total');
-            if (!summary || !summaryList || !summaryTotal) return;
-
-            if (count === 0) {
-                summary.classList.add('d-none');
-                document.body.classList.remove('summary-active');
-                summaryList.textContent = 'No has añadido servicios.';
-                summaryTotal.textContent = '';
-                return;
-            }
-
-            summary.classList.remove('d-none');
-            document.body.classList.add('summary-active');
-
-            // Texto de items
-            const preview = allSelected.slice(0, 3).map(cb => {
-                const name = cb.dataset.name || cb.value;
-                const type = cb.dataset.type || '';
-                return type ? `${name} (${type})` : name;
-            }).join(' · ');
-            let previewText = preview;
-            if (allSelected.length > 3) {
-                previewText += ` + ${allSelected.length - 3} más`;
-            }
-            summaryList.textContent = previewText;
-
-            // Totales por moneda
-            const totals = {};
-            allSelected.forEach(cb => {
-                const price = parseFloat(cb.dataset.price) || 0;
-                const curr = cb.dataset.currency || '';
-                if (!totals[curr]) totals[curr] = 0;
-                totals[curr] += price;
-            });
-            const parts = Object.keys(totals).map(curr => {
-                const val = totals[curr];
-                const symbol = curr === 'USD' ? '$' : (curr === 'COP' ? '$' : '');
-                return `${symbol}${val.toLocaleString('en-US')} ${curr}`.trim();
-            }).filter(Boolean);
-            summaryTotal.textContent = parts.length ? `Total estimado: ${parts.join(' / ')}` : '';
-
-            console.log(`Selected ${count} offer(s)`);
         }
 
-        // Text filter for MedTravel services
         function filterMedtravelServices(term) {
             const value = term.trim().toLowerCase();
             document.querySelectorAll('.service-card').forEach(function(card) {
@@ -811,7 +1189,6 @@ foreach ($offers as $offer) {
             });
         }
 
-        // Text filter for provider offers
         function filterOffers(term) {
             const value = term.trim().toLowerCase();
             document.querySelectorAll('.offer-card').forEach(function(card) {
@@ -828,64 +1205,87 @@ foreach ($offers as $offer) {
                 if (wrapper) wrapper.classList.toggle('d-none', !match);
             });
         }
-        
-        // Initialize - mark pre-selected cards
-        document.addEventListener('DOMContentLoaded', function() {
-            // Inicializar contador y resumen
-            updateSelectionSummary();
-            
-            document.querySelectorAll('.offer-card input[type="checkbox"]:checked').forEach(function(checkbox) {
-                const card = checkbox.closest('.offer-card');
-                card.classList.add('selected');
-                
-                // Auto-scroll a la oferta pre-seleccionada
-                <?php if ($preselected_offer_id > 0): ?>
-                    if (checkbox.value === '<?php echo $preselected_offer_id; ?>') {
-                        setTimeout(function() {
-                            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            // Highlight temporal
-                            card.style.boxShadow = '0 0 0 3px rgba(34, 197, 94, 0.5)';
-                            setTimeout(function() {
-                                card.style.boxShadow = '';
-                            }, 2000);
-                        }, 500);
-                    }
-                <?php endif; ?>
-            });
 
-            // Escuchar cambios directos en checkboxes
+        function renderHiddenSelectionsForSubmit() {
+            const container = document.getElementById('wizard-selected-hidden');
+            if (!container) return;
+            container.innerHTML = '';
+
+            let selectedOffers = getStoredOffers();
+            const preOffer = String(localStorage.getItem(KEY_PRESELECTED_OFFER) || '').trim();
+            if (selectedOffers.length === 0 && /^\d+$/.test(preOffer)) {
+                selectedOffers = [{ id: preOffer }];
+            }
+            const selectedServices = getStoredServices();
+
+            selectedOffers.forEach(function(item) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'selected_offers[]';
+                input.value = String(item.id);
+                container.appendChild(input);
+            });
+            selectedServices.forEach(function(item) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'medtravel_services[]';
+                input.value = String(item.id);
+                container.appendChild(input);
+            });
+        }
+
+        function hydrateWizardFromStorage() {
+            <?php if ($preselected_offer_id > 0): ?>
+            if (!localStorage.getItem(KEY_PRESELECTED_OFFER)) {
+                localStorage.setItem(KEY_PRESELECTED_OFFER, '<?php echo (int)$preselected_offer_id; ?>');
+            }
+            <?php endif; ?>
+            const draft = (function() {
+                try { return JSON.parse(localStorage.getItem('mt_booking_draft') || '{}'); } catch (e) { return {}; }
+            })();
+            setWizardFieldIfEmpty('timeline_from', draft.timeline_from);
+            setWizardFieldIfEmpty('timeline_to', draft.timeline_to);
+            setWizardFieldIfEmpty('budget', draft.budget);
+            setWizardFieldIfEmpty('additional_notes', draft.additional_notes || draft.special_request);
+            applyStoredSelectionsToCurrentStep();
+            updateSelectionSummary();
+            renderHiddenSelectionsForSubmit();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (WAS_SUBMITTED) {
+                clearBookingStorage();
+                if (window.BookingSummary && typeof window.BookingSummary.hide === 'function') {
+                    window.BookingSummary.hide();
+                }
+                window.dispatchEvent(new Event('mt-booking-state-changed'));
+            }
+            hydrateWizardFromStorage();
+
             document.querySelectorAll('.offer-checkbox').forEach(function(cb) {
+                cb.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
                 cb.addEventListener('change', function(e) {
-                    const card = cb.closest('.offer-card');
-                    if (card) {
-                        card.classList.toggle('selected', cb.checked);
-                    }
-                    updateSelectionSummary();
+                    syncOfferCheckbox(cb);
                     e.stopPropagation();
                 });
             });
 
-            // MedTravel services buttons
-            document.querySelectorAll('[data-service-trigger]').forEach(function(btn){
-                btn.addEventListener('click', function(e){
+            document.querySelectorAll('[data-service-trigger]').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
                     const id = btn.getAttribute('data-service-trigger');
                     toggleMedService(id);
                     e.stopPropagation();
                 });
             });
 
-            // MedTravel checkboxes (fallback)
-            document.querySelectorAll('.medtravel-checkbox').forEach(function(cb){
-                cb.addEventListener('change', function(){
-                    const card = cb.closest('.service-card');
-                    const button = card ? card.querySelector('[data-service-trigger]') : null;
-                    if (card) card.classList.toggle('selected', cb.checked);
-                    if (button) button.classList.toggle('active', cb.checked);
-                    updateSelectionSummary();
+            document.querySelectorAll('.medtravel-checkbox').forEach(function(cb) {
+                cb.addEventListener('change', function() {
+                    syncMedCheckbox(cb);
                 });
             });
 
-            // Buscador de servicios complementarios
             const medFilter = document.getElementById('medtravel-filter');
             if (medFilter) {
                 medFilter.addEventListener('input', function() {
@@ -893,7 +1293,6 @@ foreach ($offers as $offer) {
                 });
             }
 
-            // Buscador de servicios médicos
             const offersFilter = document.getElementById('offers-filter');
             if (offersFilter) {
                 offersFilter.addEventListener('input', function() {
@@ -901,30 +1300,18 @@ foreach ($offers as $offer) {
                 });
             }
 
-            // Botones del resumen
-            const clearBtn = document.getElementById('wizard-summary-clear');
-            const continueBtn = document.getElementById('wizard-summary-continue');
-            if (clearBtn) {
-                clearBtn.addEventListener('click', function() {
-                    document.querySelectorAll('.offer-checkbox, .medtravel-checkbox').forEach(function(cb) {
-                        cb.checked = false;
-                        const card = cb.closest('.offer-card, .service-card');
-                        if (card) card.classList.remove('selected');
-                        const button = card ? card.querySelector('[data-service-trigger]') : null;
-                        if (button) button.classList.remove('active');
-                    });
-                    updateSelectionSummary();
+            const bookingForm = document.getElementById('booking-wizard-form');
+            if (bookingForm) {
+                bookingForm.addEventListener('submit', function() {
+                    renderHiddenSelectionsForSubmit();
                 });
             }
-            if (continueBtn) {
-                continueBtn.addEventListener('click', function() {
-                    const submitBtn = document.querySelector('button[type="submit"]');
-                    if (submitBtn) {
-                        submitBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        submitBtn.focus();
-                    }
-                });
-            }
+        });
+
+        window.addEventListener('mt-booking-state-changed', function() {
+            applyStoredSelectionsToCurrentStep();
+            updateSelectionSummary();
+            renderHiddenSelectionsForSubmit();
         });
     </script>
 </body>

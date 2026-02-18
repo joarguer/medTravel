@@ -398,11 +398,10 @@ $id_usuario = $_SESSION['id_usuario'];
         </div>
         <!-- END MODAL -->
         
-        <?php echo $theme_global_js;?>
+        <?php echo $theme_layout_script;?>
         <script src="../../assets/global/scripts/datatable.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/datatables.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>
-        <?php echo $theme_layout_js;?>
         <script src="js/clientes.js" type="text/javascript"></script>
     </body>
 </html>

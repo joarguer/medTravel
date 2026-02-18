@@ -1,7 +1,6 @@
 <?php
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+require_once __DIR__ . '/session_security.php';
+medtravel_session_start();
 ob_start();
 
 mysqli_report(MYSQLI_REPORT_OFF);
@@ -89,7 +88,15 @@ mysqli_set_charset($conexion, 'utf8mb4');
 
 // Helper: requiere sesión válida para endpoints AJAX del admin
 function require_login_ajax(){
-	if (session_status() === PHP_SESSION_NONE) { session_start(); }
+	medtravel_session_start();
+	$sessionState = medtravel_session_enforce_limits();
+	if (empty($sessionState['ok'])) {
+		medtravel_session_destroy();
+		http_response_code(401);
+		header('Content-Type: application/json; charset=utf-8');
+		echo json_encode(['ok' => false, 'error' => 'SESSION_EXPIRED']);
+		exit;
+	}
 	global $conexion;
 	$user_id = null;
 	// Prefer numeric session ids when available

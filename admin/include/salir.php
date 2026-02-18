@@ -1,10 +1,11 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_security.php';
+medtravel_session_start();
 include("conexion.php");
 $fecha	=	date("Y-m-d",time()-18000);
 $salida	=	date("H:i:s",time()-18000);
-$rasocial = $_SESSION["rasocial"];
-$usuario  = $_SESSION["usrlogin"];
+$rasocial = isset($_SESSION["rasocial"]) ? $_SESSION["rasocial"] : '';
+$usuario  = isset($_SESSION["usrlogin"]) ? $_SESSION["usrlogin"] : '';
 
 mysqli_query($conexion,"DELETE FROM sessiones_activas WHERE usuario = '$usuario'");
 //registramos la salida
@@ -13,11 +14,11 @@ if($usuario!=''){
 }
 unset($_SESSION["tipoUsuario"]);
 unset($_SESSION["usuario"]);
-session_destroy();
+medtravel_session_destroy();
 setcookie("usuario_nombre","",36000);
 setcookie("pais","",36000);
-$_SESSION["registration_ids"] = $registration_ids;
-if($_REQUEST["error"] == "1"){
+$errorParam = isset($_REQUEST["error"]) ? (string)$_REQUEST["error"] : '';
+if($errorParam == "1"){
 	header("location:../../index.php?error=1");
 	exit();
 } else {

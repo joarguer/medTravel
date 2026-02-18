@@ -1,7 +1,6 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/session_security.php';
+medtravel_session_start();
 // Mobile_Detect may be in the project's root `include/` directory.
 $mobileDetectPath = __DIR__ . '/../../include/Mobile_Detect.php';
 if (file_exists($mobileDetectPath)) {
@@ -253,6 +252,7 @@ if (mysqli_num_rows($busca_usua) > 0) {
     $password_valido = verify_password_for_user($password, $fil);
     
     if ($password_valido) {
+        medtravel_session_mark_login();
         //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC
         $rasocial = v($fil,'empresa','');
         $role_id_val = (isset($fil['role_id']) && is_numeric($fil['role_id'])) ? intval($fil['role_id']) : normalize_role_value(v($fil, 'rol', ''));

@@ -1,7 +1,6 @@
 <?php
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+require_once __DIR__ . '/session_security.php';
+medtravel_session_start();
 
 if (defined('SKIP_AUTH')) {
     return;
@@ -9,6 +8,13 @@ if (defined('SKIP_AUTH')) {
 
 if (!isset($_SESSION["usuario"]) || $_SESSION["usuario"] == "") {
     header("Location: include/salir.php?error=1");
+    exit();
+}
+
+$sessionState = medtravel_session_enforce_limits();
+if (empty($sessionState['ok'])) {
+    medtravel_session_destroy();
+    header("Location: ../../login.php?error=session_expired");
     exit();
 }
 
@@ -36,6 +42,7 @@ function get_required_permission_for_script($script_name) {
 
         // Booking / clientes
         'booking_requests.php' => PERM_BOOKING_MANAGE,
+        'my_booking_requests.php' => PERM_BOOKING_VIEW,
         'clientes.php' => PERM_BOOKING_VIEW,
 
         // Usuarios / accesos
