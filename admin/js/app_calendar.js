@@ -4,6 +4,9 @@
     var focusState = resolveFocusFromQuery();
     var focusNoticeShown = false;
     var focusDetailOpened = false;
+    var selectedItemId = focusState.itemId > 0 ? focusState.itemId : 0;
+    var knownItemOptions = {};
+    var pendingOpenEventId = 0;
 
     function parseQueryParams() {
         var out = {};
@@ -126,6 +129,77 @@
         return String(v || 'ITEM').toUpperCase();
     }
 
+    function isProviderView() {
+        return !!config.isProvider;
+    }
+
+    function buildItemOptionLabel(itemId, event) {
+        var ext = event && event.extendedProps ? event.extendedProps : {};
+        var serviceName = String((ext.item_name || ext.service_name || event.item_name || event.service_name || '')).trim();
+        if (serviceName) {
+            return 'ITEM #' + itemId + ' - ' + serviceName;
+        }
+        return 'ITEM #' + itemId;
+    }
+
+    function collectKnownItemOptions(events) {
+        (events || []).forEach(function (e) {
+            var itemId = getEventItemId(e);
+            if (itemId <= 0) return;
+            if (!knownItemOptions[itemId]) {
+                knownItemOptions[itemId] = buildItemOptionLabel(itemId, e);
+            }
+        });
+        if (selectedItemId > 0 && !knownItemOptions[selectedItemId]) {
+            knownItemOptions[selectedItemId] = 'ITEM #' + selectedItemId;
+        }
+    }
+
+    function renderItemSelector() {
+        var $wrap = $('#admin-calendar-item-selector-wrap');
+        var $select = $('#admin-calendar-item-select');
+        if (!$wrap.length || !$select.length) return;
+
+        var keys = Object.keys(knownItemOptions)
+            .map(function (k) { return parseInt(k, 10) || 0; })
+            .filter(function (n) { return n > 0; })
+            .sort(function (a, b) { return a - b; });
+
+        var shouldShow = isProviderView() || selectedItemId > 0 || keys.length > 0;
+        $wrap.toggle(shouldShow);
+        if (!shouldShow) return;
+
+        var html = ['<option value="">Select an ITEM...</option>'];
+        keys.forEach(function (id) {
+            var label = knownItemOptions[id] || ('ITEM #' + id);
+            var selected = selectedItemId === id ? ' selected' : '';
+            html.push('<option value="' + id + '"' + selected + '>' + esc(label) + '</option>');
+        });
+        if (selectedItemId > 0 && keys.indexOf(selectedItemId) === -1) {
+            html.push('<option value="' + selectedItemId + '" selected>ITEM #' + selectedItemId + '</option>');
+        }
+        $select.html(html.join(''));
+    }
+
+    function updateEmptyState(count) {
+        var $empty = $('#admin-calendar-empty-state');
+        if (!$empty.length) return;
+        if (count > 0) {
+            $empty.hide().text('');
+            return;
+        }
+        if (isProviderView()) {
+            if (selectedItemId > 0) {
+                $empty.text('No events yet for this item. Click a date to propose one.');
+            } else {
+                $empty.text('No events yet. Select an ITEM thread, then click a date/time to propose one.');
+            }
+        } else {
+            $empty.text('No events yet.');
+        }
+        $empty.show();
+    }
+
     function eventAllowedByFilter(event) {
         var f = getFilterValue();
         if (f === 'ALL') return true;
@@ -133,6 +207,9 @@
     }
 
     function eventMatchesFocus(event) {
+        if (selectedItemId > 0) {
+            return getEventItemId(event) === selectedItemId;
+        }
         if (!focusState) return true;
         if (focusState.itemId > 0) {
             return getEventItemId(event) === focusState.itemId;
@@ -191,21 +268,57 @@
         }
     }
 
-    function openCreateModal(start, end, allDay) {
+    function openCreateModal(start, end, allDay, options) {
         if (!config.canCreate) return;
+        options = options || {};
         var $form = $('#admin-calendar-create-form');
         $form[0].reset();
+        var startVal = start;
+        var endVal = end;
+        var allDayVal = !!allDay;
+        if (options.forceThirtyMinutes && startVal) {
+            var startMoment = moment(startVal);
+            if (startMoment.isValid()) {
+                startVal = startMoment;
+                endVal = startMoment.clone().add(30, 'minutes');
+                allDayVal = false;
+            }
+        }
+        if (options.defaultTitle) {
+            $form.find('[name="title"]').val(options.defaultTitle);
+        }
         if (start) {
-            $form.find('[name="start_at"]').val(toInputDateTime(start));
+            $form.find('[name="start_at"]').val(toInputDateTime(startVal));
         }
-        if (end) {
-            $form.find('[name="end_at"]').val(toInputDateTime(end));
+        if (endVal) {
+            $form.find('[name="end_at"]').val(toInputDateTime(endVal));
         }
-        $form.find('[name="all_day"]').prop('checked', !!allDay);
+        $form.find('[name="all_day"]').prop('checked', allDayVal);
+        if (options.eventType) {
+            $form.find('[name="event_type"]').val(options.eventType);
+        }
+        if (options.forceStatus) {
+            $form.find('[name="status"]').val(options.forceStatus);
+        }
+        if (options.itemId > 0) {
+            $form.find('[name="item_id"]').val(options.itemId);
+        }
         if (!config.canAdmin) {
             $form.find('[name="event_type"]').val('ITEM').prop('disabled', true);
+            $form.find('[name="status"]').val('proposed');
         } else {
             $form.find('[name="event_type"]').prop('disabled', false);
+            $form.find('[name="status"]').prop('disabled', false);
+        }
+        if (options.lockItemId) {
+            $form.find('[name="item_id"]').prop('readonly', true);
+        } else {
+            $form.find('[name="item_id"]').prop('readonly', false);
+        }
+        if (options.lockStatus) {
+            $form.find('[name="status"]').prop('disabled', true);
+        } else if (config.canAdmin) {
+            $form.find('[name="status"]').prop('disabled', false);
         }
         $('#admin-calendar-create-modal').modal('show');
     }
@@ -292,13 +405,36 @@
                     if (!res || res.ok !== true) {
                         toastr.error((res && res.message) ? res.message : 'Could not load events');
                         callback([]);
+                        updateEmptyState(0);
                         return;
                     }
+                    collectKnownItemOptions(res.events || []);
+                    renderItemSelector();
                     var mapped = mapListEvents(res.events || []);
                     callback(mapped);
+                    updateEmptyState(mapped.length);
                     if ((focusState.itemId > 0 || focusState.threadId) && mapped.length === 0 && !focusNoticeShown) {
                         focusNoticeShown = true;
                         toastr.warning('Not allowed or no events found for selected item.');
+                    }
+                    if (pendingOpenEventId > 0 && mapped.length > 0) {
+                        var matchedPending = null;
+                        mapped.some(function (evt) {
+                            if (parseInt(evt.id, 10) === pendingOpenEventId) {
+                                matchedPending = evt;
+                                return true;
+                            }
+                            return false;
+                        });
+                        if (matchedPending) {
+                            pendingOpenEventId = 0;
+                            if (matchedPending.start) {
+                                $('#admin-calendar').fullCalendar('gotoDate', matchedPending.start);
+                            }
+                            setTimeout(function () {
+                                loadEventInDetail(matchedPending);
+                            }, 120);
+                        }
                     }
                     if ((focusState.itemId > 0 || focusState.threadId) && mapped.length > 0 && !focusDetailOpened) {
                         focusDetailOpened = true;
@@ -313,10 +449,31 @@
                 }).fail(function () {
                     toastr.error('Could not load events');
                     callback([]);
+                    updateEmptyState(0);
                 });
             },
             select: function (start, end, allDay) {
-                openCreateModal(start, end, allDay);
+                if (isProviderView() && selectedItemId <= 0) {
+                    toastr.warning('Please select an ITEM thread first.');
+                    $('#admin-calendar').fullCalendar('unselect');
+                    return;
+                }
+                if (isProviderView()) {
+                    openCreateModal(start, end, allDay, {
+                        eventType: 'ITEM',
+                        itemId: selectedItemId,
+                        defaultTitle: 'Proposed schedule',
+                        forceStatus: 'proposed',
+                        lockStatus: true,
+                        lockItemId: true,
+                        forceThirtyMinutes: true
+                    });
+                } else {
+                    openCreateModal(start, end, allDay, selectedItemId > 0 ? {
+                        eventType: 'ITEM',
+                        itemId: selectedItemId
+                    } : {});
+                }
                 $('#admin-calendar').fullCalendar('unselect');
             },
             eventClick: function (event) {
@@ -361,10 +518,35 @@
 
     $(function () {
         applyInitialFilterFromFocus();
+        if (isProviderView()) {
+            $('#admin-calendar-provider-guide').show();
+        }
+        renderItemSelector();
         initCalendar();
 
         $('#admin-calendar-filter').on('change', function () {
             if (focusState.itemId > 0 || focusState.threadId) {
+                focusState.itemId = 0;
+                focusState.threadId = '';
+                focusState.threadType = '';
+            }
+            if (getFilterValue() !== 'ITEM') {
+                selectedItemId = 0;
+                renderItemSelector();
+            }
+            refreshCalendar();
+        });
+
+        $('#admin-calendar-item-select').on('change', function () {
+            selectedItemId = parseInt($(this).val() || '0', 10) || 0;
+            if (selectedItemId > 0) {
+                focusState.itemId = selectedItemId;
+                focusState.threadId = 'ITEM:' + selectedItemId;
+                focusState.threadType = 'ITEM';
+                if ($('#admin-calendar-filter').find('option[value="ITEM"]').length) {
+                    $('#admin-calendar-filter').val('ITEM');
+                }
+            } else if (focusState.itemId > 0 || (focusState.threadId || '').indexOf('ITEM:') === 0) {
                 focusState.itemId = 0;
                 focusState.threadId = '';
                 focusState.threadType = '';
@@ -375,20 +557,33 @@
         $('#admin-calendar-create-form').on('submit', function (e) {
             e.preventDefault();
             var $f = $(this);
+            var submittedItemId = parseInt($.trim($f.find('[name="item_id"]').val() || '0'), 10) || 0;
             postCalendar({
                 action: 'create_event',
                 title: $.trim($f.find('[name="title"]').val() || ''),
                 description: $.trim($f.find('[name="description"]').val() || ''),
                 event_type: $.trim($f.find('[name="event_type"]').val() || 'ITEM'),
                 request_id: $.trim($f.find('[name="request_id"]').val() || ''),
-                item_id: $.trim($f.find('[name="item_id"]').val() || ''),
+                item_id: submittedItemId > 0 ? submittedItemId : '',
                 start_at: $.trim($f.find('[name="start_at"]').val() || ''),
                 end_at: $.trim($f.find('[name="end_at"]').val() || ''),
                 status: $.trim($f.find('[name="status"]').val() || 'scheduled'),
                 all_day: $f.find('[name="all_day"]').is(':checked') ? 1 : 0
-            }, function () {
+            }, function (res) {
                 $('#admin-calendar-create-modal').modal('hide');
                 toastr.success('Event created');
+                var createdEventId = parseInt((res && res.event && res.event.id) ? res.event.id : '0', 10) || 0;
+                if (createdEventId > 0) {
+                    pendingOpenEventId = createdEventId;
+                }
+                if (submittedItemId > 0) {
+                    selectedItemId = submittedItemId;
+                    focusState.itemId = submittedItemId;
+                    focusState.threadId = 'ITEM:' + submittedItemId;
+                    focusState.threadType = 'ITEM';
+                    knownItemOptions[submittedItemId] = knownItemOptions[submittedItemId] || ('ITEM #' + submittedItemId);
+                    renderItemSelector();
+                }
                 refreshCalendar();
             });
         });

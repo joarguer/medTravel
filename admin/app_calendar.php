@@ -69,6 +69,16 @@ $can_delete = $can_admin_view;
                         </div>
                     </div>
                     <div class="portlet-body">
+                        <div id="admin-calendar-provider-guide" class="alert alert-info" style="display:none; margin-bottom:15px;">
+                            Select an ITEM thread, then click a date/time to propose a schedule.
+                        </div>
+                        <div id="admin-calendar-item-selector-wrap" style="display:none; margin-bottom:15px;">
+                            <label for="admin-calendar-item-select" style="font-weight:600; margin-right:8px;">ITEM thread</label>
+                            <select id="admin-calendar-item-select" class="form-control input-sm" style="display:inline-block; min-width:260px; max-width:420px;">
+                                <option value="">Select an ITEM...</option>
+                            </select>
+                        </div>
+                        <div id="admin-calendar-empty-state" class="alert alert-warning" style="display:none; margin-bottom:15px;"></div>
                         <div id="admin-calendar"></div>
                     </div>
                 </div>
@@ -234,6 +244,7 @@ $can_delete = $can_admin_view;
 <script type="text/javascript">
 window.AdminCalendarConfig = {
     canAdmin: <?php echo $can_admin_view ? 'true' : 'false'; ?>,
+    isProvider: <?php echo (!$can_admin_view && ($provider_id > 0 || $service_provider_id > 0)) ? 'true' : 'false'; ?>,
     canCreate: <?php echo $can_create ? 'true' : 'false'; ?>,
     canUpdate: <?php echo $can_update ? 'true' : 'false'; ?>,
     canDelete: <?php echo $can_delete ? 'true' : 'false'; ?>,
