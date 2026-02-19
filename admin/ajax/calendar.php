@@ -80,8 +80,12 @@ function calendar_fetch_scoped_item_admin($conexion, $itemId, $scope)
     }
     $hasItemsSoftDelete = calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $hasRequestsSoftDelete = calendar_table_has_column($conexion, 'booking_requests', 'is_deleted');
+    $providerIdExpr = calendar_table_has_column($conexion, 'booking_request_items', 'provider_id') ? 'bri.provider_id' : 'NULL';
+    $serviceProviderIdExpr = calendar_table_has_column($conexion, 'booking_request_items', 'service_provider_id') ? 'bri.service_provider_id' : 'NULL';
 
-    $sql = "SELECT bri.id AS item_id, bri.booking_request_id AS request_id
+    $sql = "SELECT bri.id AS item_id, bri.booking_request_id AS request_id,
+                   {$providerIdExpr} AS provider_id,
+                   {$serviceProviderIdExpr} AS service_provider_id
             FROM booking_request_items bri
             INNER JOIN booking_requests br ON br.id = bri.booking_request_id
             WHERE bri.id = ?";
@@ -108,6 +112,103 @@ function calendar_fetch_scoped_item_admin($conexion, $itemId, $scope)
     $row = $res ? mysqli_fetch_assoc($res) : null;
     mysqli_stmt_close($stmt);
     return $row ?: null;
+}
+
+function calendar_resolve_provider_context_from_item($itemRow)
+{
+    $providerId = (int)($itemRow['provider_id'] ?? 0);
+    if ($providerId > 0) {
+        return ['kind' => 'providers', 'id' => $providerId];
+    }
+    $serviceProviderId = (int)($itemRow['service_provider_id'] ?? 0);
+    if ($serviceProviderId > 0) {
+        return ['kind' => 'service_providers', 'id' => $serviceProviderId];
+    }
+    return ['kind' => '', 'id' => 0];
+}
+
+function calendar_get_provider_capacity($conexion, $providerContext)
+{
+    $kind = trim((string)($providerContext['kind'] ?? ''));
+    $providerId = (int)($providerContext['id'] ?? 0);
+    if ($providerId <= 0 || $kind === '') {
+        return 1;
+    }
+    if (!calendar_table_exists($conexion, $kind) || !calendar_table_has_column($conexion, $kind, 'calendar_capacity')) {
+        return 1;
+    }
+
+    $sql = "SELECT calendar_capacity FROM `{$kind}` WHERE id = ? LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return 1;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return 1;
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    $capacity = (int)($row['calendar_capacity'] ?? 1);
+    return ($capacity > 0) ? $capacity : 1;
+}
+
+function calendar_count_overlaps_for_provider($conexion, $providerContext, $startAt, $endAt, $excludeEventId = 0)
+{
+    $kind = trim((string)($providerContext['kind'] ?? ''));
+    $providerId = (int)($providerContext['id'] ?? 0);
+    $startAt = trim((string)$startAt);
+    $endAt = trim((string)$endAt);
+    $excludeEventId = (int)$excludeEventId;
+
+    if ($providerId <= 0 || $kind === '' || $startAt === '') {
+        return 0;
+    }
+    if ($endAt === '') {
+        $endAt = $startAt;
+    }
+
+    $hasItemsSoftDelete = calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $providerColumn = ($kind === 'providers') ? 'provider_id' : (($kind === 'service_providers') ? 'service_provider_id' : '');
+    if ($providerColumn === '' || !calendar_table_has_column($conexion, 'booking_request_items', $providerColumn)) {
+        return 0;
+    }
+
+    $sql = "SELECT COUNT(*) AS overlap_count
+            FROM calendar_events ce
+            INNER JOIN booking_request_items bri ON bri.id = ce.item_id
+            WHERE ce.event_type = 'ITEM'
+              AND COALESCE(ce.status, 'scheduled') <> 'cancelled'
+              AND ce.start_at < ?
+              AND COALESCE(ce.end_at, ce.start_at) > ?
+              AND bri.`{$providerColumn}` = ?";
+    if ($hasItemsSoftDelete) {
+        $sql .= " AND bri.is_deleted = 0";
+    }
+    if ($excludeEventId > 0) {
+        $sql .= " AND ce.id <> ?";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return 0;
+    }
+    if ($excludeEventId > 0) {
+        mysqli_stmt_bind_param($stmt, 'ssii', $endAt, $startAt, $providerId, $excludeEventId);
+    } else {
+        mysqli_stmt_bind_param($stmt, 'ssi', $endAt, $startAt, $providerId);
+    }
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return 0;
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return (int)($row['overlap_count'] ?? 0);
 }
 
 function calendar_fetch_request_row($conexion, $requestId)
@@ -527,6 +628,7 @@ if ($action === 'create_event') {
     $itemId = (int)($_POST['item_id'] ?? 0);
     $status = calendar_normalize_status($_POST['status'] ?? 'scheduled');
     $isProviderActor = empty($scope['is_admin']);
+    $providerContext = ['kind' => '', 'id' => 0];
 
     if ($title === '' || $startAt === null) {
         calendar_admin_err('title_and_start_required', 422);
@@ -546,6 +648,7 @@ if ($action === 'create_event') {
         if (!$itemRow) {
             calendar_admin_err('item_not_found_or_forbidden', $isProviderActor ? 403 : 404);
         }
+        $providerContext = calendar_resolve_provider_context_from_item($itemRow);
         $requestId = (int)$itemRow['request_id'];
     } else {
         if ($requestId <= 0) {
@@ -558,6 +661,20 @@ if ($action === 'create_event') {
     }
     if ($isProviderActor) {
         $status = 'proposed';
+    }
+
+    if ($eventType === 'ITEM') {
+        $capacity = calendar_get_provider_capacity($conexion, $providerContext);
+        $overlapCount = calendar_count_overlaps_for_provider($conexion, $providerContext, (string)$startAt, (string)$endAt, 0);
+        if ($overlapCount >= $capacity) {
+            http_response_code(409);
+            echo json_encode([
+                'ok' => false,
+                'code' => 'CONFLICT',
+                'error' => 'This time conflicts with another scheduled event.',
+            ]);
+            exit;
+        }
     }
 
     $requestRow = calendar_fetch_request_row($conexion, $requestId);
@@ -580,7 +697,7 @@ if ($action === 'create_event') {
     }
     $createdByRole = (string)$scope['role_label'];
     $createdByUserId = (int)$scope['user_id'];
-    $providerIdentifier = (int)$scope['provider_identifier'];
+    $providerIdentifier = ((int)$providerContext['id'] > 0) ? (int)$providerContext['id'] : (int)$scope['provider_identifier'];
     mysqli_stmt_bind_param(
         $stmt,
         'ssssisiissiiis',
@@ -679,6 +796,7 @@ if ($action === 'update_event') {
     $isProviderActor = empty($scope['is_admin']);
     $requestId = isset($_POST['request_id']) ? (int)$_POST['request_id'] : (int)($existing['request_id'] ?? 0);
     $itemId = isset($_POST['item_id']) ? (int)$_POST['item_id'] : (int)($existing['item_id'] ?? 0);
+    $providerContext = ['kind' => '', 'id' => 0];
 
     if ($title === '' || $startAt === null) {
         calendar_admin_err('title_and_start_required', 422);
@@ -692,6 +810,7 @@ if ($action === 'update_event') {
         if (!$itemRow) {
             calendar_admin_err('item_not_found_or_forbidden', $isProviderActor ? 403 : 404);
         }
+        $providerContext = calendar_resolve_provider_context_from_item($itemRow);
         $requestId = (int)$itemRow['request_id'];
     } else {
         if ($requestId <= 0) {
@@ -715,9 +834,24 @@ if ($action === 'update_event') {
     if ($isProviderActor) {
         $status = 'proposed';
     }
+    $providerIdentifier = ((int)$providerContext['id'] > 0) ? (int)$providerContext['id'] : (int)$scope['provider_identifier'];
+
+    if ($eventType === 'ITEM') {
+        $capacity = calendar_get_provider_capacity($conexion, $providerContext);
+        $overlapCount = calendar_count_overlaps_for_provider($conexion, $providerContext, (string)$startAt, (string)$endAt, $eventId);
+        if ($overlapCount >= $capacity) {
+            http_response_code(409);
+            echo json_encode([
+                'ok' => false,
+                'code' => 'CONFLICT',
+                'error' => 'This time conflicts with another scheduled event.',
+            ]);
+            exit;
+        }
+    }
 
     $sql = "UPDATE calendar_events
-            SET title = ?, description = ?, start_at = ?, end_at = ?, all_day = ?, event_type = ?, request_id = ?, item_id = ?, thread_id = ?, client_user_id = ?, status = ?, updated_at = NOW()
+            SET title = ?, description = ?, start_at = ?, end_at = ?, all_day = ?, event_type = ?, request_id = ?, item_id = ?, thread_id = ?, provider_id = ?, client_user_id = ?, status = ?, updated_at = NOW()
             WHERE id = ?
             LIMIT 1";
     $stmt = mysqli_prepare($conexion, $sql);
@@ -726,7 +860,7 @@ if ($action === 'update_event') {
     }
     mysqli_stmt_bind_param(
         $stmt,
-        'ssssisiisisi',
+        'ssssisiisiisi',
         $title,
         $description,
         $startAt,
@@ -736,6 +870,7 @@ if ($action === 'update_event') {
         $requestId,
         $itemId,
         $threadId,
+        $providerIdentifier,
         $clientUserId,
         $status,
         $eventId

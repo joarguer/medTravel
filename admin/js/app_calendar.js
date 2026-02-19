@@ -644,14 +644,25 @@
             data: data
         }).done(function (res) {
             if (!res || res.ok !== true) {
-                toastr.error((res && res.message) ? res.message : 'Action failed');
+                var apiCode = String((res && res.code) ? res.code : '').toUpperCase();
+                var apiError = (res && (res.error || res.message)) ? String(res.error || res.message) : 'Action failed';
+                toastr.error(apiError);
+                if (apiCode === 'CONFLICT') {
+                    setCreateFieldError('admin-calendar-create-end-error', apiError);
+                }
                 if (onError) onError(res);
                 return;
             }
             if (onSuccess) onSuccess(res);
-        }).fail(function () {
-            toastr.error('Request failed');
-            if (onError) onError();
+        }).fail(function (xhr) {
+            var payload = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            var apiCode = String((payload && payload.code) ? payload.code : '').toUpperCase();
+            var apiError = (payload && (payload.error || payload.message)) ? String(payload.error || payload.message) : 'Request failed';
+            toastr.error(apiError);
+            if (apiCode === 'CONFLICT') {
+                setCreateFieldError('admin-calendar-create-end-error', apiError);
+            }
+            if (onError) onError(payload || xhr);
         });
     }
 

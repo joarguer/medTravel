@@ -599,3 +599,14 @@ Nota de alcance:
   - validaciones inline (item requerido para ITEM, request requerido para CARE, `end > start`).
   - botón primario con estado de carga (spinner) durante AJAX.
 - La lista de items del modal reutiliza el mismo pool de `knownItemOptions`/threads del calendario para evitar duplicación de selectores y mantener deep-link por `item_id`.
+
+### 12) Calendar overlap capacity (2026-02-19)
+- Se agrega `calendar_capacity` para concurrencia por proveedor (migración: `sql/2026_02_19_provider_calendar_capacity.sql`):
+  - `providers.calendar_capacity`
+  - `service_providers.calendar_capacity`
+- Regla de conflicto (`admin/ajax/calendar.php`):
+  - Aplica en `create_event` y `update_event` para `event_type=ITEM`.
+  - Se resuelve el proveedor real desde `booking_request_items` (`provider_id` o `service_provider_id`) sin confiar en input del cliente.
+  - Si `overlaps_count >= calendar_capacity`, retorna `409` con `code=CONFLICT` y mensaje:
+    `This time conflicts with another scheduled event.`
+  - Eventos `cancelled` no cuentan para el solape.
