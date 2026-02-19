@@ -590,3 +590,12 @@ Nota de alcance:
 - `client/app_calendar.php` + `client/js/app_calendar.js`:
   - modal muestra `Accept` y `Request change` cuando evento está en `proposed`
   - `Request change` redirige al Inbox thread correspondiente (negociación por mensaje).
+
+### 11) Calendar create modal UX polish (2026-02-19)
+- `admin/app_calendar.php` + `admin/js/app_calendar.js` mejoran la UX del modal de creación sin cambiar contrato backend:
+  - título dinámico (`Propose schedule` para provider, `Create event` para admin/patientcare).
+  - layout en dos columnas (`Event details` / `Schedule`) con labels y ayudas en inglés.
+  - campos condicionales por tipo (`CARE` vs `ITEM`) y por rol (provider fijo en `ITEM` + `proposed`).
+  - validaciones inline (item requerido para ITEM, request requerido para CARE, `end > start`).
+  - botón primario con estado de carga (spinner) durante AJAX.
+- La lista de items del modal reutiliza el mismo pool de `knownItemOptions`/threads del calendario para evitar duplicación de selectores y mantener deep-link por `item_id`.

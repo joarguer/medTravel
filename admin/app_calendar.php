@@ -94,64 +94,101 @@ $can_delete = $can_admin_view;
             <form id="admin-calendar-create-form">
                 <div class="modal-header">
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
-                    <h4 class="modal-title">Create event</h4>
+                    <h4 class="modal-title"><i class="icon-calendar"></i> <span id="admin-calendar-create-title">Create event</span></h4>
+                    <p id="admin-calendar-create-subtitle" class="help-block" style="margin:8px 0 0; display:none;">This will notify the patient for confirmation.</p>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group">
-                        <label>Title</label>
-                        <input type="text" class="form-control" name="title" required maxlength="255">
-                    </div>
-                    <div class="form-group">
-                        <label>Event Type</label>
-                        <select class="form-control" name="event_type" id="admin-calendar-create-type">
-                            <?php if ($can_admin_view): ?>
-                            <option value="CARE">CARE</option>
-                            <?php endif; ?>
-                            <option value="ITEM" selected>ITEM</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Request ID</label>
-                        <input type="number" min="1" class="form-control" name="request_id">
-                    </div>
-                    <div class="form-group">
-                        <label>Item ID (required for ITEM)</label>
-                        <input type="number" min="1" class="form-control" name="item_id">
-                    </div>
+                    <div id="admin-calendar-create-summary" class="alert alert-info" style="display:none; margin-bottom:15px;"></div>
                     <div class="row">
                         <div class="col-sm-6">
+                            <h5 style="margin-top:0; margin-bottom:12px;">Event details</h5>
                             <div class="form-group">
-                                <label>Start</label>
-                                <input type="datetime-local" class="form-control" name="start_at" required>
+                                <label>Title</label>
+                                <input type="text" class="form-control" name="title" required maxlength="255">
+                            </div>
+                            <div class="form-group">
+                                <label>Description</label>
+                                <textarea class="form-control" name="description" rows="4"></textarea>
+                            </div>
+                            <div class="form-group" id="admin-calendar-create-status-group">
+                                <label>Status</label>
+                                <select class="form-control" name="status" id="admin-calendar-create-status">
+                                    <option value="scheduled">scheduled</option>
+                                    <option value="proposed">proposed</option>
+                                    <option value="confirmed">confirmed</option>
+                                    <option value="cancelled">cancelled</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="admin-calendar-create-status-readonly-group" style="display:none;">
+                                <label>Status</label>
+                                <p class="form-control-static" id="admin-calendar-create-status-readonly" style="font-weight:600;">Proposed</p>
+                                <small class="text-muted">The patient will need to accept this schedule.</small>
                             </div>
                         </div>
                         <div class="col-sm-6">
+                            <h5 style="margin-top:0; margin-bottom:12px;">Schedule</h5>
+                            <div class="form-group" id="admin-calendar-create-type-group">
+                                <label>Event type</label>
+                                <select class="form-control" name="event_type" id="admin-calendar-create-type">
+                                    <?php if ($can_admin_view): ?>
+                                    <option value="CARE">CARE</option>
+                                    <?php endif; ?>
+                                    <option value="ITEM" selected>ITEM</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="admin-calendar-create-type-readonly-group" style="display:none;">
+                                <label>Event type</label>
+                                <p class="form-control-static" id="admin-calendar-create-type-readonly" style="font-weight:600;">ITEM</p>
+                            </div>
+                            <div class="form-group" id="admin-calendar-create-item-group">
+                                <label>Item (required)</label>
+                                <select class="form-control" name="item_id" id="admin-calendar-create-item-select">
+                                    <option value="">Select item (required)</option>
+                                </select>
+                                <small class="text-muted">Select item (required)</small>
+                                <div class="help-block text-danger" id="admin-calendar-create-item-error" style="display:none;"></div>
+                            </div>
+                            <div class="form-group" id="admin-calendar-create-request-group">
+                                <label>Booking request</label>
+                                <select class="form-control" name="request_id" id="admin-calendar-create-request-select">
+                                    <option value="">Select booking request</option>
+                                </select>
+                                <div class="help-block text-danger" id="admin-calendar-create-request-error" style="display:none;"></div>
+                            </div>
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <div class="form-group">
+                                        <label>Start time</label>
+                                        <div class="input-group">
+                                            <span class="input-group-addon"><i class="fa fa-calendar"></i></span>
+                                            <input type="datetime-local" class="form-control" name="start_at" required>
+                                        </div>
+                                        <div class="help-block text-danger" id="admin-calendar-create-start-error" style="display:none;"></div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="form-group">
+                                        <label>End time</label>
+                                        <div class="input-group">
+                                            <span class="input-group-addon"><i class="fa fa-calendar-o"></i></span>
+                                            <input type="datetime-local" class="form-control" name="end_at">
+                                        </div>
+                                        <div class="help-block text-danger" id="admin-calendar-create-end-error" style="display:none;"></div>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="form-group">
-                                <label>End</label>
-                                <input type="datetime-local" class="form-control" name="end_at">
+                                <label class="mt-checkbox mt-checkbox-outline">
+                                    <input type="checkbox" name="all_day" value="1"> All-day event
+                                    <span></span>
+                                </label>
                             </div>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select class="form-control" name="status">
-                            <option value="scheduled">scheduled</option>
-                            <option value="proposed">proposed</option>
-                            <option value="confirmed">confirmed</option>
-                            <option value="cancelled">cancelled</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <textarea class="form-control" name="description" rows="3"></textarea>
-                    </div>
-                    <div class="checkbox">
-                        <label><input type="checkbox" name="all_day" value="1"> All day</label>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn default" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn blue">Create</button>
+                    <button type="submit" class="btn blue" id="admin-calendar-create-submit">Create event</button>
                 </div>
             </form>
         </div>

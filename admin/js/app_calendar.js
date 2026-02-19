@@ -5,7 +5,10 @@
     var focusNoticeShown = false;
     var focusDetailOpened = false;
     var selectedItemId = focusState.itemId > 0 ? focusState.itemId : 0;
+    var selectedRequestId = focusState.requestId > 0 ? focusState.requestId : 0;
     var knownItemOptions = {};
+    var knownItemMeta = {};
+    var knownRequestOptions = {};
     var pendingOpenEventId = 0;
 
     function parseQueryParams() {
@@ -28,6 +31,7 @@
         var threadId = String(params.thread_id || '').trim();
         var threadType = String(params.thread_type || '').toUpperCase().trim();
         var itemId = parseInt(params.item_id || '0', 10) || 0;
+        var requestId = parseInt(params.request_id || '0', 10) || 0;
 
         if (!threadId && itemId > 0) {
             threadId = 'ITEM:' + itemId;
@@ -44,7 +48,8 @@
         return {
             threadId: threadId,
             threadType: threadType,
-            itemId: itemId
+            itemId: itemId,
+            requestId: requestId
         };
     }
 
@@ -142,16 +147,43 @@
         return 'ITEM #' + itemId;
     }
 
+    function registerItemOption(itemId, label, requestId, status) {
+        itemId = parseInt(itemId, 10) || 0;
+        requestId = parseInt(requestId, 10) || 0;
+        if (itemId <= 0) return;
+        var normalizedLabel = $.trim(String(label || ''));
+        if (!normalizedLabel) {
+            normalizedLabel = 'ITEM #' + itemId;
+            if (requestId > 0) {
+                normalizedLabel = 'Request #' + requestId + ' - ' + normalizedLabel;
+            }
+        }
+        knownItemOptions[itemId] = normalizedLabel;
+        knownItemMeta[itemId] = {
+            itemId: itemId,
+            requestId: requestId > 0 ? requestId : 0,
+            status: $.trim(String(status || ''))
+        };
+        if (requestId > 0 && !knownRequestOptions[requestId]) {
+            knownRequestOptions[requestId] = 'Request #' + requestId;
+        }
+    }
+
     function collectKnownItemOptions(events) {
         (events || []).forEach(function (e) {
             var itemId = getEventItemId(e);
-            if (itemId <= 0) return;
-            if (!knownItemOptions[itemId]) {
-                knownItemOptions[itemId] = buildItemOptionLabel(itemId, e);
+            var requestId = getEventRequestId(e);
+            if (requestId > 0 && !knownRequestOptions[requestId]) {
+                knownRequestOptions[requestId] = 'Request #' + requestId;
             }
+            if (itemId <= 0) return;
+            registerItemOption(itemId, buildItemOptionLabel(itemId, e), requestId, getEventStatus(e));
         });
         if (selectedItemId > 0 && !knownItemOptions[selectedItemId]) {
-            knownItemOptions[selectedItemId] = 'ITEM #' + selectedItemId;
+            registerItemOption(selectedItemId, 'ITEM #' + selectedItemId, selectedRequestId, '');
+        }
+        if (selectedRequestId > 0 && !knownRequestOptions[selectedRequestId]) {
+            knownRequestOptions[selectedRequestId] = 'Request #' + selectedRequestId;
         }
     }
 
@@ -181,6 +213,43 @@
         $select.html(html.join(''));
     }
 
+    function renderCreateModalSelectors() {
+        var $itemSelect = $('#admin-calendar-create-item-select');
+        var $requestSelect = $('#admin-calendar-create-request-select');
+
+        if ($itemSelect.length) {
+            var itemKeys = Object.keys(knownItemOptions)
+                .map(function (k) { return parseInt(k, 10) || 0; })
+                .filter(function (n) { return n > 0; })
+                .sort(function (a, b) { return a - b; });
+            var itemHtml = ['<option value="">Select item (required)</option>'];
+            itemKeys.forEach(function (id) {
+                var selected = selectedItemId === id ? ' selected' : '';
+                itemHtml.push('<option value="' + id + '"' + selected + '>' + esc(knownItemOptions[id] || ('ITEM #' + id)) + '</option>');
+            });
+            if (selectedItemId > 0 && itemKeys.indexOf(selectedItemId) === -1) {
+                itemHtml.push('<option value="' + selectedItemId + '" selected>' + esc('ITEM #' + selectedItemId) + '</option>');
+            }
+            $itemSelect.html(itemHtml.join(''));
+        }
+
+        if ($requestSelect.length) {
+            var requestKeys = Object.keys(knownRequestOptions)
+                .map(function (k) { return parseInt(k, 10) || 0; })
+                .filter(function (n) { return n > 0; })
+                .sort(function (a, b) { return a - b; });
+            var requestHtml = ['<option value="">Select booking request</option>'];
+            requestKeys.forEach(function (id) {
+                var selected = selectedRequestId === id ? ' selected' : '';
+                requestHtml.push('<option value="' + id + '"' + selected + '>' + esc(knownRequestOptions[id]) + '</option>');
+            });
+            if (selectedRequestId > 0 && requestKeys.indexOf(selectedRequestId) === -1) {
+                requestHtml.push('<option value="' + selectedRequestId + '" selected>' + esc('Request #' + selectedRequestId) + '</option>');
+            }
+            $requestSelect.html(requestHtml.join(''));
+        }
+    }
+
     function loadItemThreads(callback) {
         $.ajax({
             url: config.listUrl || 'ajax/calendar.php',
@@ -200,13 +269,11 @@
                 var itemId = parseInt(thread.item_id || '0', 10) || 0;
                 if (itemId <= 0) return;
                 var label = $.trim(String(thread.label || ''));
-                if (!label) {
-                    var requestId = parseInt(thread.request_id || '0', 10) || 0;
-                    label = 'Request #' + requestId + ' - ITEM #' + itemId;
-                }
-                knownItemOptions[itemId] = label;
+                var requestId = parseInt(thread.request_id || '0', 10) || 0;
+                registerItemOption(itemId, label, requestId, thread.status || '');
             });
             renderItemSelector();
+            renderCreateModalSelectors();
             if (callback) callback(true);
         }).fail(function () {
             if (callback) callback(false);
@@ -282,7 +349,15 @@
 
     function applyInitialFilterFromFocus() {
         var $filter = $('#admin-calendar-filter');
-        if (!$filter.length || !focusState) return;
+        if (!focusState) return;
+
+        if (focusState.requestId > 0) {
+            selectedRequestId = focusState.requestId;
+            if (!knownRequestOptions[selectedRequestId]) {
+                knownRequestOptions[selectedRequestId] = 'Request #' + selectedRequestId;
+            }
+        }
+        if (!$filter.length) return;
 
         if (focusState.itemId > 0 || focusState.threadType === 'ITEM') {
             if ($filter.find('option[value="ITEM"]').length) {
@@ -300,11 +375,162 @@
         }
     }
 
+    function resetCreateFormErrors() {
+        $('#admin-calendar-create-item-error').hide().text('');
+        $('#admin-calendar-create-request-error').hide().text('');
+        $('#admin-calendar-create-start-error').hide().text('');
+        $('#admin-calendar-create-end-error').hide().text('');
+    }
+
+    function setCreateFieldError(id, message) {
+        var $el = $('#' + id);
+        if (!$el.length) return;
+        $el.text(message || '').toggle(!!message);
+    }
+
+    function refreshCreateSummary() {
+        var $summary = $('#admin-calendar-create-summary');
+        if (!$summary.length) return;
+        var eventType = String($('#admin-calendar-create-form [name="event_type"]').val() || 'ITEM').toUpperCase();
+        var itemId = parseInt($('#admin-calendar-create-item-select').val() || '0', 10) || 0;
+        var requestId = parseInt($('#admin-calendar-create-request-select').val() || '0', 10) || 0;
+
+        if (eventType === 'ITEM' && itemId > 0) {
+            var label = knownItemOptions[itemId] || ('ITEM #' + itemId);
+            var itemMeta = knownItemMeta[itemId] || {};
+            var resolvedRequestId = parseInt(itemMeta.requestId || requestId || '0', 10) || 0;
+            var text = 'Thread: ITEM #' + itemId;
+            if (resolvedRequestId > 0) {
+                text += ' — Request #' + resolvedRequestId;
+            }
+            text += ' — ' + label;
+            $summary.text(text).show();
+            return;
+        }
+
+        if (eventType === 'CARE' && requestId > 0) {
+            $summary.text('Thread: CARE:' + requestId + ' — Request #' + requestId).show();
+            return;
+        }
+
+        $summary.hide().text('');
+    }
+
+    function updateCreateHeaderAndButtons() {
+        var isProvider = isProviderView();
+        var status = String($('#admin-calendar-create-form [name="status"]').val() || 'scheduled').toLowerCase();
+        var submitLabel = isProvider ? 'Send proposal' : 'Create event';
+        $('#admin-calendar-create-title').text(isProvider ? 'Propose schedule' : 'Create event');
+        $('#admin-calendar-create-submit').text(submitLabel).data('default-label', submitLabel);
+        if (status === 'proposed') {
+            $('#admin-calendar-create-subtitle').show();
+        } else {
+            $('#admin-calendar-create-subtitle').hide();
+        }
+    }
+
+    function syncCreateModalByType() {
+        var $form = $('#admin-calendar-create-form');
+        var eventType = String($form.find('[name="event_type"]').val() || 'ITEM').toUpperCase();
+        var isProvider = isProviderView();
+        var isItem = eventType === 'ITEM';
+
+        $('#admin-calendar-create-type-group').toggle(!isProvider);
+        $('#admin-calendar-create-type-readonly-group').toggle(isProvider);
+        $('#admin-calendar-create-status-group').toggle(!isProvider);
+        $('#admin-calendar-create-status-readonly-group').toggle(isProvider);
+        $('#admin-calendar-create-item-group').toggle(isItem);
+        $('#admin-calendar-create-request-group').toggle(!isItem && !isProvider);
+        $('#admin-calendar-create-type-readonly').text(isItem ? 'ITEM' : 'CARE');
+        $('#admin-calendar-create-status-readonly').text('Proposed');
+
+        if (isProvider) {
+            $form.find('[name="event_type"]').val('ITEM').prop('disabled', true);
+            $form.find('[name="status"]').val('proposed').prop('disabled', true);
+        } else {
+            $form.find('[name="event_type"]').prop('disabled', false);
+            $form.find('[name="status"]').prop('disabled', false);
+        }
+
+        if (isItem) {
+            var selectedModalItemId = parseInt($('#admin-calendar-create-item-select').val() || '0', 10) || 0;
+            if (selectedModalItemId > 0) {
+                selectedItemId = selectedModalItemId;
+                var meta = knownItemMeta[selectedModalItemId] || {};
+                if ((parseInt(meta.requestId || '0', 10) || 0) > 0) {
+                    selectedRequestId = parseInt(meta.requestId, 10);
+                }
+            } else if (selectedItemId > 0) {
+                $('#admin-calendar-create-item-select').val(String(selectedItemId));
+            }
+            $form.find('[name="request_id"]').val('');
+        } else {
+            var selectedModalRequestId = parseInt($('#admin-calendar-create-request-select').val() || '0', 10) || 0;
+            if (selectedModalRequestId > 0) {
+                selectedRequestId = selectedModalRequestId;
+            } else if (selectedRequestId > 0) {
+                $('#admin-calendar-create-request-select').val(String(selectedRequestId));
+            }
+            $form.find('[name="item_id"]').val('');
+        }
+
+        updateCreateHeaderAndButtons();
+        refreshCreateSummary();
+    }
+
+    function validateCreateForm() {
+        resetCreateFormErrors();
+        var $form = $('#admin-calendar-create-form');
+        var eventType = String($form.find('[name="event_type"]').val() || 'ITEM').toUpperCase();
+        var itemId = parseInt($('#admin-calendar-create-item-select').val() || '0', 10) || 0;
+        var requestId = parseInt($('#admin-calendar-create-request-select').val() || '0', 10) || 0;
+        var startAt = $.trim(String($form.find('[name="start_at"]').val() || ''));
+        var endAt = $.trim(String($form.find('[name="end_at"]').val() || ''));
+        var hasError = false;
+
+        if (eventType === 'ITEM' && itemId <= 0) {
+            setCreateFieldError('admin-calendar-create-item-error', 'Item is required for ITEM events.');
+            hasError = true;
+        }
+        if (eventType === 'CARE' && !isProviderView() && requestId <= 0) {
+            setCreateFieldError('admin-calendar-create-request-error', 'Booking request is required for CARE events.');
+            hasError = true;
+        }
+        if (startAt === '') {
+            setCreateFieldError('admin-calendar-create-start-error', 'Start time is required.');
+            hasError = true;
+        }
+        if (startAt !== '' && endAt !== '') {
+            var mStart = moment(startAt);
+            var mEnd = moment(endAt);
+            if (mStart.isValid() && mEnd.isValid() && !mEnd.isAfter(mStart)) {
+                setCreateFieldError('admin-calendar-create-end-error', 'End time must be after start time.');
+                hasError = true;
+            }
+        }
+        return !hasError;
+    }
+
+    function setCreateSubmittingState(isSubmitting) {
+        var $btn = $('#admin-calendar-create-submit');
+        if (!$btn.length) return;
+        if (isSubmitting) {
+            if (!$btn.data('default-label')) {
+                $btn.data('default-label', $btn.text());
+            }
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sending...');
+            return;
+        }
+        var label = String($btn.data('default-label') || '');
+        $btn.prop('disabled', false).text(label !== '' ? label : 'Create event');
+    }
+
     function openCreateModal(start, end, allDay, options) {
         if (!config.canCreate) return;
         options = options || {};
         var $form = $('#admin-calendar-create-form');
         $form[0].reset();
+        resetCreateFormErrors();
         var startVal = start;
         var endVal = end;
         var allDayVal = !!allDay;
@@ -333,25 +559,20 @@
             $form.find('[name="status"]').val(options.forceStatus);
         }
         if (options.itemId > 0) {
-            $form.find('[name="item_id"]').val(options.itemId);
+            selectedItemId = parseInt(options.itemId, 10) || 0;
+            $('#admin-calendar-create-item-select').val(String(selectedItemId));
+            var meta = knownItemMeta[selectedItemId] || {};
+            if ((parseInt(meta.requestId || '0', 10) || 0) > 0) {
+                selectedRequestId = parseInt(meta.requestId, 10);
+            }
         }
-        if (!config.canAdmin) {
-            $form.find('[name="event_type"]').val('ITEM').prop('disabled', true);
-            $form.find('[name="status"]').val('proposed');
-        } else {
-            $form.find('[name="event_type"]').prop('disabled', false);
-            $form.find('[name="status"]').prop('disabled', false);
+        if (options.requestId > 0) {
+            selectedRequestId = parseInt(options.requestId, 10) || 0;
+            $('#admin-calendar-create-request-select').val(String(selectedRequestId));
         }
-        if (options.lockItemId) {
-            $form.find('[name="item_id"]').prop('readonly', true);
-        } else {
-            $form.find('[name="item_id"]').prop('readonly', false);
-        }
-        if (options.lockStatus) {
-            $form.find('[name="status"]').prop('disabled', true);
-        } else if (config.canAdmin) {
-            $form.find('[name="status"]').prop('disabled', false);
-        }
+        renderCreateModalSelectors();
+        syncCreateModalByType();
+        setCreateSubmittingState(false);
         $('#admin-calendar-create-modal').modal('show');
     }
 
@@ -366,15 +587,20 @@
                 itemId: selectedItemId,
                 defaultTitle: 'Proposed schedule',
                 forceStatus: 'proposed',
-                lockStatus: true,
-                lockItemId: true,
                 forceThirtyMinutes: true
             });
             return;
         }
-        openCreateModal(start, end, allDay, selectedItemId > 0 ? {
-            eventType: 'ITEM',
-            itemId: selectedItemId
+        if (selectedItemId > 0) {
+            openCreateModal(start, end, allDay, {
+                eventType: 'ITEM',
+                itemId: selectedItemId
+            });
+            return;
+        }
+        openCreateModal(start, end, allDay, selectedRequestId > 0 ? {
+            eventType: 'CARE',
+            requestId: selectedRequestId
         } : {});
     }
 
@@ -465,6 +691,7 @@
                     }
                     collectKnownItemOptions(res.events || []);
                     renderItemSelector();
+                    renderCreateModalSelectors();
                     var mapped = mapListEvents(res.events || []);
                     callback(mapped);
                     updateEmptyState(mapped.length);
@@ -570,6 +797,7 @@
             $('#admin-calendar-provider-guide').show();
         }
         renderItemSelector();
+        renderCreateModalSelectors();
         loadItemThreads();
         initCalendar();
 
@@ -581,7 +809,9 @@
             }
             if (getFilterValue() !== 'ITEM') {
                 selectedItemId = 0;
+                selectedRequestId = selectedRequestId > 0 ? selectedRequestId : 0;
                 renderItemSelector();
+                renderCreateModalSelectors();
             }
             refreshCalendar();
         });
@@ -589,6 +819,10 @@
         $('#admin-calendar-item-select').on('change', function () {
             selectedItemId = parseInt($(this).val() || '0', 10) || 0;
             if (selectedItemId > 0) {
+                var meta = knownItemMeta[selectedItemId] || {};
+                if ((parseInt(meta.requestId || '0', 10) || 0) > 0) {
+                    selectedRequestId = parseInt(meta.requestId, 10);
+                }
                 focusState.itemId = selectedItemId;
                 focusState.threadId = 'ITEM:' + selectedItemId;
                 focusState.threadType = 'ITEM';
@@ -600,40 +834,92 @@
                 focusState.threadId = '';
                 focusState.threadType = '';
             }
+            renderCreateModalSelectors();
             refreshCalendar();
+        });
+
+        $('#admin-calendar-create-type').on('change', function () {
+            syncCreateModalByType();
+        });
+
+        $('#admin-calendar-create-status').on('change', function () {
+            updateCreateHeaderAndButtons();
+        });
+
+        $('#admin-calendar-create-item-select').on('change', function () {
+            selectedItemId = parseInt($(this).val() || '0', 10) || 0;
+            if (selectedItemId > 0) {
+                var meta = knownItemMeta[selectedItemId] || {};
+                if ((parseInt(meta.requestId || '0', 10) || 0) > 0) {
+                    selectedRequestId = parseInt(meta.requestId, 10);
+                    $('#admin-calendar-create-request-select').val(String(selectedRequestId));
+                }
+            }
+            syncCreateModalByType();
+        });
+
+        $('#admin-calendar-create-request-select').on('change', function () {
+            selectedRequestId = parseInt($(this).val() || '0', 10) || 0;
+            syncCreateModalByType();
+        });
+
+        $('#admin-calendar-create-form [name="start_at"], #admin-calendar-create-form [name="end_at"]').on('change', function () {
+            setCreateFieldError('admin-calendar-create-start-error', '');
+            setCreateFieldError('admin-calendar-create-end-error', '');
+        });
+
+        $('#admin-calendar-create-form').on('shown.bs.modal', function () {
+            renderCreateModalSelectors();
+            syncCreateModalByType();
         });
 
         $('#admin-calendar-create-form').on('submit', function (e) {
             e.preventDefault();
             var $f = $(this);
-            var submittedItemId = parseInt($.trim($f.find('[name="item_id"]').val() || '0'), 10) || 0;
+            if (!validateCreateForm()) {
+                return;
+            }
+            var submittedItemId = parseInt($.trim($('#admin-calendar-create-item-select').val() || '0'), 10) || 0;
+            var submittedRequestId = parseInt($.trim($('#admin-calendar-create-request-select').val() || '0'), 10) || 0;
+            var eventType = $.trim($f.find('[name="event_type"]').val() || 'ITEM').toUpperCase();
+            setCreateSubmittingState(true);
             postCalendar({
                 action: 'create_event',
                 title: $.trim($f.find('[name="title"]').val() || ''),
                 description: $.trim($f.find('[name="description"]').val() || ''),
-                event_type: $.trim($f.find('[name="event_type"]').val() || 'ITEM'),
-                request_id: $.trim($f.find('[name="request_id"]').val() || ''),
-                item_id: submittedItemId > 0 ? submittedItemId : '',
+                event_type: eventType,
+                request_id: (eventType === 'CARE' && submittedRequestId > 0) ? submittedRequestId : '',
+                item_id: (eventType === 'ITEM' && submittedItemId > 0) ? submittedItemId : '',
                 start_at: $.trim($f.find('[name="start_at"]').val() || ''),
                 end_at: $.trim($f.find('[name="end_at"]').val() || ''),
                 status: $.trim($f.find('[name="status"]').val() || 'scheduled'),
                 all_day: $f.find('[name="all_day"]').is(':checked') ? 1 : 0
             }, function (res) {
+                setCreateSubmittingState(false);
                 $('#admin-calendar-create-modal').modal('hide');
-                toastr.success('Event created');
+                toastr.success(isProviderView() ? 'Proposal sent' : 'Event created');
                 var createdEventId = parseInt((res && res.event && res.event.id) ? res.event.id : '0', 10) || 0;
                 if (createdEventId > 0) {
                     pendingOpenEventId = createdEventId;
                 }
                 if (submittedItemId > 0) {
                     selectedItemId = submittedItemId;
+                    var meta = knownItemMeta[submittedItemId] || {};
+                    if ((parseInt(meta.requestId || '0', 10) || 0) > 0) {
+                        selectedRequestId = parseInt(meta.requestId, 10);
+                    }
                     focusState.itemId = submittedItemId;
                     focusState.threadId = 'ITEM:' + submittedItemId;
                     focusState.threadType = 'ITEM';
-                    knownItemOptions[submittedItemId] = knownItemOptions[submittedItemId] || ('ITEM #' + submittedItemId);
+                    registerItemOption(submittedItemId, knownItemOptions[submittedItemId] || ('ITEM #' + submittedItemId), selectedRequestId, '');
                     renderItemSelector();
+                    renderCreateModalSelectors();
+                } else if (submittedRequestId > 0) {
+                    selectedRequestId = submittedRequestId;
                 }
                 refreshCalendar();
+            }, function () {
+                setCreateSubmittingState(false);
             });
         });
 
