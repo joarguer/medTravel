@@ -541,3 +541,18 @@ Nota de alcance:
   - Admin/PatientCare pueden ver `CARE` + `ITEM`.
 - Compatibilidad:
   - Si un hilo no tiene mensajes en tablas Inbox, se permite fallback legacy de lectura desde `booking_requests.additional_notes`.
+
+### 8) Calendario scoped (admin/provider/client)
+- Nueva tabla: `calendar_events` (migración: `sql/2026_02_19_calendar_events.sql`).
+- Páginas:
+  - `admin/app_calendar.php`
+  - `client/app_calendar.php`
+- Endpoints:
+  - `admin/ajax/calendar.php` (`list_events`, `create_event`, `update_event`, `delete_event`)
+  - `client/ajax/calendar.php` (`list_events` read-only)
+- Reglas de scope:
+  - Admin/PatientCare: CARE + ITEM.
+  - Provider: solo ITEM de sus `item_id` scopeados.
+  - Client: solo eventos de sus requests (`client_user_id` y fallback ownership por request).
+- Integración:
+  - Evento enlaza `request_id`, `item_id` y `thread_id` (`CARE:<request_id>` / `ITEM:<item_id>`) para abrir Inbox y detalle.

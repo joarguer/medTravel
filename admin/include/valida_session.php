@@ -50,6 +50,7 @@ function get_required_permission_for_script($script_name) {
         // Booking / clientes
         'booking_requests.php' => PERM_BOOKING_MANAGE,
         'my_booking_requests.php' => PERM_BOOKING_VIEW,
+        'app_calendar.php' => PERM_BOOKING_VIEW,
         'clientes.php' => PERM_BOOKING_VIEW,
 
         // Usuarios / accesos

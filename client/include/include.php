@@ -118,6 +118,9 @@ $top_header = '<div class="clearfix navbar-fixed-top">
                                 <a href="/client/my_requests.php"><i class="icon-calendar"></i> My Requests</a>
                             </li>
                             <li>
+                                <a href="/client/app_calendar.php"><i class="icon-clock"></i> My Calendar</a>
+                            </li>
+                            <li>
                                 <a href="/client/app_inbox.php"><i class="icon-envelope-open"></i> My Inbox</a>
                             </li>
                             <li class="divider"></li>
@@ -139,6 +142,9 @@ $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-respon
                         </li>
                         <li' . client_menu_li_class(['app_inbox.php'], 'dropdown dropdown-fw dropdown-fw-disabled') . '>
                             <a href="/client/app_inbox.php" class="text-uppercase"><i class="icon-envelope-open"></i> Inbox</a>
+                        </li>
+                        <li' . client_menu_li_class(['app_calendar.php'], 'dropdown dropdown-fw dropdown-fw-disabled') . '>
+                            <a href="/client/app_calendar.php" class="text-uppercase"><i class="icon-clock"></i> Calendar</a>
                         </li>
                     </ul>
                  </div>';
