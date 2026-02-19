@@ -181,6 +181,38 @@
         $select.html(html.join(''));
     }
 
+    function loadItemThreads(callback) {
+        $.ajax({
+            url: config.listUrl || 'ajax/calendar.php',
+            method: 'GET',
+            dataType: 'json',
+            data: {
+                action: 'list_threads',
+                limit: 500
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                if (callback) callback(false);
+                return;
+            }
+            var list = Array.isArray(res.threads) ? res.threads : [];
+            list.forEach(function (thread) {
+                var itemId = parseInt(thread.item_id || '0', 10) || 0;
+                if (itemId <= 0) return;
+                var label = $.trim(String(thread.label || ''));
+                if (!label) {
+                    var requestId = parseInt(thread.request_id || '0', 10) || 0;
+                    label = 'Request #' + requestId + ' - ITEM #' + itemId;
+                }
+                knownItemOptions[itemId] = label;
+            });
+            renderItemSelector();
+            if (callback) callback(true);
+        }).fail(function () {
+            if (callback) callback(false);
+        });
+    }
+
     function updateEmptyState(count) {
         var $empty = $('#admin-calendar-empty-state');
         if (!$empty.length) return;
@@ -323,6 +355,29 @@
         $('#admin-calendar-create-modal').modal('show');
     }
 
+    function openCreateFromSelection(start, end, allDay) {
+        if (isProviderView() && selectedItemId <= 0) {
+            toastr.warning('Please select an ITEM thread first.');
+            return;
+        }
+        if (isProviderView()) {
+            openCreateModal(start, end, allDay, {
+                eventType: 'ITEM',
+                itemId: selectedItemId,
+                defaultTitle: 'Proposed schedule',
+                forceStatus: 'proposed',
+                lockStatus: true,
+                lockItemId: true,
+                forceThirtyMinutes: true
+            });
+            return;
+        }
+        openCreateModal(start, end, allDay, selectedItemId > 0 ? {
+            eventType: 'ITEM',
+            itemId: selectedItemId
+        } : {});
+    }
+
     function loadEventInDetail(event) {
         currentEvent = event || null;
         if (!currentEvent) return;
@@ -453,28 +508,21 @@
                 });
             },
             select: function (start, end, allDay) {
-                if (isProviderView() && selectedItemId <= 0) {
-                    toastr.warning('Please select an ITEM thread first.');
-                    $('#admin-calendar').fullCalendar('unselect');
+                openCreateFromSelection(start, end, allDay);
+                $('#admin-calendar').fullCalendar('unselect');
+            },
+            dayClick: function (date, jsEvent, view) {
+                if (!config.canCreate) {
                     return;
                 }
-                if (isProviderView()) {
-                    openCreateModal(start, end, allDay, {
-                        eventType: 'ITEM',
-                        itemId: selectedItemId,
-                        defaultTitle: 'Proposed schedule',
-                        forceStatus: 'proposed',
-                        lockStatus: true,
-                        lockItemId: true,
-                        forceThirtyMinutes: true
-                    });
-                } else {
-                    openCreateModal(start, end, allDay, selectedItemId > 0 ? {
-                        eventType: 'ITEM',
-                        itemId: selectedItemId
-                    } : {});
+                var start = moment(date);
+                var end = start.clone().add(30, 'minutes');
+                var isAllDayView = view && (view.name === 'month' || view.name === 'basicWeek' || view.name === 'basicDay');
+                if (isAllDayView) {
+                    start.hour(9).minute(0).second(0).millisecond(0);
+                    end = start.clone().add(30, 'minutes');
                 }
-                $('#admin-calendar').fullCalendar('unselect');
+                openCreateFromSelection(start, end, false);
             },
             eventClick: function (event) {
                 loadEventInDetail(event);
@@ -522,6 +570,7 @@
             $('#admin-calendar-provider-guide').show();
         }
         renderItemSelector();
+        loadItemThreads();
         initCalendar();
 
         $('#admin-calendar-filter').on('change', function () {

@@ -381,6 +381,93 @@ if (empty($scope['ok'])) {
 
 $action = trim((string)($_GET['action'] ?? $_POST['action'] ?? 'list_events'));
 
+if ($action === 'list_threads') {
+    if (!calendar_table_exists($conexion, 'booking_request_items') || !calendar_table_exists($conexion, 'booking_requests')) {
+        calendar_admin_err('booking_items_not_available', 409);
+    }
+
+    $limit = (int)($_GET['limit'] ?? $_POST['limit'] ?? 300);
+    if ($limit < 1) {
+        $limit = 300;
+    } elseif ($limit > 1000) {
+        $limit = 1000;
+    }
+
+    $hasItemsSoftDelete = calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $hasRequestsSoftDelete = calendar_table_has_column($conexion, 'booking_requests', 'is_deleted');
+    $hasItemStatus = calendar_table_has_column($conexion, 'booking_request_items', 'item_status');
+    $itemStatusExpr = $hasItemStatus
+        ? "CASE
+                WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                ELSE bri.item_status
+           END"
+        : "'pending_provider'";
+
+    $sql = "SELECT
+                bri.id AS item_id,
+                bri.booking_request_id AS request_id,
+                {$itemStatusExpr} AS item_status,
+                COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name
+            FROM booking_request_items bri
+            INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+            LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+            LEFT JOIN service_catalog sc ON sc.id = o.service_id
+            LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+            WHERE 1=1";
+    if ($hasItemsSoftDelete) {
+        $sql .= " AND bri.is_deleted = 0";
+    }
+    if ($hasRequestsSoftDelete) {
+        $sql .= " AND br.is_deleted = 0";
+    }
+    if (empty($scope['is_admin'])) {
+        $sql .= (string)$scope['scope_where'];
+    }
+    $sql .= " ORDER BY br.created_at DESC, bri.id DESC LIMIT " . $limit;
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        calendar_admin_err('prepare_failed', 500);
+    }
+    if (!empty($scope['scope_types'])) {
+        $bindParams = $scope['scope_params'];
+        if (!calendar_bind_stmt_params($stmt, (string)$scope['scope_types'], $bindParams)) {
+            mysqli_stmt_close($stmt);
+            calendar_admin_err('bind_failed', 500);
+        }
+    }
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        calendar_admin_err('execute_failed: ' . $err, 500);
+    }
+
+    $res = mysqli_stmt_get_result($stmt);
+    $threads = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $itemId = (int)($row['item_id'] ?? 0);
+        $requestId = (int)($row['request_id'] ?? 0);
+        if ($itemId <= 0 || $requestId <= 0) {
+            continue;
+        }
+        $itemName = trim((string)($row['item_name'] ?? ''));
+        if ($itemName === '') {
+            $itemName = 'Item #' . $itemId;
+        }
+        $threads[] = [
+            'thread_id' => 'ITEM:' . $itemId,
+            'thread_type' => 'ITEM',
+            'item_id' => $itemId,
+            'request_id' => $requestId,
+            'status' => (string)($row['item_status'] ?? 'pending_provider'),
+            'label' => 'Request #' . $requestId . ' - ' . $itemName,
+        ];
+    }
+    mysqli_stmt_close($stmt);
+
+    calendar_admin_ok(['threads' => $threads]);
+}
+
 if ($action === 'list_events') {
     $start = calendar_parse_datetime_input($_GET['start'] ?? $_POST['start'] ?? '');
     $end = calendar_parse_datetime_input($_GET['end'] ?? $_POST['end'] ?? '');
@@ -457,7 +544,7 @@ if ($action === 'create_event') {
         }
         $itemRow = calendar_fetch_scoped_item_admin($conexion, $itemId, $scope);
         if (!$itemRow) {
-            calendar_admin_err('item_not_found_or_forbidden', 404);
+            calendar_admin_err('item_not_found_or_forbidden', $isProviderActor ? 403 : 404);
         }
         $requestId = (int)$itemRow['request_id'];
     } else {
@@ -603,7 +690,7 @@ if ($action === 'update_event') {
         }
         $itemRow = calendar_fetch_scoped_item_admin($conexion, $itemId, $scope);
         if (!$itemRow) {
-            calendar_admin_err('item_not_found_or_forbidden', 404);
+            calendar_admin_err('item_not_found_or_forbidden', $isProviderActor ? 403 : 404);
         }
         $requestId = (int)$itemRow['request_id'];
     } else {
