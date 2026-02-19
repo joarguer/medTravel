@@ -148,8 +148,135 @@ if (inbox_table_exists($conexion, 'inbox_messages') && inbox_table_exists($conex
     $payload = inbox_build_notifications_payload($threads, '/admin/app_inbox.php', 12);
 }
 
+$pendingServicesCount = 0;
+$pendingServices = [];
+$isProviderScope = (!$isAdmin && ($providerId > 0 || $serviceProviderId > 0));
+if ($isProviderScope && inbox_table_exists($conexion, 'booking_request_items') && inbox_table_exists($conexion, 'booking_requests')) {
+    $hasItemsSoftDelete = inbox_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $hasRequestsSoftDelete = inbox_table_has_column($conexion, 'booking_requests', 'is_deleted');
+    $hasTimeline = inbox_table_has_column($conexion, 'booking_requests', 'timeline');
+    $hasTimelineFrom = inbox_table_has_column($conexion, 'booking_requests', 'timeline_from');
+    $hasTimelineTo = inbox_table_has_column($conexion, 'booking_requests', 'timeline_to');
+    $itemCreatedExpr = inbox_table_has_column($conexion, 'booking_request_items', 'created_at') ? 'bri.created_at' : 'br.created_at';
+
+    $pendingStatusExpr = "CASE
+        WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+        ELSE bri.item_status
+    END";
+
+    $pendingWhere = " WHERE 1=1";
+    if ($hasItemsSoftDelete) {
+        $pendingWhere .= " AND bri.is_deleted = 0";
+    }
+    if ($hasRequestsSoftDelete) {
+        $pendingWhere .= " AND br.is_deleted = 0";
+    }
+    $pendingWhere .= " AND {$pendingStatusExpr} = 'pending_provider'";
+    $pendingWhere .= $scopeWhere;
+
+    $countSql = "SELECT COUNT(*) AS total
+                 FROM booking_request_items bri
+                 INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                 {$pendingWhere}";
+    $stmtCount = mysqli_prepare($conexion, $countSql);
+    if ($stmtCount) {
+        if ($scopeTypes !== '') {
+            $types = $scopeTypes;
+            $params = $scopeParams;
+            inbox_bind_stmt_params($stmtCount, $types, $params);
+        }
+        if (mysqli_stmt_execute($stmtCount)) {
+            $resCount = mysqli_stmt_get_result($stmtCount);
+            $rowCount = $resCount ? mysqli_fetch_assoc($resCount) : null;
+            $pendingServicesCount = (int)($rowCount['total'] ?? 0);
+        }
+        mysqli_stmt_close($stmtCount);
+    }
+
+    $timelineCols = [];
+    if ($hasTimeline) {
+        $timelineCols[] = "br.timeline";
+    }
+    if ($hasTimelineFrom) {
+        $timelineCols[] = "br.timeline_from";
+    }
+    if ($hasTimelineTo) {
+        $timelineCols[] = "br.timeline_to";
+    }
+    $timelineSelect = '';
+    if (!empty($timelineCols)) {
+        $timelineSelect = ', ' . implode(', ', $timelineCols);
+    }
+
+    $listSql = "SELECT
+                    bri.id AS item_id,
+                    bri.booking_request_id AS request_id,
+                    COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS service_name,
+                    br.destination,
+                    {$itemCreatedExpr} AS created_at
+                    {$timelineSelect}
+                FROM booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                LEFT JOIN service_catalog sc ON sc.id = o.service_id
+                LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                {$pendingWhere}
+                ORDER BY {$itemCreatedExpr} DESC, bri.id DESC
+                LIMIT 5";
+
+    $stmtList = mysqli_prepare($conexion, $listSql);
+    if ($stmtList) {
+        if ($scopeTypes !== '') {
+            $types = $scopeTypes;
+            $params = $scopeParams;
+            inbox_bind_stmt_params($stmtList, $types, $params);
+        }
+        if (mysqli_stmt_execute($stmtList)) {
+            $resList = mysqli_stmt_get_result($stmtList);
+            while ($resList && ($row = mysqli_fetch_assoc($resList))) {
+                $itemId = (int)($row['item_id'] ?? 0);
+                $requestId = (int)($row['request_id'] ?? 0);
+                if ($itemId <= 0 || $requestId <= 0) {
+                    continue;
+                }
+
+                $timelineText = '';
+                if ($hasTimelineFrom || $hasTimelineTo) {
+                    $from = trim((string)($row['timeline_from'] ?? ''));
+                    $to = trim((string)($row['timeline_to'] ?? ''));
+                    if ($from !== '' && $to !== '') {
+                        $timelineText = $from . ' to ' . $to;
+                    } elseif ($from !== '' || $to !== '') {
+                        $timelineText = ($from !== '' ? $from : $to);
+                    }
+                }
+                if ($timelineText === '' && $hasTimeline) {
+                    $timelineText = trim((string)($row['timeline'] ?? ''));
+                }
+
+                $pendingServices[] = [
+                    'item_id' => $itemId,
+                    'request_id' => $requestId,
+                    'service_name' => trim((string)($row['service_name'] ?? ('Item #' . $itemId))),
+                    'destination' => trim((string)($row['destination'] ?? '')),
+                    'timeline' => $timelineText,
+                    'created_at' => (string)($row['created_at'] ?? ''),
+                    'url_target' => 'my_booking_requests.php?item_id=' . $itemId,
+                ];
+            }
+        }
+        mysqli_stmt_close($stmtList);
+    }
+}
+
+$inboxUnreadCount = (int)($payload['count'] ?? 0);
+$totalCount = $inboxUnreadCount + $pendingServicesCount;
+
 echo json_encode([
     'ok' => true,
-    'count' => (int)($payload['count'] ?? 0),
+    'count' => $totalCount,
+    'unread_count' => $inboxUnreadCount,
     'items' => is_array($payload['items'] ?? null) ? $payload['items'] : [],
+    'pending_services_count' => $pendingServicesCount,
+    'pending_services' => $pendingServices,
 ]);

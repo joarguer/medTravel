@@ -621,3 +621,12 @@ Nota de alcance:
   - cast a entero.
   - mínimo `1` (fallback seguro si llega vacío o inválido).
   - tope operativo `50` para evitar valores fuera de rango.
+
+### 14) Provider header pending services notification (2026-02-19)
+- Se extiende `admin/ajax/get_notifications.php` para incluir notificaciones persistentes de **Pending services** para providers:
+  - `pending_services_count`
+  - `pending_services` (lista limitada, con `item_id`, `request_id`, `service_name`, `destination/timeline`, `created_at`, `url_target`)
+- Definición de pendiente: `booking_request_items.item_status = pending_provider` (normalizando legacy `pending_admin` / `pending_review`).
+- Scope de provider alineado con `my_booking_requests` (filtro por `provider_id` / `service_provider_id`).
+- `admin/js/header_notifications.js` suma badge total = `unread inbox + pending services` y renderiza ambas secciones en el dropdown.
+- No hay mark-as-read manual para pending services: desaparecen automáticamente al cambiar el estado del item.
