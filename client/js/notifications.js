@@ -15,18 +15,21 @@
         }
         if (!items || !items.length) {
             $list.html(
-                '<li><a href="/client/my_requests.php"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No tienes notificaciones</span></a></li>'
+                '<li><a href="/client/app_inbox.php"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No unread messages</span></a></li>'
             );
             return;
         }
 
         var html = '';
         items.forEach(function (item) {
-            var title = escapeHtml(item.title || 'Notification');
-            var subtitle = escapeHtml(item.subtitle || '');
-            var time = escapeHtml(item.time || '');
-            var url = escapeHtml(item.url || '/client/my_requests.php');
-            var details = title + (subtitle ? '<br><small>' + subtitle + '</small>' : '');
+            var label = escapeHtml(item.label || 'Inbox update');
+            var preview = escapeHtml(item.preview || '');
+            var time = escapeHtml(item.created_at || '');
+            var url = escapeHtml(item.url || '/client/app_inbox.php');
+            var unread = parseInt(item.unread_count || 0, 10);
+            var details = label +
+                (preview ? '<br><small>' + preview + '</small>' : '') +
+                (unread > 0 ? '<br><small><strong>' + unread + ' unread</strong></small>' : '');
             html += '<li><a href="' + url + '"><span class="details"><span class="label label-sm label-icon label-info md-skip"><i class="fa fa-bell"></i></span> ' + details + '</span>' +
                 (time ? '<span class="time">' + time + '</span>' : '') +
                 '</a></li>';
@@ -40,9 +43,9 @@
         $badge.text(String(count));
         if ($summary.length) {
             if (count > 0) {
-                $summary.html('<span class="bold">' + count + '</span> notification(s)');
+                $summary.html('<span class="bold">' + count + '</span> unread message(s)');
             } else {
-                $summary.text('No notifications');
+                $summary.text('No unread messages');
             }
         }
     }
@@ -62,8 +65,8 @@
     }
 
     $(function () {
+        window.clientReloadNotifications = loadNotifications;
         loadNotifications();
         setInterval(loadNotifications, 60000);
     });
 })();
-

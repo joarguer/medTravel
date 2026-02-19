@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../../inc/inbox_utils.php';
 
 function client_table_exists($conexion, $table)
 {
@@ -52,13 +53,178 @@ function client_status_is_update($status)
     ], true);
 }
 
+function client_get_session_email()
+{
+    $email = trim((string)($_SESSION['usuario_email'] ?? ''));
+    if ($email === '') {
+        $email = trim((string)($_SESSION['usuario'] ?? ''));
+    }
+    return strtolower($email);
+}
+
+function client_bind_params($stmt, $types, &$params)
+{
+    if ($types === '' || empty($params)) {
+        return true;
+    }
+    $bind = [];
+    $bind[] = $stmt;
+    $bind[] = &$types;
+    foreach ($params as $k => $v) {
+        $bind[] = &$params[$k];
+    }
+    return call_user_func_array('mysqli_stmt_bind_param', $bind);
+}
+
+function client_build_booking_owner_scope($conexion, $tableAlias, $clientUserId, $clientEmail)
+{
+    $alias = trim((string)$tableAlias);
+    if ($alias === '') {
+        $alias = 'br';
+    }
+
+    $clientUserId = (int)$clientUserId;
+    $clientEmail = strtolower(trim((string)$clientEmail));
+    $hasClientUserId = client_table_has_column($conexion, 'booking_requests', 'client_user_id');
+    $hasEmail = client_table_has_column($conexion, 'booking_requests', 'email');
+
+    if ($hasClientUserId && $clientUserId > 0 && $hasEmail && $clientEmail !== '') {
+        return [
+            'sql' => "({$alias}.client_user_id = ? OR ({$alias}.client_user_id IS NULL AND LOWER(TRIM({$alias}.email)) = LOWER(TRIM(?))))",
+            'types' => 'is',
+            'params' => [$clientUserId, $clientEmail],
+        ];
+    }
+
+    if ($hasClientUserId && $clientUserId > 0) {
+        return [
+            'sql' => "{$alias}.client_user_id = ?",
+            'types' => 'i',
+            'params' => [$clientUserId],
+        ];
+    }
+
+    if ($hasEmail && $clientEmail !== '') {
+        return [
+            'sql' => "LOWER(TRIM({$alias}.email)) = LOWER(TRIM(?))",
+            'types' => 's',
+            'params' => [$clientEmail],
+        ];
+    }
+
+    return [
+        'sql' => '1=0',
+        'types' => '',
+        'params' => [],
+    ];
+}
+
 function client_fetch_notifications($conexion, $clientUserId, $limit = 10)
 {
     $clientUserId = (int)$clientUserId;
     $limit = max(1, min(50, (int)$limit));
     $out = ['count' => 0, 'items' => []];
 
-    if ($clientUserId <= 0 || !client_table_exists($conexion, 'booking_requests') || !client_table_has_column($conexion, 'booking_requests', 'client_user_id')) {
+    if (inbox_table_exists($conexion, 'inbox_messages') && inbox_table_exists($conexion, 'inbox_thread_reads')) {
+        $ownerScope = client_build_booking_owner_scope($conexion, 'br', $clientUserId, client_get_session_email());
+        if ($ownerScope['sql'] !== '1=0' && client_table_exists($conexion, 'booking_requests')) {
+            $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+            $threads = [];
+
+            $careSql = "SELECT br.id AS request_id, br.destination, br.created_at
+                        FROM booking_requests br
+                        WHERE " . $ownerScope['sql'];
+            if ($hasBookingSoftDelete) {
+                $careSql .= " AND br.is_deleted = 0";
+            }
+            $careSql .= " ORDER BY br.created_at DESC LIMIT " . (int)$limit;
+            $stmtCare = mysqli_prepare($conexion, $careSql);
+            if ($stmtCare) {
+                $types = $ownerScope['types'];
+                $params = $ownerScope['params'];
+                if (inbox_bind_stmt_params($stmtCare, $types, $params) && mysqli_stmt_execute($stmtCare)) {
+                    $res = mysqli_stmt_get_result($stmtCare);
+                    while ($res && ($row = mysqli_fetch_assoc($res))) {
+                        $requestId = (int)($row['request_id'] ?? 0);
+                        if ($requestId <= 0) {
+                            continue;
+                        }
+                        $threads[] = [
+                            'thread_id' => inbox_thread_id('CARE', $requestId, 0),
+                            'thread_type' => 'CARE',
+                            'request_id' => $requestId,
+                            'item_id' => 0,
+                            'title' => 'General - Request #' . $requestId,
+                            'subtitle' => trim((string)($row['destination'] ?? '')),
+                            'updated_at' => (string)($row['created_at'] ?? ''),
+                        ];
+                    }
+                }
+                mysqli_stmt_close($stmtCare);
+            }
+
+            if (client_table_exists($conexion, 'booking_request_items')) {
+                $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+                $itemSql = "SELECT
+                                bri.id AS item_id,
+                                bri.booking_request_id AS request_id,
+                                COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
+                                br.destination,
+                                br.created_at
+                            FROM booking_request_items bri
+                            INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                            LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                            LEFT JOIN service_catalog sc ON sc.id = o.service_id
+                            LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                            WHERE " . $ownerScope['sql'];
+                if ($hasItemsSoftDelete) {
+                    $itemSql .= " AND bri.is_deleted = 0";
+                }
+                if ($hasBookingSoftDelete) {
+                    $itemSql .= " AND br.is_deleted = 0";
+                }
+                $itemSql .= " ORDER BY br.created_at DESC, bri.id DESC LIMIT " . (int)$limit;
+                $stmtItem = mysqli_prepare($conexion, $itemSql);
+                if ($stmtItem) {
+                    $types = $ownerScope['types'];
+                    $params = $ownerScope['params'];
+                    if (inbox_bind_stmt_params($stmtItem, $types, $params) && mysqli_stmt_execute($stmtItem)) {
+                        $res = mysqli_stmt_get_result($stmtItem);
+                        while ($res && ($row = mysqli_fetch_assoc($res))) {
+                            $requestId = (int)($row['request_id'] ?? 0);
+                            $itemId = (int)($row['item_id'] ?? 0);
+                            if ($requestId <= 0 || $itemId <= 0) {
+                                continue;
+                            }
+                            $itemName = trim((string)($row['item_name'] ?? ''));
+                            if ($itemName === '') {
+                                $itemName = 'Item #' . $itemId;
+                            }
+                            $threads[] = [
+                                'thread_id' => inbox_thread_id('ITEM', $requestId, $itemId),
+                                'thread_type' => 'ITEM',
+                                'request_id' => $requestId,
+                                'item_id' => $itemId,
+                                'title' => $itemName . ' - Request #' . $requestId,
+                                'subtitle' => trim((string)($row['destination'] ?? '')),
+                                'updated_at' => (string)($row['created_at'] ?? ''),
+                            ];
+                        }
+                    }
+                    mysqli_stmt_close($stmtItem);
+                }
+            }
+
+            $threads = inbox_enrich_threads_with_meta($conexion, $threads, 'CLIENT', $clientUserId);
+            return inbox_build_notifications_payload($threads, '/client/app_inbox.php', $limit);
+        }
+    }
+
+    if (!client_table_exists($conexion, 'booking_requests')) {
+        return $out;
+    }
+    $ownerScope = client_build_booking_owner_scope($conexion, 'br', $clientUserId, client_get_session_email());
+    if ($ownerScope['sql'] === '1=0') {
         return $out;
     }
 
@@ -71,7 +237,7 @@ function client_fetch_notifications($conexion, $clientUserId, $limit = 10)
     } else {
         $bookingSql .= ", '' AS timeline";
     }
-    $bookingSql .= " FROM booking_requests br WHERE br.client_user_id = ?";
+    $bookingSql .= " FROM booking_requests br WHERE " . $ownerScope['sql'];
     if ($hasBookingSoftDelete) {
         $bookingSql .= " AND br.is_deleted = 0";
     }
@@ -79,8 +245,9 @@ function client_fetch_notifications($conexion, $clientUserId, $limit = 10)
 
     $stmtBookings = mysqli_prepare($conexion, $bookingSql);
     if ($stmtBookings) {
-        mysqli_stmt_bind_param($stmtBookings, 'i', $clientUserId);
-        if (mysqli_stmt_execute($stmtBookings)) {
+        $bookingTypes = $ownerScope['types'];
+        $bookingParams = $ownerScope['params'];
+        if (client_bind_params($stmtBookings, $bookingTypes, $bookingParams) && mysqli_stmt_execute($stmtBookings)) {
             $res = mysqli_stmt_get_result($stmtBookings);
             while ($res && ($row = mysqli_fetch_assoc($res))) {
                 $bookingId = (int)$row['id'];
@@ -128,7 +295,7 @@ function client_fetch_notifications($conexion, $clientUserId, $limit = 10)
             $itemsSql = "SELECT bri.booking_request_id, bri.item_status, {$eventAtExpr} AS event_at, {$notesExpr} AS provider_notes
                          FROM booking_request_items bri
                          INNER JOIN booking_requests br ON br.id = bri.booking_request_id
-                         WHERE br.client_user_id = ?";
+                         WHERE " . $ownerScope['sql'];
             if ($hasBookingSoftDelete) {
                 $itemsSql .= " AND br.is_deleted = 0";
             }
@@ -139,8 +306,9 @@ function client_fetch_notifications($conexion, $clientUserId, $limit = 10)
 
             $stmtItems = mysqli_prepare($conexion, $itemsSql);
             if ($stmtItems) {
-                mysqli_stmt_bind_param($stmtItems, 'i', $clientUserId);
-                if (mysqli_stmt_execute($stmtItems)) {
+                $itemTypes = $ownerScope['types'];
+                $itemParams = $ownerScope['params'];
+                if (client_bind_params($stmtItems, $itemTypes, $itemParams) && mysqli_stmt_execute($stmtItems)) {
                     $resItems = mysqli_stmt_get_result($stmtItems);
                     while ($resItems && ($itemRow = mysqli_fetch_assoc($resItems))) {
                         $status = client_status_label($itemRow['item_status'] ?? '');
@@ -182,4 +350,3 @@ function client_fetch_notifications($conexion, $clientUserId, $limit = 10)
 
     return $out;
 }
-

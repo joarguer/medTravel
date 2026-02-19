@@ -34,13 +34,13 @@ $es_cliente = (
 $booking_pending_count = 0;
 $booking_notifications = [];
 $booking_badge = '0';
-$booking_summary_text = 'No pending bookings';
+$booking_summary_text = 'No unread messages';
 $booking_list_html = '';
-$booking_notifications_href = 'booking_requests.php';
+$booking_notifications_href = 'app_inbox.php';
 if ($es_cliente) {
-    $booking_notifications_href = '../client/my_requests.php';
+    $booking_notifications_href = '../client/app_inbox.php';
 } elseif (!$es_admin && (!empty($_SESSION['provider_id']) || !empty($_SESSION['service_provider_id']))) {
-    $booking_notifications_href = 'my_booking_requests.php';
+    $booking_notifications_href = 'app_inbox.php';
 }
 $deletion_count = 0;
 $deletion_list_html = '';
@@ -252,12 +252,12 @@ if (isset($conexion)) {
     $booking_badge = (string) $booking_pending_count;
     if ($es_cliente) {
         $booking_summary_text = $booking_pending_count > 0
-            ? '<span class="bold">' . $booking_pending_count . '</span> request updates'
-            : 'No request updates';
+            ? '<span class="bold">' . $booking_pending_count . '</span> unread message(s)'
+            : 'No unread messages';
     } else {
         $booking_summary_text = $booking_pending_count > 0
-            ? '<span class="bold">' . $booking_pending_count . '</span> pending bookings'
-            : 'No pending bookings';
+            ? '<span class="bold">' . $booking_pending_count . '</span> unread message(s)'
+            : 'No unread messages';
     }
 
     if ($booking_pending_count > 0) {
@@ -283,7 +283,7 @@ if (isset($conexion)) {
             $booking_list_html .= '</a></li>';
         }
     } else {
-        $booking_list_html = '<li><a href="' . $booking_notifications_href . '"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No pending bookings</span></a></li>';
+        $booking_list_html = '<li><a href="' . $booking_notifications_href . '"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No unread messages</span></a></li>';
     }
 
     // Solicitudes de eliminación de datos (solo admin)
@@ -348,7 +348,8 @@ $theme_layout_script =  '<!-- BEGIN THEME LAYOUT SCRIPTS -->
                         <script src="../../assets/layouts/global/scripts/quick-sidebar.min.js" type="text/javascript"></script>
                         <script src="../assets/pages/scripts/ui-toastr.min.js" type="text/javascript"></script>
                         <!-- END THEME LAYOUT SCRIPTS -->
-                        <script src="js/global_scripts.js" type="text/javascript"></script>';
+                        <script src="js/global_scripts.js" type="text/javascript"></script>
+                        <script src="js/header_notifications.js" type="text/javascript"></script>';
 
 // Scripts base para las vistas (se usan en la mayoría de páginas admin)
 $theme_global_js = '<!-- BEGIN CORE PLUGINS -->
@@ -373,7 +374,7 @@ $theme_layout_js = '<!-- BEGIN THEME GLOBAL SCRIPTS -->
 $avatar = $_SESSION['avatar'];
 $avatar = '../'.$avatar;
 $notification_bar_id = $es_cliente ? 'header_notification_bar_client' : 'header_notification_bar';
-$notification_icon = $es_cliente ? 'fa fa-bell' : 'fa fa-shopping-cart';
+$notification_icon = 'fa fa-bell';
 
 $top_header =  '<div class="clearfix navbar-fixed-top">
                 <!-- Brand and toggle get grouped for better mobile display -->
@@ -404,15 +405,15 @@ $top_header =  '<div class="clearfix navbar-fixed-top">
                     <div class="btn-group-notification btn-group" id="'.$notification_bar_id.'" style="margin-right:10px;">
                         <button type="button" class="btn btn-sm md-skip dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
                             <i class="'.$notification_icon.'"></i>
-                            <span class="badge">'.$booking_badge.'</span>
+                            <span class="badge admin-notif-badge">'.$booking_badge.'</span>
                         </button>
                         <ul class="dropdown-menu-v2">
                             <li class="external">
-                                <h3>'.$booking_summary_text.'</h3>
-                                <a href="'.$booking_notifications_href.'">view all</a>
+                                <h3 id="admin-notification-summary">'.$booking_summary_text.'</h3>
+                                <a id="admin-notification-view-all" href="'.$booking_notifications_href.'">view all</a>
                             </li>
                             <li>
-                                <ul class="dropdown-menu-list scroller" style="height: 250px; padding: 0;" data-handle-color="#637283">
+                                <ul class="dropdown-menu-list scroller" id="admin-notification-list" style="height: 250px; padding: 0;" data-handle-color="#637283">
                                     '.$booking_list_html.'
                                 </ul>
                             </li>
@@ -469,7 +470,7 @@ $top_header .= '</span>
                                     <i class="icon-calendar"></i> My Calendar </a>
                             </li>
                             <li>
-                                <a href="app_inbox.html">
+                                <a href="app_inbox.php">
                                     <i class="icon-envelope-open"></i> My Inbox
                                     <span class="badge badge-danger"> 3 </span>
                                 </a>
@@ -506,11 +507,11 @@ require_once __DIR__ . '/menu_helpers.php';
 $current = menu_current_script();
 
 $dashboard_pages = array('index.php');
-$management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php','my_booking_requests.php');
-$medical_group_pages = array('service_categories.php','service_catalog.php','providers.php','provider_verification.php','provider_offers.php','my_booking_requests.php');
-$complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php','my_booking_requests.php');
-$complementary_scope_pages = array('providers_complementary.php','medtravel_services.php','my_booking_requests.php');
-$clients_booking_pages = array('clientes.php','booking_requests.php');
+$management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php','my_booking_requests.php','app_inbox.php');
+$medical_group_pages = array('service_categories.php','service_catalog.php','providers.php','provider_verification.php','provider_offers.php','my_booking_requests.php','app_inbox.php');
+$complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php','my_booking_requests.php','app_inbox.php');
+$complementary_scope_pages = array('providers_complementary.php','medtravel_services.php','my_booking_requests.php','app_inbox.php');
+$clients_booking_pages = array('clientes.php','booking_requests.php','app_inbox.php');
 $admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','informes.php','email_settings.php','data_deletion_requests.php','cleanup.php');
 $admin_users_pages = array('mis_datos.php','usuarios.php','crear_usuario.php','roles.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
@@ -597,6 +598,9 @@ if ($es_admin) {
                                             <li'.menu_li_class('booking_requests.php').'>
                                                 <a href="./booking_requests.php">Solicitudes de Booking</a>
                                             </li>
+                                            <li'.menu_li_class('app_inbox.php').'>
+                                                <a href="./app_inbox.php">Inbox Solicitudes</a>
+                                            </li>
                                         </ul>
                                     </li>';
 } elseif ($es_prestador) {
@@ -616,6 +620,10 @@ if ($es_admin) {
                                         <a href="./my_booking_requests.php">
                                             <i class="icon-calendar"></i> Mis Solicitudes </a>
                                     </li>';
+        $top_header_2 .=           '<li'.menu_li_class('app_inbox.php').'>
+                                        <a href="./app_inbox.php">
+                                            <i class="icon-envelope-open"></i> Inbox </a>
+                                    </li>';
     }
 } elseif ($es_complementario) {
     if ($can_manage_complementary_providers || $can_manage_complementary_services) {
@@ -631,6 +639,9 @@ if ($es_admin) {
                                                 </li>' : '').'
                                                 '.($can_view_my_bookings ? '<li'.menu_li_class('my_booking_requests.php').'>
                                                     <a href="./my_booking_requests.php">Mis Solicitudes</a>
+                                                </li>
+                                                <li'.menu_li_class('app_inbox.php').'>
+                                                    <a href="./app_inbox.php">Inbox</a>
                                                 </li>' : '').'
                                             </ul>
                                         </li>';

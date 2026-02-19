@@ -522,3 +522,22 @@ Nota de alcance:
   - `thread_type=CARE` para hilo general del request.
   - `thread_type=ITEM` para hilo por item cuando aplica.
 - Se mantiene el detalle del request y se agrega CTA "Open Inbox" para evitar duplicidad de canales.
+
+### 7) Inbox persistente + unread en header (2026-02-19)
+- Se agrega modelo persistente para mensajería Inbox:
+  - `inbox_messages`
+  - `inbox_thread_reads`
+- Endpoints dedicados:
+  - Cliente: `client/ajax/inbox.php`
+  - Admin/Provider: `admin/ajax/inbox.php`
+  - Notificaciones header: `client/ajax/get_notifications.php`, `admin/ajax/get_notifications.php`
+- Flujo unread:
+  - `list_threads` retorna `unread_count` por hilo.
+  - `mark_read` persiste `last_read_message_id` por usuario/rol/hilo.
+  - Header muestra badge + dropdown con mensajes no leídos y refresco periódico.
+- Seguridad de scope:
+  - Cliente solo ve hilos de sus requests/items.
+  - Proveedor solo ve `ITEM` de items propios (sin `CARE`).
+  - Admin/PatientCare pueden ver `CARE` + `ITEM`.
+- Compatibilidad:
+  - Si un hilo no tiene mensajes en tablas Inbox, se permite fallback legacy de lectura desde `booking_requests.additional_notes`.

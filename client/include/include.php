@@ -22,8 +22,8 @@ if (isset($conexion) && $conexion) {
 $notifCount = (int)($notifPayload['count'] ?? 0);
 $notifBadge = (string)$notifCount;
 $notifSummary = ($notifCount > 0)
-    ? '<span class="bold">' . $notifCount . '</span> notification(s)'
-    : 'No notifications';
+    ? '<span class="bold">' . $notifCount . '</span> unread message(s)'
+    : 'No unread messages';
 
 $notifListHtml = '';
 if (!empty($notifPayload['items'])) {
@@ -41,7 +41,7 @@ if (!empty($notifPayload['items'])) {
             . '</a></li>';
     }
 } else {
-    $notifListHtml = '<li><a href="/client/my_requests.php"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No tienes notificaciones</span></a></li>';
+    $notifListHtml = '<li><a href="/client/app_inbox.php"><span class="details"><span class="label label-sm label-icon label-default md-skip"><i class="fa fa-info"></i></span>No unread messages</span></a></li>';
 }
 
 function client_menu_li_class($script, $extraClass = '')
@@ -96,7 +96,7 @@ $top_header = '<div class="clearfix navbar-fixed-top">
                         <ul class="dropdown-menu-v2">
                             <li class="external">
                                 <h3 id="client-notification-summary">' . $notifSummary . '</h3>
-                                <a href="/client/my_requests.php">view all</a>
+                                <a href="/client/app_inbox.php">view all</a>
                             </li>
                             <li>
                                 <ul class="dropdown-menu-list scroller" id="client-notification-list" style="height: 250px; padding: 0;" data-handle-color="#637283">
@@ -117,6 +117,9 @@ $top_header = '<div class="clearfix navbar-fixed-top">
                             <li>
                                 <a href="/client/my_requests.php"><i class="icon-calendar"></i> My Requests</a>
                             </li>
+                            <li>
+                                <a href="/client/app_inbox.php"><i class="icon-envelope-open"></i> My Inbox</a>
+                            </li>
                             <li class="divider"></li>
                             <li>
                                 <a href="/admin/include/salir.php"><i class="icon-key"></i> Log Out</a>
@@ -134,6 +137,9 @@ $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-respon
                         <li' . client_menu_li_class(['my_requests.php', 'request_detail.php'], 'dropdown dropdown-fw dropdown-fw-disabled') . '>
                             <a href="/client/my_requests.php" class="text-uppercase"><i class="icon-list"></i> My Requests</a>
                         </li>
+                        <li' . client_menu_li_class(['app_inbox.php'], 'dropdown dropdown-fw dropdown-fw-disabled') . '>
+                            <a href="/client/app_inbox.php" class="text-uppercase"><i class="icon-envelope-open"></i> Inbox</a>
+                        </li>
                     </ul>
                  </div>';
 
@@ -148,4 +154,3 @@ $theme_layout_script = '<script src="/assets/global/plugins/jquery.min.js" type=
                         <script src="/assets/global/scripts/app.min.js" type="text/javascript"></script>
                         <script src="/assets/layouts/layout5/scripts/layout.min.js" type="text/javascript"></script>
                         <script src="/assets/layouts/global/scripts/quick-sidebar.min.js" type="text/javascript"></script>';
-

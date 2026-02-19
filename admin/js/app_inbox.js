@@ -13,21 +13,21 @@
 
     function senderClass(sender) {
         var s = String(sender || 'system').toLowerCase();
-        if (s === 'client') return 'info';
         if (s === 'provider') return 'success';
+        if (s === 'client') return 'info';
         if (s === 'admin' || s === 'patientcare') return 'warning';
         return 'default';
     }
 
-    function threadMatchesPreference(thread, preferred) {
+    function matchesPreferred(thread, preferred) {
         if (!thread || !preferred) return false;
         if (preferred.threadId && String(thread.thread_id || '') === String(preferred.threadId)) {
             return true;
         }
-        var tBooking = parseInt(thread.booking_id || thread.request_id || 0, 10);
+        var tRequest = parseInt(thread.booking_request_id || thread.request_id || 0, 10);
         var tItem = parseInt(thread.item_id || 0, 10);
         var tType = String(thread.thread_type || '').toUpperCase();
-        if (preferred.requestId > 0 && tBooking !== preferred.requestId) {
+        if (preferred.requestId > 0 && tRequest !== preferred.requestId) {
             return false;
         }
         if (preferred.threadType === 'ITEM') {
@@ -37,13 +37,13 @@
     }
 
     function renderThreads(threads) {
-        var $list = $('#client-inbox-thread-list');
+        var $list = $('#admin-inbox-thread-list');
         if (!$list.length) return;
 
         if (!threads || !threads.length) {
             $list.html('<li><a href="javascript:;">No threads available</a></li>');
-            $('#client-inbox-content').hide();
-            $('#client-inbox-empty').show();
+            $('#admin-inbox-content').hide();
+            $('#admin-inbox-empty').show();
             currentThread = null;
             return;
         }
@@ -51,7 +51,7 @@
         var selectedKey = '';
         if (preferredThread) {
             for (var i = 0; i < threads.length; i++) {
-                if (threadMatchesPreference(threads[i], preferredThread)) {
+                if (matchesPreferred(threads[i], preferredThread)) {
                     selectedKey = String(threads[i].thread_id || '');
                     break;
                 }
@@ -68,13 +68,13 @@
         threads.forEach(function (thread) {
             var threadId = String(thread.thread_id || '');
             var unread = parseInt(thread.unread_count || 0, 10);
-            var active = (threadId === selectedKey);
+            var active = threadId === selectedKey;
             var badge = unread > 0 ? '<span class="badge badge-danger" style="margin-left:6px;">' + unread + '</span>' : '';
             html += '<li class="' + (active ? 'active' : '') + '">' +
-                '<a href="javascript:;" class="client-thread-link"' +
+                '<a href="javascript:;" class="admin-thread-link"' +
                 ' data-thread-id="' + esc(threadId) + '"' +
                 ' data-thread-type="' + esc(thread.thread_type) + '"' +
-                ' data-booking-id="' + esc(thread.booking_id || thread.request_id || 0) + '"' +
+                ' data-booking-id="' + esc(thread.booking_request_id || thread.request_id || 0) + '"' +
                 ' data-item-id="' + esc(thread.item_id || 0) + '">' +
                 esc(thread.title || 'Thread') + badge +
                 (thread.subtitle ? '<small style="display:block;margin-top:4px;opacity:.8;">' + esc(thread.subtitle) + '</small>' : '') +
@@ -97,8 +97,8 @@
         var changed = !currentThread || String(currentThread.thread_id || '') !== String(selected.thread_id || '');
         currentThread = {
             thread_id: String(selected.thread_id || ''),
-            thread_type: String(selected.thread_type || 'CARE'),
-            booking_id: parseInt(selected.booking_id || selected.request_id || 0, 10),
+            thread_type: String(selected.thread_type || 'ITEM'),
+            booking_request_id: parseInt(selected.booking_request_id || selected.request_id || 0, 10),
             item_id: parseInt(selected.item_id || 0, 10)
         };
         preferredThread = null;
@@ -108,7 +108,7 @@
     }
 
     function renderMessages(messages) {
-        var $box = $('#client-inbox-messages');
+        var $box = $('#admin-inbox-messages');
         if (!$box.length) return;
         if (!messages || !messages.length) {
             $box.html('<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
@@ -124,20 +124,19 @@
                 '<div style="margin-top:6px;white-space:pre-wrap;">' + esc(m.body || '') + '</div>' +
                 '</div>';
         });
-
         $box.html(html);
         $box.scrollTop($box[0].scrollHeight);
     }
 
     function refreshHeaderNotifications() {
-        if (typeof window.clientReloadNotifications === 'function') {
-            window.clientReloadNotifications();
+        if (typeof window.adminReloadNotifications === 'function') {
+            window.adminReloadNotifications();
         }
     }
 
     function loadThreads() {
         $.ajax({
-            url: '/client/ajax/inbox.php',
+            url: 'ajax/inbox.php',
             method: 'GET',
             dataType: 'json',
             data: { action: 'list_threads' }
@@ -153,12 +152,10 @@
         });
     }
 
-    function markCurrentThreadRead() {
-        if (!currentThread || !currentThread.thread_id) {
-            return;
-        }
+    function markCurrentRead() {
+        if (!currentThread || !currentThread.thread_id) return;
         $.ajax({
-            url: '/client/ajax/inbox.php',
+            url: 'ajax/inbox.php',
             method: 'POST',
             dataType: 'json',
             data: {
@@ -166,9 +163,7 @@
                 thread_id: currentThread.thread_id
             }
         }).done(function (res) {
-            if (!res || res.ok !== true) {
-                return;
-            }
+            if (!res || res.ok !== true) return;
             refreshHeaderNotifications();
             loadThreads();
         });
@@ -177,12 +172,12 @@
     function loadMessages() {
         if (!currentThread || !currentThread.thread_id) return;
 
-        $('#client-inbox-title').text('Loading...');
-        $('#client-inbox-empty').hide();
-        $('#client-inbox-content').show();
+        $('#admin-inbox-title').text('Loading...');
+        $('#admin-inbox-empty').hide();
+        $('#admin-inbox-content').show();
 
         $.ajax({
-            url: '/client/ajax/inbox.php',
+            url: 'ajax/inbox.php',
             method: 'GET',
             dataType: 'json',
             data: {
@@ -195,20 +190,22 @@
                 return;
             }
 
-            var title = 'General - Request #' + currentThread.booking_id;
+            var title = 'Request #' + currentThread.booking_request_id;
             if (currentThread.thread_type === 'ITEM') {
-                title = 'Item #' + currentThread.item_id + ' - Request #' + currentThread.booking_id;
+                title = 'Item #' + currentThread.item_id + ' - Request #' + currentThread.booking_request_id;
+            } else {
+                title = 'General - Request #' + currentThread.booking_request_id;
             }
-            $('#client-inbox-title').text(title);
+            $('#admin-inbox-title').text(title);
             renderMessages(res.messages || []);
-            markCurrentThreadRead();
+            markCurrentRead();
         }).fail(function () {
             toastr.error('Could not load messages');
         });
     }
 
     function sendMessage() {
-        var text = $.trim($('#client-inbox-message').val() || '');
+        var text = $.trim($('#admin-inbox-message').val() || '');
         if (!currentThread || !currentThread.thread_id) return;
         if (!text) {
             toastr.warning('Write a message before sending');
@@ -216,7 +213,7 @@
         }
 
         $.ajax({
-            url: '/client/ajax/inbox.php',
+            url: 'ajax/inbox.php',
             method: 'POST',
             dataType: 'json',
             data: {
@@ -229,7 +226,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not send message');
                 return;
             }
-            $('#client-inbox-message').val('');
+            $('#admin-inbox-message').val('');
             toastr.success('Message sent');
             loadMessages();
             loadThreads();
@@ -254,24 +251,24 @@
             };
         }
 
-        $('#client-inbox-refresh').on('click', function () {
+        $('#admin-inbox-refresh').on('click', function () {
             loadThreads();
         });
 
-        $('#client-inbox-thread-list').on('click', '.client-thread-link', function () {
+        $('#admin-inbox-thread-list').on('click', '.admin-thread-link', function () {
             var $a = $(this);
             currentThread = {
                 thread_id: String($a.data('thread-id') || ''),
-                thread_type: String($a.data('thread-type') || 'CARE'),
-                booking_id: parseInt($a.data('booking-id') || 0, 10),
+                thread_type: String($a.data('thread-type') || 'ITEM'),
+                booking_request_id: parseInt($a.data('booking-id') || 0, 10),
                 item_id: parseInt($a.data('item-id') || 0, 10)
             };
-            $('#client-inbox-thread-list li').removeClass('active');
+            $('#admin-inbox-thread-list li').removeClass('active');
             $a.closest('li').addClass('active');
             loadMessages();
         });
 
-        $('#client-inbox-send-form').on('submit', function (e) {
+        $('#admin-inbox-send-form').on('submit', function (e) {
             e.preventDefault();
             sendMessage();
         });
