@@ -630,3 +630,9 @@ Nota de alcance:
 - Scope de provider alineado con `my_booking_requests` (filtro por `provider_id` / `service_provider_id`).
 - `admin/js/header_notifications.js` suma badge total = `unread inbox + pending services` y renderiza ambas secciones en el dropdown.
 - No hay mark-as-read manual para pending services: desaparecen automáticamente al cambiar el estado del item.
+
+### 15) booking_request_items write-path normalization (2026-02-19)
+- Desde `booking/submit.php` (función `insert_booking_items_mvp`), los nuevos `booking_request_items` se crean con `service_provider_id` como fuente de verdad.
+- En nuevos inserts, `provider_id` se persiste explícitamente como `NULL` cuando la columna existe.
+- `item_status` inicial se mantiene en `pending_provider`.
+- Si no se puede resolver `service_provider_id` del item al crear, el item se omite y se registra en log (no se inventa owner).

@@ -544,13 +544,32 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
         error_log('booking_submit: booking_request_items table does not exist; skipping item insert for booking_request_id=' . intval($booking_request_id));
         return;
     }
+    $itemsHasProviderId = table_has_column_local($conexion, 'booking_request_items', 'provider_id');
+    $itemsHasServiceProviderId = table_has_column_local($conexion, 'booking_request_items', 'service_provider_id');
+    if (!$itemsHasServiceProviderId) {
+        error_log('booking_submit: booking_request_items.service_provider_id is required for new inserts; skipping booking_request_id=' . intval($booking_request_id));
+        return;
+    }
 
     $hasOfferActive = table_has_column_local($conexion, 'provider_service_offers', 'is_active');
     $hasOfferDeleted = table_has_column_local($conexion, 'provider_service_offers', 'is_deleted');
     $hasProviderActive = table_has_column_local($conexion, 'providers', 'is_active');
     $hasProviderDeleted = table_has_column_local($conexion, 'providers', 'is_deleted');
+    $hasOfferServiceProviderId = table_has_column_local($conexion, 'provider_service_offers', 'service_provider_id');
+    $hasProvidersServiceProviderId = table_has_column_local($conexion, 'providers', 'service_provider_id');
 
-    $offerSql = "SELECT o.provider_id
+    $offerResolverParts = [];
+    if ($hasOfferServiceProviderId) {
+        $offerResolverParts[] = "NULLIF(o.service_provider_id, 0)";
+    }
+    if ($hasProvidersServiceProviderId) {
+        $offerResolverParts[] = "NULLIF(p.service_provider_id, 0)";
+    }
+    // Fallback controlado: provider_id representa el dueño médico legacy.
+    $offerResolverParts[] = "NULLIF(o.provider_id, 0)";
+    $offerResolverExpr = 'COALESCE(' . implode(', ', $offerResolverParts) . ')';
+
+    $offerSql = "SELECT {$offerResolverExpr} AS service_provider_id
                  FROM provider_service_offers o
                  INNER JOIN providers p ON p.id = o.provider_id
                  WHERE o.id = ?";
@@ -569,11 +588,16 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     $offerSql .= " LIMIT 1";
 
     $offerStmt = mysqli_prepare($conexion, $offerSql);
-    $insertMedicalStmt = mysqli_prepare(
-        $conexion,
-        "INSERT INTO booking_request_items (booking_request_id, item_type, offer_id, provider_id, item_status, created_at)
-         VALUES (?, 'medical_offer', ?, ?, 'pending_provider', NOW())"
-    );
+    $medicalInsertSql = "INSERT INTO booking_request_items (booking_request_id, item_type, offer_id, service_provider_id";
+    if ($itemsHasProviderId) {
+        $medicalInsertSql .= ", provider_id";
+    }
+    $medicalInsertSql .= ", item_status, created_at) VALUES (?, 'medical_offer', ?, ?";
+    if ($itemsHasProviderId) {
+        $medicalInsertSql .= ", NULL";
+    }
+    $medicalInsertSql .= ", 'pending_provider', NOW())";
+    $insertMedicalStmt = mysqli_prepare($conexion, $medicalInsertSql);
 
     if ($offerStmt && $insertMedicalStmt) {
         foreach ($selected_offers as $offerId) {
@@ -588,15 +612,15 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
                 continue;
             }
             $offerRow = stmt_fetch_assoc_local($offerStmt);
-            if (!$offerRow || empty($offerRow['provider_id'])) {
-                error_log('booking_submit: offer skipped (not found/invalid/inactive) offer_id=' . $offerId);
+            if (!$offerRow || empty($offerRow['service_provider_id'])) {
+                error_log('booking_submit: offer skipped (missing service_provider_id) offer_id=' . $offerId);
                 continue;
             }
 
-            $providerId = intval($offerRow['provider_id']);
-            mysqli_stmt_bind_param($insertMedicalStmt, 'iii', $booking_request_id, $offerId, $providerId);
+            $serviceProviderId = intval($offerRow['service_provider_id']);
+            mysqli_stmt_bind_param($insertMedicalStmt, 'iii', $booking_request_id, $offerId, $serviceProviderId);
             if (!mysqli_stmt_execute($insertMedicalStmt)) {
-                error_log('booking_submit: medical item insert failed booking_request_id=' . intval($booking_request_id) . ' offer_id=' . $offerId . ' error=' . mysqli_stmt_error($insertMedicalStmt));
+                error_log('booking_submit: medical item insert failed booking_request_id=' . intval($booking_request_id) . ' offer_id=' . $offerId . ' service_provider_id=' . $serviceProviderId . ' error=' . mysqli_stmt_error($insertMedicalStmt));
             }
         }
     } else {
@@ -650,11 +674,16 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     $serviceSql .= " LIMIT 1";
 
     $serviceStmt = mysqli_prepare($conexion, $serviceSql);
-    $insertComplementaryStmt = mysqli_prepare(
-        $conexion,
-        "INSERT INTO booking_request_items (booking_request_id, item_type, medtravel_service_id, service_provider_id, item_status, created_at)
-         VALUES (?, 'complementary_service', ?, ?, 'pending_provider', NOW())"
-    );
+    $complementaryInsertSql = "INSERT INTO booking_request_items (booking_request_id, item_type, medtravel_service_id, service_provider_id";
+    if ($itemsHasProviderId) {
+        $complementaryInsertSql .= ", provider_id";
+    }
+    $complementaryInsertSql .= ", item_status, created_at) VALUES (?, 'complementary_service', ?, ?";
+    if ($itemsHasProviderId) {
+        $complementaryInsertSql .= ", NULL";
+    }
+    $complementaryInsertSql .= ", 'pending_provider', NOW())";
+    $insertComplementaryStmt = mysqli_prepare($conexion, $complementaryInsertSql);
 
     if ($serviceStmt && $insertComplementaryStmt) {
         foreach ($medtravel_services as $serviceId) {

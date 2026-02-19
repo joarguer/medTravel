@@ -45,13 +45,13 @@ function calendar_admin_scope()
             $scopeTypes = 'ii';
             $scopeParams = [$providerId, $serviceProviderId];
         } elseif ($providerId > 0) {
-            $scopeWhere = ' AND bri.provider_id = ?';
-            $scopeTypes = 'i';
-            $scopeParams = [$providerId];
+            $scopeWhere = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?))';
+            $scopeTypes = 'ii';
+            $scopeParams = [$providerId, $providerId];
         } else {
-            $scopeWhere = ' AND bri.service_provider_id = ?';
-            $scopeTypes = 'i';
-            $scopeParams = [$serviceProviderId];
+            $scopeWhere = ' AND ((bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?) OR (bri.provider_id IS NOT NULL AND bri.provider_id = ?))';
+            $scopeTypes = 'ii';
+            $scopeParams = [$serviceProviderId, $serviceProviderId];
         }
     }
 

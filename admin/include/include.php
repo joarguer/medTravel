@@ -129,13 +129,13 @@ if (isset($conexion)) {
                 $scope_types = 'ii';
                 $scope_values = [$provider_id, $service_provider_id];
             } elseif ($provider_id > 0) {
-                $scope_where = ' AND bri.provider_id = ?';
-                $scope_types = 'i';
-                $scope_values = [$provider_id];
+                $scope_where = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?))';
+                $scope_types = 'ii';
+                $scope_values = [$provider_id, $provider_id];
             } elseif ($service_provider_id > 0) {
-                $scope_where = ' AND bri.service_provider_id = ?';
-                $scope_types = 'i';
-                $scope_values = [$service_provider_id];
+                $scope_where = ' AND ((bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?) OR (bri.provider_id IS NOT NULL AND bri.provider_id = ?))';
+                $scope_types = 'ii';
+                $scope_values = [$service_provider_id, $service_provider_id];
             }
 
             $count_sql = "SELECT COUNT(*) AS total
