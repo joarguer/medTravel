@@ -935,6 +935,143 @@ function parse_booking_datetime_bogota_local($rawValue)
     return '';
 }
 
+function parse_timeline_date_range_local($timelineText)
+{
+    $timelineText = trim((string)$timelineText);
+    if ($timelineText === '') {
+        return null;
+    }
+
+    if (!preg_match('/(\d{4}-\d{2}-\d{2})\s*(?:to|a|al|hasta|-|–)\s*(\d{4}-\d{2}-\d{2})/i', $timelineText, $m)) {
+        return null;
+    }
+
+    $start = trim((string)$m[1]);
+    $end = trim((string)$m[2]);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+        return null;
+    }
+    $startParts = array_map('intval', explode('-', $start));
+    $endParts = array_map('intval', explode('-', $end));
+    if (count($startParts) !== 3 || count($endParts) !== 3) {
+        return null;
+    }
+    if (!checkdate($startParts[1], $startParts[2], $startParts[0]) || !checkdate($endParts[1], $endParts[2], $endParts[0])) {
+        return null;
+    }
+    if (strtotime($end) < strtotime($start)) {
+        $tmp = $start;
+        $start = $end;
+        $end = $tmp;
+    }
+
+    return [
+        'start_date' => $start,
+        'end_date' => $end,
+    ];
+}
+
+function upsert_calendar_care_event_local($conexion, $bookingRequestId, $clientUserId, $title, $startAt, $endAt, $allDay, $description)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $clientUserId = (int)$clientUserId;
+    $title = trim((string)$title);
+    $startAt = trim((string)$startAt);
+    $description = trim((string)$description);
+    $allDay = ((int)$allDay === 1) ? 1 : 0;
+    $endAt = ($endAt === null || trim((string)$endAt) === '') ? null : trim((string)$endAt);
+
+    if ($bookingRequestId <= 0 || $clientUserId <= 0 || $title === '' || $startAt === '') {
+        return false;
+    }
+    if (!table_exists_local($conexion, 'calendar_events')) {
+        return false;
+    }
+
+    $eventData = [
+        'title' => $title,
+        'description' => $description,
+        'start_at' => $startAt,
+        'end_at' => $endAt,
+        'all_day' => $allDay,
+        'event_type' => 'CARE',
+        'request_id' => $bookingRequestId,
+        'item_id' => null,
+        'created_by_role' => 'CLIENT',
+        'created_by_user_id' => $clientUserId,
+        'client_user_id' => $clientUserId,
+        'status' => 'proposed',
+        'updated_at' => date('Y-m-d H:i:s'),
+    ];
+    if (table_has_column_local($conexion, 'calendar_events', 'thread_id')) {
+        $eventData['thread_id'] = 'CARE:' . $bookingRequestId;
+    }
+
+    $existingId = 0;
+    if (table_has_column_local($conexion, 'calendar_events', 'title')
+        && table_has_column_local($conexion, 'calendar_events', 'request_id')
+        && table_has_column_local($conexion, 'calendar_events', 'event_type')
+    ) {
+        $stmtExists = mysqli_prepare(
+            $conexion,
+            "SELECT id FROM calendar_events WHERE request_id = ? AND event_type = 'CARE' AND title = ? LIMIT 1"
+        );
+        if ($stmtExists) {
+            mysqli_stmt_bind_param($stmtExists, 'is', $bookingRequestId, $title);
+            if (mysqli_stmt_execute($stmtExists)) {
+                $existsRow = stmt_fetch_assoc_local($stmtExists);
+                $existingId = (int)($existsRow['id'] ?? 0);
+            }
+            mysqli_stmt_close($stmtExists);
+        }
+    }
+
+    if ($existingId > 0) {
+        $setParts = [];
+        $values = [];
+        foreach ($eventData as $col => $val) {
+            if (!table_has_column_local($conexion, 'calendar_events', $col) || $col === 'created_by_role' || $col === 'created_by_user_id') {
+                continue;
+            }
+            $setParts[] = "`{$col}` = ?";
+            $values[] = $val;
+        }
+        if (empty($setParts)) {
+            return true;
+        }
+        $sql = "UPDATE calendar_events SET " . implode(', ', $setParts) . " WHERE id = ? LIMIT 1";
+        $stmtUpdate = mysqli_prepare($conexion, $sql);
+        if (!$stmtUpdate) {
+            return false;
+        }
+        $types = str_repeat('s', count($values)) . 'i';
+        $values[] = $existingId;
+        if (!bind_stmt_params_local($stmtUpdate, $types, $values)) {
+            mysqli_stmt_close($stmtUpdate);
+            return false;
+        }
+        $ok = mysqli_stmt_execute($stmtUpdate);
+        if (!$ok) {
+            error_log('booking_submit: calendar care upsert update failed event_id=' . $existingId . ' error=' . mysqli_stmt_error($stmtUpdate));
+        }
+        mysqli_stmt_close($stmtUpdate);
+        return $ok;
+    }
+
+    $insert = run_dynamic_insert_local(
+        $conexion,
+        'calendar_events',
+        $eventData,
+        ['title', 'start_at', 'event_type', 'request_id', 'created_by_role', 'status'],
+        'calendar_seed'
+    );
+    if (!$insert['ok']) {
+        error_log('booking_submit: calendar care upsert insert failed request_id=' . $bookingRequestId . ' title=' . $title . ' error=' . (string)$insert['error']);
+        return false;
+    }
+    return true;
+}
+
 function seed_initial_calendar_event_for_booking($conexion, $bookingRequestId, $clientUserId, $bookingDatetime, $timelineText)
 {
     $bookingRequestId = (int)$bookingRequestId;
@@ -975,81 +1112,56 @@ function seed_initial_calendar_event_for_booking($conexion, $bookingRequestId, $
         return false;
     }
 
-    $title = 'Preferred date (patient)';
-    if (table_has_column_local($conexion, 'calendar_events', 'title')
-        && table_has_column_local($conexion, 'calendar_events', 'request_id')
-        && table_has_column_local($conexion, 'calendar_events', 'event_type')
-    ) {
-        $stmtExists = mysqli_prepare(
-            $conexion,
-            "SELECT id FROM calendar_events WHERE request_id = ? AND event_type = 'CARE' AND title = ? LIMIT 1"
-        );
-        if ($stmtExists) {
-            mysqli_stmt_bind_param($stmtExists, 'is', $bookingRequestId, $title);
-            if (mysqli_stmt_execute($stmtExists)) {
-                $existsRow = stmt_fetch_assoc_local($stmtExists);
-                mysqli_stmt_close($stmtExists);
-                if ($existsRow && !empty($existsRow['id'])) {
-                    return true;
-                }
-            } else {
-                mysqli_stmt_close($stmtExists);
-            }
-        }
-    }
-
     $parsedStart = parse_booking_datetime_bogota_local($bookingDatetime);
+    $parsedRange = parse_timeline_date_range_local($timelineText);
     $requestCreatedAt = parse_booking_datetime_bogota_local((string)($requestRow['created_at'] ?? ''));
     if ($requestCreatedAt === '') {
         $requestCreatedAt = parse_booking_datetime_bogota_local(date('Y-m-d H:i:s'));
     }
 
-    $allDay = 0;
-    $startAt = '';
-    $endAt = null;
-    $description = 'Patient submitted preferred date during booking.';
+    $seeded = false;
+
     if ($parsedStart !== '') {
-        $startAt = $parsedStart;
-        $endAt = date('Y-m-d H:i:s', strtotime($parsedStart . ' +30 minutes'));
-    } elseif ($timelineText !== '') {
-        $allDay = 1;
+        $seeded = upsert_calendar_care_event_local(
+            $conexion,
+            $bookingRequestId,
+            $clientUserId,
+            'Preferred date (patient)',
+            $parsedStart,
+            date('Y-m-d H:i:s', strtotime($parsedStart . ' +30 minutes')),
+            0,
+            'Patient submitted preferred date during booking.'
+        ) || $seeded;
+    } elseif ($timelineText !== '' && $parsedRange === null) {
         $baseDate = $requestCreatedAt !== '' ? substr($requestCreatedAt, 0, 10) : date('Y-m-d');
-        $startAt = $baseDate . ' 00:00:00';
-        $description = 'Preferred timeline: ' . $timelineText;
-    } else {
-        return false;
+        $seeded = upsert_calendar_care_event_local(
+            $conexion,
+            $bookingRequestId,
+            $clientUserId,
+            'Preferred date (patient)',
+            $baseDate . ' 00:00:00',
+            null,
+            1,
+            'Preferred timeline: ' . $timelineText
+        ) || $seeded;
     }
 
-    $eventData = [
-        'title' => $title,
-        'description' => $description,
-        'start_at' => $startAt,
-        'end_at' => $endAt,
-        'all_day' => $allDay,
-        'event_type' => 'CARE',
-        'request_id' => $bookingRequestId,
-        'created_by_role' => 'CLIENT',
-        'created_by_user_id' => $clientUserId,
-        'client_user_id' => $clientUserId,
-        'status' => 'proposed',
-        'updated_at' => date('Y-m-d H:i:s'),
-    ];
-    if (table_has_column_local($conexion, 'calendar_events', 'thread_id')) {
-        $eventData['thread_id'] = 'CARE:' . $bookingRequestId;
+    if ($parsedRange !== null) {
+        $rangeStart = $parsedRange['start_date'] . ' 00:00:00';
+        $rangeEndExclusive = date('Y-m-d 00:00:00', strtotime($parsedRange['end_date'] . ' +1 day'));
+        $seeded = upsert_calendar_care_event_local(
+            $conexion,
+            $bookingRequestId,
+            $clientUserId,
+            'Travel window (patient)',
+            $rangeStart,
+            $rangeEndExclusive,
+            1,
+            'Patient travel window from ' . $parsedRange['start_date'] . ' to ' . $parsedRange['end_date'] . '.'
+        ) || $seeded;
     }
 
-    $insert = run_dynamic_insert_local(
-        $conexion,
-        'calendar_events',
-        $eventData,
-        ['title', 'start_at', 'event_type', 'request_id', 'created_by_role', 'status'],
-        'calendar_seed'
-    );
-    if (!$insert['ok']) {
-        error_log('booking_submit: calendar seed failed request_id=' . $bookingRequestId . ' error=' . (string)$insert['error']);
-        return false;
-    }
-    return true;
+    return $seeded;
 }
 
 function set_password_reset_token_for_user($conexion, $userId)

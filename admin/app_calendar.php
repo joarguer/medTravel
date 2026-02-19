@@ -59,13 +59,13 @@ $can_delete = $can_admin_view;
                             <span class="caption-subject font-blue bold uppercase">Booking Calendar</span>
                         </div>
                         <div class="actions">
+                            <?php if ($can_admin_view): ?>
                             <select id="admin-calendar-filter" class="form-control input-sm" style="min-width:180px;">
-                                <?php if ($can_admin_view): ?>
                                 <option value="ALL">All events</option>
                                 <option value="CARE">CARE threads</option>
-                                <?php endif; ?>
-                                <option value="ITEM" selected>ITEM threads</option>
+                                <option value="ITEM">ITEM threads</option>
                             </select>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <div class="portlet-body">
