@@ -427,27 +427,39 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                             <div class="row">
                                 <div class="col-md-6">
                                     <h4>Operational reset (recommended)</h4>
-                                    <div class="checkbox">
-                                        <label><input type="checkbox" name="include_bookings" value="1" <?php echo $includeOptions['bookings'] ? 'checked' : ''; ?>> Include bookings and items</label>
-                                    </div>
-                                    <div class="checkbox">
-                                        <label><input type="checkbox" name="include_inbox" value="1" <?php echo $includeOptions['inbox'] ? 'checked' : ''; ?>> Include inbox messages</label>
-                                    </div>
-                                    <div class="checkbox">
-                                        <label><input type="checkbox" name="include_calendar" value="1" <?php echo $includeOptions['calendar'] ? 'checked' : ''; ?>> Include calendar events</label>
-                                    </div>
-                                    <div class="checkbox">
-                                        <label><input type="checkbox" name="reset_autoincrement" value="1" <?php echo $includeOptions['reset_autoincrement'] ? 'checked' : ''; ?>> Reset AUTO_INCREMENT (dev only)</label>
+                                    <div class="mt-checkbox-list">
+                                        <label class="mt-checkbox mt-checkbox-outline"> Include bookings and items
+                                            <input type="checkbox" name="include_bookings" value="1" <?php echo $includeOptions['bookings'] ? 'checked' : ''; ?>>
+                                            <span></span>
+                                        </label>
+                                        <label class="mt-checkbox mt-checkbox-outline"> Include inbox messages
+                                            <input type="checkbox" name="include_inbox" value="1" <?php echo $includeOptions['inbox'] ? 'checked' : ''; ?>>
+                                            <span></span>
+                                        </label>
+                                        <label class="mt-checkbox mt-checkbox-outline"> Include calendar events
+                                            <input type="checkbox" name="include_calendar" value="1" <?php echo $includeOptions['calendar'] ? 'checked' : ''; ?>>
+                                            <span></span>
+                                        </label>
+                                        <label class="mt-checkbox mt-checkbox-outline"> Reset AUTO_INCREMENT (dev only)
+                                            <input type="checkbox" name="reset_autoincrement" value="1" <?php echo $includeOptions['reset_autoincrement'] ? 'checked' : ''; ?>>
+                                            <span></span>
+                                        </label>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <h4>Full reset (dangerous)</h4>
-                                    <div class="checkbox">
-                                        <label><input type="checkbox" name="include_full_catalog" value="1" <?php echo $includeOptions['full_catalog'] ? 'checked' : ''; ?>> Also delete providers/services demo data</label>
+                                    <div class="mt-checkbox-list">
+                                        <label class="mt-checkbox mt-checkbox-outline"> Also delete providers/services demo data
+                                            <input type="checkbox" name="include_full_catalog" value="1" <?php echo $includeOptions['full_catalog'] ? 'checked' : ''; ?>>
+                                            <span></span>
+                                        </label>
                                     </div>
                                     <?php if (!empty($attachmentDirs)): ?>
-                                        <div class="checkbox">
-                                            <label><input type="checkbox" name="include_files" value="1" <?php echo $includeOptions['include_files'] ? 'checked' : ''; ?>> Also delete generated booking files</label>
+                                        <div class="mt-checkbox-list">
+                                            <label class="mt-checkbox mt-checkbox-outline"> Also delete generated booking files
+                                                <input type="checkbox" name="include_files" value="1" <?php echo $includeOptions['include_files'] ? 'checked' : ''; ?>>
+                                                <span></span>
+                                            </label>
                                         </div>
                                         <p class="help-block">
                                             Detected folders:
@@ -471,11 +483,15 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                             <input type="text" class="form-control" name="confirm_word" value="" placeholder="RESET">
                                         </div>
                                     </div>
-                                    <div class="checkbox">
-                                        <label><input type="checkbox" name="confirm_irreversible" value="1"> I understand this cannot be undone</label>
-                                    </div>
-                                    <div class="checkbox">
-                                        <label><input type="checkbox" name="confirm_full_reset" value="1"> I also confirm full reset of demo catalog data</label>
+                                    <div class="mt-checkbox-list">
+                                        <label class="mt-checkbox mt-checkbox-outline"> I understand this cannot be undone
+                                            <input type="checkbox" name="confirm_irreversible" value="1">
+                                            <span></span>
+                                        </label>
+                                        <label class="mt-checkbox mt-checkbox-outline"> I also confirm full reset of demo catalog data
+                                            <input type="checkbox" name="confirm_full_reset" value="1">
+                                            <span></span>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -608,8 +624,11 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
 
                     <div class="tab-content" style="padding-top:15px;">
                         <div class="tab-pane active" id="tab-users">
-                            <div class="checkbox" style="margin-bottom:10px;">
-                                <label><input type="checkbox" id="users-show-deleted"> Ver eliminados</label>
+                            <div style="margin-bottom:10px;">
+                                <label class="mt-checkbox mt-checkbox-outline"> Ver eliminados
+                                    <input type="checkbox" id="users-show-deleted">
+                                    <span></span>
+                                </label>
                             </div>
                             <table class="table table-striped table-bordered" id="cleanup-users-table">
                                 <thead>
@@ -627,8 +646,11 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                         </div>
 
                         <div class="tab-pane" id="tab-providers">
-                            <div class="checkbox" style="margin-bottom:10px;">
-                                <label><input type="checkbox" id="providers-show-deleted"> Ver eliminados</label>
+                            <div style="margin-bottom:10px;">
+                                <label class="mt-checkbox mt-checkbox-outline"> Ver eliminados
+                                    <input type="checkbox" id="providers-show-deleted">
+                                    <span></span>
+                                </label>
                             </div>
                             <table class="table table-striped table-bordered" id="cleanup-providers-table">
                                 <thead>
@@ -646,8 +668,11 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                         </div>
 
                         <div class="tab-pane" id="tab-service-providers">
-                            <div class="checkbox" style="margin-bottom:10px;">
-                                <label><input type="checkbox" id="service-providers-show-deleted"> Ver eliminados</label>
+                            <div style="margin-bottom:10px;">
+                                <label class="mt-checkbox mt-checkbox-outline"> Ver eliminados
+                                    <input type="checkbox" id="service-providers-show-deleted">
+                                    <span></span>
+                                </label>
                             </div>
                             <table class="table table-striped table-bordered" id="cleanup-service-providers-table">
                                 <thead>
@@ -665,8 +690,11 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                         </div>
 
                         <div class="tab-pane" id="tab-medtravel-services">
-                            <div class="checkbox" style="margin-bottom:10px;">
-                                <label><input type="checkbox" id="medtravel-services-show-deleted"> Ver eliminados</label>
+                            <div style="margin-bottom:10px;">
+                                <label class="mt-checkbox mt-checkbox-outline"> Ver eliminados
+                                    <input type="checkbox" id="medtravel-services-show-deleted">
+                                    <span></span>
+                                </label>
                             </div>
                             <table class="table table-striped table-bordered" id="cleanup-medtravel-services-table">
                                 <thead>
