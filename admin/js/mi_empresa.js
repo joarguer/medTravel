@@ -27,7 +27,8 @@ $(document).ready(function() {
             address: $('#address').val(),
             phone: $('#phone').val(),
             email: $('#email').val(),
-            website: $('#website').val()
+            website: $('#website').val(),
+            calendar_capacity: $('#calendar_capacity').val()
         };
 
         $.ajax({
@@ -37,16 +38,16 @@ $(document).ready(function() {
             dataType: 'json',
             success: function(response) {
                 if (response.ok) {
-                    toastr.success(response.message || 'Cambios guardados correctamente', 'Éxito');
+                    toastr.success(response.message || 'Saved', 'Saved');
                     if (response.data) {
                         populateCompanyForm(response.data);
                     }
                 } else {
-                    toastr.error(response.error || 'Error al guardar los cambios', 'Error');
+                    toastr.error(response.error || 'Could not save', 'Could not save');
                 }
             },
             error: function(xhr, status, error) {
-                toastr.error('Error de conexión: ' + error, 'Error');
+                toastr.error('Could not save', 'Could not save');
             },
             complete: function() {
                 $btn.prop('disabled', !miEmpresaCtx.canEditSelf).html(btnText);
@@ -142,6 +143,7 @@ function populateCompanyForm(data) {
     $('#phone').val(data.phone || '');
     $('#email').val(data.email || '');
     $('#website').val(data.website || '');
+    $('#calendar_capacity').val(Math.max(1, parseInt(data.calendar_capacity || 1, 10)));
 
     if ($('#company-type-text').length) {
         $('#company-type-text').text(data.type_label || 'N/A');

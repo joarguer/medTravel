@@ -218,6 +218,7 @@ function build_company_payload($conexion, $scope, $row) {
             'logo' => $logoFile,
             'logo_url' => $logoUrl,
             'is_active' => isset($row['is_active']) ? intval($row['is_active']) : 0,
+            'calendar_capacity' => max(1, (int)($row['calendar_capacity'] ?? 1)),
             'status' => $verification['status'],
             'verification_level' => $verification['verification_level'],
             'completion_percent' => $verification['completion_percent'],
@@ -242,6 +243,7 @@ function build_company_payload($conexion, $scope, $row) {
         'logo' => '',
         'logo_url' => '',
         'is_active' => isset($row['is_active']) ? intval($row['is_active']) : 0,
+        'calendar_capacity' => max(1, (int)($row['calendar_capacity'] ?? 1)),
         'status' => ((isset($row['is_active']) && intval($row['is_active']) === 1) ? 'active' : 'inactive'),
         'verification_level' => null,
         'completion_percent' => null,
@@ -340,6 +342,12 @@ if ($action === 'update_self_company') {
     $phone = isset($_POST['phone']) ? trim((string)$_POST['phone']) : '';
     $email = isset($_POST['email']) ? trim((string)$_POST['email']) : '';
     $website = isset($_POST['website']) ? trim((string)$_POST['website']) : '';
+    $calendarCapacity = isset($_POST['calendar_capacity']) ? (int)$_POST['calendar_capacity'] : 1;
+    if ($calendarCapacity < 1) {
+        $calendarCapacity = 1;
+    } elseif ($calendarCapacity > 50) {
+        $calendarCapacity = 50;
+    }
 
     if ($name === '') {
         json_err('El nombre es obligatorio', 422, 'name_required');
@@ -351,12 +359,22 @@ if ($action === 'update_self_company') {
     $scopeId = intval($scope['scope_id']);
 
     if ($scope['domain'] === 'medical') {
-        $sql = "UPDATE providers SET name = ?, description = ?, city = ?, address = ?, phone = ?, email = ?, website = ? WHERE id = ? AND is_active = 1 LIMIT 1";
-        $stmt = mysqli_prepare($conexion, $sql);
-        if (!$stmt) {
-            json_err('Error al preparar actualización', 500, 'db_prepare_error');
+        $hasCapacityColumn = table_has_column($conexion, 'providers', 'calendar_capacity');
+        if ($hasCapacityColumn) {
+            $sql = "UPDATE providers SET name = ?, description = ?, city = ?, address = ?, phone = ?, email = ?, website = ?, calendar_capacity = ? WHERE id = ? AND is_active = 1 LIMIT 1";
+            $stmt = mysqli_prepare($conexion, $sql);
+            if (!$stmt) {
+                json_err('Error al preparar actualización', 500, 'db_prepare_error');
+            }
+            mysqli_stmt_bind_param($stmt, 'sssssssii', $name, $description, $city, $address, $phone, $email, $website, $calendarCapacity, $scopeId);
+        } else {
+            $sql = "UPDATE providers SET name = ?, description = ?, city = ?, address = ?, phone = ?, email = ?, website = ? WHERE id = ? AND is_active = 1 LIMIT 1";
+            $stmt = mysqli_prepare($conexion, $sql);
+            if (!$stmt) {
+                json_err('Error al preparar actualización', 500, 'db_prepare_error');
+            }
+            mysqli_stmt_bind_param($stmt, 'sssssssi', $name, $description, $city, $address, $phone, $email, $website, $scopeId);
         }
-        mysqli_stmt_bind_param($stmt, 'sssssssi', $name, $description, $city, $address, $phone, $email, $website, $scopeId);
         if (!mysqli_stmt_execute($stmt)) {
             $err = mysqli_stmt_error($stmt);
             mysqli_stmt_close($stmt);
@@ -364,12 +382,22 @@ if ($action === 'update_self_company') {
         }
         mysqli_stmt_close($stmt);
     } elseif ($scope['domain'] === 'complementary') {
-        $sql = "UPDATE service_providers SET provider_name = ?, notes = ?, city = ?, contact_phone = ?, contact_email = ?, website = ? WHERE id = ? AND is_active = 1 LIMIT 1";
-        $stmt = mysqli_prepare($conexion, $sql);
-        if (!$stmt) {
-            json_err('Error al preparar actualización', 500, 'db_prepare_error');
+        $hasCapacityColumn = table_has_column($conexion, 'service_providers', 'calendar_capacity');
+        if ($hasCapacityColumn) {
+            $sql = "UPDATE service_providers SET provider_name = ?, notes = ?, city = ?, contact_phone = ?, contact_email = ?, website = ?, calendar_capacity = ? WHERE id = ? AND is_active = 1 LIMIT 1";
+            $stmt = mysqli_prepare($conexion, $sql);
+            if (!$stmt) {
+                json_err('Error al preparar actualización', 500, 'db_prepare_error');
+            }
+            mysqli_stmt_bind_param($stmt, 'ssssssii', $name, $description, $city, $phone, $email, $website, $calendarCapacity, $scopeId);
+        } else {
+            $sql = "UPDATE service_providers SET provider_name = ?, notes = ?, city = ?, contact_phone = ?, contact_email = ?, website = ? WHERE id = ? AND is_active = 1 LIMIT 1";
+            $stmt = mysqli_prepare($conexion, $sql);
+            if (!$stmt) {
+                json_err('Error al preparar actualización', 500, 'db_prepare_error');
+            }
+            mysqli_stmt_bind_param($stmt, 'ssssssi', $name, $description, $city, $phone, $email, $website, $scopeId);
         }
-        mysqli_stmt_bind_param($stmt, 'ssssssi', $name, $description, $city, $phone, $email, $website, $scopeId);
         if (!mysqli_stmt_execute($stmt)) {
             $err = mysqli_stmt_error($stmt);
             mysqli_stmt_close($stmt);

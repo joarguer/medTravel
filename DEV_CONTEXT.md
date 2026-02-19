@@ -610,3 +610,14 @@ Nota de alcance:
   - Si `overlaps_count >= calendar_capacity`, retorna `409` con `code=CONFLICT` y mensaje:
     `This time conflicts with another scheduled event.`
   - Eventos `cancelled` no cuentan para el solape.
+
+### 13) calendar_capacity configurable desde Mi Empresa (2026-02-19)
+- `admin/mi_empresa.php` expone el campo **Simultaneous appointments capacity** para proveedores médicos y complementarios.
+- Persistencia en el mismo flujo existente (`admin/ajax/mi_empresa.php`, acción `update_self_company`) sin crear endpoints nuevos.
+- Significado operativo:
+  - `1`: capacidad individual (doctor/vehículo único, sin solapes).
+  - `N > 1`: capacidad concurrente (clínica/flota con múltiples atenciones simultáneas).
+- Validación backend:
+  - cast a entero.
+  - mínimo `1` (fallback seguro si llega vacío o inválido).
+  - tope operativo `50` para evitar valores fuera de rango.

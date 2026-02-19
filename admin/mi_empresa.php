@@ -41,7 +41,8 @@ $company = [
     'website' => '',
     'description' => '',
     'logo' => '',
-    'is_active' => 0
+    'is_active' => 0,
+    'calendar_capacity' => 1
 ];
 
 // Cargar estado de verificación (solo dominio médico)
@@ -80,6 +81,9 @@ if ($domain_type === 'medical') {
     $company['description'] = isset($provider['description']) ? $provider['description'] : '';
     $company['logo'] = isset($provider['logo']) ? $provider['logo'] : '';
     $company['is_active'] = isset($provider['is_active']) ? intval($provider['is_active']) : 0;
+    $company['calendar_capacity'] = (isset($provider['calendar_capacity']) && (int)$provider['calendar_capacity'] > 0)
+        ? (int)$provider['calendar_capacity']
+        : 1;
 
     $ver_sql = "SELECT 
                     COALESCE(pv.status,'pending') AS status,
@@ -138,6 +142,9 @@ if ($domain_type === 'medical') {
     $company['description'] = isset($provider['notes']) ? $provider['notes'] : '';
     $company['logo'] = '';
     $company['is_active'] = isset($provider['is_active']) ? intval($provider['is_active']) : 0;
+    $company['calendar_capacity'] = (isset($provider['calendar_capacity']) && (int)$provider['calendar_capacity'] > 0)
+        ? (int)$provider['calendar_capacity']
+        : 1;
 }
 
 $company_title = ($domain_type === 'complementary') ? 'Mi Empresa / Proveedor Complementario' : 'Mi Empresa';
@@ -348,6 +355,23 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                                                 <div class="col-md-10">
                                                                     <textarea id="description" name="description" class="form-control" 
                                                                               rows="5"><?php echo htmlspecialchars((string)$company['description'], ENT_QUOTES); ?></textarea>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="row">
+                                                        <div class="col-md-12">
+                                                            <div class="form-group">
+                                                                <label class="col-md-2 control-label">Simultaneous appointments capacity</label>
+                                                                <div class="col-md-10">
+                                                                    <div class="input-group">
+                                                                        <span class="input-group-addon"><i class="fa fa-calendar"></i></span>
+                                                                        <input type="number" id="calendar_capacity" name="calendar_capacity" class="form-control"
+                                                                               min="1" max="50" step="1"
+                                                                               value="<?php echo max(1, (int)$company['calendar_capacity']); ?>" />
+                                                                    </div>
+                                                                    <span class="help-block">1 = single doctor/vehicle (no overlaps). Higher values for clinics/fleets.</span>
                                                                 </div>
                                                             </div>
                                                         </div>
