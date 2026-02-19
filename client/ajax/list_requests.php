@@ -9,7 +9,12 @@ require_once __DIR__ . '/../include/client_notifications.php';
 $clientUserId = get_client_user_id();
 $data = [];
 
-if (!isset($conexion) || !$conexion || !client_table_exists($conexion, 'booking_requests') || !client_table_has_column($conexion, 'booking_requests', 'client_user_id')) {
+if (!isset($conexion) || !$conexion || !client_table_exists($conexion, 'booking_requests')) {
+    echo json_encode(['ok' => true, 'data' => []]);
+    exit;
+}
+$ownerScope = client_build_booking_owner_scope($conexion, 'br', $clientUserId, client_get_session_email());
+if ($ownerScope['sql'] === '1=0') {
     echo json_encode(['ok' => true, 'data' => []]);
     exit;
 }
@@ -21,7 +26,7 @@ $hasStatus = client_table_has_column($conexion, 'booking_requests', 'status');
 $bookingSql = "SELECT br.id, br.created_at, br.destination";
 $bookingSql .= $hasTimeline ? ", br.timeline" : ", '' AS timeline";
 $bookingSql .= $hasStatus ? ", br.status" : ", 'pending' AS status";
-$bookingSql .= " FROM booking_requests br WHERE br.client_user_id = ?";
+$bookingSql .= " FROM booking_requests br WHERE " . $ownerScope['sql'];
 if ($hasBookingSoftDelete) {
     $bookingSql .= " AND br.is_deleted = 0";
 }
@@ -31,8 +36,9 @@ $bookings = [];
 $bookingIds = [];
 $stmtBookings = mysqli_prepare($conexion, $bookingSql);
 if ($stmtBookings) {
-    mysqli_stmt_bind_param($stmtBookings, 'i', $clientUserId);
-    if (mysqli_stmt_execute($stmtBookings)) {
+    $bookingTypes = $ownerScope['types'];
+    $bookingParams = $ownerScope['params'];
+    if (client_bind_params($stmtBookings, $bookingTypes, $bookingParams) && mysqli_stmt_execute($stmtBookings)) {
         $res = mysqli_stmt_get_result($stmtBookings);
         while ($res && ($row = mysqli_fetch_assoc($res))) {
             $id = (int)$row['id'];
@@ -154,4 +160,3 @@ foreach ($bookings as $booking) {
 }
 
 echo json_encode(['ok' => true, 'data' => $data]);
-

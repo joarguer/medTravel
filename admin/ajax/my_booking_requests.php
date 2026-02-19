@@ -135,17 +135,51 @@ function parse_additional_notes_messages($additionalNotes)
 
         if (preg_match('/^\[(CLIENT_MESSAGE|PROVIDER_MESSAGE)\]\[(.*?)\](?:\[(.*?)\])?\s*(.*)$/', $line, $m)) {
             $type = strtoupper((string)$m[1]);
+            $actorRaw = isset($m[3]) ? trim((string)$m[3]) : '';
+            $threadType = 'CARE';
+            $threadItemId = 0;
+            $actor = $actorRaw;
+            if ($actorRaw !== '') {
+                if (preg_match('/(?:^|\|)THREAD:ITEM:(\d+)/i', $actorRaw, $scopeMatch)) {
+                    $threadType = 'ITEM';
+                    $threadItemId = (int)$scopeMatch[1];
+                } elseif (preg_match('/(?:^|\|)THREAD:CARE(?:\||$)/i', $actorRaw)) {
+                    $threadType = 'CARE';
+                }
+                $actorParts = explode('|', $actorRaw);
+                $actorClean = [];
+                foreach ($actorParts as $part) {
+                    $part = trim((string)$part);
+                    if ($part === '' || stripos($part, 'THREAD:') === 0) {
+                        continue;
+                    }
+                    $actorClean[] = $part;
+                }
+                $actor = implode('|', $actorClean);
+            }
             $messages[] = [
                 'sender' => ($type === 'CLIENT_MESSAGE') ? 'client' : 'provider',
                 'type' => strtolower($type),
                 'time' => trim((string)$m[2]),
-                'actor' => isset($m[3]) ? trim((string)$m[3]) : '',
+                'actor' => $actor,
                 'body' => trim((string)$m[4]),
+                'thread_type' => $threadType,
+                'thread_item_id' => $threadItemId,
             ];
         }
     }
 
     return $messages;
+}
+
+function build_thread_actor($threadType, $threadItemId, $actor)
+{
+    $threadType = strtoupper(trim((string)$threadType));
+    $actor = trim((string)$actor);
+    if ($threadType === 'ITEM' && (int)$threadItemId > 0) {
+        return 'THREAD:ITEM:' . (int)$threadItemId . ($actor !== '' ? ('|' . $actor) : '');
+    }
+    return 'THREAD:CARE' . ($actor !== '' ? ('|' . $actor) : '');
 }
 
 function sort_messages_by_time(&$messages)
@@ -243,8 +277,9 @@ if (!table_exists($conexion, 'booking_request_items')) {
 
 $providerId = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
 $serviceProviderId = isset($_SESSION['service_provider_id']) ? intval($_SESSION['service_provider_id']) : 0;
+$isAdminSession = is_role_admin_session();
 
-if ($providerId <= 0 && $serviceProviderId <= 0) {
+if (!$isAdminSession && $providerId <= 0 && $serviceProviderId <= 0) {
     json_err('forbidden', 403);
 }
 
@@ -309,7 +344,11 @@ if (!$hasItemStatus) {
 $scopeWhere = '';
 $scopeTypes = '';
 $scopeParams = [];
-if ($providerId > 0 && $serviceProviderId > 0) {
+if ($isAdminSession) {
+    $scopeWhere = '';
+    $scopeTypes = '';
+    $scopeParams = [];
+} elseif ($providerId > 0 && $serviceProviderId > 0) {
     $scopeWhere = ' AND (bri.provider_id = ? OR bri.service_provider_id = ?)';
     $scopeTypes = 'ii';
     $scopeParams = [$providerId, $serviceProviderId];
@@ -334,6 +373,115 @@ $proposedDateFromExpr = $hasProviderProposedDateFrom ? 'bri.provider_proposed_da
 $proposedDateToExpr = $hasProviderProposedDateTo ? 'bri.provider_proposed_date_to' : 'NULL';
 $proposedPriceExpr = $hasProviderProposedPrice ? 'bri.provider_proposed_price' : ($hasItemProposedPrice ? 'bri.proposed_price' : 'NULL');
 $proposedCurrencyExpr = $hasProviderProposedCurrency ? 'bri.provider_proposed_currency' : ($hasItemCurrency ? 'bri.currency' : 'NULL');
+
+if ($action === 'list_threads') {
+    $threads = [];
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : (isset($_POST['limit']) ? (int)$_POST['limit'] : 200);
+    if ($limit < 1) {
+        $limit = 200;
+    }
+    if ($limit > 500) {
+        $limit = 500;
+    }
+
+    if ($isAdminSession) {
+        $careSql = "SELECT br.id AS booking_request_id,
+                           br.created_at,
+                           br.destination,
+                           " . ($hasBookingUpdatedAt ? "COALESCE(br.updated_at, br.created_at)" : "br.created_at") . " AS thread_updated_at
+                    FROM booking_requests br
+                    WHERE 1=1";
+        if ($hasRequestsSoftDelete) {
+            $careSql .= " AND br.is_deleted = 0";
+        }
+        $careSql .= " ORDER BY thread_updated_at DESC LIMIT " . (int)$limit;
+        $careRes = mysqli_query($conexion, $careSql);
+        if ($careRes) {
+            while ($row = mysqli_fetch_assoc($careRes)) {
+                $bookingId = (int)($row['booking_request_id'] ?? 0);
+                if ($bookingId <= 0) {
+                    continue;
+                }
+                $threads[] = [
+                    'thread_key' => 'CARE:' . $bookingId,
+                    'thread_type' => 'CARE',
+                    'booking_request_id' => $bookingId,
+                    'item_id' => 0,
+                    'title' => 'General - Request #' . $bookingId,
+                    'subtitle' => trim((string)($row['destination'] ?? '')),
+                    'updated_at' => (string)($row['thread_updated_at'] ?? $row['created_at'] ?? ''),
+                ];
+            }
+        }
+    }
+
+    $itemSql = "SELECT
+                    bri.id AS item_id,
+                    bri.booking_request_id,
+                    COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
+                    br.destination,
+                    " . ($hasProviderResponseAt && $hasItemUpdatedAt && $hasItemCreatedAt
+                        ? "COALESCE(bri.provider_response_at, bri.updated_at, bri.created_at, br.created_at)"
+                        : ($hasItemUpdatedAt && $hasItemCreatedAt
+                            ? "COALESCE(bri.updated_at, bri.created_at, br.created_at)"
+                            : ($hasItemCreatedAt ? "COALESCE(bri.created_at, br.created_at)" : "br.created_at"))) . " AS thread_updated_at
+                FROM booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                LEFT JOIN service_catalog sc ON sc.id = o.service_id
+                LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                WHERE 1=1";
+    if ($hasItemsSoftDelete) {
+        $itemSql .= " AND bri.is_deleted = 0";
+    }
+    if ($hasRequestsSoftDelete) {
+        $itemSql .= " AND br.is_deleted = 0";
+    }
+    $itemSql .= $scopeWhere;
+    $itemSql .= " ORDER BY thread_updated_at DESC, bri.id DESC LIMIT " . (int)$limit;
+
+    $stmtThreads = mysqli_prepare($conexion, $itemSql);
+    if ($stmtThreads) {
+        if ($scopeTypes !== '') {
+            bind_stmt_params($stmtThreads, $scopeTypes, $scopeParams);
+        }
+        if (mysqli_stmt_execute($stmtThreads)) {
+            $threadsRes = mysqli_stmt_get_result($stmtThreads);
+            while ($threadsRes && ($row = mysqli_fetch_assoc($threadsRes))) {
+                $itemId = (int)($row['item_id'] ?? 0);
+                $bookingId = (int)($row['booking_request_id'] ?? 0);
+                if ($itemId <= 0 || $bookingId <= 0) {
+                    continue;
+                }
+                $title = trim((string)($row['item_name'] ?? ''));
+                if ($title === '') {
+                    $title = 'Item #' . $itemId;
+                }
+                $threads[] = [
+                    'thread_key' => 'ITEM:' . $itemId,
+                    'thread_type' => 'ITEM',
+                    'booking_request_id' => $bookingId,
+                    'item_id' => $itemId,
+                    'title' => $title . ' - Request #' . $bookingId,
+                    'subtitle' => trim((string)($row['destination'] ?? '')),
+                    'updated_at' => (string)($row['thread_updated_at'] ?? ''),
+                ];
+            }
+        }
+        mysqli_stmt_close($stmtThreads);
+    }
+
+    usort($threads, function ($a, $b) {
+        $ta = strtotime((string)($a['updated_at'] ?? ''));
+        $tb = strtotime((string)($b['updated_at'] ?? ''));
+        if ($ta === $tb) {
+            return strcmp((string)($a['thread_key'] ?? ''), (string)($b['thread_key'] ?? ''));
+        }
+        return ($ta > $tb) ? -1 : 1;
+    });
+
+    json_ok(['threads' => $threads]);
+}
 
 if ($action === 'list') {
     $sql = "SELECT
@@ -550,105 +698,179 @@ if ($action === 'get_detail') {
 }
 
 if ($action === 'list_messages') {
+    $threadTypeRaw = trim((string)($_POST['thread_type'] ?? $_GET['thread_type'] ?? ''));
+    $legacyMode = ($threadTypeRaw === '');
+    $threadType = strtoupper($threadTypeRaw);
     $itemId = intval($_POST['item_id'] ?? $_GET['item_id'] ?? 0);
-    if ($itemId <= 0) {
-        json_err('invalid_id');
+    $bookingRequestId = intval($_POST['booking_request_id'] ?? $_GET['booking_request_id'] ?? $_POST['booking_id'] ?? $_GET['booking_id'] ?? 0);
+
+    if ($threadType === '') {
+        $threadType = 'ITEM';
+    }
+    if (!in_array($threadType, ['CARE', 'ITEM'], true)) {
+        json_err('invalid_thread_type', 422);
+    }
+    if ($threadType === 'CARE' && !$isAdminSession) {
+        json_err('forbidden', 403);
     }
 
-    $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
-    if (!$itemRow) {
-        json_err('not_found', 404);
+    if ($threadType === 'ITEM') {
+        if ($itemId <= 0) {
+            json_err('invalid_id');
+        }
+        $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
+        if (!$itemRow) {
+            json_err('not_found', 404);
+        }
+        $bookingRequestId = (int)$itemRow['booking_request_id'];
+    } else {
+        if ($bookingRequestId <= 0) {
+            json_err('invalid_booking_id', 422);
+        }
+        $bookingSql = "SELECT id FROM booking_requests WHERE id = ?";
+        if ($hasRequestsSoftDelete) {
+            $bookingSql .= " AND is_deleted = 0";
+        }
+        $bookingSql .= " LIMIT 1";
+        $bookingStmt = mysqli_prepare($conexion, $bookingSql);
+        if (!$bookingStmt) {
+            json_err('db_prepare_error', 500);
+        }
+        mysqli_stmt_bind_param($bookingStmt, 'i', $bookingRequestId);
+        if (!mysqli_stmt_execute($bookingStmt)) {
+            $err = mysqli_stmt_error($bookingStmt);
+            mysqli_stmt_close($bookingStmt);
+            json_err('db_error: ' . $err, 500);
+        }
+        $bookingRes = mysqli_stmt_get_result($bookingStmt);
+        $bookingRow = $bookingRes ? mysqli_fetch_assoc($bookingRes) : null;
+        mysqli_stmt_close($bookingStmt);
+        if (!$bookingRow) {
+            json_err('not_found', 404);
+        }
     }
 
-    $bookingRequestId = (int)$itemRow['booking_request_id'];
-    $messages = parse_additional_notes_messages(fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete));
-
-    $timelineSql = "SELECT
-                        CASE
-                            WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
-                            ELSE bri.item_status
-                        END AS item_status,
-                        {$providerNotesExpr} AS provider_notes,
-                        {$rejectReasonExpr} AS provider_reject_reason,
-                        {$responseAtExpr} AS provider_response_at,
-                        " . ($hasItemUpdatedAt ? "bri.updated_at" : "NULL") . " AS item_updated_at,
-                        " . ($hasItemCreatedAt ? "bri.created_at" : "NULL") . " AS item_created_at
-                    FROM booking_request_items bri
-                    INNER JOIN booking_requests br ON br.id = bri.booking_request_id
-                    WHERE bri.booking_request_id = ?";
-
-    if ($hasItemsSoftDelete) {
-        $timelineSql .= ' AND bri.is_deleted = 0';
-    }
-    if ($hasRequestsSoftDelete) {
-        $timelineSql .= ' AND br.is_deleted = 0';
-    }
-    $timelineSql .= $scopeWhere;
-    $timelineSql .= ' ORDER BY bri.id ASC';
-
-    $stmtTimeline = mysqli_prepare($conexion, $timelineSql);
-    if ($stmtTimeline) {
-        $timelineTypes = 'i' . $scopeTypes;
-        $timelineParams = array_merge([$bookingRequestId], $scopeParams);
-        bind_stmt_params($stmtTimeline, $timelineTypes, $timelineParams);
-        if (mysqli_stmt_execute($stmtTimeline)) {
-            $timelineRes = mysqli_stmt_get_result($stmtTimeline);
-            while ($timelineRes && ($timelineRow = mysqli_fetch_assoc($timelineRes))) {
-                $eventTime = trim((string)($timelineRow['provider_response_at'] ?? ''));
-                if ($eventTime === '') {
-                    $eventTime = trim((string)($timelineRow['item_updated_at'] ?? ''));
-                }
-                if ($eventTime === '') {
-                    $eventTime = trim((string)($timelineRow['item_created_at'] ?? ''));
-                }
-
-                $providerNotes = trim((string)($timelineRow['provider_notes'] ?? ''));
-                if ($providerNotes !== '') {
-                    $messages[] = [
-                        'sender' => 'provider',
-                        'type' => 'provider_note',
-                        'time' => $eventTime,
-                        'actor' => '',
-                        'body' => $providerNotes,
-                    ];
-                }
-
-                $rejectReason = trim((string)($timelineRow['provider_reject_reason'] ?? ''));
-                if ($rejectReason !== '') {
-                    $messages[] = [
-                        'sender' => 'provider',
-                        'type' => 'provider_reject_reason',
-                        'time' => $eventTime,
-                        'actor' => '',
-                        'body' => 'Rejection reason: ' . $rejectReason,
-                    ];
-                }
-
-                $status = normalize_legacy_item_status($timelineRow['item_status'] ?? '');
-                if ($status !== '') {
-                    $messages[] = [
-                        'sender' => 'system',
-                        'type' => 'status_update',
-                        'time' => $eventTime,
-                        'actor' => '',
-                        'body' => 'Service status updated to: ' . $status,
-                    ];
-                }
+    $parsedMessages = parse_additional_notes_messages(fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete));
+    $messages = [];
+    foreach ($parsedMessages as $m) {
+        if ($legacyMode) {
+            $messages[] = $m;
+            continue;
+        }
+        $mThreadType = strtoupper((string)($m['thread_type'] ?? 'CARE'));
+        $mThreadItemId = (int)($m['thread_item_id'] ?? 0);
+        if ($threadType === 'CARE') {
+            if ($mThreadType !== 'ITEM') {
+                $messages[] = $m;
+            }
+        } else {
+            if ($mThreadType === 'ITEM' && $mThreadItemId === $itemId) {
+                $messages[] = $m;
             }
         }
-        mysqli_stmt_close($stmtTimeline);
+    }
+
+    if ($threadType === 'ITEM') {
+        $timelineSql = "SELECT
+                            bri.id AS row_item_id,
+                            CASE
+                                WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                                ELSE bri.item_status
+                            END AS item_status,
+                            {$providerNotesExpr} AS provider_notes,
+                            {$rejectReasonExpr} AS provider_reject_reason,
+                            {$responseAtExpr} AS provider_response_at,
+                            " . ($hasItemUpdatedAt ? "bri.updated_at" : "NULL") . " AS item_updated_at,
+                            " . ($hasItemCreatedAt ? "bri.created_at" : "NULL") . " AS item_created_at
+                        FROM booking_request_items bri
+                        INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                        WHERE " . ($legacyMode ? "bri.booking_request_id = ?" : "bri.id = ?");
+
+        if ($hasItemsSoftDelete) {
+            $timelineSql .= ' AND bri.is_deleted = 0';
+        }
+        if ($hasRequestsSoftDelete) {
+            $timelineSql .= ' AND br.is_deleted = 0';
+        }
+        $timelineSql .= $scopeWhere;
+        if ($legacyMode) {
+            $timelineSql .= ' ORDER BY bri.id ASC';
+        } else {
+            $timelineSql .= ' LIMIT 1';
+        }
+
+        $stmtTimeline = mysqli_prepare($conexion, $timelineSql);
+        if ($stmtTimeline) {
+            $timelineTypes = 'i' . $scopeTypes;
+            $timelineParams = array_merge([$legacyMode ? $bookingRequestId : $itemId], $scopeParams);
+            bind_stmt_params($stmtTimeline, $timelineTypes, $timelineParams);
+            if (mysqli_stmt_execute($stmtTimeline)) {
+                $timelineRes = mysqli_stmt_get_result($stmtTimeline);
+                while ($timelineRes && ($timelineRow = mysqli_fetch_assoc($timelineRes))) {
+                    $rowItemId = (int)($timelineRow['row_item_id'] ?? $itemId);
+                    $eventTime = trim((string)($timelineRow['provider_response_at'] ?? ''));
+                    if ($eventTime === '') {
+                        $eventTime = trim((string)($timelineRow['item_updated_at'] ?? ''));
+                    }
+                    if ($eventTime === '') {
+                        $eventTime = trim((string)($timelineRow['item_created_at'] ?? ''));
+                    }
+
+                    $providerNotes = trim((string)($timelineRow['provider_notes'] ?? ''));
+                    if ($providerNotes !== '') {
+                        $messages[] = [
+                            'sender' => 'provider',
+                            'type' => 'provider_note',
+                            'time' => $eventTime,
+                            'actor' => '',
+                            'body' => $providerNotes,
+                            'thread_type' => 'ITEM',
+                            'thread_item_id' => $rowItemId,
+                        ];
+                    }
+
+                    $rejectReason = trim((string)($timelineRow['provider_reject_reason'] ?? ''));
+                    if ($rejectReason !== '') {
+                        $messages[] = [
+                            'sender' => 'provider',
+                            'type' => 'provider_reject_reason',
+                            'time' => $eventTime,
+                            'actor' => '',
+                            'body' => 'Rejection reason: ' . $rejectReason,
+                            'thread_type' => 'ITEM',
+                            'thread_item_id' => $rowItemId,
+                        ];
+                    }
+
+                    $status = normalize_legacy_item_status($timelineRow['item_status'] ?? '');
+                    if ($status !== '') {
+                        $messages[] = [
+                            'sender' => 'system',
+                            'type' => 'status_update',
+                            'time' => $eventTime,
+                            'actor' => '',
+                            'body' => 'Service status updated to: ' . $status,
+                            'thread_type' => 'ITEM',
+                            'thread_item_id' => $rowItemId,
+                        ];
+                    }
+                }
+            }
+            mysqli_stmt_close($stmtTimeline);
+        }
     }
 
     sort_messages_by_time($messages);
-    json_ok(['booking_request_id' => $bookingRequestId, 'messages' => $messages]);
+    json_ok([
+        'booking_request_id' => $bookingRequestId,
+        'thread_type' => $threadType,
+        'item_id' => $threadType === 'ITEM' ? $itemId : 0,
+        'messages' => $messages
+    ]);
 }
 
 if ($action === 'send_message') {
-    $itemId = intval($_POST['item_id'] ?? 0);
     $messageText = trim((string)($_POST['message'] ?? ''));
-    if ($itemId <= 0) {
-        json_err('invalid_id');
-    }
     if ($messageText === '') {
         json_err('message_required', 422);
     }
@@ -656,25 +878,73 @@ if ($action === 'send_message') {
         json_err('additional_notes_not_available', 409);
     }
 
-    $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
-    if (!$itemRow) {
-        json_err('not_found', 404);
+    $threadType = strtoupper(trim((string)($_POST['thread_type'] ?? '')));
+    $itemId = intval($_POST['item_id'] ?? 0);
+    $bookingRequestId = intval($_POST['booking_request_id'] ?? $_POST['booking_id'] ?? 0);
+    if ($threadType === '') {
+        $threadType = 'ITEM';
+    }
+    if (!in_array($threadType, ['CARE', 'ITEM'], true)) {
+        json_err('invalid_thread_type', 422);
+    }
+    if ($threadType === 'CARE' && !$isAdminSession) {
+        json_err('forbidden', 403);
     }
 
-    $bookingRequestId = (int)$itemRow['booking_request_id'];
+    if ($threadType === 'ITEM') {
+        if ($itemId <= 0) {
+            json_err('invalid_id', 422);
+        }
+        $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
+        if (!$itemRow) {
+            json_err('not_found', 404);
+        }
+        $bookingRequestId = (int)$itemRow['booking_request_id'];
+    } else {
+        if ($bookingRequestId <= 0) {
+            json_err('invalid_booking_id', 422);
+        }
+        $bookingSql = "SELECT id FROM booking_requests WHERE id = ?";
+        if ($hasRequestsSoftDelete) {
+            $bookingSql .= " AND is_deleted = 0";
+        }
+        $bookingSql .= " LIMIT 1";
+        $stmtBooking = mysqli_prepare($conexion, $bookingSql);
+        if (!$stmtBooking) {
+            json_err('db_prepare_error', 500);
+        }
+        mysqli_stmt_bind_param($stmtBooking, 'i', $bookingRequestId);
+        if (!mysqli_stmt_execute($stmtBooking)) {
+            $err = mysqli_stmt_error($stmtBooking);
+            mysqli_stmt_close($stmtBooking);
+            json_err('db_error: ' . $err, 500);
+        }
+        $bookingRes = mysqli_stmt_get_result($stmtBooking);
+        $bookingRow = $bookingRes ? mysqli_fetch_assoc($bookingRes) : null;
+        mysqli_stmt_close($stmtBooking);
+        if (!$bookingRow) {
+            json_err('not_found', 404);
+        }
+    }
+
     $stamp = date('Y-m-d H:i:s');
     $normalizedMessage = normalize_message_text($messageText);
-    $actor = '';
+    $actor = 'provider';
     if ($providerId > 0) {
-        $actor .= 'provider:' . $providerId;
+        $actor = 'provider:' . $providerId;
     }
     if ($serviceProviderId > 0) {
-        $actor .= ($actor !== '' ? '|' : '') . 'service_provider:' . $serviceProviderId;
+        $actor .= '|service_provider:' . $serviceProviderId;
+    } elseif ($isAdminSession) {
+        $adminId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+        if ($adminId > 0) {
+            $actor = 'admin:' . $adminId;
+        } else {
+            $actor = 'admin';
+        }
     }
-    if ($actor === '') {
-        $actor = 'provider';
-    }
-    $entry = '[PROVIDER_MESSAGE][' . $stamp . '][' . $actor . '] ' . $normalizedMessage;
+    $threadActor = build_thread_actor($threadType, $itemId, $actor);
+    $entry = '[PROVIDER_MESSAGE][' . $stamp . '][' . $threadActor . '] ' . $normalizedMessage;
 
     $currentNotes = fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete);
     $newNotes = trim($currentNotes) !== '' ? (rtrim($currentNotes) . "\n" . $entry) : $entry;
@@ -703,12 +973,16 @@ if ($action === 'send_message') {
 
     json_ok([
         'booking_request_id' => $bookingRequestId,
+        'thread_type' => $threadType,
+        'item_id' => $threadType === 'ITEM' ? $itemId : 0,
         'message' => [
             'sender' => 'provider',
             'type' => 'provider_message',
             'time' => $stamp,
             'actor' => $actor,
             'body' => $normalizedMessage,
+            'thread_type' => $threadType,
+            'thread_item_id' => $threadType === 'ITEM' ? $itemId : 0,
         ],
     ]);
 }

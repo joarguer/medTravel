@@ -1,5 +1,6 @@
 (function () {
     var table = null;
+    var activeDetailItemId = 0;
 
     $(document).ready(function () {
         initTable();
@@ -175,6 +176,18 @@
                 $('#provider_propose_modal').modal('hide');
             });
         });
+
+        $('#my_booking_detail_modal').on('click', '#btn-provider-send-message', function () {
+            if (!activeDetailItemId) {
+                return;
+            }
+            var text = ($('#provider-message-text').val() || '').trim();
+            if (!text) {
+                toastr.warning('Escribe un mensaje antes de enviar');
+                return;
+            }
+            sendProviderMessage(activeDetailItemId, text);
+        });
     }
 
     function loadRows() {
@@ -211,42 +224,192 @@
                     return;
                 }
 
-                var d = response.data;
-                var notes = buildRequestNotes(d);
-                var timeline = buildTimeline(d);
-                var responseMeta = '';
-
-                if (d.provider_response_at) {
-                    responseMeta += '<p><strong>Respondido:</strong> ' + escapeHtml(d.provider_response_at) + '</p>';
-                }
-                if (d.provider_reject_reason) {
-                    responseMeta += '<p><strong>Motivo rechazo:</strong><br>' + nl2brSafe(d.provider_reject_reason) + '</p>';
-                }
-                if (d.provider_notes) {
-                    responseMeta += '<p><strong>Notas proveedor:</strong><br>' + nl2brSafe(d.provider_notes) + '</p>';
-                }
-                if (d.provider_proposed_date_from || d.provider_proposed_date_to) {
-                    responseMeta += '<p><strong>Fechas propuestas:</strong> ' + escapeHtml((d.provider_proposed_date_from || '-') + ' - ' + (d.provider_proposed_date_to || '-')) + '</p>';
-                }
-                if (d.provider_proposed_price) {
-                    responseMeta += '<p><strong>Precio propuesto:</strong> ' + escapeHtml((d.provider_proposed_currency || 'USD') + ' ' + d.provider_proposed_price) + '</p>';
-                }
+                var d = response.data || {};
+                var itemsHistory = response.items_history || [];
+                activeDetailItemId = itemId;
 
                 var html = '' +
-                    '<p><strong>Booking:</strong> #' + escapeHtml(d.booking_request_id || '') + '</p>' +
-                    '<p><strong>Servicio:</strong> ' + escapeHtml(d.item_name || '') + '</p>' +
-                    '<p><strong>Estado:</strong> ' + renderStatusBadge(d.item_status || '') + '</p>' +
+                    '<div class="row">' +
+                        '<div class="col-md-12">' +
+                            '<h4 style="margin-top:0;">Solicitud #' + escapeHtml(d.booking_request_id || '') + '</h4>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="row">' +
+                        '<div class="col-md-6">' +
+                            '<p><strong>Creado:</strong> ' + escapeHtml(d.booking_created_at || '-') + '</p>' +
+                            '<p><strong>Estado booking:</strong> ' + renderStatusBadge(d.booking_status || 'pending') + '</p>' +
+                            '<p><strong>Categoría:</strong> ' + escapeHtml(d.category || '-') + '</p>' +
+                            '<p><strong>Service categories:</strong> ' + escapeHtml(d.service_categories || '-') + '</p>' +
+                            '<p><strong>Medical services:</strong> ' + escapeHtml(d.medical_services || '-') + '</p>' +
+                            '<p><strong>Budget:</strong> ' + escapeHtml(d.budget || '-') + '</p>' +
+                            '<p><strong>Selected offers:</strong> ' + escapeHtml(d.selected_offers || '-') + '</p>' +
+                        '</div>' +
+                        '<div class="col-md-6">' +
+                            '<p><strong>Origin:</strong> ' + escapeHtml(d.origin || '-') + '</p>' +
+                            '<p><strong>Destination:</strong> ' + escapeHtml(d.destination || '-') + '</p>' +
+                            '<p><strong>Timeline:</strong> ' + escapeHtml(buildTimeline(d)) + '</p>' +
+                            '<p><strong>Persons:</strong> ' + escapeHtml(d.persons || '-') + '</p>' +
+                            '<p><strong>Booking datetime:</strong> ' + escapeHtml(d.booking_datetime || '-') + '</p>' +
+                            '<p><strong>Special request:</strong><br>' + nl2brSafe(d.special_request || '-') + '</p>' +
+                        '</div>' +
+                    '</div>' +
                     '<hr>' +
-                    '<p><strong>Destino:</strong> ' + escapeHtml(d.destination || '-') + '</p>' +
-                    '<p><strong>Timeline:</strong> ' + escapeHtml(timeline) + '</p>' +
-                    '<p><strong>Notas de solicitud:</strong><br>' + nl2brSafe(notes) + '</p>' +
-                    (responseMeta ? '<hr>' + responseMeta : '');
+                    '<div class="row">' +
+                        '<div class="col-md-12">' +
+                            '<h5>Datos del cliente</h5>' +
+                            '<p><strong>Name:</strong> ' + escapeHtml(d.client_name || '-') + '</p>' +
+                            '<p><strong>Email:</strong> ' + escapeHtml(d.client_email || '-') + '</p>' +
+                            '<p><strong>Phone:</strong> ' + escapeHtml(d.client_phone || '-') + '</p>' +
+                        '</div>' +
+                    '</div>' +
+                    '<hr>' +
+                    '<div class="row">' +
+                        '<div class="col-md-12">' +
+                            '<h5>Timeline de items (scope proveedor)</h5>' +
+                            '<div class="table-responsive">' +
+                                '<table class="table table-striped table-bordered">' +
+                                    '<thead>' +
+                                        '<tr>' +
+                                            '<th>Item</th>' +
+                                            '<th>Tipo</th>' +
+                                            '<th>Estado</th>' +
+                                            '<th>Notas / Respuesta</th>' +
+                                            '<th>Fechas / Precio propuesto</th>' +
+                                            '<th>Timestamps</th>' +
+                                        '</tr>' +
+                                    '</thead>' +
+                                    '<tbody id="provider-item-history-body">' + renderItemsHistory(itemsHistory) + '</tbody>' +
+                                '</table>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<hr>' +
+                    '<div class="row">' +
+                        '<div class="col-md-12">' +
+                            '<h5>Conversación</h5>' +
+                            '<div id="provider-conversation-log" style="max-height:260px; overflow:auto; border:1px solid #e5e5e5; padding:10px; background:#fafafa;">Cargando mensajes...</div>' +
+                            '<div class="form-group" style="margin-top:12px;">' +
+                                '<label for="provider-message-text">Enviar mensaje al cliente</label>' +
+                                '<textarea id="provider-message-text" class="form-control" rows="3" maxlength="2000" placeholder="Escribe tu mensaje..."></textarea>' +
+                            '</div>' +
+                            '<button type="button" id="btn-provider-send-message" class="btn btn-primary btn-sm"><i class="fa fa-paper-plane"></i> Send message</button>' +
+                        '</div>' +
+                    '</div>';
 
                 $('#my_booking_detail_content').html(html);
                 $('#my_booking_detail_modal').modal('show');
+                loadMessages(itemId);
             },
             error: function () {
                 toastr.error('Error de conexión al cargar detalle');
+            }
+        });
+    }
+
+    function renderItemsHistory(items) {
+        if (!items || !items.length) {
+            return '<tr><td colspan="6">No hay items asociados para este proveedor.</td></tr>';
+        }
+        var html = '';
+        items.forEach(function (item) {
+            var typeLabel = item.item_type === 'medical_offer' ? 'Médico' : (item.item_type === 'complementary_service' ? 'Complementario' : (item.item_type || '-'));
+            var notesBlock = [];
+            if (item.provider_notes) notesBlock.push('<strong>Notas:</strong> ' + nl2brSafe(item.provider_notes));
+            if (item.provider_reject_reason) notesBlock.push('<strong>Rechazo:</strong> ' + nl2brSafe(item.provider_reject_reason));
+            if (!notesBlock.length) notesBlock.push('-');
+
+            var proposalBlock = [];
+            if (item.provider_proposed_date_from || item.provider_proposed_date_to) {
+                proposalBlock.push('Fechas: ' + escapeHtml((item.provider_proposed_date_from || '-') + ' - ' + (item.provider_proposed_date_to || '-')));
+            }
+            if (item.provider_proposed_price) {
+                proposalBlock.push('Precio: ' + escapeHtml((item.provider_proposed_currency || item.item_currency || 'USD') + ' ' + item.provider_proposed_price));
+            }
+            if (!proposalBlock.length) proposalBlock.push('-');
+
+            var timeBlock = [];
+            if (item.item_created_at) timeBlock.push('created: ' + escapeHtml(item.item_created_at));
+            if (item.item_updated_at) timeBlock.push('updated: ' + escapeHtml(item.item_updated_at));
+            if (item.provider_response_at) timeBlock.push('response: ' + escapeHtml(item.provider_response_at));
+            if (!timeBlock.length) timeBlock.push('-');
+
+            html += '<tr>' +
+                '<td>' + escapeHtml(item.item_name || '') + '</td>' +
+                '<td>' + escapeHtml(typeLabel) + '</td>' +
+                '<td>' + renderStatusBadge(item.item_status || '') + '</td>' +
+                '<td>' + notesBlock.join('<br>') + '</td>' +
+                '<td>' + proposalBlock.join('<br>') + '</td>' +
+                '<td>' + timeBlock.join('<br>') + '</td>' +
+                '</tr>';
+        });
+        return html;
+    }
+
+    function loadMessages(itemId) {
+        $.ajax({
+            url: 'ajax/my_booking_requests.php',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'list_messages', item_id: itemId },
+            success: function (response) {
+                if (!response || !response.ok) {
+                    $('#provider-conversation-log').html('<p>No se pudo cargar conversación.</p>');
+                    return;
+                }
+                renderConversation(response.messages || []);
+            },
+            error: function () {
+                $('#provider-conversation-log').html('<p>Error de conexión al cargar conversación.</p>');
+            }
+        });
+    }
+
+    function renderConversation(messages) {
+        var $log = $('#provider-conversation-log');
+        if (!$log.length) return;
+        if (!messages || !messages.length) {
+            $log.html('<p>Sin mensajes todavía.</p>');
+            return;
+        }
+
+        var html = '';
+        messages.forEach(function (m) {
+            var sender = (m.sender || 'system').toString();
+            var senderClass = sender === 'client' ? 'label-info' : (sender === 'provider' ? 'label-success' : 'label-default');
+            var actor = (m.actor || '').toString().trim();
+            html += '<div class="well well-sm" style="margin-bottom:8px;">' +
+                '<div><span class="label ' + senderClass + '">' + escapeHtml(sender) + '</span>' +
+                (actor ? ' <small>[' + escapeHtml(actor) + ']</small>' : '') +
+                (m.time ? ' <small style="margin-left:6px;">' + escapeHtml(m.time) + '</small>' : '') +
+                '</div>' +
+                '<div style="margin-top:6px; white-space:pre-wrap;">' + escapeHtml(m.body || '') + '</div>' +
+                '</div>';
+        });
+        $log.html(html);
+        $log.scrollTop($log[0].scrollHeight);
+    }
+
+    function sendProviderMessage(itemId, text) {
+        $.ajax({
+            url: 'ajax/my_booking_requests.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'send_message',
+                item_id: itemId,
+                message: text
+            },
+            success: function (response) {
+                if (!response || !response.ok) {
+                    toastr.error((response && response.message) ? response.message : 'No se pudo enviar mensaje');
+                    return;
+                }
+                $('#provider-message-text').val('');
+                toastr.success('Mensaje enviado');
+                loadMessages(itemId);
+            },
+            error: function () {
+                toastr.error('Error de conexión al enviar mensaje');
             }
         });
     }

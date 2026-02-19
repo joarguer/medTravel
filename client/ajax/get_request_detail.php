@@ -19,8 +19,12 @@ if ($requestId <= 0) {
     client_json_error('invalid_request_id');
 }
 
-if (!isset($conexion) || !$conexion || !client_table_exists($conexion, 'booking_requests') || !client_table_has_column($conexion, 'booking_requests', 'client_user_id')) {
+if (!isset($conexion) || !$conexion || !client_table_exists($conexion, 'booking_requests')) {
     client_json_error('booking_requests_not_available', 409);
+}
+$ownerScope = client_build_booking_owner_scope($conexion, 'br', $clientUserId, client_get_session_email());
+if ($ownerScope['sql'] === '1=0') {
+    client_json_error('booking_owner_scope_unavailable', 409);
 }
 
 $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
@@ -34,7 +38,7 @@ $bookingSql .= $hasTimeline ? ", br.timeline" : ", '' AS timeline";
 $bookingSql .= $hasStatus ? ", br.status" : ", 'pending' AS status";
 $bookingSql .= $hasSpecialRequest ? ", br.special_request" : ", '' AS special_request";
 $bookingSql .= $hasAdditionalNotes ? ", br.additional_notes" : ", '' AS additional_notes";
-$bookingSql .= " FROM booking_requests br WHERE br.id = ? AND br.client_user_id = ?";
+$bookingSql .= " FROM booking_requests br WHERE br.id = ? AND (" . $ownerScope['sql'] . ")";
 if ($hasBookingSoftDelete) {
     $bookingSql .= " AND br.is_deleted = 0";
 }
@@ -44,8 +48,9 @@ $stmtBooking = mysqli_prepare($conexion, $bookingSql);
 if (!$stmtBooking) {
     client_json_error('prepare_failed', 500);
 }
-mysqli_stmt_bind_param($stmtBooking, 'ii', $requestId, $clientUserId);
-if (!mysqli_stmt_execute($stmtBooking)) {
+$bookingTypes = 'i' . $ownerScope['types'];
+$bookingParams = array_merge([$requestId], $ownerScope['params']);
+if (!client_bind_params($stmtBooking, $bookingTypes, $bookingParams) || !mysqli_stmt_execute($stmtBooking)) {
     mysqli_stmt_close($stmtBooking);
     client_json_error('execute_failed', 500);
 }
@@ -270,4 +275,3 @@ echo json_encode([
     ],
     'items' => $itemsPayload,
 ]);
-

@@ -447,11 +447,17 @@ function run_static_booking_insert_local($conexion, $data)
         }
     }
 
-    $result['columns'] = $requiredColumns;
-    $sql = "INSERT INTO booking_requests
-            (name, email, phone, origin, booking_datetime, destination, persons, category,
-             special_request, selected_offers, budget, timeline, additional_notes)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)";
+    $hasClientUserId = table_has_column_local($conexion, 'booking_requests', 'client_user_id');
+    $columns = [
+        'name', 'email', 'phone', 'origin', 'booking_datetime', 'destination', 'persons', 'category',
+        'special_request', 'selected_offers', 'budget', 'timeline', 'additional_notes'
+    ];
+    if ($hasClientUserId) {
+        $columns[] = 'client_user_id';
+    }
+    $result['columns'] = $columns;
+
+    $sql = "INSERT INTO booking_requests (`" . implode('`,`', $columns) . "`) VALUES (" . implode(',', array_fill(0, count($columns), '?')) . ")";
 
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
@@ -472,8 +478,32 @@ function run_static_booking_insert_local($conexion, $data)
     $budget = $data['budget'] ?? null;
     $timeline = $data['timeline'] ?? null;
     $additionalNotes = $data['additional_notes'] ?? null;
+    $clientUserId = (isset($data['client_user_id']) && (int)$data['client_user_id'] > 0) ? (string)((int)$data['client_user_id']) : null;
 
-    if (!mysqli_stmt_bind_param(
+    if ($hasClientUserId) {
+        if (!mysqli_stmt_bind_param(
+            $stmt,
+            'ssssssssssssss',
+            $name,
+            $email,
+            $phone,
+            $origin,
+            $bookingDatetime,
+            $destination,
+            $persons,
+            $category,
+            $specialRequest,
+            $selectedOffers,
+            $budget,
+            $timeline,
+            $additionalNotes,
+            $clientUserId
+        )) {
+            $result['error'] = 'bind_failed: ' . mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            return $result;
+        }
+    } elseif (!mysqli_stmt_bind_param(
         $stmt,
         'sssssssssssss',
         $name,
@@ -1404,6 +1434,13 @@ $booking_request_id = 0;
 $client_user_id = 0;
 $summaryPayload = [];
 
+try {
+    $client_user_id = find_or_create_client_user_for_booking($conexion, $booking);
+} catch (Throwable $e) {
+    error_log('booking_submit: pre-insert client lookup error: ' . $e->getMessage());
+}
+$clientUserForBooking = ($client_user_id > 0) ? $client_user_id : null;
+
 $staticPayload = [
     'name' => (string)($booking['name'] ?? ''),
     'email' => (string)($booking['email'] ?? ''),
@@ -1418,6 +1455,7 @@ $staticPayload = [
     'budget' => $budget,
     'timeline' => ($timeline !== '' ? (string)$timeline : null),
     'additional_notes' => ($additional_notes !== '' ? (string)$additional_notes : null),
+    'client_user_id' => $clientUserForBooking,
 ];
 
 $attemptStatic = run_static_booking_insert_local($conexion, $staticPayload);
@@ -1446,6 +1484,7 @@ if (!$saved) {
         'budget' => $budget,
         'timeline' => (string)$timeline,
         'additional_notes' => (string)$additional_notes,
+        'client_user_id' => $clientUserForBooking,
         'status' => 'pending',
         'created_at' => date('Y-m-d H:i:s'),
     ];
@@ -1485,6 +1524,7 @@ if (!$saved) {
             'destination' => $bookingRequestData['destination'] ?? null,
             'special_request' => $bookingRequestData['special_request'] ?? null,
             'additional_notes' => $bookingRequestData['additional_notes'] ?? null,
+            'client_user_id' => $clientUserForBooking,
             'status' => 'pending',
             'created_at' => date('Y-m-d H:i:s'),
         ];
@@ -1499,6 +1539,7 @@ if (!$saved) {
             $minimalData = [
                 'name' => $bookingRequestData['name'],
                 'email' => $bookingRequestData['email'],
+                'client_user_id' => $clientUserForBooking,
                 'status' => 'pending',
                 'created_at' => date('Y-m-d H:i:s'),
             ];
@@ -1522,7 +1563,9 @@ if ($saved && $booking_request_id > 0) {
 
     $resetInfo = ['enabled' => false, 'saved' => false, 'token' => ''];
     try {
-        $client_user_id = find_or_create_client_user_for_booking($conexion, $booking);
+        if ($client_user_id <= 0) {
+            $client_user_id = find_or_create_client_user_for_booking($conexion, $booking);
+        }
         if ($client_user_id > 0) {
             update_booking_client_user($conexion, $booking_request_id, $client_user_id);
             $resetInfo = set_password_reset_token_for_user($conexion, $client_user_id);
