@@ -636,3 +636,17 @@ Nota de alcance:
 - En nuevos inserts, `provider_id` se persiste explícitamente como `NULL` cuando la columna existe.
 - `item_status` inicial se mantiene en `pending_provider`.
 - Si no se puede resolver `service_provider_id` del item al crear, el item se omite y se registra en log (no se inventa owner).
+
+### 16) Dev cleanup reset with preview/execute (2026-02-19)
+- `admin/cleanup.php` ahora incluye un flujo de reset de entorno para desarrollo con dos fases:
+  - **Preview (dry-run):** muestra conteos por tabla, FKs detectadas y orden de borrado seguro.
+  - **Execute:** ejecuta `DELETE` por tabla en orden child->parent, con transacción y reporte final.
+- Modos:
+  - **Operational reset (recommended):** bookings/items + inbox + calendar.
+  - **Full reset (dangerous):** además limpia catálogo demo de providers/services.
+- Guard de seguridad:
+  - ejecución real bloqueada salvo `APP_ENV=dev` y `ALLOW_DEV_RESET=true`.
+  - doble confirmación obligatoria: texto `RESET` + checkbox irreversible.
+  - full reset requiere confirmación adicional explícita.
+- Logging:
+  - registra preview/execute en `admin/logs/cleanup.log` y `error_log`.
