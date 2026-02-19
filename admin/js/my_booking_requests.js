@@ -8,7 +8,37 @@
     });
 
     function initTable() {
-        table = $('#my_booking_requests_table').DataTable({
+        var $table = $('#my_booking_requests_table');
+        if (!$table.length) {
+            return;
+        }
+
+        var expectedHeaders = [
+            'Booking',
+            'Fecha',
+            'Destino / Timeline',
+            'Tipo',
+            'Servicio',
+            'Estado',
+            'Acciones'
+        ];
+        var $thead = $table.find('thead');
+        var $headerRow = $thead.find('tr');
+        if (!$headerRow.length || $headerRow.find('th').length !== expectedHeaders.length) {
+            $table.find('thead').remove();
+            var headHtml = '<thead><tr>';
+            for (var i = 0; i < expectedHeaders.length; i++) {
+                headHtml += '<th>' + expectedHeaders[i] + '</th>';
+            }
+            headHtml += '</tr></thead>';
+            $table.prepend(headHtml);
+        }
+
+        if ($.fn.dataTable.isDataTable($table)) {
+            $table.DataTable().clear().destroy();
+        }
+
+        table = $table.DataTable({
             destroy: true,
             data: [],
             columns: [
@@ -58,7 +88,8 @@
             ],
             order: [[1, 'desc']],
             pageLength: 25,
-            responsive: true
+            responsive: true,
+            autoWidth: false
         });
     }
 

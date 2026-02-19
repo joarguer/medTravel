@@ -16,17 +16,118 @@ function usuarios_column_exists_reset($conexion, $column)
     return $cache[$column];
 }
 
+function usuarios_password_max_length($conexion)
+{
+    static $maxLen = null;
+    if ($maxLen !== null) {
+        return $maxLen;
+    }
+    $maxLen = 0;
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM usuarios LIKE 'password'");
+    if (!$res) {
+        return $maxLen;
+    }
+    $row = mysqli_fetch_assoc($res);
+    $type = isset($row['Type']) ? (string)$row['Type'] : '';
+    if (preg_match('/\((\d+)\)/', $type, $m)) {
+        $maxLen = (int)$m[1];
+    }
+    return $maxLen;
+}
+
 function bind_params_local($stmt, $types, &$params)
 {
     if ($types === '' || empty($params)) {
         return true;
     }
     $bind = [];
+    $bind[] = $stmt;
     $bind[] = &$types;
     foreach ($params as $k => $v) {
         $bind[] = &$params[$k];
     }
     return call_user_func_array('mysqli_stmt_bind_param', $bind);
+}
+
+function stmt_fetch_assoc_local($stmt)
+{
+    if (function_exists('mysqli_stmt_get_result')) {
+        $res = mysqli_stmt_get_result($stmt);
+        return $res ? mysqli_fetch_assoc($res) : null;
+    }
+
+    $meta = mysqli_stmt_result_metadata($stmt);
+    if (!$meta) {
+        return null;
+    }
+
+    $row = [];
+    $bind = [$stmt];
+    while ($field = mysqli_fetch_field($meta)) {
+        $row[$field->name] = null;
+        $bind[] = &$row[$field->name];
+    }
+
+    call_user_func_array('mysqli_stmt_bind_result', $bind);
+    if (!mysqli_stmt_fetch($stmt)) {
+        return null;
+    }
+
+    $out = [];
+    foreach ($row as $k => $v) {
+        $out[$k] = $v;
+    }
+    return $out;
+}
+
+function redirect_to_login_after_password_set()
+{
+    $target = 'login.php?password_set=1';
+    if (!headers_sent()) {
+        header('Location: ' . $target);
+        exit;
+    }
+    echo '<!doctype html><html><head><meta http-equiv="refresh" content="0;url=' . htmlspecialchars($target, ENT_QUOTES, 'UTF-8') . '"></head><body>';
+    echo '<script>window.location.href=' . json_encode($target) . ';</script>';
+    echo '</body></html>';
+    exit;
+}
+
+function build_password_storage_payload($plainPassword, $userByToken)
+{
+    $plainPassword = (string)$plainPassword;
+    $userByToken = is_array($userByToken) ? $userByToken : [];
+
+    // Prefer project canonical legacy hash/token flow when available.
+    if (function_exists('hash_password_for_storage')) {
+        $payload = hash_password_for_storage($plainPassword, $userByToken);
+        return [
+            'password' => (string)($payload['password'] ?? ''),
+            'token' => (string)($payload['token'] ?? ensure_password_token($userByToken)),
+        ];
+    }
+
+    // Fallback: bcrypt where available.
+    if (function_exists('password_hash')) {
+        return [
+            'password' => (string)password_hash($plainPassword, PASSWORD_DEFAULT),
+            'token' => (string)ensure_password_token($userByToken),
+        ];
+    }
+
+    // Last-resort compatibility fallback.
+    $token = (string)ensure_password_token($userByToken);
+    if (function_exists('hash_password')) {
+        return [
+            'password' => (string)hash_password($plainPassword, $token),
+            'token' => $token,
+        ];
+    }
+
+    return [
+        'password' => sha1($token . $plainPassword),
+        'token' => $token,
+    ];
 }
 
 function token_is_expired($expiresAt)
@@ -45,24 +146,41 @@ function generate_secure_reset_token($bytes = 32)
 {
     $bytes = max(16, (int)$bytes);
     if (function_exists('random_bytes')) {
-        return bin2hex(random_bytes($bytes));
-    }
-    if (function_exists('openssl_random_pseudo_bytes')) {
-        $raw = openssl_random_pseudo_bytes($bytes);
-        if ($raw !== false) {
-            return bin2hex($raw);
+        try {
+            return bin2hex(random_bytes($bytes));
+        } catch (Throwable $e) {
+            error_log('set_password random_bytes failed: ' . $e->getMessage());
         }
     }
-    return bin2hex(hash('sha256', uniqid((string)mt_rand(), true), true));
+    if (function_exists('openssl_random_pseudo_bytes')) {
+        try {
+            $raw = openssl_random_pseudo_bytes($bytes);
+            if ($raw !== false) {
+                return bin2hex($raw);
+            }
+        } catch (Throwable $e) {
+            error_log('set_password openssl_random_pseudo_bytes failed: ' . $e->getMessage());
+        }
+    }
+    return hash('sha256', uniqid((string)mt_rand(), true) . microtime(true));
 }
 
 function get_user_by_reset_token($conexion, $rawToken)
 {
-    if (!usuarios_column_exists_reset($conexion, 'password_reset_token') || !usuarios_column_exists_reset($conexion, 'password_reset_expires_at')) {
+    $hasResetToken = usuarios_column_exists_reset($conexion, 'password_reset_token');
+    $hasResetExpiry = usuarios_column_exists_reset($conexion, 'password_reset_expires_at');
+    $hasLegacyToken = usuarios_column_exists_reset($conexion, 'token');
+
+    if (!$hasResetToken && !$hasLegacyToken) {
         return null;
     }
 
-    $sql = "SELECT * FROM usuarios WHERE password_reset_token = ?";
+    if ($hasResetToken && $hasResetExpiry) {
+        $sql = "SELECT * FROM usuarios WHERE password_reset_token = ?";
+    } else {
+        // Legacy fallback for environments that still use usuarios.token.
+        $sql = "SELECT * FROM usuarios WHERE token = ?";
+    }
     if (usuarios_column_exists_reset($conexion, 'is_deleted')) {
         $sql .= " AND is_deleted = 0";
     }
@@ -77,8 +195,7 @@ function get_user_by_reset_token($conexion, $rawToken)
         mysqli_stmt_close($stmt);
         return null;
     }
-    $res = mysqli_stmt_get_result($stmt);
-    $row = $res ? mysqli_fetch_assoc($res) : null;
+    $row = stmt_fetch_assoc_local($stmt);
     mysqli_stmt_close($stmt);
     return $row ?: null;
 }
@@ -126,8 +243,7 @@ function find_user_for_resend($conexion, $email)
         return null;
     }
 
-    $res = mysqli_stmt_get_result($stmt);
-    $row = $res ? mysqli_fetch_assoc($res) : null;
+    $row = stmt_fetch_assoc_local($stmt);
     mysqli_stmt_close($stmt);
 
     return $row ?: null;
@@ -167,7 +283,7 @@ function send_resend_access_email($conexion, $toEmail, $token)
     try {
         $result = sendEmail($toEmail, $subject, $body, 'patientcare', [], $conexion);
         return $result === true;
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         error_log('set_password resend email exception: ' . $e->getMessage());
         return false;
     }
@@ -183,8 +299,11 @@ function resend_secure_access_link($conexion, $email)
     $hasResetToken = usuarios_column_exists_reset($conexion, 'password_reset_token');
     $hasResetExpires = usuarios_column_exists_reset($conexion, 'password_reset_expires_at');
     $hasResetSentAt = usuarios_column_exists_reset($conexion, 'password_reset_sent_at');
+    $hasLegacyToken = usuarios_column_exists_reset($conexion, 'token');
 
-    if (!$hasResetToken || !$hasResetExpires) {
+    $canUseSecureReset = ($hasResetToken && $hasResetExpires);
+    $canUseLegacyReset = (!$canUseSecureReset && $hasLegacyToken);
+    if (!$canUseSecureReset && !$canUseLegacyReset) {
         return;
     }
 
@@ -195,14 +314,22 @@ function resend_secure_access_link($conexion, $email)
 
     $token = generate_secure_reset_token(32);
     $expiresAt = date('Y-m-d H:i:s', time() + 86400);
-    if ($hasResetSentAt) {
+    if ($canUseSecureReset && $hasResetSentAt) {
         // Throttle at DB level to avoid race/timezone drift on concurrent requests.
         $updateSql = 'UPDATE usuarios SET password_reset_token = ?, password_reset_expires_at = ?, password_reset_sent_at = NOW()
             WHERE id = ?
               AND (password_reset_sent_at IS NULL OR password_reset_sent_at <= DATE_SUB(NOW(), INTERVAL 3 MINUTE))
             LIMIT 1';
-    } else {
+    } elseif ($canUseSecureReset) {
         $updateSql = 'UPDATE usuarios SET password_reset_token = ?, password_reset_expires_at = ? WHERE id = ? LIMIT 1';
+    } elseif ($hasResetSentAt) {
+        // Legacy fallback keeps token flow working without new reset columns.
+        $updateSql = 'UPDATE usuarios SET token = ?, password_reset_sent_at = NOW()
+            WHERE id = ?
+              AND (password_reset_sent_at IS NULL OR password_reset_sent_at <= DATE_SUB(NOW(), INTERVAL 3 MINUTE))
+            LIMIT 1';
+    } else {
+        $updateSql = 'UPDATE usuarios SET token = ? WHERE id = ? LIMIT 1';
     }
 
     $stmt = mysqli_prepare($conexion, $updateSql);
@@ -211,7 +338,11 @@ function resend_secure_access_link($conexion, $email)
     }
 
     $userId = (int)$user['id'];
-    mysqli_stmt_bind_param($stmt, 'ssi', $token, $expiresAt, $userId);
+    if ($canUseSecureReset) {
+        mysqli_stmt_bind_param($stmt, 'ssi', $token, $expiresAt, $userId);
+    } else {
+        mysqli_stmt_bind_param($stmt, 'si', $token, $userId);
+    }
     $ok = mysqli_stmt_execute($stmt);
     $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
@@ -235,19 +366,28 @@ $statusMessage = '';
 $statusType = '';
 $showPasswordForm = false;
 $showResendForm = false;
-$tokenState = 'invalid';
+$tokenState = 'missing';
 $userByToken = null;
 
-$resetColumnsAvailable = usuarios_column_exists_reset($conexion, 'password_reset_token') && usuarios_column_exists_reset($conexion, 'password_reset_expires_at');
+$hasResetTokenCol = usuarios_column_exists_reset($conexion, 'password_reset_token');
+$hasResetExpiryCol = usuarios_column_exists_reset($conexion, 'password_reset_expires_at');
+$hasLegacyTokenCol = usuarios_column_exists_reset($conexion, 'token');
+$canUseSecureReset = ($hasResetTokenCol && $hasResetExpiryCol);
+$canUseLegacyReset = (!$canUseSecureReset && $hasLegacyTokenCol);
+$resetColumnsAvailable = ($canUseSecureReset || $canUseLegacyReset);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'resend_link') {
     if ($resetColumnsAvailable && filter_var($emailInput, FILTER_VALIDATE_EMAIL)) {
-        resend_secure_access_link($conexion, $emailInput);
+        try {
+            resend_secure_access_link($conexion, $emailInput);
+        } catch (Throwable $e) {
+            error_log('set_password resend_link fatal-safe catch: ' . $e->getMessage());
+        }
     }
     $statusType = 'success';
     $statusMessage = 'If the email exists, we sent a new secure link.';
     $showResendForm = true;
-    $tokenState = 'invalid';
+    $tokenState = 'missing';
 } else {
     if (!$resetColumnsAvailable) {
         $statusType = 'danger';
@@ -255,14 +395,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'resend_link') {
         $showResendForm = false;
     } else {
         if ($token === '' || strlen($token) < 20) {
-            $tokenState = 'invalid';
+            $tokenState = 'missing';
             $showResendForm = true;
         } else {
             $userByToken = get_user_by_reset_token($conexion, $token);
             if (!$userByToken) {
                 $tokenState = 'invalid';
                 $showResendForm = true;
-            } elseif (token_is_expired($userByToken['password_reset_expires_at'] ?? null)) {
+            } elseif ($canUseSecureReset && token_is_expired($userByToken['password_reset_expires_at'] ?? null)) {
                 $tokenState = 'expired';
                 $showResendForm = true;
             } else {
@@ -284,7 +424,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'set_password') {
         $passwordConfirm = isset($_POST['password_confirm']) ? (string)$_POST['password_confirm'] : '';
 
         if ($token === '' || strlen($token) < 20) {
-            $tokenState = 'invalid';
+            $tokenState = 'missing';
             $showPasswordForm = false;
             $showResendForm = true;
         } else {
@@ -293,7 +433,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'set_password') {
                 $tokenState = 'invalid';
                 $showPasswordForm = false;
                 $showResendForm = true;
-            } elseif (token_is_expired($userByToken['password_reset_expires_at'] ?? null)) {
+            } elseif ($canUseSecureReset && token_is_expired($userByToken['password_reset_expires_at'] ?? null)) {
                 $tokenState = 'expired';
                 $showPasswordForm = false;
                 $showResendForm = true;
@@ -306,123 +446,188 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'set_password') {
                 $statusMessage = 'Passwords do not match.';
                 $showPasswordForm = true;
             } else {
-                $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                try {
+                    $storagePayload = build_password_storage_payload($password, $userByToken);
+                    $passwordHash = (string)($storagePayload['password'] ?? '');
+                    $tokenForUser = (string)($storagePayload['token'] ?? '');
+                    if ($passwordHash === '') {
+                        throw new Exception('empty_password_hash');
+                    }
+                    $passwordMaxLen = usuarios_password_max_length($conexion);
+                    if ($passwordMaxLen > 0 && strlen($passwordHash) > $passwordMaxLen) {
+                        $bcryptHash = function_exists('password_hash')
+                            ? (string)password_hash($password, PASSWORD_DEFAULT)
+                            : '';
+                        if ($bcryptHash === '' || strlen($bcryptHash) > $passwordMaxLen) {
+                            throw new Exception('password_hash_exceeds_column_length');
+                        }
+                        $passwordHash = $bcryptHash;
+                        if ($tokenForUser === '') {
+                            $tokenForUser = ensure_password_token($userByToken);
+                        }
+                        error_log('set_password: fallback to bcrypt due password column length limit=' . $passwordMaxLen);
+                    }
 
-                $fields = ['password = ?', 'password_reset_token = NULL', 'password_reset_expires_at = NULL'];
-                $types = 's';
-                $params = [$passwordHash];
-                if (usuarios_column_exists_reset($conexion, 'password_reset_sent_at')) {
-                    $fields[] = 'password_reset_sent_at = NULL';
-                }
+                    $fields = ['password = ?'];
+                    if (usuarios_column_exists_reset($conexion, 'password_reset_token')) {
+                        $fields[] = 'password_reset_token = NULL';
+                    }
+                    if (usuarios_column_exists_reset($conexion, 'password_reset_expires_at')) {
+                        $fields[] = 'password_reset_expires_at = NULL';
+                    }
+                    if (usuarios_column_exists_reset($conexion, 'password_reset_sent_at')) {
+                        $fields[] = 'password_reset_sent_at = NULL';
+                    }
 
-                if (usuarios_column_exists_reset($conexion, 'token')) {
-                    $legacyToken = ensure_password_token($userByToken);
-                    $fields[] = 'token = ?';
-                    $types .= 's';
-                    $params[] = $legacyToken;
-                }
-                if (usuarios_column_exists_reset($conexion, 'cambio_password')) {
-                    $fields[] = 'cambio_password = 0';
-                }
-                if (usuarios_column_exists_reset($conexion, 'activo')) {
-                    $fields[] = 'activo = 1';
-                }
+                    if (usuarios_column_exists_reset($conexion, 'token')) {
+                        $fields[] = 'token = ?';
+                    }
+                    if (usuarios_column_exists_reset($conexion, 'cambio_password')) {
+                        $fields[] = 'cambio_password = 0';
+                    }
+                    if (usuarios_column_exists_reset($conexion, 'activo')) {
+                        $fields[] = 'activo = 1';
+                    }
 
-                $sql = 'UPDATE usuarios SET ' . implode(', ', $fields) . ' WHERE id = ? LIMIT 1';
-                $stmt = mysqli_prepare($conexion, $sql);
+                    $sql = 'UPDATE usuarios SET ' . implode(', ', $fields) . ' WHERE id = ? LIMIT 1';
+                    $stmt = mysqli_prepare($conexion, $sql);
 
-                if (!$stmt) {
-                    $statusType = 'danger';
-                    $statusMessage = 'Could not update password. Try again later.';
-                    $showPasswordForm = true;
-                } else {
-                    $userId = (int)$userByToken['id'];
-                    $types .= 'i';
-                    $params[] = $userId;
-                    bind_params_local($stmt, $types, $params);
-
-                    if (!mysqli_stmt_execute($stmt)) {
+                    if (!$stmt) {
                         $statusType = 'danger';
                         $statusMessage = 'Could not update password. Try again later.';
                         $showPasswordForm = true;
-                        mysqli_stmt_close($stmt);
                     } else {
-                        mysqli_stmt_close($stmt);
-                        header('Location: login.php?password_set=1');
-                        exit;
+                        $userId = (int)$userByToken['id'];
+                        if (usuarios_column_exists_reset($conexion, 'token')) {
+                            $tokenToStore = $tokenForUser !== '' ? $tokenForUser : ensure_password_token($userByToken);
+                            mysqli_stmt_bind_param($stmt, 'ssi', $passwordHash, $tokenToStore, $userId);
+                        } else {
+                            mysqli_stmt_bind_param($stmt, 'si', $passwordHash, $userId);
+                        }
+
+                        if (!mysqli_stmt_execute($stmt)) {
+                            $statusType = 'danger';
+                            $statusMessage = 'Could not update password. Try again later.';
+                            $showPasswordForm = true;
+                            error_log('set_password update execute failed: ' . mysqli_stmt_error($stmt));
+                            mysqli_stmt_close($stmt);
+                        } else {
+                            mysqli_stmt_close($stmt);
+                            redirect_to_login_after_password_set();
+                        }
                     }
+                } catch (Throwable $e) {
+                    error_log('set_password set_password action fatal-safe catch: ' . $e->getMessage());
+                    $statusType = 'danger';
+                    $statusMessage = 'Could not update password. Try again later.';
+                    $showPasswordForm = true;
                 }
             }
         }
     }
 }
 
-$tokenInfoTitle = 'Link expired or invalid';
-$tokenInfoText = 'This secure link is no longer valid. You can request a new one below.';
+$tokenInfoTitle = 'Request a secure access link';
+$tokenInfoText = 'Enter your email below and we will send a secure link so you can create your password.';
+if ($tokenState === 'invalid') {
+    $tokenInfoTitle = 'Link expired or invalid';
+    $tokenInfoText = 'This secure link is no longer valid. You can request a new one below.';
+}
 if ($tokenState === 'expired') {
+    $tokenInfoTitle = 'Link expired';
     $tokenInfoText = 'For security reasons, access links expire after 24 hours. You can request a new one below.';
 }
 ?>
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Secure access link - MedTravel</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <meta charset="utf-8" />
+    <title>MedTravel | Secure access link</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <meta content="" name="description" />
+    <meta content="" name="author" />
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,300,600,700&subset=all" rel="stylesheet" type="text/css" />
+    <link href="assets/global/plugins/font-awesome/css/font-awesome.min.css" rel="stylesheet" type="text/css" />
+    <link href="assets/global/plugins/simple-line-icons/simple-line-icons.min.css" rel="stylesheet" type="text/css" />
+    <link href="assets/global/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+    <link href="assets/global/plugins/bootstrap-switch/css/bootstrap-switch.min.css" rel="stylesheet" type="text/css" />
+    <link href="assets/global/css/components-md.min.css" rel="stylesheet" id="style_components" type="text/css" />
+    <link href="assets/global/css/plugins-md.min.css" rel="stylesheet" type="text/css" />
+    <link href="assets/pages/css/lock.min.css" rel="stylesheet" type="text/css" />
+    <link rel="shortcut icon" href="favicon.ico" />
 </head>
-<body class="bg-light">
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-md-7 col-lg-6">
-                <div class="card shadow-sm">
-                    <div class="card-body p-4">
-                        <h1 class="h4 mb-3">Secure access link</h1>
+<body>
+    <div class="page-lock">
+        <div class="page-logo">
+            <a class="brand" href="index.php">
+                <img src="img/site/logo_800_182.png" alt="MedTravel" style="max-width: 220px; height: auto;" />
+            </a>
+        </div>
+        <div class="page-body">
+            <div class="lock-head"> Secure access link </div>
+            <div class="lock-body">
+                <div class="pull-left lock-avatar-block">
+                    <img src="assets/pages/media/profile/photo3.jpg" class="lock-avatar" alt="profile">
+                </div>
 
-                        <?php if ($statusMessage !== ''): ?>
-                            <div class="alert alert-<?php echo htmlspecialchars($statusType ?: 'info', ENT_QUOTES, 'UTF-8'); ?>">
-                                <?php echo htmlspecialchars($statusMessage, ENT_QUOTES, 'UTF-8'); ?>
+                <div class="lock-form pull-left" style="width: calc(100% - 130px);">
+                    <?php if ($statusMessage !== ''): ?>
+                        <div class="alert alert-<?php echo htmlspecialchars($statusType ?: 'info', ENT_QUOTES, 'UTF-8'); ?>" style="margin-bottom: 15px;">
+                            <?php echo htmlspecialchars($statusMessage, ENT_QUOTES, 'UTF-8'); ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($showPasswordForm): ?>
+                        <h4 style="margin:0 0 12px 0;">Create your password</h4>
+                        <form method="post" action="set_password.php">
+                            <input type="hidden" name="action" value="set_password">
+                            <input type="hidden" name="token" value="<?php echo htmlspecialchars($token, ENT_QUOTES, 'UTF-8'); ?>">
+                            <div class="form-group">
+                                <input class="form-control placeholder-no-fix" type="password" id="password" name="password" required minlength="8" autocomplete="off" placeholder="New password" />
                             </div>
-                        <?php endif; ?>
-
-                        <?php if ($showPasswordForm): ?>
-                            <p class="text-muted">Create your password to access your MedTravel patient portal.</p>
-                            <form method="post" action="set_password.php">
-                                <input type="hidden" name="action" value="set_password">
-                                <input type="hidden" name="token" value="<?php echo htmlspecialchars($token, ENT_QUOTES, 'UTF-8'); ?>">
-                                <div class="mb-3">
-                                    <label for="password" class="form-label">New password</label>
-                                    <input type="password" class="form-control" id="password" name="password" required minlength="8">
-                                </div>
-                                <div class="mb-3">
-                                    <label for="password_confirm" class="form-label">Confirm password</label>
-                                    <input type="password" class="form-control" id="password_confirm" name="password_confirm" required minlength="8">
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100">Save password</button>
-                            </form>
-                        <?php else: ?>
-                            <?php if ($showResendForm): ?>
-                                <h2 class="h5 mb-2"><?php echo htmlspecialchars($tokenInfoTitle, ENT_QUOTES, 'UTF-8'); ?></h2>
-                                <p class="text-muted mb-3"><?php echo htmlspecialchars($tokenInfoText, ENT_QUOTES, 'UTF-8'); ?></p>
-                                <p class="text-muted mb-3">Your patient portal lets you track each requested service status, receive updates, and coordinate your virtual evaluation appointment.</p>
-
-                                <form method="post" action="set_password.php" class="mb-3">
-                                    <input type="hidden" name="action" value="resend_link">
-                                    <div class="mb-3">
-                                        <label for="email" class="form-label">Email</label>
-                                        <input type="email" class="form-control" id="email" name="email" required value="<?php echo htmlspecialchars($emailInput, ENT_QUOTES, 'UTF-8'); ?>">
-                                    </div>
-                                    <button type="submit" class="btn btn-primary w-100">Send me a new access link</button>
-                                </form>
-                                <p class="small text-muted mb-0">Need help? Reply to this email and our coordination team will assist you.</p>
-                            <?php else: ?>
-                                <a href="login.php" class="btn btn-outline-primary w-100">Go to login</a>
-                            <?php endif; ?>
-                        <?php endif; ?>
-                    </div>
+                            <div class="form-group">
+                                <input class="form-control placeholder-no-fix" type="password" id="password_confirm" name="password_confirm" required minlength="8" autocomplete="off" placeholder="Confirm password" />
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn red uppercase">Save password</button>
+                            </div>
+                        </form>
+                    <?php elseif ($showResendForm): ?>
+                        <h4 style="margin:0 0 8px 0;"><?php echo htmlspecialchars($tokenInfoTitle, ENT_QUOTES, 'UTF-8'); ?></h4>
+                        <p style="margin:0 0 10px 0; color:#9ca8b4;"><?php echo htmlspecialchars($tokenInfoText, ENT_QUOTES, 'UTF-8'); ?></p>
+                        <p style="margin:0 0 12px 0; color:#9ca8b4;">Your patient portal lets you track each requested service status, receive updates, and coordinate your virtual evaluation appointment.</p>
+                        <form method="post" action="set_password.php">
+                            <input type="hidden" name="action" value="resend_link">
+                            <div class="form-group">
+                                <input class="form-control placeholder-no-fix" type="email" id="email" name="email" required autocomplete="off" placeholder="Email" value="<?php echo htmlspecialchars($emailInput, ENT_QUOTES, 'UTF-8'); ?>" />
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn red uppercase">Send me a new access link</button>
+                            </div>
+                        </form>
+                        <p style="margin-top:10px; color:#9ca8b4; font-size:12px;">Need help? Reply to this email and our coordination team will assist you.</p>
+                    <?php else: ?>
+                        <div class="form-actions">
+                            <a href="login.php" class="btn red uppercase">Go to login</a>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
+            <div class="lock-bottom">
+                <a href="login.php">Back to login</a>
+            </div>
         </div>
+        <div class="page-footer-custom"> <?php echo date('Y'); ?> &copy; MedTravel </div>
     </div>
+
+    <script src="assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+    <script src="assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+    <script src="assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
+    <script src="assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
+    <script src="assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
+    <script src="assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
+    <script src="assets/global/scripts/app.min.js" type="text/javascript"></script>
+    <script src="assets/pages/scripts/lock.min.js" type="text/javascript"></script>
 </body>
 </html>

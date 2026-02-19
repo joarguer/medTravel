@@ -70,7 +70,11 @@ if (!function_exists('verify_password_legacy')) {
 
         // Backwards compatibility with historical inverse order.
         $calc2 = hash('sha512', $plain . $token);
-        return hash_equals($stored, $calc2);
+        if (hash_equals($stored, $calc2)) {
+            return true;
+        }
+
+        return false;
     }
 }
 

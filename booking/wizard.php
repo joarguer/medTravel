@@ -801,6 +801,15 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         <h3 id="stage4-header">Stage 4 – Final Review & Submit</h3>
                         <p>Review selected services and complete context before sending your request.</p>
                         <div id="wizard-selected-hidden"></div>
+                        <input type="hidden" name="name" id="wizard-hidden-name" value="<?php echo isset($booking['name']) ? htmlspecialchars((string)$booking['name']) : ''; ?>">
+                        <input type="hidden" name="email" id="wizard-hidden-email" value="<?php echo isset($booking['email']) ? htmlspecialchars((string)$booking['email']) : ''; ?>">
+                        <input type="hidden" name="phone" id="wizard-hidden-phone" value="<?php echo isset($booking['phone']) ? htmlspecialchars((string)$booking['phone']) : ''; ?>">
+                        <input type="hidden" name="origin" id="wizard-hidden-origin" value="<?php echo isset($booking['origin']) ? htmlspecialchars((string)$booking['origin']) : 'wizard'; ?>">
+                        <input type="hidden" name="destination" id="wizard-hidden-destination" value="<?php echo isset($booking['destination']) ? htmlspecialchars((string)$booking['destination']) : ''; ?>">
+                        <input type="hidden" name="persons" id="wizard-hidden-persons" value="<?php echo isset($booking['persons']) ? htmlspecialchars((string)$booking['persons']) : ''; ?>">
+                        <input type="hidden" name="category" id="wizard-hidden-category" value="<?php echo isset($booking['category']) ? htmlspecialchars((string)$booking['category']) : ''; ?>">
+                        <input type="hidden" name="special_request" id="wizard-hidden-special-request" value="<?php echo isset($booking['special_request']) ? htmlspecialchars((string)$booking['special_request']) : ''; ?>">
+                        <input type="hidden" name="preselected_offer" id="wizard-hidden-preselected-offer" value="<?php echo isset($booking['preselected_offer']) ? htmlspecialchars((string)$booking['preselected_offer']) : ''; ?>">
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Preferred dates</label>
@@ -1029,6 +1038,30 @@ if ($flow === 'addon' && !empty($addon_route)) {
             field.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
+        function hydrateHiddenBookingContextFromDraft() {
+            let draft = {};
+            try {
+                draft = JSON.parse(localStorage.getItem('mt_booking_draft') || '{}') || {};
+            } catch (e) {
+                draft = {};
+            }
+
+            setWizardFieldIfEmpty('name', draft.name);
+            setWizardFieldIfEmpty('email', draft.email);
+            setWizardFieldIfEmpty('phone', draft.phone);
+            setWizardFieldIfEmpty('origin', draft.origin || 'wizard');
+            setWizardFieldIfEmpty('destination', draft.destination);
+            setWizardFieldIfEmpty('persons', draft.persons);
+            setWizardFieldIfEmpty('category', draft.category);
+            setWizardFieldIfEmpty('special_request', draft.special_request || draft.additional_notes);
+            setWizardFieldIfEmpty('preselected_offer', draft.preselected_offer);
+
+            const preOffer = String(localStorage.getItem(KEY_PRESELECTED_OFFER) || sessionStorage.getItem('preselected_offer_id') || '').trim();
+            if (/^\d+$/.test(preOffer)) {
+                setWizardFieldIfEmpty('preselected_offer', preOffer);
+            }
+        }
+
         function updateMedButtonState(card, checked) {
             if (!card) return;
             const button = card.querySelector('[data-service-trigger]');
@@ -1240,6 +1273,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 localStorage.setItem(KEY_PRESELECTED_OFFER, '<?php echo (int)$preselected_offer_id; ?>');
             }
             <?php endif; ?>
+            hydrateHiddenBookingContextFromDraft();
             const draft = (function() {
                 try { return JSON.parse(localStorage.getItem('mt_booking_draft') || '{}'); } catch (e) { return {}; }
             })();
@@ -1303,6 +1337,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
             const bookingForm = document.getElementById('booking-wizard-form');
             if (bookingForm) {
                 bookingForm.addEventListener('submit', function() {
+                    hydrateHiddenBookingContextFromDraft();
                     renderHiddenSelectionsForSubmit();
                 });
             }

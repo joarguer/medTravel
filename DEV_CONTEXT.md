@@ -434,3 +434,40 @@ Nota de alcance:
 - Migración de throttling de reenvío ejecutable: `2026_02_18_password_reset_sent_at.sql`.
 
 **Fecha de actualización de esta sección:** 18 de febrero de 2026.
+
+---
+
+## Estado técnico actual (2026-02-19) – Estabilización booking + acceso cliente
+
+### 1) Booking submit robusto contra drift de esquema
+- `booking/submit.php` ahora crea/inserta de forma dinámica según columnas reales disponibles en `booking_requests` y `usuarios`.
+- Se mantiene `booking_request_items` como fuente de verdad para items médicos y complementarios.
+- Se corrige bind dinámico de prepared statements (`mysqli_stmt_bind_param`) para evitar errores fatales al crear/reusar usuario cliente.
+
+### 2) Acceso cliente seguro compatible con esquema legacy
+- El flujo de acceso usa token seguro y link `set_password.php?token=...`.
+- En instalaciones sin `password_reset_token/password_reset_expires_at`, se usa fallback seguro sobre `usuarios.token`.
+- Se protege el caso de conflicto por email privilegiado: si el email del booking coincide con cuenta admin/privilegiada, no se resetea esa cuenta automáticamente.
+
+### 3) set_password.php resiliente
+- Soporta token válido/expirado/inválido + reenvío con anti-enumeración.
+- Throttling de reenvío con `password_reset_sent_at`.
+- Corrección de bind dinámico en consultas de resend/lookup.
+- Al guardar password, limpia estado de reset y redirige a login.
+
+### 4) Compatibilidad con login histórico
+- `admin/include/password_utils.php` mantiene validación legacy basada en hash histórico del sistema.
+- Objetivo: no romper acceso de usuarios administrativos existentes mientras se habilita onboarding de cliente por token.
+
+### 5) Entregabilidad de correo transaccional
+- `admin/include/email_config.php` refuerza `AltBody` para incluir URL de creación de contraseña cuando exista `password_reset_url`.
+- Se garantiza fallback de texto plano para clientes que no renderizan HTML completo.
+
+### 6) Operación proveedor en admin
+- `admin/js/my_booking_requests.js` se endurece para inicializar DataTables solo cuando el markup existe y con headers consistentes, evitando error `Cannot read properties of undefined (reading 'style')`.
+
+### Estado operativo
+- Booking guarda solicitud y items.
+- Envío de correo de confirmación sigue sin bloquear guardado de booking.
+- Flujo de acceso cliente por token queda operativo para emails no privilegiados.
+- Riesgo controlado: conflictos por email admin se bloquean explícitamente para evitar takeover de cuenta privilegiada.

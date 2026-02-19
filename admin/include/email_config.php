@@ -195,12 +195,26 @@ function sendEmail($to, $subject, $body, $account_type = 'patientcare', $options
         $mail->Subject = $subject;
         $mail->Body = $body;
         
-        // Versión texto plano (opcional)
-        if (isset($options['alt_body'])) {
-            $mail->AltBody = $options['alt_body'];
+        // Versión texto plano (opcional) con fallback robusto para enlaces de acceso seguro.
+        if (isset($options['alt_body']) && trim((string)$options['alt_body']) !== '') {
+            $plainText = (string)$options['alt_body'];
         } else {
-            $mail->AltBody = strip_tags($body);
+            $plainText = trim(html_entity_decode(strip_tags((string)$body), ENT_QUOTES, 'UTF-8'));
         }
+
+        $passwordResetUrl = '';
+        if (isset($options['password_reset_url']) && trim((string)$options['password_reset_url']) !== '') {
+            $passwordResetUrl = trim((string)$options['password_reset_url']);
+        } elseif (preg_match('/https?:\/\/[^\s"\']*set_password\.php\?token=[A-Za-z0-9%_-]+/i', (string)$body, $m)) {
+            $passwordResetUrl = trim((string)$m[0]);
+        }
+
+        if ($passwordResetUrl !== '' && stripos($plainText, $passwordResetUrl) === false) {
+            $plainText .= "\n\nCreate your password:\n" . $passwordResetUrl . "\n";
+            $plainText .= "\nAfter creating your password, sign in:\nhttps://medtravel.com.co/login.php\n";
+        }
+
+        $mail->AltBody = $plainText;
         
         // Enviar
         $result = $mail->send();
