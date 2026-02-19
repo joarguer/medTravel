@@ -5,6 +5,7 @@ require_once __DIR__ . '/../admin/include/roles.php';
 require_once __DIR__ . '/../admin/include/password_utils.php';
 require_once __DIR__ . '/../admin/include/email_config.php';
 require_once __DIR__ . '/../inc/email_template.php';
+require_once __DIR__ . '/../inc/calendar_utils.php';
 
 function table_exists_local($conexion, $table)
 {
@@ -901,6 +902,156 @@ function update_booking_client_user($conexion, $bookingRequestId, $clientUserId)
     mysqli_stmt_close($stmt);
 }
 
+function parse_booking_datetime_bogota_local($rawValue)
+{
+    $rawValue = trim((string)$rawValue);
+    if ($rawValue === '') {
+        return '';
+    }
+
+    try {
+        $tz = new DateTimeZone('America/Bogota');
+        $formats = ['Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d\TH:i:s', 'Y-m-d\TH:i', 'Y-m-d'];
+        foreach ($formats as $fmt) {
+            $dt = DateTime::createFromFormat('!' . $fmt, $rawValue, $tz);
+            if ($dt instanceof DateTime) {
+                if ($fmt === 'Y-m-d') {
+                    $dt->setTime(0, 0, 0);
+                }
+                return $dt->format('Y-m-d H:i:s');
+            }
+        }
+
+        $ts = strtotime($rawValue);
+        if ($ts !== false) {
+            $dt = new DateTime('@' . $ts);
+            $dt->setTimezone($tz);
+            return $dt->format('Y-m-d H:i:s');
+        }
+    } catch (Throwable $e) {
+        error_log('booking_submit: parse_booking_datetime_bogota_local error: ' . $e->getMessage());
+    }
+
+    return '';
+}
+
+function seed_initial_calendar_event_for_booking($conexion, $bookingRequestId, $clientUserId, $bookingDatetime, $timelineText)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $clientUserId = (int)$clientUserId;
+    $timelineText = trim((string)$timelineText);
+
+    if ($bookingRequestId <= 0 || $clientUserId <= 0) {
+        return false;
+    }
+    if (!table_exists_local($conexion, 'calendar_events') || !table_exists_local($conexion, 'booking_requests')) {
+        return false;
+    }
+
+    $hasRequestsSoftDelete = table_has_column_local($conexion, 'booking_requests', 'is_deleted');
+    $requestSql = "SELECT id, client_user_id, created_at FROM booking_requests WHERE id = ?";
+    if ($hasRequestsSoftDelete) {
+        $requestSql .= " AND is_deleted = 0";
+    }
+    $requestSql .= " LIMIT 1";
+    $stmtRequest = mysqli_prepare($conexion, $requestSql);
+    if (!$stmtRequest) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmtRequest, 'i', $bookingRequestId);
+    if (!mysqli_stmt_execute($stmtRequest)) {
+        mysqli_stmt_close($stmtRequest);
+        return false;
+    }
+    $requestRow = stmt_fetch_assoc_local($stmtRequest);
+    mysqli_stmt_close($stmtRequest);
+    if (!$requestRow) {
+        return false;
+    }
+    if ((int)($requestRow['client_user_id'] ?? 0) > 0) {
+        $clientUserId = (int)$requestRow['client_user_id'];
+    }
+    if ($clientUserId <= 0) {
+        return false;
+    }
+
+    $title = 'Preferred date (patient)';
+    if (table_has_column_local($conexion, 'calendar_events', 'title')
+        && table_has_column_local($conexion, 'calendar_events', 'request_id')
+        && table_has_column_local($conexion, 'calendar_events', 'event_type')
+    ) {
+        $stmtExists = mysqli_prepare(
+            $conexion,
+            "SELECT id FROM calendar_events WHERE request_id = ? AND event_type = 'CARE' AND title = ? LIMIT 1"
+        );
+        if ($stmtExists) {
+            mysqli_stmt_bind_param($stmtExists, 'is', $bookingRequestId, $title);
+            if (mysqli_stmt_execute($stmtExists)) {
+                $existsRow = stmt_fetch_assoc_local($stmtExists);
+                mysqli_stmt_close($stmtExists);
+                if ($existsRow && !empty($existsRow['id'])) {
+                    return true;
+                }
+            } else {
+                mysqli_stmt_close($stmtExists);
+            }
+        }
+    }
+
+    $parsedStart = parse_booking_datetime_bogota_local($bookingDatetime);
+    $requestCreatedAt = parse_booking_datetime_bogota_local((string)($requestRow['created_at'] ?? ''));
+    if ($requestCreatedAt === '') {
+        $requestCreatedAt = parse_booking_datetime_bogota_local(date('Y-m-d H:i:s'));
+    }
+
+    $allDay = 0;
+    $startAt = '';
+    $endAt = null;
+    $description = 'Patient submitted preferred date during booking.';
+    if ($parsedStart !== '') {
+        $startAt = $parsedStart;
+        $endAt = date('Y-m-d H:i:s', strtotime($parsedStart . ' +30 minutes'));
+    } elseif ($timelineText !== '') {
+        $allDay = 1;
+        $baseDate = $requestCreatedAt !== '' ? substr($requestCreatedAt, 0, 10) : date('Y-m-d');
+        $startAt = $baseDate . ' 00:00:00';
+        $description = 'Preferred timeline: ' . $timelineText;
+    } else {
+        return false;
+    }
+
+    $eventData = [
+        'title' => $title,
+        'description' => $description,
+        'start_at' => $startAt,
+        'end_at' => $endAt,
+        'all_day' => $allDay,
+        'event_type' => 'CARE',
+        'request_id' => $bookingRequestId,
+        'created_by_role' => 'CLIENT',
+        'created_by_user_id' => $clientUserId,
+        'client_user_id' => $clientUserId,
+        'status' => 'proposed',
+        'updated_at' => date('Y-m-d H:i:s'),
+    ];
+    if (table_has_column_local($conexion, 'calendar_events', 'thread_id')) {
+        $eventData['thread_id'] = 'CARE:' . $bookingRequestId;
+    }
+
+    $insert = run_dynamic_insert_local(
+        $conexion,
+        'calendar_events',
+        $eventData,
+        ['title', 'start_at', 'event_type', 'request_id', 'created_by_role', 'status'],
+        'calendar_seed'
+    );
+    if (!$insert['ok']) {
+        error_log('booking_submit: calendar seed failed request_id=' . $bookingRequestId . ' error=' . (string)$insert['error']);
+        return false;
+    }
+    return true;
+}
+
 function set_password_reset_token_for_user($conexion, $userId)
 {
     $result = [
@@ -1569,6 +1720,7 @@ if ($saved && $booking_request_id > 0) {
         if ($client_user_id > 0) {
             update_booking_client_user($conexion, $booking_request_id, $client_user_id);
             $resetInfo = set_password_reset_token_for_user($conexion, $client_user_id);
+            seed_initial_calendar_event_for_booking($conexion, $booking_request_id, $client_user_id, $booking_datetime, $timeline);
         }
         booking_runtime_log_local(
             'client_access'

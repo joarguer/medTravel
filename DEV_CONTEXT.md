@@ -570,3 +570,23 @@ Nota de alcance:
   - endpoint read-only (`list_events`).
   - ownership estricto por `client_user_id` y fallback por ownership de `booking_requests`.
   - filtro adicional de integridad: solo devuelve eventos válidos (`CARE` sin `item_id`, `ITEM` con `item_id`).
+
+### 10) Calendar workflow (preferred date + propose/accept)
+- `booking/submit.php` ahora siembra automáticamente un evento inicial CARE al guardar booking:
+  - título fijo: `Preferred date (patient)`
+  - si `booking_datetime` es parseable: slot con hora (`status=proposed`)
+  - si no hay fecha exacta y existe `timeline`: evento all-day con timeline en descripción
+  - idempotencia por `request_id + event_type=CARE + title`
+  - `thread_id` alineado a Inbox (`CARE:<request_id>`) cuando la columna existe
+- `admin/ajax/calendar.php`:
+  - cuando actor es provider en `create_event`/`update_event`, `status` se fuerza a `proposed`
+  - inserta mensaje automático en Inbox `ITEM:<item_id>`
+  - envía notificación no bloqueante por email a cliente + patientcare/admin
+- `client/ajax/calendar.php`:
+  - nueva acción `accept_event` (ownership estricto)
+  - cambia estado a `confirmed`
+  - registra mensaje `Patient accepted the proposed schedule.` en el thread CARE/ITEM
+  - envía notificación no bloqueante a patientcare/admin y al provider (si ITEM)
+- `client/app_calendar.php` + `client/js/app_calendar.js`:
+  - modal muestra `Accept` y `Request change` cuando evento está en `proposed`
+  - `Request change` redirige al Inbox thread correspondiente (negociación por mensaje).

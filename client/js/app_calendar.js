@@ -103,7 +103,37 @@
         $('#client-calendar-detail-description').text(description || 'N/A');
         $('#client-calendar-open-request').attr('href', buildRequestUrl(requestId));
         $('#client-calendar-open-inbox').attr('href', buildInboxUrl(threadId));
+        $('#client-calendar-request-change-btn').attr('href', buildInboxUrl(threadId));
+
+        var isProposed = (status === 'proposed');
+        $('#client-calendar-accept-btn').toggle(isProposed);
+        $('#client-calendar-request-change-btn').toggle(isProposed);
         $('#client-calendar-detail-modal').modal('show');
+    }
+
+    function acceptCurrentEvent() {
+        if (!currentEvent || !currentEvent.id) {
+            return;
+        }
+        $.ajax({
+            url: config.acceptUrl || config.listUrl || '/client/ajax/calendar.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'accept_event',
+                id: currentEvent.id
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'Could not accept proposal');
+                return;
+            }
+            toastr.success('Schedule accepted');
+            $('#client-calendar-detail-modal').modal('hide');
+            $('#client-calendar').fullCalendar('refetchEvents');
+        }).fail(function () {
+            toastr.error('Could not accept proposal');
+        });
     }
 
     function initCalendar() {
@@ -156,5 +186,9 @@
 
     $(function () {
         initCalendar();
+        $('#client-calendar-accept-btn').on('click', function (e) {
+            e.preventDefault();
+            acceptCurrentEvent();
+        });
     });
 })();

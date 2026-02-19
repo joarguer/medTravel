@@ -1,7 +1,9 @@
 <?php
 include '../include/conexion.php';
 require_once '../include/roles.php';
+require_once '../include/email_config.php';
 require_once '../../inc/calendar_utils.php';
+require_once '../../inc/inbox_utils.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -171,6 +173,200 @@ function calendar_fetch_event_row_admin($conexion, $eventId, $scope)
     return $row ?: null;
 }
 
+function calendar_resolve_patientcare_email($conexion)
+{
+    if (!function_exists('loadEmailAccountsFromDB')) {
+        return '';
+    }
+    $accounts = loadEmailAccountsFromDB($conexion);
+    if (!is_array($accounts) || empty($accounts['patientcare']) || !is_array($accounts['patientcare'])) {
+        return '';
+    }
+    $email = trim((string)($accounts['patientcare']['reply_to'] ?? ''));
+    if ($email === '') {
+        $email = trim((string)($accounts['patientcare']['from_email'] ?? ''));
+    }
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+}
+
+function calendar_fetch_booking_contact($conexion, $requestId)
+{
+    if ((int)$requestId <= 0) {
+        return null;
+    }
+    if (!calendar_table_exists($conexion, 'booking_requests')) {
+        return null;
+    }
+    $hasRequestsSoftDelete = calendar_table_has_column($conexion, 'booking_requests', 'is_deleted');
+    $sql = "SELECT id, name, email, client_user_id FROM booking_requests WHERE id = ?";
+    if ($hasRequestsSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $requestId);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return null;
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ?: null;
+}
+
+function calendar_fetch_item_provider_email($conexion, $itemId)
+{
+    if ((int)$itemId <= 0) {
+        return '';
+    }
+    if (!calendar_table_exists($conexion, 'booking_request_items') || !calendar_table_exists($conexion, 'usuarios')) {
+        return '';
+    }
+    $hasUsersDeleted = calendar_table_has_column($conexion, 'usuarios', 'is_deleted');
+    $hasUsersActive = calendar_table_has_column($conexion, 'usuarios', 'activo');
+
+    $sql = "SELECT u.email
+            FROM booking_request_items bri
+            INNER JOIN usuarios u ON (
+                (bri.provider_id IS NOT NULL AND bri.provider_id > 0 AND u.provider_id = bri.provider_id)
+                OR
+                (bri.service_provider_id IS NOT NULL AND bri.service_provider_id > 0 AND u.service_provider_id = bri.service_provider_id)
+            )
+            WHERE bri.id = ?";
+    if ($hasUsersDeleted) {
+        $sql .= " AND u.is_deleted = 0";
+    }
+    if ($hasUsersActive) {
+        $sql .= " AND u.activo = 1";
+    }
+    $sql .= " AND u.email IS NOT NULL AND u.email <> '' ORDER BY u.id ASC LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return '';
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $itemId);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return '';
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    $email = trim((string)($row['email'] ?? ''));
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+}
+
+function calendar_insert_inbox_message($conexion, $threadId, $threadType, $requestId, $itemId, $senderRole, $senderUserId, $body)
+{
+    if (!inbox_table_exists($conexion, 'inbox_messages')) {
+        return 0;
+    }
+    $threadId = trim((string)$threadId);
+    $threadType = strtoupper(trim((string)$threadType));
+    $senderRole = strtoupper(trim((string)$senderRole));
+    $body = trim((string)$body);
+    if ($threadId === '' || $body === '' || !in_array($threadType, ['CARE', 'ITEM'], true)) {
+        return 0;
+    }
+    if (!in_array($senderRole, ['CLIENT', 'PROVIDER', 'ADMIN', 'PATIENTCARE'], true)) {
+        $senderRole = 'ADMIN';
+    }
+    $requestId = (int)$requestId;
+    $itemId = (int)$itemId;
+    $senderUserId = (int)$senderUserId;
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        "INSERT INTO inbox_messages
+            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+    if (!$stmt) {
+        return 0;
+    }
+    mysqli_stmt_bind_param($stmt, 'ssiisis', $threadId, $threadType, $requestId, $itemId, $senderRole, $senderUserId, $body);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return 0;
+    }
+    $messageId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+    return $messageId;
+}
+
+function calendar_format_schedule_label($startAt, $endAt, $allDay)
+{
+    $startAt = trim((string)$startAt);
+    $endAt = trim((string)$endAt);
+    $allDay = ((int)$allDay === 1);
+    if ($startAt === '') {
+        return 'date/time to be confirmed';
+    }
+    if ($allDay) {
+        $startDate = substr($startAt, 0, 10);
+        if ($endAt !== '' && substr($endAt, 0, 10) !== '' && substr($endAt, 0, 10) !== $startDate) {
+            return $startDate . ' to ' . substr($endAt, 0, 10) . ' (all day)';
+        }
+        return $startDate . ' (all day)';
+    }
+    if ($endAt !== '') {
+        return $startAt . ' to ' . $endAt;
+    }
+    return $startAt;
+}
+
+function calendar_notify_provider_proposed_change($conexion, $eventRow, $bookingContact, $adminEmail)
+{
+    if (!function_exists('sendEmail')) {
+        return;
+    }
+    $requestId = (int)($eventRow['request_id'] ?? 0);
+    $itemId = (int)($eventRow['item_id'] ?? 0);
+    $eventTitle = trim((string)($eventRow['title'] ?? 'Schedule update'));
+    $scheduleLabel = calendar_format_schedule_label($eventRow['start_at'] ?? '', $eventRow['end_at'] ?? '', $eventRow['all_day'] ?? 0);
+
+    $subject = 'MedTravel update - proposed schedule for request #' . $requestId;
+    $clientName = trim((string)($bookingContact['name'] ?? 'Patient'));
+    if ($clientName === '') {
+        $clientName = 'Patient';
+    }
+    $clientHtml = '<p>Hello ' . htmlspecialchars($clientName, ENT_QUOTES, 'UTF-8') . ',</p>'
+        . '<p>Your provider proposed a new schedule.</p>'
+        . '<p><strong>Request ID:</strong> #' . $requestId . '<br>'
+        . '<strong>Service:</strong> ' . htmlspecialchars($eventTitle, ENT_QUOTES, 'UTF-8') . '<br>'
+        . '<strong>Proposed schedule:</strong> ' . htmlspecialchars($scheduleLabel, ENT_QUOTES, 'UTF-8') . '</p>'
+        . '<p>Please review this proposal in your Inbox or calendar.</p>';
+    $clientAlt = "Hello {$clientName},\n\nYour provider proposed a new schedule.\nRequest ID: #{$requestId}\nService: {$eventTitle}\nProposed schedule: {$scheduleLabel}\n\nPlease review this proposal in your Inbox or calendar.";
+
+    $clientEmail = trim((string)($bookingContact['email'] ?? ''));
+    if (filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+        try {
+            sendEmail($clientEmail, $subject, $clientHtml, 'patientcare', ['alt_body' => $clientAlt], $conexion);
+        } catch (Throwable $e) {
+            error_log('calendar_provider_notify client_send_failed request_id=' . $requestId . ' item_id=' . $itemId . ' err=' . $e->getMessage());
+        }
+    }
+
+    if (filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+        $adminHtml = '<p>Provider proposed a new schedule.</p>'
+            . '<p><strong>Request ID:</strong> #' . $requestId . '<br>'
+            . '<strong>Item ID:</strong> #' . $itemId . '<br>'
+            . '<strong>Service:</strong> ' . htmlspecialchars($eventTitle, ENT_QUOTES, 'UTF-8') . '<br>'
+            . '<strong>Proposed schedule:</strong> ' . htmlspecialchars($scheduleLabel, ENT_QUOTES, 'UTF-8') . '</p>';
+        $adminAlt = "Provider proposed a new schedule.\nRequest ID: #{$requestId}\nItem ID: #{$itemId}\nService: {$eventTitle}\nProposed schedule: {$scheduleLabel}";
+        try {
+            sendEmail($adminEmail, '[ADMIN] ' . $subject, $adminHtml, 'patientcare', ['alt_body' => $adminAlt], $conexion);
+        } catch (Throwable $e) {
+            error_log('calendar_provider_notify admin_send_failed request_id=' . $requestId . ' item_id=' . $itemId . ' err=' . $e->getMessage());
+        }
+    }
+}
+
 if (!isset($conexion) || !$conexion) {
     calendar_admin_err('db_not_available', 500);
 }
@@ -243,6 +439,7 @@ if ($action === 'create_event') {
     $requestId = (int)($_POST['request_id'] ?? 0);
     $itemId = (int)($_POST['item_id'] ?? 0);
     $status = calendar_normalize_status($_POST['status'] ?? 'scheduled');
+    $isProviderActor = empty($scope['is_admin']);
 
     if ($title === '' || $startAt === null) {
         calendar_admin_err('title_and_start_required', 422);
@@ -271,6 +468,9 @@ if ($action === 'create_event') {
             calendar_admin_err('care_event_cannot_have_item_id', 400);
         }
         $itemId = 0;
+    }
+    if ($isProviderActor) {
+        $status = 'proposed';
     }
 
     $requestRow = calendar_fetch_request_row($conexion, $requestId);
@@ -321,6 +521,34 @@ if ($action === 'create_event') {
     mysqli_stmt_close($stmt);
 
     $eventRow = calendar_fetch_event_row_admin($conexion, $eventId, ['is_admin' => true, 'scope_types' => '', 'scope_params' => [], 'scope_where' => '']);
+    if ($isProviderActor) {
+        $eventForNotify = $eventRow ?: [
+            'request_id' => $requestId,
+            'item_id' => $itemId,
+            'title' => $title,
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+            'all_day' => $allDay,
+            'event_type' => $eventType,
+            'thread_id' => $threadId,
+            'status' => $status,
+        ];
+        $scheduleLabel = calendar_format_schedule_label($startAt, $endAt, $allDay);
+        $autoMessage = 'Provider proposed a new schedule for: ' . $title . ' at ' . $scheduleLabel . '.';
+        calendar_insert_inbox_message(
+            $conexion,
+            (string)$threadId,
+            'ITEM',
+            (int)$requestId,
+            (int)$itemId,
+            'PROVIDER',
+            (int)$scope['user_id'],
+            $autoMessage
+        );
+        $bookingContact = calendar_fetch_booking_contact($conexion, $requestId);
+        $adminEmail = calendar_resolve_patientcare_email($conexion);
+        calendar_notify_provider_proposed_change($conexion, $eventForNotify, $bookingContact ?: [], $adminEmail);
+    }
     calendar_admin_ok(['event' => calendar_json_event_row($eventRow ?: [
         'id' => $eventId,
         'title' => $title,
@@ -361,6 +589,7 @@ if ($action === 'update_event') {
     $endAt = isset($_POST['end_at']) ? calendar_parse_datetime_input($_POST['end_at']) : (string)($existing['end_at'] ?? '');
     $allDay = isset($_POST['all_day']) ? (int)((int)$_POST['all_day'] === 1) : (int)($existing['all_day'] ?? 0);
     $status = isset($_POST['status']) ? calendar_normalize_status($_POST['status']) : (string)$existing['status'];
+    $isProviderActor = empty($scope['is_admin']);
     $requestId = isset($_POST['request_id']) ? (int)$_POST['request_id'] : (int)($existing['request_id'] ?? 0);
     $itemId = isset($_POST['item_id']) ? (int)$_POST['item_id'] : (int)($existing['item_id'] ?? 0);
 
@@ -396,6 +625,9 @@ if ($action === 'update_event') {
         calendar_admin_err('request_client_user_required', 422);
     }
     $threadId = calendar_build_thread_id($eventType, $requestId, $itemId);
+    if ($isProviderActor) {
+        $status = 'proposed';
+    }
 
     $sql = "UPDATE calendar_events
             SET title = ?, description = ?, start_at = ?, end_at = ?, all_day = ?, event_type = ?, request_id = ?, item_id = ?, thread_id = ?, client_user_id = ?, status = ?, updated_at = NOW()
@@ -429,6 +661,34 @@ if ($action === 'update_event') {
     mysqli_stmt_close($stmt);
 
     $row = calendar_fetch_event_row_admin($conexion, $eventId, $scope);
+    if ($isProviderActor) {
+        $scheduleLabel = calendar_format_schedule_label($startAt, $endAt, $allDay);
+        $autoMessage = 'Provider proposed a new schedule for: ' . $title . ' at ' . $scheduleLabel . '.';
+        calendar_insert_inbox_message(
+            $conexion,
+            (string)$threadId,
+            'ITEM',
+            (int)$requestId,
+            (int)$itemId,
+            'PROVIDER',
+            (int)$scope['user_id'],
+            $autoMessage
+        );
+        $notifyRow = $row ?: [
+            'request_id' => $requestId,
+            'item_id' => $itemId,
+            'title' => $title,
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+            'all_day' => $allDay,
+            'event_type' => $eventType,
+            'thread_id' => $threadId,
+            'status' => $status,
+        ];
+        $bookingContact = calendar_fetch_booking_contact($conexion, $requestId);
+        $adminEmail = calendar_resolve_patientcare_email($conexion);
+        calendar_notify_provider_proposed_change($conexion, $notifyRow, $bookingContact ?: [], $adminEmail);
+    }
     calendar_admin_ok(['event' => calendar_json_event_row($row ?: $existing)]);
 }
 

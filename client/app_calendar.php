@@ -70,6 +70,8 @@ include __DIR__ . '/include/include.php';
                 </p>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn green-jungle" id="client-calendar-accept-btn" style="display:none;">Accept</button>
+                <a href="#" id="client-calendar-request-change-btn" class="btn blue" style="display:none;" target="_blank">Request change</a>
                 <button type="button" class="btn default" data-dismiss="modal">Close</button>
             </div>
         </div>
@@ -83,6 +85,7 @@ include __DIR__ . '/include/include.php';
 <script type="text/javascript">
 window.ClientCalendarConfig = {
     listUrl: '/client/ajax/calendar.php',
+    acceptUrl: '/client/ajax/calendar.php',
     requestBase: '/client/request_detail.php',
     inboxBase: '/client/app_inbox.php'
 };
