@@ -60,21 +60,19 @@ if ($requestId <= 0) {
                             <div class="portlet-title">
                                 <div class="caption">
                                     <i class="icon-speech font-green"></i>
-                                    <span class="caption-subject font-green bold uppercase">Messages / Communication</span>
+                                    <span class="caption-subject font-green bold uppercase">Communication</span>
                                 </div>
                             </div>
                             <div class="portlet-body">
-                                <div id="client-request-messages" style="max-height:360px;overflow:auto;margin-bottom:15px;">
-                                    <p>Loading messages...</p>
+                                <p>Messages and updates are managed in your Inbox for privacy and clarity.</p>
+                                <p>
+                                    <a class="btn btn-primary" id="client-open-inbox-care" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=CARE">
+                                        <i class="icon-envelope-open"></i> Open Inbox
+                                    </a>
+                                </p>
+                                <div id="client-inbox-item-links" style="margin-top:10px;">
+                                    <p class="text-muted" style="margin:0;">Item threads will appear here when available.</p>
                                 </div>
-                                <form id="client-send-message-form">
-                                    <input type="hidden" id="client-booking-id" value="<?php echo (int)$requestId; ?>">
-                                    <div class="form-group">
-                                        <label for="client-message-text">Send a message</label>
-                                        <textarea class="form-control" id="client-message-text" rows="3" maxlength="2000" placeholder="Write your message to the MedTravel coordination team"></textarea>
-                                    </div>
-                                    <button type="submit" class="btn btn-primary">Send message</button>
-                                </form>
                             </div>
                         </div>
                     </div>
@@ -90,4 +88,3 @@ if ($requestId <= 0) {
 <script src="/client/js/request_detail.js" type="text/javascript"></script>
 </body>
 </html>
-

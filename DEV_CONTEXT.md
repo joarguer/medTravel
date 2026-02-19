@@ -515,3 +515,10 @@ Nota de alcance:
   - se envía email al cliente (`booking_requests.email`)
   - se envía email al admin patient care (`loadEmailAccountsFromDB()['patientcare']['reply_to']`, fallback `from_email`)
 - El envío es no bloqueante: errores SMTP no revierten el cambio de estado ni la respuesta JSON `ok`.
+
+### 6) Deprecación del chat legacy en detalle de solicitud
+- `client/request_detail.php` deja de exponer el bloque legacy de conversación embebida.
+- La comunicación se centraliza en `client/app_inbox.php` con hilos por scope:
+  - `thread_type=CARE` para hilo general del request.
+  - `thread_type=ITEM` para hilo por item cuando aplica.
+- Se mantiene el detalle del request y se agrega CTA "Open Inbox" para evitar duplicidad de canales.

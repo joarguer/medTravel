@@ -37,6 +37,30 @@
         return html;
     }
 
+    function buildItemInboxLinks(items, bookingId) {
+        if (!items || !items.length) {
+            return '<p class="text-muted" style="margin:0;">No item-specific threads available.</p>';
+        }
+        var html = '<div class="list-group">';
+        items.forEach(function (item) {
+            var itemId = parseInt(item.id || 0, 10);
+            if (!itemId) {
+                return;
+            }
+            var typeLabel = String(item.item_type_label || '');
+            var itemName = String(item.name || ('Item #' + itemId));
+            var label = 'Message ' + (typeLabel ? (typeLabel + ' Provider') : 'Provider');
+            var url = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(bookingId || 0)) +
+                '&thread_type=ITEM&item_id=' + encodeURIComponent(String(itemId));
+            html += '<a class="list-group-item" href="' + esc(url) + '">' +
+                '<strong>' + esc(label) + '</strong>' +
+                '<br><small>' + esc(itemName) + '</small>' +
+                '</a>';
+        });
+        html += '</div>';
+        return html;
+    }
+
     function renderDetail(payload) {
         var booking = payload.booking || {};
         var items = payload.items || {};
@@ -65,31 +89,14 @@
         html += '<h4>Complementary services</h4>' + renderItemsTable(complementary);
 
         $('#client-request-detail-body').html(html);
-    }
 
-    function renderMessages(messages) {
-        var $box = $('#client-request-messages');
-        if (!$box.length) return;
-        if (!messages || !messages.length) {
-            $box.html('<p>No messages yet.</p>');
-            return;
+        var allItems = [];
+        allItems = allItems.concat(medical || []);
+        allItems = allItems.concat(complementary || []);
+        var $linksBox = $('#client-inbox-item-links');
+        if ($linksBox.length) {
+            $linksBox.html(buildItemInboxLinks(allItems, booking.id || 0));
         }
-
-        var html = '';
-        messages.forEach(function (m) {
-            var sender = esc(m.sender || 'system');
-            var body = esc(m.body || '');
-            var time = esc(m.time || '');
-            var labelCls = sender === 'client' ? 'info' : (sender === 'provider' ? 'success' : 'default');
-            html += '<div class="well well-sm" style="margin-bottom:10px;">' +
-                '<div><span class="label label-' + labelCls + '">' + sender + '</span>' +
-                (time ? '<small style="margin-left:8px;">' + time + '</small>' : '') +
-                '</div>' +
-                '<div style="margin-top:6px;white-space:pre-wrap;">' + body + '</div>' +
-                '</div>';
-        });
-        $box.html(html);
-        $box.scrollTop($box[0].scrollHeight);
     }
 
     function loadDetail(bookingId) {
@@ -109,57 +116,9 @@
         });
     }
 
-    function loadMessages(bookingId) {
-        $.ajax({
-            url: '/client/ajax/list_messages.php',
-            method: 'GET',
-            data: { booking_id: bookingId },
-            dataType: 'json'
-        }).done(function (res) {
-            if (!res || res.ok !== true) {
-                return;
-            }
-            renderMessages(res.messages || []);
-        });
-    }
-
-    function bindSendMessage(bookingId) {
-        $('#client-send-message-form').on('submit', function (e) {
-            e.preventDefault();
-            var text = $.trim($('#client-message-text').val() || '');
-            if (!text) {
-                toastr.warning('Please write a message');
-                return;
-            }
-
-            $.ajax({
-                url: '/client/ajax/send_message.php',
-                method: 'POST',
-                dataType: 'json',
-                data: {
-                    booking_id: bookingId,
-                    message: text
-                }
-            }).done(function (res) {
-                if (!res || res.ok !== true) {
-                    toastr.error((res && res.message) ? res.message : 'Could not send message');
-                    return;
-                }
-                $('#client-message-text').val('');
-                toastr.success('Message sent');
-                loadMessages(bookingId);
-            }).fail(function () {
-                toastr.error('Could not send message');
-            });
-        });
-    }
-
     $(function () {
-        var bookingId = parseInt($('#client-booking-id').val() || '0', 10);
+        var bookingId = parseInt((new URLSearchParams(window.location.search)).get('id') || '0', 10);
         if (!bookingId) return;
         loadDetail(bookingId);
-        loadMessages(bookingId);
-        bindSendMessage(bookingId);
     });
 })();
-
