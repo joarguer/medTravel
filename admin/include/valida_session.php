@@ -21,6 +21,13 @@ if (empty($sessionState['ok'])) {
 if (!function_exists('user_can')) {
     require_once __DIR__ . '/roles.php';
 }
+if (!function_exists('is_client_session')) {
+    require_once __DIR__ . '/../../inc/auth_client.php';
+}
+if (function_exists('is_client_session') && is_client_session()) {
+    header("Location: ../../client/index.php");
+    exit();
+}
 if (!isset($GLOBALS['conexion']) || !$GLOBALS['conexion']) {
     include_once __DIR__ . '/conexion.php';
 }

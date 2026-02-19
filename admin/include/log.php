@@ -259,6 +259,7 @@ if (mysqli_num_rows($busca_usua) > 0) {
         $is_global_admin_role = ($role_id_val === ROLE_ADMIN || $role_id_val === ROLE_ADMINISTRATIVE || v($fil, 'ppal', '') === '1');
         $is_medical_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
         $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
+        $is_client_role = ($role_id_val === ROLE_CLIENT);
         $provider_id_val = !empty($fil['provider_id']) ? intval($fil['provider_id']) : 0;
         $service_provider_id_val = !empty($fil['service_provider_id']) ? intval($fil['service_provider_id']) : 0;
 
@@ -429,17 +430,19 @@ if (mysqli_num_rows($busca_usua) > 0) {
         $sess_ips = v($sessiones_activas,'ips','');
         if($sess_user != v($fil,'id','') && $sess_ips != $ip) {
             mysqli_query($conexion,"INSERT INTO sessiones_activas(`fecha`, `hora`, `visitante`, `usuario`, `ip`, `latitud`, `longitud`, `cobrador`, `hora2`) VALUES('".mysqli_real_escape_string($conexion,$fecha)."', '".mysqli_real_escape_string($conexion,$time)."', '".mysqli_real_escape_string($conexion,$visitante)."', '".mysqli_real_escape_string($conexion,$usrlogin)."', '".mysqli_real_escape_string($conexion,$ip)."', '0', '0', '0', '00:00:00')");
+            $default_next = $is_client_role ? '../../client/index.php' : '../index.php';
             if(v($fil,'cambio_password',0) == 1){
+                $next = $is_client_role ? '../../client/index.php?password_change=1' : '../index.php#cambio_password';
                 if (login_is_debug_mode()) {
-                    login_debug_response(true, 'ok', $fil, array('next' => '../index.php#cambio_password'));
+                    login_debug_response(true, 'ok', $fil, array('next' => $next));
                 }
-                header("location:../index.php#cambio_password");
+                header("location:" . $next);
                 exit();
             } else {
                 if (login_is_debug_mode()) {
-                    login_debug_response(true, 'ok', $fil, array('next' => '../index.php'));
+                    login_debug_response(true, 'ok', $fil, array('next' => $default_next));
                 }
-                header("location:../index.php");
+                header("location:" . $default_next);
                 exit();
             }
         } else {

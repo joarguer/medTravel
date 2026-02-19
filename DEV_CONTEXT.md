@@ -471,3 +471,40 @@ Nota de alcance:
 - Envío de correo de confirmación sigue sin bloquear guardado de booking.
 - Flujo de acceso cliente por token queda operativo para emails no privilegiados.
 - Riesgo controlado: conflictos por email admin se bloquean explícitamente para evitar takeover de cuenta privilegiada.
+
+---
+
+## Estado técnico actual (2026-02-19) – Portal Cliente mínimo
+
+### 1) Separación de sesión cliente
+- Nuevo helper: `inc/auth_client.php`.
+- Funciones canónicas:
+  - `is_client_session()`
+  - `require_client_auth()`
+  - `require_client_auth_ajax()`
+  - `get_client_user_id()`
+- Guard admin actualizado para redirigir clientes a `/client/index.php` y evitar exposición de vistas admin.
+
+### 2) Header/notificaciones cliente sin bloque admin demo
+- Se evita renderizar el bloque admin clásico para sesión cliente y se usa `header_notification_bar_client`.
+- Fuente de datos de notificaciones cliente:
+  - `booking_requests` filtrado por `client_user_id`
+  - updates desde `booking_request_items` (status y notas de proveedor cuando existen)
+- Endpoint: `client/ajax/get_notifications.php`
+- Frontend: `client/js/notifications.js` (carga inicial + refresh simple).
+
+### 3) Portal cliente funcional (MVP)
+- Nuevas páginas:
+  - `client/index.php` (dashboard)
+  - `client/my_requests.php` (tabla de solicitudes)
+  - `client/request_detail.php` (detalle + comunicación)
+- Nuevos endpoints:
+  - `client/ajax/list_requests.php`
+  - `client/ajax/get_request_detail.php`
+  - `client/ajax/list_messages.php`
+  - `client/ajax/send_message.php`
+- Seguridad: todas las consultas validan pertenencia por `client_user_id` y usan guard de cliente.
+
+### 4) Comunicación cliente (sin tablas nuevas)
+- Para MVP y compatibilidad de esquema real, mensajes del cliente se registran en `booking_requests.additional_notes` con marcador estructurado `[CLIENT_MESSAGE][timestamp]`.
+- Mensajes/actualizaciones del proveedor se leen desde `booking_request_items` (ej. `provider_notes`, `provider_reject_reason`, `item_status`) si están disponibles.

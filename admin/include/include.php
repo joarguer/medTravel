@@ -21,6 +21,14 @@ if (isset($_SESSION['provider_id']) && !empty($_SESSION['provider_id'])) {
     $es_prestador = true;
 }
 $es_complementario = is_complementary_user_session();
+$session_role_id = current_role_id();
+$es_cliente = (
+    !$es_admin
+    && !$es_prestador
+    && !$es_complementario
+    && $session_role_id !== null
+    && intval($session_role_id) === ROLE_CLIENT
+);
 
 // Contadores y notificaciones de booking pending
 $booking_pending_count = 0;
@@ -29,7 +37,9 @@ $booking_badge = '0';
 $booking_summary_text = 'No pending bookings';
 $booking_list_html = '';
 $booking_notifications_href = 'booking_requests.php';
-if (!$es_admin && (!empty($_SESSION['provider_id']) || !empty($_SESSION['service_provider_id']))) {
+if ($es_cliente) {
+    $booking_notifications_href = '../client/my_requests.php';
+} elseif (!$es_admin && (!empty($_SESSION['provider_id']) || !empty($_SESSION['service_provider_id']))) {
     $booking_notifications_href = 'my_booking_requests.php';
 }
 $deletion_count = 0;
@@ -37,6 +47,7 @@ $deletion_list_html = '';
 if (isset($conexion)) {
     $provider_id = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
     $service_provider_id = isset($_SESSION['service_provider_id']) ? intval($_SESSION['service_provider_id']) : 0;
+    $client_user_id = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : 0;
     $is_provider_scope = (!$es_admin && ($provider_id > 0 || $service_provider_id > 0) && user_can(PERM_BOOKING_VIEW));
 
     $booking_has_soft_delete = false;
@@ -45,7 +56,48 @@ if (isset($conexion)) {
         $booking_has_soft_delete = true;
     }
 
-    if ($is_provider_scope) {
+    if ($es_cliente && $client_user_id > 0) {
+        $client_count_sql = "SELECT COUNT(*) AS total FROM booking_requests br WHERE br.client_user_id = ?";
+        if ($booking_has_soft_delete) {
+            $client_count_sql .= " AND br.is_deleted = 0";
+        }
+        $stmt_client_count = mysqli_prepare($conexion, $client_count_sql);
+        if ($stmt_client_count) {
+            mysqli_stmt_bind_param($stmt_client_count, 'i', $client_user_id);
+            if (mysqli_stmt_execute($stmt_client_count)) {
+                mysqli_stmt_bind_result($stmt_client_count, $client_total);
+                if (mysqli_stmt_fetch($stmt_client_count)) {
+                    $booking_pending_count = intval($client_total);
+                }
+            }
+            mysqli_stmt_close($stmt_client_count);
+        }
+
+        $client_list_sql = "SELECT br.id, br.destination, br.status, br.created_at
+                            FROM booking_requests br
+                            WHERE br.client_user_id = ?";
+        if ($booking_has_soft_delete) {
+            $client_list_sql .= " AND br.is_deleted = 0";
+        }
+        $client_list_sql .= " ORDER BY br.created_at DESC LIMIT 5";
+        $stmt_client_list = mysqli_prepare($conexion, $client_list_sql);
+        if ($stmt_client_list) {
+            mysqli_stmt_bind_param($stmt_client_list, 'i', $client_user_id);
+            if (mysqli_stmt_execute($stmt_client_list)) {
+                mysqli_stmt_bind_result($stmt_client_list, $booking_id_raw, $destination_raw, $status_raw, $created_at_raw);
+                while (mysqli_stmt_fetch($stmt_client_list)) {
+                    $booking_notifications[] = [
+                        'name' => 'Request #' . intval($booking_id_raw),
+                        'destination' => (string)$destination_raw,
+                        'created_at' => (string)$created_at_raw,
+                        'item_name' => 'Status: ' . ((string)$status_raw !== '' ? (string)$status_raw : 'pending'),
+                        'item_status' => (string)$status_raw,
+                    ];
+                }
+            }
+            mysqli_stmt_close($stmt_client_list);
+        }
+    } elseif ($is_provider_scope) {
         $items_table_exists = false;
         $items_table_check = mysqli_query($conexion, "SHOW TABLES LIKE 'booking_request_items'");
         if ($items_table_check && mysqli_num_rows($items_table_check) > 0) {
@@ -198,9 +250,15 @@ if (isset($conexion)) {
     }
 
     $booking_badge = (string) $booking_pending_count;
-    $booking_summary_text = $booking_pending_count > 0
-        ? '<span class="bold">' . $booking_pending_count . '</span> pending bookings'
-        : 'No pending bookings';
+    if ($es_cliente) {
+        $booking_summary_text = $booking_pending_count > 0
+            ? '<span class="bold">' . $booking_pending_count . '</span> request updates'
+            : 'No request updates';
+    } else {
+        $booking_summary_text = $booking_pending_count > 0
+            ? '<span class="bold">' . $booking_pending_count . '</span> pending bookings'
+            : 'No pending bookings';
+    }
 
     if ($booking_pending_count > 0) {
         foreach ($booking_notifications as $notif) {
@@ -314,6 +372,8 @@ $theme_layout_js = '<!-- BEGIN THEME GLOBAL SCRIPTS -->
 
 $avatar = $_SESSION['avatar'];
 $avatar = '../'.$avatar;
+$notification_bar_id = $es_cliente ? 'header_notification_bar_client' : 'header_notification_bar';
+$notification_icon = $es_cliente ? 'fa fa-bell' : 'fa fa-shopping-cart';
 
 $top_header =  '<div class="clearfix navbar-fixed-top">
                 <!-- Brand and toggle get grouped for better mobile display -->
@@ -341,9 +401,9 @@ $top_header =  '<div class="clearfix navbar-fixed-top">
                 <!-- BEGIN TOPBAR ACTIONS -->
                 <div class="topbar-actions">
                     <!-- BEGIN GROUP NOTIFICATION -->
-                    <div class="btn-group-notification btn-group" id="header_notification_bar" style="margin-right:10px;">
+                    <div class="btn-group-notification btn-group" id="'.$notification_bar_id.'" style="margin-right:10px;">
                         <button type="button" class="btn btn-sm md-skip dropdown-toggle" data-toggle="dropdown" data-hover="dropdown" data-close-others="true">
-                            <i class="fa fa-shopping-cart"></i>
+                            <i class="'.$notification_icon.'"></i>
                             <span class="badge">'.$booking_badge.'</span>
                         </button>
                         <ul class="dropdown-menu-v2">
