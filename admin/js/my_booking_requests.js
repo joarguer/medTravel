@@ -78,6 +78,7 @@
                     orderable: false,
                     render: function (row) {
                         var html = '<button class="btn btn-xs btn-primary btn-view" data-id="' + row.item_id + '"><i class="fa fa-eye"></i> Ver</button>';
+                        html += ' <button class="btn btn-xs purple btn-open-calendar" data-item-id="' + row.item_id + '"><i class="fa fa-calendar"></i> Calendar</button>';
                         if (row.item_status === 'pending_provider') {
                             html += ' <button class="btn btn-xs btn-success btn-provider-confirm" data-id="' + row.item_id + '"><i class="fa fa-check"></i> Confirmar</button>';
                             html += ' <button class="btn btn-xs btn-danger btn-provider-reject" data-id="' + row.item_id + '"><i class="fa fa-times"></i> Rechazar</button>';
@@ -113,6 +114,15 @@
                 return;
             }
             sendProviderAction('provider_confirm', { item_id: itemId });
+        });
+
+        $('#my_booking_requests_table').on('click', '.btn-open-calendar', function () {
+            var itemId = parseInt($(this).data('item-id'), 10) || 0;
+            if (itemId <= 0) {
+                return;
+            }
+            var threadId = 'ITEM:' + itemId;
+            window.location = 'app_calendar.php?thread_type=ITEM&item_id=' + encodeURIComponent(String(itemId)) + '&thread_id=' + encodeURIComponent(threadId);
         });
 
         $('#my_booking_requests_table').on('click', '.btn-provider-reject', function () {

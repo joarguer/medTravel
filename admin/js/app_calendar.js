@@ -1,6 +1,49 @@
 (function () {
     var config = window.AdminCalendarConfig || {};
     var currentEvent = null;
+    var focusState = resolveFocusFromQuery();
+    var focusNoticeShown = false;
+    var focusDetailOpened = false;
+
+    function parseQueryParams() {
+        var out = {};
+        var q = window.location && window.location.search ? window.location.search.replace(/^\?/, '') : '';
+        if (!q) return out;
+        q.split('&').forEach(function (part) {
+            if (!part) return;
+            var chunks = part.split('=');
+            var key = decodeURIComponent((chunks[0] || '').replace(/\+/g, ' ')).trim();
+            if (!key) return;
+            var val = decodeURIComponent((chunks.slice(1).join('=') || '').replace(/\+/g, ' '));
+            out[key] = val;
+        });
+        return out;
+    }
+
+    function resolveFocusFromQuery() {
+        var params = parseQueryParams();
+        var threadId = String(params.thread_id || '').trim();
+        var threadType = String(params.thread_type || '').toUpperCase().trim();
+        var itemId = parseInt(params.item_id || '0', 10) || 0;
+
+        if (!threadId && itemId > 0) {
+            threadId = 'ITEM:' + itemId;
+        }
+        if (threadId) {
+            threadId = threadId.toUpperCase();
+            if (threadId.indexOf('ITEM:') === 0 && itemId <= 0) {
+                itemId = parseInt(threadId.substring(5), 10) || 0;
+            }
+            if (!threadType) {
+                threadType = (threadId.indexOf('CARE:') === 0) ? 'CARE' : 'ITEM';
+            }
+        }
+        return {
+            threadId: threadId,
+            threadType: threadType,
+            itemId: itemId
+        };
+    }
 
     function esc(str) {
         return String(str || '')
@@ -89,10 +132,22 @@
         return getEventType(event) === f;
     }
 
+    function eventMatchesFocus(event) {
+        if (!focusState) return true;
+        if (focusState.itemId > 0) {
+            return getEventItemId(event) === focusState.itemId;
+        }
+        if (focusState.threadId) {
+            return getEventThreadId(event).toUpperCase() === focusState.threadId;
+        }
+        return true;
+    }
+
     function mapListEvents(events) {
         var out = [];
         (events || []).forEach(function (e) {
             if (!eventAllowedByFilter(e)) return;
+            if (!eventMatchesFocus(e)) return;
             e.backgroundColor = statusColor(getEventStatus(e));
             e.borderColor = typeBorderColor(getEventType(e));
             out.push(e);
@@ -114,6 +169,26 @@
 
     function refreshCalendar() {
         $('#admin-calendar').fullCalendar('refetchEvents');
+    }
+
+    function applyInitialFilterFromFocus() {
+        var $filter = $('#admin-calendar-filter');
+        if (!$filter.length || !focusState) return;
+
+        if (focusState.itemId > 0 || focusState.threadType === 'ITEM') {
+            if ($filter.find('option[value="ITEM"]').length) {
+                $filter.val('ITEM');
+            }
+            return;
+        }
+
+        if (focusState.threadType === 'CARE' || (focusState.threadId && focusState.threadId.indexOf('CARE:') === 0)) {
+            if ($filter.find('option[value="CARE"]').length) {
+                $filter.val('CARE');
+            } else if ($filter.find('option[value="ALL"]').length) {
+                $filter.val('ALL');
+            }
+        }
     }
 
     function openCreateModal(start, end, allDay) {
@@ -219,7 +294,22 @@
                         callback([]);
                         return;
                     }
-                    callback(mapListEvents(res.events || []));
+                    var mapped = mapListEvents(res.events || []);
+                    callback(mapped);
+                    if ((focusState.itemId > 0 || focusState.threadId) && mapped.length === 0 && !focusNoticeShown) {
+                        focusNoticeShown = true;
+                        toastr.warning('Not allowed or no events found for selected item.');
+                    }
+                    if ((focusState.itemId > 0 || focusState.threadId) && mapped.length > 0 && !focusDetailOpened) {
+                        focusDetailOpened = true;
+                        var first = mapped[0];
+                        if (first && first.start) {
+                            $('#admin-calendar').fullCalendar('gotoDate', first.start);
+                        }
+                        setTimeout(function () {
+                            loadEventInDetail(first);
+                        }, 120);
+                    }
                 }).fail(function () {
                     toastr.error('Could not load events');
                     callback([]);
@@ -270,9 +360,15 @@
     }
 
     $(function () {
+        applyInitialFilterFromFocus();
         initCalendar();
 
         $('#admin-calendar-filter').on('change', function () {
+            if (focusState.itemId > 0 || focusState.threadId) {
+                focusState.itemId = 0;
+                focusState.threadId = '';
+                focusState.threadType = '';
+            }
             refreshCalendar();
         });
 
