@@ -508,3 +508,10 @@ Nota de alcance:
 ### 4) Comunicación cliente (sin tablas nuevas)
 - Para MVP y compatibilidad de esquema real, mensajes del cliente se registran en `booking_requests.additional_notes` con marcador estructurado `[CLIENT_MESSAGE][timestamp]`.
 - Mensajes/actualizaciones del proveedor se leen desde `booking_request_items` (ej. `provider_notes`, `provider_reject_reason`, `item_status`) si están disponibles.
+
+### 5) Notificaciones por email en acciones del proveedor
+- Endpoint actualizado: `admin/ajax/my_booking_requests.php`.
+- Cuando un proveedor ejecuta `provider_confirm`, `provider_reject` o `provider_propose_change`:
+  - se envía email al cliente (`booking_requests.email`)
+  - se envía email al admin patient care (`loadEmailAccountsFromDB()['patientcare']['reply_to']`, fallback `from_email`)
+- El envío es no bloqueante: errores SMTP no revierten el cambio de estado ni la respuesta JSON `ok`.

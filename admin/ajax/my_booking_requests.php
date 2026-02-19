@@ -1,6 +1,7 @@
 <?php
 include '../include/conexion.php';
 require_once '../include/roles.php';
+require_once '../include/email_config.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -80,6 +81,85 @@ function is_valid_date_ymd($value)
     return checkdate((int)$parts[1], (int)$parts[2], (int)$parts[0]);
 }
 
+function normalize_message_text($text)
+{
+    return trim((string)preg_replace('/\s+/', ' ', (string)$text));
+}
+
+function safe_html($value)
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+function resolve_patientcare_admin_email($conexion)
+{
+    if (!function_exists('loadEmailAccountsFromDB')) {
+        return '';
+    }
+    $accounts = loadEmailAccountsFromDB($conexion);
+    if (!is_array($accounts) || empty($accounts['patientcare']) || !is_array($accounts['patientcare'])) {
+        return '';
+    }
+    $email = trim((string)($accounts['patientcare']['reply_to'] ?? ''));
+    if ($email === '') {
+        $email = trim((string)($accounts['patientcare']['from_email'] ?? ''));
+    }
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+}
+
+function provider_status_label($status)
+{
+    $map = [
+        'provider_confirmed' => 'Confirmed by provider',
+        'provider_rejected' => 'Rejected by provider',
+        'provider_proposed_change' => 'Provider proposed changes',
+    ];
+    $key = trim((string)$status);
+    return isset($map[$key]) ? $map[$key] : $key;
+}
+
+function parse_additional_notes_messages($additionalNotes)
+{
+    $messages = [];
+    $notes = trim((string)$additionalNotes);
+    if ($notes === '') {
+        return $messages;
+    }
+
+    $lines = preg_split('/\R+/', $notes);
+    foreach ($lines as $line) {
+        $line = trim((string)$line);
+        if ($line === '') {
+            continue;
+        }
+
+        if (preg_match('/^\[(CLIENT_MESSAGE|PROVIDER_MESSAGE)\]\[(.*?)\](?:\[(.*?)\])?\s*(.*)$/', $line, $m)) {
+            $type = strtoupper((string)$m[1]);
+            $messages[] = [
+                'sender' => ($type === 'CLIENT_MESSAGE') ? 'client' : 'provider',
+                'type' => strtolower($type),
+                'time' => trim((string)$m[2]),
+                'actor' => isset($m[3]) ? trim((string)$m[3]) : '',
+                'body' => trim((string)$m[4]),
+            ];
+        }
+    }
+
+    return $messages;
+}
+
+function sort_messages_by_time(&$messages)
+{
+    usort($messages, function ($a, $b) {
+        $ta = strtotime((string)($a['time'] ?? ''));
+        $tb = strtotime((string)($b['time'] ?? ''));
+        if ($ta === $tb) {
+            return 0;
+        }
+        return ($ta < $tb) ? -1 : 1;
+    });
+}
+
 function fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete)
 {
     $sql = "SELECT
@@ -125,6 +205,34 @@ function fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeP
     return $row;
 }
 
+function fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete)
+{
+    if (!table_has_column($conexion, 'booking_requests', 'additional_notes')) {
+        return '';
+    }
+
+    $sql = "SELECT additional_notes FROM booking_requests WHERE id = ?";
+    if ($hasRequestsSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return '';
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $bookingRequestId);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return '';
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    return (string)($row['additional_notes'] ?? '');
+}
+
 if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
     json_err('forbidden', 403);
 }
@@ -160,6 +268,7 @@ $providerAllowedTargets = [
 $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
 $hasRequestsSoftDelete = table_has_column($conexion, 'booking_requests', 'is_deleted');
 $hasItemStatus = table_has_column($conexion, 'booking_request_items', 'item_status');
+$hasItemCreatedAt = table_has_column($conexion, 'booking_request_items', 'created_at');
 $hasItemUpdatedAt = table_has_column($conexion, 'booking_request_items', 'updated_at');
 $hasItemCurrency = table_has_column($conexion, 'booking_request_items', 'currency');
 $hasItemNotes = table_has_column($conexion, 'booking_request_items', 'notes');
@@ -178,6 +287,20 @@ $hasTimelineFrom = table_has_column($conexion, 'booking_requests', 'timeline_fro
 $hasTimelineTo = table_has_column($conexion, 'booking_requests', 'timeline_to');
 $hasSpecialRequest = table_has_column($conexion, 'booking_requests', 'special_request');
 $hasAdditionalNotes = table_has_column($conexion, 'booking_requests', 'additional_notes');
+$hasBookingName = table_has_column($conexion, 'booking_requests', 'name');
+$hasBookingEmail = table_has_column($conexion, 'booking_requests', 'email');
+$hasBookingPhone = table_has_column($conexion, 'booking_requests', 'phone');
+$hasBookingOrigin = table_has_column($conexion, 'booking_requests', 'origin');
+$hasBookingPersons = table_has_column($conexion, 'booking_requests', 'persons');
+$hasBookingCategory = table_has_column($conexion, 'booking_requests', 'category');
+$hasBookingServiceCategories = table_has_column($conexion, 'booking_requests', 'service_categories');
+$hasBookingMedicalServices = table_has_column($conexion, 'booking_requests', 'medical_services');
+$hasBookingBudget = table_has_column($conexion, 'booking_requests', 'budget');
+$hasBookingStatus = table_has_column($conexion, 'booking_requests', 'status');
+$hasBookingDatetime = table_has_column($conexion, 'booking_requests', 'booking_datetime');
+$hasBookingSelectedOffers = table_has_column($conexion, 'booking_requests', 'selected_offers');
+$hasBookingCreatedAt = table_has_column($conexion, 'booking_requests', 'created_at');
+$hasBookingUpdatedAt = table_has_column($conexion, 'booking_requests', 'updated_at');
 
 if (!$hasItemStatus) {
     json_err('item_status_not_available', 409);
@@ -279,6 +402,21 @@ if ($action === 'get_detail') {
         json_err('invalid_id');
     }
 
+    $bookingNameExpr = $hasBookingName ? 'br.name' : "''";
+    $bookingEmailExpr = $hasBookingEmail ? 'br.email' : "''";
+    $bookingPhoneExpr = $hasBookingPhone ? 'br.phone' : "''";
+    $bookingOriginExpr = $hasBookingOrigin ? 'br.origin' : "''";
+    $bookingPersonsExpr = $hasBookingPersons ? 'br.persons' : "''";
+    $bookingCategoryExpr = $hasBookingCategory ? 'br.category' : "''";
+    $bookingServiceCategoriesExpr = $hasBookingServiceCategories ? 'br.service_categories' : "''";
+    $bookingMedicalServicesExpr = $hasBookingMedicalServices ? 'br.medical_services' : "''";
+    $bookingBudgetExpr = $hasBookingBudget ? 'br.budget' : "NULL";
+    $bookingStatusExpr = $hasBookingStatus ? 'br.status' : "'pending'";
+    $bookingDatetimeExpr = $hasBookingDatetime ? 'br.booking_datetime' : "''";
+    $bookingSelectedOffersExpr = $hasBookingSelectedOffers ? 'br.selected_offers' : "''";
+    $bookingCreatedAtExpr = $hasBookingCreatedAt ? 'br.created_at' : "NULL";
+    $bookingUpdatedAtExpr = $hasBookingUpdatedAt ? 'br.updated_at' : "NULL";
+
     $sql = "SELECT
                 bri.id AS item_id,
                 bri.booking_request_id,
@@ -287,7 +425,21 @@ if ($action === 'get_detail') {
                     WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
                     ELSE bri.item_status
                 END AS item_status,
+                {$bookingNameExpr} AS client_name,
+                {$bookingEmailExpr} AS client_email,
+                {$bookingPhoneExpr} AS client_phone,
+                {$bookingOriginExpr} AS origin,
                 br.destination,
+                {$bookingPersonsExpr} AS persons,
+                {$bookingCategoryExpr} AS category,
+                {$bookingServiceCategoriesExpr} AS service_categories,
+                {$bookingMedicalServicesExpr} AS medical_services,
+                {$bookingBudgetExpr} AS budget,
+                {$bookingStatusExpr} AS booking_status,
+                {$bookingDatetimeExpr} AS booking_datetime,
+                {$bookingSelectedOffersExpr} AS selected_offers,
+                {$bookingCreatedAtExpr} AS booking_created_at,
+                {$bookingUpdatedAtExpr} AS booking_updated_at,
                 {$timelineFromExpr} AS timeline_from,
                 {$timelineToExpr} AS timeline_to,
                 br.timeline,
@@ -341,7 +493,224 @@ if ($action === 'get_detail') {
         json_err('not_found', 404);
     }
 
-    json_ok(['data' => $row]);
+    $bookingRequestId = (int)$row['booking_request_id'];
+    $row['messages'] = parse_additional_notes_messages((string)($row['additional_notes'] ?? ''));
+    sort_messages_by_time($row['messages']);
+
+    $history = [];
+    $historySql = "SELECT
+                    bri.id AS item_id,
+                    bri.item_type,
+                    CASE
+                        WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                        ELSE bri.item_status
+                    END AS item_status,
+                    " . ($hasItemCreatedAt ? "bri.created_at" : "NULL") . " AS item_created_at,
+                    " . ($hasItemUpdatedAt ? "bri.updated_at" : "NULL") . " AS item_updated_at,
+                    {$responseAtExpr} AS provider_response_at,
+                    {$rejectReasonExpr} AS provider_reject_reason,
+                    {$providerNotesExpr} AS provider_notes,
+                    {$proposedDateFromExpr} AS provider_proposed_date_from,
+                    {$proposedDateToExpr} AS provider_proposed_date_to,
+                    {$proposedPriceExpr} AS provider_proposed_price,
+                    {$proposedCurrencyExpr} AS provider_proposed_currency,
+                    COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
+                    COALESCE(NULLIF(ms.currency, ''), NULLIF(o.currency, ''), NULLIF(bri.currency, ''), 'USD') AS item_currency
+                FROM booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                LEFT JOIN service_catalog sc ON sc.id = o.service_id
+                LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                WHERE bri.booking_request_id = ?";
+
+    if ($hasItemsSoftDelete) {
+        $historySql .= ' AND bri.is_deleted = 0';
+    }
+    if ($hasRequestsSoftDelete) {
+        $historySql .= ' AND br.is_deleted = 0';
+    }
+    $historySql .= $scopeWhere;
+    $historySql .= ' ORDER BY bri.id ASC';
+
+    $stmtHistory = mysqli_prepare($conexion, $historySql);
+    if ($stmtHistory) {
+        $historyTypes = 'i' . $scopeTypes;
+        $historyParams = array_merge([$bookingRequestId], $scopeParams);
+        bind_stmt_params($stmtHistory, $historyTypes, $historyParams);
+        if (mysqli_stmt_execute($stmtHistory)) {
+            $historyRes = mysqli_stmt_get_result($stmtHistory);
+            while ($historyRes && ($historyRow = mysqli_fetch_assoc($historyRes))) {
+                $history[] = $historyRow;
+            }
+        }
+        mysqli_stmt_close($stmtHistory);
+    }
+
+    json_ok(['data' => $row, 'items_history' => $history]);
+}
+
+if ($action === 'list_messages') {
+    $itemId = intval($_POST['item_id'] ?? $_GET['item_id'] ?? 0);
+    if ($itemId <= 0) {
+        json_err('invalid_id');
+    }
+
+    $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
+    if (!$itemRow) {
+        json_err('not_found', 404);
+    }
+
+    $bookingRequestId = (int)$itemRow['booking_request_id'];
+    $messages = parse_additional_notes_messages(fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete));
+
+    $timelineSql = "SELECT
+                        CASE
+                            WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                            ELSE bri.item_status
+                        END AS item_status,
+                        {$providerNotesExpr} AS provider_notes,
+                        {$rejectReasonExpr} AS provider_reject_reason,
+                        {$responseAtExpr} AS provider_response_at,
+                        " . ($hasItemUpdatedAt ? "bri.updated_at" : "NULL") . " AS item_updated_at,
+                        " . ($hasItemCreatedAt ? "bri.created_at" : "NULL") . " AS item_created_at
+                    FROM booking_request_items bri
+                    INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                    WHERE bri.booking_request_id = ?";
+
+    if ($hasItemsSoftDelete) {
+        $timelineSql .= ' AND bri.is_deleted = 0';
+    }
+    if ($hasRequestsSoftDelete) {
+        $timelineSql .= ' AND br.is_deleted = 0';
+    }
+    $timelineSql .= $scopeWhere;
+    $timelineSql .= ' ORDER BY bri.id ASC';
+
+    $stmtTimeline = mysqli_prepare($conexion, $timelineSql);
+    if ($stmtTimeline) {
+        $timelineTypes = 'i' . $scopeTypes;
+        $timelineParams = array_merge([$bookingRequestId], $scopeParams);
+        bind_stmt_params($stmtTimeline, $timelineTypes, $timelineParams);
+        if (mysqli_stmt_execute($stmtTimeline)) {
+            $timelineRes = mysqli_stmt_get_result($stmtTimeline);
+            while ($timelineRes && ($timelineRow = mysqli_fetch_assoc($timelineRes))) {
+                $eventTime = trim((string)($timelineRow['provider_response_at'] ?? ''));
+                if ($eventTime === '') {
+                    $eventTime = trim((string)($timelineRow['item_updated_at'] ?? ''));
+                }
+                if ($eventTime === '') {
+                    $eventTime = trim((string)($timelineRow['item_created_at'] ?? ''));
+                }
+
+                $providerNotes = trim((string)($timelineRow['provider_notes'] ?? ''));
+                if ($providerNotes !== '') {
+                    $messages[] = [
+                        'sender' => 'provider',
+                        'type' => 'provider_note',
+                        'time' => $eventTime,
+                        'actor' => '',
+                        'body' => $providerNotes,
+                    ];
+                }
+
+                $rejectReason = trim((string)($timelineRow['provider_reject_reason'] ?? ''));
+                if ($rejectReason !== '') {
+                    $messages[] = [
+                        'sender' => 'provider',
+                        'type' => 'provider_reject_reason',
+                        'time' => $eventTime,
+                        'actor' => '',
+                        'body' => 'Rejection reason: ' . $rejectReason,
+                    ];
+                }
+
+                $status = normalize_legacy_item_status($timelineRow['item_status'] ?? '');
+                if ($status !== '') {
+                    $messages[] = [
+                        'sender' => 'system',
+                        'type' => 'status_update',
+                        'time' => $eventTime,
+                        'actor' => '',
+                        'body' => 'Service status updated to: ' . $status,
+                    ];
+                }
+            }
+        }
+        mysqli_stmt_close($stmtTimeline);
+    }
+
+    sort_messages_by_time($messages);
+    json_ok(['booking_request_id' => $bookingRequestId, 'messages' => $messages]);
+}
+
+if ($action === 'send_message') {
+    $itemId = intval($_POST['item_id'] ?? 0);
+    $messageText = trim((string)($_POST['message'] ?? ''));
+    if ($itemId <= 0) {
+        json_err('invalid_id');
+    }
+    if ($messageText === '') {
+        json_err('message_required', 422);
+    }
+    if (!$hasAdditionalNotes) {
+        json_err('additional_notes_not_available', 409);
+    }
+
+    $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
+    if (!$itemRow) {
+        json_err('not_found', 404);
+    }
+
+    $bookingRequestId = (int)$itemRow['booking_request_id'];
+    $stamp = date('Y-m-d H:i:s');
+    $normalizedMessage = normalize_message_text($messageText);
+    $actor = '';
+    if ($providerId > 0) {
+        $actor .= 'provider:' . $providerId;
+    }
+    if ($serviceProviderId > 0) {
+        $actor .= ($actor !== '' ? '|' : '') . 'service_provider:' . $serviceProviderId;
+    }
+    if ($actor === '') {
+        $actor = 'provider';
+    }
+    $entry = '[PROVIDER_MESSAGE][' . $stamp . '][' . $actor . '] ' . $normalizedMessage;
+
+    $currentNotes = fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete);
+    $newNotes = trim($currentNotes) !== '' ? (rtrim($currentNotes) . "\n" . $entry) : $entry;
+
+    $updateSql = 'UPDATE booking_requests SET additional_notes = ?';
+    if ($hasBookingUpdatedAt) {
+        $updateSql .= ', updated_at = NOW()';
+    }
+    $updateSql .= ' WHERE id = ?';
+    if ($hasRequestsSoftDelete) {
+        $updateSql .= ' AND is_deleted = 0';
+    }
+    $updateSql .= ' LIMIT 1';
+
+    $stmtUpdate = mysqli_prepare($conexion, $updateSql);
+    if (!$stmtUpdate) {
+        json_err('db_prepare_error', 500);
+    }
+    mysqli_stmt_bind_param($stmtUpdate, 'si', $newNotes, $bookingRequestId);
+    if (!mysqli_stmt_execute($stmtUpdate)) {
+        $err = mysqli_stmt_error($stmtUpdate);
+        mysqli_stmt_close($stmtUpdate);
+        json_err('db_error: ' . $err, 500);
+    }
+    mysqli_stmt_close($stmtUpdate);
+
+    json_ok([
+        'booking_request_id' => $bookingRequestId,
+        'message' => [
+            'sender' => 'provider',
+            'type' => 'provider_message',
+            'time' => $stamp,
+            'actor' => $actor,
+            'body' => $normalizedMessage,
+        ],
+    ]);
 }
 
 if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_change', 'update_item_status'], true)) {
@@ -556,6 +925,156 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
 
     if ($affected <= 0) {
         json_err('not_found_or_no_change', 404);
+    }
+
+    try {
+        $notifySql = "SELECT
+                        br.id AS booking_id,
+                        br.name AS client_name,
+                        br.email AS client_email,
+                        CASE
+                            WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                            ELSE bri.item_status
+                        END AS item_status,
+                        {$providerNotesExpr} AS provider_notes,
+                        {$rejectReasonExpr} AS provider_reject_reason,
+                        {$proposedDateFromExpr} AS provider_proposed_date_from,
+                        {$proposedDateToExpr} AS provider_proposed_date_to,
+                        {$proposedPriceExpr} AS provider_proposed_price,
+                        {$proposedCurrencyExpr} AS provider_proposed_currency,
+                        COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
+                        COALESCE(NULLIF(ms.currency, ''), NULLIF(o.currency, ''), NULLIF(bri.currency, ''), 'USD') AS item_currency
+                    FROM booking_request_items bri
+                    INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                    LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                    LEFT JOIN service_catalog sc ON sc.id = o.service_id
+                    LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                    WHERE bri.id = ?";
+        if ($hasItemsSoftDelete) {
+            $notifySql .= ' AND bri.is_deleted = 0';
+        }
+        if ($hasRequestsSoftDelete) {
+            $notifySql .= ' AND br.is_deleted = 0';
+        }
+        $notifySql .= $scopeWhere . ' LIMIT 1';
+
+        $notifyStmt = mysqli_prepare($conexion, $notifySql);
+        $notifyRow = null;
+        if ($notifyStmt) {
+            $notifyTypes = 'i' . $scopeTypes;
+            $notifyParams = array_merge([$itemId], $scopeParams);
+            bind_stmt_params($notifyStmt, $notifyTypes, $notifyParams);
+            if (mysqli_stmt_execute($notifyStmt)) {
+                $notifyRes = mysqli_stmt_get_result($notifyStmt);
+                $notifyRow = $notifyRes ? mysqli_fetch_assoc($notifyRes) : null;
+            }
+            mysqli_stmt_close($notifyStmt);
+        }
+
+        if (is_array($notifyRow) && !empty($notifyRow)) {
+            $bookingId = (int)($notifyRow['booking_id'] ?? 0);
+            $clientName = trim((string)($notifyRow['client_name'] ?? ''));
+            $clientEmail = trim((string)($notifyRow['client_email'] ?? ''));
+            $itemName = trim((string)($notifyRow['item_name'] ?? ''));
+            $statusNow = trim((string)($notifyRow['item_status'] ?? $targetStatus));
+            $providerNotes = trim((string)($notifyRow['provider_notes'] ?? ''));
+            $rejectReason = trim((string)($notifyRow['provider_reject_reason'] ?? ''));
+            $propFrom = trim((string)($notifyRow['provider_proposed_date_from'] ?? ''));
+            $propTo = trim((string)($notifyRow['provider_proposed_date_to'] ?? ''));
+            $propPriceRaw = $notifyRow['provider_proposed_price'] ?? null;
+            $propCurrency = strtoupper(trim((string)($notifyRow['provider_proposed_currency'] ?? $notifyRow['item_currency'] ?? 'USD')));
+            if ($propCurrency === '') {
+                $propCurrency = 'USD';
+            }
+
+            $summaryHtml = '';
+            $summaryText = '';
+            if ($providerNotes !== '') {
+                $summaryHtml .= '<p><strong>Provider notes:</strong> ' . safe_html($providerNotes) . '</p>';
+                $summaryText .= "Provider notes: " . $providerNotes . "\n";
+            }
+            if ($rejectReason !== '') {
+                $summaryHtml .= '<p><strong>Reject reason:</strong> ' . safe_html($rejectReason) . '</p>';
+                $summaryText .= "Reject reason: " . $rejectReason . "\n";
+            }
+            if ($targetStatus === 'provider_proposed_change') {
+                $summaryHtml .= '<p><strong>Proposed changes:</strong></p><ul>';
+                $summaryText .= "Proposed changes:\n";
+                if ($propFrom !== '' || $propTo !== '') {
+                    $dateRange = trim(($propFrom !== '' ? $propFrom : '?') . ' to ' . ($propTo !== '' ? $propTo : '?'));
+                    $summaryHtml .= '<li>Dates: ' . safe_html($dateRange) . '</li>';
+                    $summaryText .= "- Dates: " . $dateRange . "\n";
+                }
+                if ($propPriceRaw !== null && $propPriceRaw !== '') {
+                    $propPrice = number_format((float)$propPriceRaw, 2);
+                    $summaryHtml .= '<li>Price: ' . safe_html($propCurrency . ' ' . $propPrice) . '</li>';
+                    $summaryText .= "- Price: " . $propCurrency . ' ' . $propPrice . "\n";
+                }
+                if ($providerNotes === '' && $rejectReason === '' && $propFrom === '' && $propTo === '' && ($propPriceRaw === null || $propPriceRaw === '')) {
+                    $summaryHtml .= '<li>Provider submitted a change proposal.</li>';
+                    $summaryText .= "- Provider submitted a change proposal.\n";
+                }
+                $summaryHtml .= '</ul>';
+            }
+
+            $statusLabel = provider_status_label($statusNow);
+            $subject = 'Update on your MedTravel request #' . $bookingId;
+            $safeClientName = $clientName !== '' ? $clientName : 'Patient';
+            $safeItemName = $itemName !== '' ? $itemName : ('Item #' . $itemId);
+
+            $htmlBody = '<p>Hello ' . safe_html($safeClientName) . ',</p>'
+                . '<p>There is a new update on your MedTravel request.</p>'
+                . '<p><strong>Request ID:</strong> #' . safe_html((string)$bookingId) . '<br>'
+                . '<strong>Service:</strong> ' . safe_html($safeItemName) . '<br>'
+                . '<strong>New status:</strong> ' . safe_html($statusLabel) . '</p>'
+                . $summaryHtml
+                . '<p>You can log in to your client portal to review details.</p>';
+
+            $altBody = "Hello {$safeClientName},\n\n"
+                . "There is a new update on your MedTravel request.\n"
+                . "Request ID: #{$bookingId}\n"
+                . "Service: {$safeItemName}\n"
+                . "New status: {$statusLabel}\n";
+            if ($summaryText !== '') {
+                $altBody .= "\n" . trim($summaryText) . "\n";
+            }
+            $altBody .= "\nYou can log in to your client portal to review details.\n";
+
+            if (filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+                try {
+                    sendEmail($clientEmail, $subject, $htmlBody, 'patientcare', ['alt_body' => $altBody], $conexion);
+                } catch (Throwable $emailEx) {
+                    error_log('provider_action_email_client_error item_id=' . $itemId . ' action=' . $action . ' msg=' . $emailEx->getMessage());
+                }
+            }
+
+            $adminEmail = resolve_patientcare_admin_email($conexion);
+            if ($adminEmail !== '') {
+                $adminSubject = '[ADMIN] ' . $subject;
+                $adminHtml = '<p>Provider action received.</p>'
+                    . '<p><strong>Request ID:</strong> #' . safe_html((string)$bookingId) . '<br>'
+                    . '<strong>Item ID:</strong> #' . safe_html((string)$itemId) . '<br>'
+                    . '<strong>Status:</strong> ' . safe_html($statusLabel) . '<br>'
+                    . '<strong>Client:</strong> ' . safe_html($safeClientName) . ' (' . safe_html($clientEmail) . ')</p>'
+                    . $summaryHtml;
+                $adminAlt = "Provider action received.\n"
+                    . "Request ID: #{$bookingId}\n"
+                    . "Item ID: #{$itemId}\n"
+                    . "Status: {$statusLabel}\n"
+                    . "Client: {$safeClientName} ({$clientEmail})\n";
+                if ($summaryText !== '') {
+                    $adminAlt .= "\n" . trim($summaryText) . "\n";
+                }
+
+                try {
+                    sendEmail($adminEmail, $adminSubject, $adminHtml, 'patientcare', ['alt_body' => $adminAlt], $conexion);
+                } catch (Throwable $emailEx) {
+                    error_log('provider_action_email_admin_error item_id=' . $itemId . ' action=' . $action . ' msg=' . $emailEx->getMessage());
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('provider_action_email_error item_id=' . $itemId . ' action=' . $action . ' msg=' . $e->getMessage());
     }
 
     json_ok(['message' => 'Respuesta guardada', 'status' => $targetStatus]);
