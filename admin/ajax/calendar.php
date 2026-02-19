@@ -108,33 +108,33 @@ function calendar_fetch_scoped_item_admin($conexion, $itemId, $scope)
     return $row ?: null;
 }
 
-function calendar_fetch_request_client_user_id($conexion, $requestId)
+function calendar_fetch_request_row($conexion, $requestId)
 {
     if ((int)$requestId <= 0) {
-        return 0;
+        return null;
     }
-    if (!calendar_table_exists($conexion, 'booking_requests') || !calendar_table_has_column($conexion, 'booking_requests', 'client_user_id')) {
-        return 0;
+    if (!calendar_table_exists($conexion, 'booking_requests')) {
+        return null;
     }
     $hasRequestsSoftDelete = calendar_table_has_column($conexion, 'booking_requests', 'is_deleted');
-    $sql = "SELECT client_user_id FROM booking_requests WHERE id = ?";
+    $sql = "SELECT id, client_user_id FROM booking_requests WHERE id = ?";
     if ($hasRequestsSoftDelete) {
         $sql .= " AND is_deleted = 0";
     }
     $sql .= " LIMIT 1";
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
-        return 0;
+        return null;
     }
     mysqli_stmt_bind_param($stmt, 'i', $requestId);
     if (!mysqli_stmt_execute($stmt)) {
         mysqli_stmt_close($stmt);
-        return 0;
+        return null;
     }
     $res = mysqli_stmt_get_result($stmt);
     $row = $res ? mysqli_fetch_assoc($res) : null;
     mysqli_stmt_close($stmt);
-    return (int)($row['client_user_id'] ?? 0);
+    return $row ?: null;
 }
 
 function calendar_fetch_event_row_admin($conexion, $eventId, $scope)
@@ -201,6 +201,7 @@ if ($action === 'list_events') {
         $sql .= " INNER JOIN booking_request_items bri ON bri.id = ce.item_id";
     }
     $sql .= " WHERE ce.start_at <= ? AND COALESCE(ce.end_at, ce.start_at) >= ?";
+    $sql .= " AND ((ce.event_type = 'CARE' AND ce.request_id IS NOT NULL AND ce.item_id IS NULL) OR (ce.event_type = 'ITEM' AND ce.item_id IS NOT NULL))";
     if (empty($scope['is_admin'])) {
         $hasItemsSoftDelete = calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
         if ($hasItemsSoftDelete) {
@@ -266,9 +267,20 @@ if ($action === 'create_event') {
         if ($requestId <= 0) {
             calendar_admin_err('request_id_required', 422);
         }
+        if ($itemId > 0) {
+            calendar_admin_err('care_event_cannot_have_item_id', 400);
+        }
+        $itemId = 0;
     }
 
-    $clientUserId = calendar_fetch_request_client_user_id($conexion, $requestId);
+    $requestRow = calendar_fetch_request_row($conexion, $requestId);
+    if (!$requestRow) {
+        calendar_admin_err('request_not_found', 404);
+    }
+    $clientUserId = (int)($requestRow['client_user_id'] ?? 0);
+    if ($clientUserId <= 0) {
+        calendar_admin_err('request_client_user_required', 422);
+    }
     $threadId = calendar_build_thread_id($eventType, $requestId, $itemId);
 
     $sql = "INSERT INTO calendar_events
@@ -365,11 +377,24 @@ if ($action === 'update_event') {
             calendar_admin_err('item_not_found_or_forbidden', 404);
         }
         $requestId = (int)$itemRow['request_id'];
-    } elseif ($requestId <= 0) {
-        calendar_admin_err('request_id_required', 422);
+    } else {
+        if ($requestId <= 0) {
+            calendar_admin_err('request_id_required', 422);
+        }
+        if ($itemId > 0) {
+            calendar_admin_err('care_event_cannot_have_item_id', 400);
+        }
+        $itemId = 0;
     }
 
-    $clientUserId = calendar_fetch_request_client_user_id($conexion, $requestId);
+    $requestRow = calendar_fetch_request_row($conexion, $requestId);
+    if (!$requestRow) {
+        calendar_admin_err('request_not_found', 404);
+    }
+    $clientUserId = (int)($requestRow['client_user_id'] ?? 0);
+    if ($clientUserId <= 0) {
+        calendar_admin_err('request_client_user_required', 422);
+    }
     $threadId = calendar_build_thread_id($eventType, $requestId, $itemId);
 
     $sql = "UPDATE calendar_events
@@ -408,12 +433,16 @@ if ($action === 'update_event') {
 }
 
 if ($action === 'delete_event') {
-    if (empty($scope['is_admin'])) {
-        calendar_admin_err('forbidden', 403);
-    }
     $eventId = (int)($_POST['id'] ?? 0);
     if ($eventId <= 0) {
         calendar_admin_err('invalid_event_id', 422);
+    }
+    $existing = calendar_fetch_event_row_admin($conexion, $eventId, $scope);
+    if (!$existing) {
+        calendar_admin_err('event_not_found_or_forbidden', 404);
+    }
+    if (empty($scope['is_admin']) && strtoupper((string)($existing['event_type'] ?? '')) !== 'ITEM') {
+        calendar_admin_err('forbidden_care_for_provider', 403);
     }
     $stmt = mysqli_prepare($conexion, "DELETE FROM calendar_events WHERE id = ? LIMIT 1");
     if (!$stmt) {

@@ -556,3 +556,17 @@ Nota de alcance:
   - Client: solo eventos de sus requests (`client_user_id` y fallback ownership por request).
 - Integración:
   - Evento enlaza `request_id`, `item_id` y `thread_id` (`CARE:<request_id>` / `ITEM:<item_id>`) para abrir Inbox y detalle.
+
+### 9) Calendar scope aligned with Inbox (CARE vs ITEM)
+- `admin/ajax/calendar.php` refuerza validaciones server-side para mantener paridad con Inbox:
+  - `CARE`: solo Admin/PatientCare, `request_id` obligatorio, `item_id` debe ser `NULL/0`.
+  - `ITEM`: `item_id` obligatorio, `request_id` derivado desde `booking_request_items` scopeado.
+  - `client_user_id` se resuelve siempre desde `booking_requests` y debe existir para crear/editar evento.
+- Providers:
+  - nunca pueden crear/editar `CARE`.
+  - solo ven `ITEM` de items scopeados.
+  - eliminación permitida solo para `ITEM` scopeado (nunca `CARE`).
+- Clients (`client/ajax/calendar.php`):
+  - endpoint read-only (`list_events`).
+  - ownership estricto por `client_user_id` y fallback por ownership de `booking_requests`.
+  - filtro adicional de integridad: solo devuelve eventos válidos (`CARE` sin `item_id`, `ITEM` con `item_id`).

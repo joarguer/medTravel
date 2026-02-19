@@ -46,6 +46,8 @@ if ($action !== 'list_events') {
     calendar_client_err('invalid_action', 400);
 }
 
+$filterRequestId = (int)($_GET['request_id'] ?? $_POST['request_id'] ?? 0);
+
 $start = calendar_parse_datetime_input($_GET['start'] ?? $_POST['start'] ?? '');
 $end = calendar_parse_datetime_input($_GET['end'] ?? $_POST['end'] ?? '');
 if ($start === null) {
@@ -58,10 +60,38 @@ if ($end === null) {
 $hasBookingSoftDelete = calendar_table_has_column($conexion, 'booking_requests', 'is_deleted');
 $hasCalendarClientUser = calendar_table_has_column($conexion, 'calendar_events', 'client_user_id');
 
+if ($filterRequestId > 0) {
+    $scopeSql = "SELECT br.id
+                 FROM booking_requests br
+                 WHERE br.id = ? AND (" . $ownerScope['sql'] . ")";
+    if ($hasBookingSoftDelete) {
+        $scopeSql .= " AND br.is_deleted = 0";
+    }
+    $scopeSql .= " LIMIT 1";
+    $scopeStmt = mysqli_prepare($conexion, $scopeSql);
+    if (!$scopeStmt) {
+        calendar_client_err('prepare_failed', 500);
+    }
+    $scopeTypes = 'i' . $ownerScope['types'];
+    $scopeParams = array_merge([$filterRequestId], $ownerScope['params']);
+    if (!calendar_bind_stmt_params($scopeStmt, $scopeTypes, $scopeParams) || !mysqli_stmt_execute($scopeStmt)) {
+        $err = mysqli_stmt_error($scopeStmt);
+        mysqli_stmt_close($scopeStmt);
+        calendar_client_err('execute_failed: ' . $err, 500);
+    }
+    $scopeRes = mysqli_stmt_get_result($scopeStmt);
+    $scopeRow = $scopeRes ? mysqli_fetch_assoc($scopeRes) : null;
+    mysqli_stmt_close($scopeStmt);
+    if (!$scopeRow) {
+        calendar_client_err('forbidden', 403);
+    }
+}
+
 $sql = "SELECT ce.*
         FROM calendar_events ce
-        LEFT JOIN booking_requests br ON br.id = ce.request_id
+        INNER JOIN booking_requests br ON br.id = ce.request_id
         WHERE ce.start_at <= ? AND COALESCE(ce.end_at, ce.start_at) >= ?";
+$sql .= " AND ((ce.event_type = 'CARE' AND ce.request_id IS NOT NULL AND ce.item_id IS NULL) OR (ce.event_type = 'ITEM' AND ce.request_id IS NOT NULL AND ce.item_id IS NOT NULL))";
 
 $types = 'ss';
 $params = [$end, $start];
@@ -78,7 +108,12 @@ if ($hasCalendarClientUser && $clientUserId > 0) {
 }
 
 if ($hasBookingSoftDelete) {
-    $sql .= " AND (br.id IS NULL OR br.is_deleted = 0)";
+    $sql .= " AND br.is_deleted = 0";
+}
+if ($filterRequestId > 0) {
+    $sql .= " AND ce.request_id = ?";
+    $types .= 'i';
+    $params[] = $filterRequestId;
 }
 $sql .= " ORDER BY ce.start_at ASC, ce.id ASC";
 
