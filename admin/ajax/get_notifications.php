@@ -23,9 +23,10 @@ if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
 
 $providerId = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $serviceProviderId = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
-$isAdmin = is_role_admin_session();
-$userId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
 $roleId = current_role_id();
+$isStrictAdminRole = in_array((int)$roleId, [ROLE_ADMIN, ROLE_ADMINISTRATIVE], true);
+$isAdmin = $isStrictAdminRole || (is_role_admin_session() && $providerId <= 0 && $serviceProviderId <= 0);
+$userId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
 
 if (!$isAdmin && $providerId <= 0 && $serviceProviderId <= 0) {
     admin_notif_err('forbidden', 403);
@@ -36,15 +37,15 @@ $scopeTypes = '';
 $scopeParams = [];
 if (!$isAdmin) {
     if ($providerId > 0 && $serviceProviderId > 0) {
-        $scopeWhere = ' AND (bri.provider_id = ? OR bri.service_provider_id = ?)';
+        $scopeWhere = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?))';
         $scopeTypes = 'ii';
         $scopeParams = [$providerId, $serviceProviderId];
     } elseif ($providerId > 0) {
-        $scopeWhere = ' AND bri.provider_id = ?';
+        $scopeWhere = ' AND (bri.provider_id IS NOT NULL AND bri.provider_id = ?)';
         $scopeTypes = 'i';
         $scopeParams = [$providerId];
     } else {
-        $scopeWhere = ' AND bri.service_provider_id = ?';
+        $scopeWhere = ' AND (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?)';
         $scopeTypes = 'i';
         $scopeParams = [$serviceProviderId];
     }
@@ -150,7 +151,7 @@ if (inbox_table_exists($conexion, 'inbox_messages') && inbox_table_exists($conex
 
 $pendingServicesCount = 0;
 $pendingServices = [];
-$isProviderScope = (!$isAdmin && ($providerId > 0 || $serviceProviderId > 0));
+$isProviderScope = (!$isStrictAdminRole && ($providerId > 0 || $serviceProviderId > 0));
 if ($isProviderScope && inbox_table_exists($conexion, 'booking_request_items') && inbox_table_exists($conexion, 'booking_requests')) {
     $hasItemsSoftDelete = inbox_table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $hasRequestsSoftDelete = inbox_table_has_column($conexion, 'booking_requests', 'is_deleted');
@@ -174,7 +175,7 @@ if ($isProviderScope && inbox_table_exists($conexion, 'booking_request_items') &
     $pendingWhere .= " AND {$pendingStatusExpr} = 'pending_provider'";
     $pendingWhere .= $scopeWhere;
 
-    $countSql = "SELECT COUNT(*) AS total
+    $countSql = "SELECT COUNT(DISTINCT bri.id) AS total
                  FROM booking_request_items bri
                  INNER JOIN booking_requests br ON br.id = bri.booking_request_id
                  {$pendingWhere}";
@@ -208,7 +209,7 @@ if ($isProviderScope && inbox_table_exists($conexion, 'booking_request_items') &
         $timelineSelect = ', ' . implode(', ', $timelineCols);
     }
 
-    $listSql = "SELECT
+    $listSql = "SELECT DISTINCT
                     bri.id AS item_id,
                     bri.booking_request_id AS request_id,
                     COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS service_name,
