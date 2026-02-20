@@ -216,22 +216,42 @@
         }
 
         var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(trimmed);
+        var structuredReplyUpper = trimmed.toUpperCase();
         if (isReply && feeGateActive) {
-            var replyUpper = trimmed.toUpperCase();
-            var showUploadCta = (
-                replyUpper === 'REQUEST HISTORY' ||
-                replyUpper === 'REQUEST LABS' ||
-                replyUpper === 'REQUEST IMAGING' ||
-                replyUpper === 'REQUEST PHOTOS'
-            );
-            if (showUploadCta) {
+            if (structuredReplyUpper.indexOf('REQUEST LABS') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
-                    '<button type="button" class="btn btn-xs btn-success client-upload-cta">Upload medical documents</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="labs">UPLOAD LABS</button>' +
+                    '</div>';
+            }
+            if (structuredReplyUpper.indexOf('REQUEST IMAGING') !== -1) {
+                messageHtml += '<div style="margin-top:8px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="imaging">UPLOAD IMAGING</button>' +
+                    '</div>';
+            }
+            if (structuredReplyUpper.indexOf('REQUEST PHOTOS') !== -1) {
+                messageHtml += '<div style="margin-top:8px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="photos">UPLOAD PHOTOS</button>' +
+                    '</div>';
+            }
+            if (structuredReplyUpper.indexOf('REQUEST HISTORY') !== -1) {
+                messageHtml += '<div style="margin-top:8px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="history">UPLOAD HISTORY</button>' +
+                    '</div>';
+            }
+
+            var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+            if (structuredReplyUpper.indexOf('DATES AVAILABLE') !== -1 && isItemThread) {
+                messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT THESE DATES</button>' +
+                    '</div>';
+            }
+            if (structuredReplyUpper.indexOf('DATES NOT AVAILABLE') !== -1 && isItemThread) {
+                messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-propose-new-dates">PROPOSE NEW DATES</button>' +
                     '</div>';
             }
         }
 
-        var structuredReplyUpper = trimmed.toUpperCase();
         if (isReply && structuredReplyUpper.indexOf('PROPOSED_DATES') !== -1) {
             messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
                 '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT DATES</button>' +
@@ -274,6 +294,14 @@
         target.trigger('click');
     });
 
+    $('#client-inbox-messages').on('click', '.client-structured-upload', function () {
+        var feeActions = $('#client-inbox-fee-actions');
+        if (!feeActions.length) {
+            return;
+        }
+        $('html, body').animate({ scrollTop: feeActions.offset().top - 20 }, 200);
+    });
+
     $('#client-inbox-messages').on('click', '.client-date-action', function () {
         var action = ($(this).data('action') || '').toString();
         if (!action) {
@@ -288,6 +316,20 @@
             return;
         }
         sendFinalDecision(action);
+    });
+
+    $('#client-inbox-messages').on('click', '.client-propose-new-dates', function () {
+        if (!currentThread) {
+            return;
+        }
+        var requestId = parseInt(currentThread.booking_id || 0, 10);
+        var itemId = parseInt(currentThread.item_id || 0, 10);
+        if (requestId <= 0 || itemId <= 0) {
+            toastr.warning('Open a service thread to continue');
+            return;
+        }
+        window.location.href = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) +
+            '&thread_type=ITEM&item_id=' + encodeURIComponent(String(itemId)) + '#client-inbox-fee-actions';
     });
     function loadThreads() {
         $.ajax({
@@ -471,7 +513,9 @@
             dataType: 'json',
             data: {
                 action: action,
-                thread_id: currentThread.thread_id
+                thread_id: currentThread.thread_id,
+                thread_type: 'ITEM',
+                item_id: parseInt(currentThread.item_id || 0, 10)
             }
         }).done(function (res) {
             if (!res || res.ok !== true) {
