@@ -801,3 +801,8 @@ Nota de alcance:
 - `fee_locked` en `get_detail` se calcula como: `fee_required=1 AND fee_status!='paid'`.
 - Con `fee_locked=1`, el modal muestra quick replies pre-fee y bloquea texto libre (`textarea` + `Send` disabled).
 - `send_message` valida server-side la misma regla y responde `403` con `code=FEE_REQUIRED` para providers.
+
+### 25) Regla final fee lock inbox cliente (2026-02-20)
+- `client/ajax/inbox.php` (`list_messages`) calcula `fee_locked` con `fee_required=1 AND fee_status!='paid'` desde `booking_requests`, para CARE e ITEM.
+- En pre-fee, el cliente ve `Quick actions`, y texto libre queda bloqueado por UI + backend (`send_message` => `403` `code=FEE_REQUIRED`).
+- Se exponen `fee_required`, `fee_status` y `fee_locked` en el payload para render consistente del inbox.

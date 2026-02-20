@@ -25,6 +25,62 @@ function client_inbox_ok($data = [])
     exit;
 }
 
+function client_inbox_fee_gate_state($conexion, $bookingRequestId)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    if ($bookingRequestId <= 0 || !inbox_table_exists($conexion, 'booking_requests')) {
+        return [
+            'fee_required' => 0,
+            'fee_status' => 'pending',
+            'fee_locked' => false,
+        ];
+    }
+
+    $hasFeeRequired = client_table_has_column($conexion, 'booking_requests', 'fee_required');
+    $hasFeeStatus = client_table_has_column($conexion, 'booking_requests', 'fee_status');
+    $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+
+    $sql = "SELECT " . ($hasFeeRequired ? "fee_required" : "0 AS fee_required") . ", " . ($hasFeeStatus ? "fee_status" : "'pending' AS fee_status") . "\n"
+         . "FROM booking_requests WHERE id = ?";
+    if ($hasBookingSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return [
+            'fee_required' => 0,
+            'fee_status' => 'pending',
+            'fee_locked' => false,
+        ];
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $bookingRequestId);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return [
+            'fee_required' => 0,
+            'fee_status' => 'pending',
+            'fee_locked' => false,
+        ];
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    $feeRequired = (int)($row['fee_required'] ?? 0) === 1 ? 1 : 0;
+    $feeStatus = strtolower(trim((string)($row['fee_status'] ?? 'pending')));
+    if ($feeStatus === '') {
+        $feeStatus = 'pending';
+    }
+
+    return [
+        'fee_required' => $feeRequired,
+        'fee_status' => $feeStatus,
+        'fee_locked' => ($feeRequired === 1 && $feeStatus !== 'paid'),
+    ];
+}
+
 function client_inbox_resolve_context($conexion, $ownerScope, $threadType, $requestId, $itemId, $threadIdInput)
 {
     $threadType = strtoupper(trim((string)$threadType));
@@ -284,7 +340,10 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
     }
 
     $bookingRequestId = (int)($ctx['request_id'] ?? 0);
-    $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
+    $feeGate = client_inbox_fee_gate_state($conexion, $bookingRequestId);
+    $feeLocked = !empty($feeGate['fee_locked']);
+    $feeRequired = (int)($feeGate['fee_required'] ?? 0);
+    $feeStatus = (string)($feeGate['fee_status'] ?? 'pending');
     if ($feeLocked && $action === 'send_message') {
         client_inbox_err('coordination_fee_required', 403, 'FEE_REQUIRED');
     }
@@ -335,6 +394,8 @@ if ($action === 'list_messages') {
         'request_id' => (int)$ctx['request_id'],
         'booking_id' => (int)$ctx['request_id'],
         'item_id' => (int)$ctx['item_id'],
+        'fee_required' => $feeRequired,
+        'fee_status' => $feeStatus,
         'fee_locked' => !empty($feeLocked),
         'fee_message' => !empty($feeLocked) ? 'Unlock after Coordination Fee.' : '',
         'messages' => $messages,

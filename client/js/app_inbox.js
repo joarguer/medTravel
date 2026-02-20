@@ -323,7 +323,11 @@
                 toastr.error((res && res.message) ? res.message : 'Could not load messages');
                 return;
             }
-            setFeeGateState(!!res.fee_locked, res.fee_message || 'Unlock after Coordination Fee.');
+            var feeRequired = parseInt(res.fee_required || 0, 10) === 1;
+            var feeStatus = String(res.fee_status || '').toLowerCase();
+            var computedFeeLocked = (feeRequired && feeStatus !== 'paid');
+            var feeLocked = !!res.fee_locked || computedFeeLocked;
+            setFeeGateState(feeLocked, res.fee_message || 'Unlock after Coordination Fee.');
 
             var title = 'General - Request #' + currentThread.booking_id;
             if (currentThread.thread_type === 'ITEM') {
