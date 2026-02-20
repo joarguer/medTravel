@@ -1,6 +1,40 @@
 <?php
 include('inc/include.php');
 
+if (!function_exists('provider_verification_level_label')) {
+    function provider_verification_level_label($level)
+    {
+        $key = strtolower(trim((string)$level));
+        $map = [
+            'basic' => 'Basic',
+            'standard' => 'Standard',
+            'premium' => 'Premium',
+        ];
+        return $map[$key] ?? ucfirst($key);
+    }
+}
+
+if (!function_exists('provider_verification_public_badge')) {
+    function provider_verification_public_badge($status, $level)
+    {
+        $levelLabel = provider_verification_level_label($level);
+        if ($levelLabel === '') {
+            return ['', ''];
+        }
+        $statusKey = strtolower(trim((string)$status));
+        if ($statusKey === 'verified') {
+            return ['verified', 'Verified ' . $levelLabel];
+        }
+        if ($statusKey === 'in_review') {
+            return ['review', 'In review ' . $levelLabel];
+        }
+        if ($statusKey === 'pending') {
+            return ['level', 'Validation level ' . $levelLabel];
+        }
+        return ['', ''];
+    }
+}
+
 // Obtener configuración del header desde la base de datos
 $busca_header = mysqli_query($conexion,"SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 if(mysqli_num_rows($busca_header) > 0) {
@@ -36,15 +70,31 @@ if ($category_id > 0) {
 }
 
 // Obtener ofertas activas con sus prestadores
+$hasProviderVerification = false;
+$pvTableCheck = mysqli_query($conexion, "SHOW TABLES LIKE 'provider_verification'");
+if ($pvTableCheck && mysqli_num_rows($pvTableCheck) > 0) {
+    $hasProviderVerification = true;
+}
+
+if ($hasProviderVerification) {
+    $verificationSelect = "COALESCE(pv.status, '') AS verification_status, COALESCE(pv.verification_level, '') AS verification_level,";
+    $verificationJoin = "LEFT JOIN provider_verification pv ON pv.provider_id = p.id";
+} else {
+    $verificationSelect = "'' AS verification_status, '' AS verification_level,";
+    $verificationJoin = "";
+}
+
 if ($category_id > 0) {
     // Filtrar por categoría
     $offers_query = "
         SELECT 
             o.id, o.title, o.description, o.price_from, o.currency,
             p.id as provider_id, p.name as provider_name, p.city, p.logo,
+            {$verificationSelect}
             sc.name as service_name
         FROM provider_service_offers o
         INNER JOIN providers p ON o.provider_id = p.id
+        {$verificationJoin}
         INNER JOIN service_catalog sc ON o.service_id = sc.id
         WHERE sc.category_id = ?
         ORDER BY o.id DESC
@@ -57,9 +107,11 @@ if ($category_id > 0) {
         SELECT 
             o.id, o.title, o.description, o.price_from, o.currency,
             p.id as provider_id, p.name as provider_name, p.city, p.logo,
+            {$verificationSelect}
             sc.name as service_name
         FROM provider_service_offers o
         INNER JOIN providers p ON o.provider_id = p.id
+        {$verificationJoin}
         INNER JOIN service_catalog sc ON o.service_id = sc.id
         ORDER BY o.id DESC
     ";
@@ -189,6 +241,31 @@ $offers_result = mysqli_stmt_get_result($stmt);
         .city-tag i {
             font-size: 12px;
         }
+        .provider-verification-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 8px;
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #065f46;
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+        .provider-verification-badge.review {
+            color: #92400e;
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+        .provider-verification-badge.level {
+            color: #1d4ed8;
+            background: #dbeafe;
+            border-color: #60a5fa;
+        }
         .btn-view-offer {
             background: #0f766e;
             border: none;
@@ -293,6 +370,11 @@ $offers_result = mysqli_stmt_get_result($stmt);
             <?php if (mysqli_num_rows($offers_result) > 0): ?>
                 <div class="row g-4">
                     <?php while ($offer = mysqli_fetch_assoc($offers_result)): ?>
+                        <?php
+                        $verificationStatus = trim((string)($offer['verification_status'] ?? ''));
+                        $verificationLevel = trim((string)($offer['verification_level'] ?? ''));
+                        [$badgeKind, $badgeText] = provider_verification_public_badge($verificationStatus, $verificationLevel);
+                        ?>
                         <div class="col-lg-4 col-md-6">
                             <div class="offer-card card h-100">
                                 <div class="position-relative">
@@ -371,6 +453,12 @@ $offers_result = mysqli_stmt_get_result($stmt);
                                                 <div class="city-tag">
                                                     <i class="fas fa-map-marker-alt"></i>
                                                     <?php echo htmlspecialchars($offer['city']); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if ($badgeText !== ''): ?>
+                                                <div class="provider-verification-badge <?php echo htmlspecialchars($badgeKind, ENT_QUOTES, 'UTF-8'); ?>">
+                                                    <i class="fas fa-shield-alt"></i>
+                                                    <?php echo htmlspecialchars($badgeText, ENT_QUOTES, 'UTF-8'); ?>
                                                 </div>
                                             <?php endif; ?>
                                         </div>

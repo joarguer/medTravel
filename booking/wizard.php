@@ -61,16 +61,64 @@ function mt_find_route_index($route, $slug) {
     return 0;
 }
 
+if (!function_exists('provider_verification_level_label')) {
+    function provider_verification_level_label($level) {
+        $key = strtolower(trim((string)$level));
+        $map = [
+            'basic' => 'Basic',
+            'standard' => 'Standard',
+            'premium' => 'Premium',
+        ];
+        return isset($map[$key]) ? $map[$key] : ucfirst($key);
+    }
+}
+
+if (!function_exists('provider_verification_public_badge')) {
+    function provider_verification_public_badge($status, $level) {
+        $levelLabel = provider_verification_level_label($level);
+        if ($levelLabel === '') {
+            return ['', ''];
+        }
+        $statusKey = strtolower(trim((string)$status));
+        if ($statusKey === 'verified') {
+            return ['verified', 'Verified ' . $levelLabel];
+        }
+        if ($statusKey === 'in_review') {
+            return ['review', 'In review ' . $levelLabel];
+        }
+        if ($statusKey === 'pending') {
+            return ['level', 'Validation level ' . $levelLabel];
+        }
+        return ['', ''];
+    }
+}
+
+$hasProviderVerification = false;
+$pvTableCheck = mysqli_query($conexion, "SHOW TABLES LIKE 'provider_verification'");
+if ($pvTableCheck && mysqli_num_rows($pvTableCheck) > 0) {
+    $hasProviderVerification = true;
+}
+
+if ($hasProviderVerification) {
+    $verificationSelect = "COALESCE(pv.status, '') AS verification_status, COALESCE(pv.verification_level, '') AS verification_level,";
+    $verificationJoin = "LEFT JOIN provider_verification pv ON pv.provider_id = p.id";
+} else {
+    $verificationSelect = "'' AS verification_status, '' AS verification_level,";
+    $verificationJoin = "";
+}
+
 // Cargar ofertas activas de proveedores con información completa
 $offers = [];
 $offers_sql = "SELECT 
                 o.id, o.title, o.description, o.price_from, o.currency, o.provider_id,
                 p.name AS provider_name, p.city AS provider_city, p.logo AS provider_logo,
+                {$verificationSelect}
                 sc.name AS service_name, sc.category_id,
                 cat.name AS category_name,
                 cat.sort_order AS category_sort_order
                FROM provider_service_offers o
                INNER JOIN providers p ON o.provider_id = p.id
+               {$verificationJoin}
                INNER JOIN service_catalog sc ON o.service_id = sc.id
                LEFT JOIN service_categories cat ON sc.category_id = cat.id
                WHERE o.is_active = 1
@@ -346,6 +394,31 @@ if ($flow === 'addon' && !empty($addon_route)) {
         .provider-info small {
             color: #64748b;
             font-size: 12px;
+        }
+        .provider-verification-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 6px;
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #065f46;
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+        .provider-verification-badge.review {
+            color: #92400e;
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+        .provider-verification-badge.level {
+            color: #1d4ed8;
+            background: #dbeafe;
+            border-color: #60a5fa;
         }
         .offer-card .card-body {
             padding: 16px;
@@ -695,6 +768,14 @@ if ($flow === 'addon' && !empty($addon_route)) {
                     <?php if (count($current_medical_offers) > 0): ?>
                         <div class="row g-3">
                             <?php foreach ($current_medical_offers as $offer): ?>
+                                <?php
+                                $verificationBadge = provider_verification_public_badge(
+                                    isset($offer['verification_status']) ? $offer['verification_status'] : '',
+                                    isset($offer['verification_level']) ? $offer['verification_level'] : ''
+                                );
+                                $badgeKind = isset($verificationBadge[0]) ? $verificationBadge[0] : '';
+                                $badgeText = isset($verificationBadge[1]) ? $verificationBadge[1] : '';
+                                ?>
                                 <div class="col-md-6 col-lg-4 d-flex">
                                     <div class="card offer-card" onclick="toggleOfferSelection(this, <?php echo $offer['id']; ?>)" data-name="<?php echo htmlspecialchars($offer['title'] ?: $offer['service_name'], ENT_QUOTES); ?>" data-type="<?php echo htmlspecialchars($offer['service_name'], ENT_QUOTES); ?>" data-provider="<?php echo htmlspecialchars($offer['provider_name'], ENT_QUOTES); ?>" data-city="<?php echo htmlspecialchars($offer['provider_city'] ?: 'Colombia', ENT_QUOTES); ?>" data-category="<?php echo htmlspecialchars($current_category_name, ENT_QUOTES); ?>">
                                         <input type="checkbox"
@@ -746,6 +827,12 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                                     <i class="fas fa-map-marker-alt me-1"></i>
                                                     <?php echo htmlspecialchars($offer['provider_city'] ?: 'Colombia'); ?>
                                                 </small>
+                                                <?php if ($badgeText !== ''): ?>
+                                                    <div class="provider-verification-badge <?php echo htmlspecialchars($badgeKind, ENT_QUOTES, 'UTF-8'); ?>">
+                                                        <i class="fas fa-shield-alt"></i>
+                                                        <?php echo htmlspecialchars($badgeText, ENT_QUOTES, 'UTF-8'); ?>
+                                                    </div>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
 

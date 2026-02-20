@@ -210,25 +210,27 @@ function renderChecklist(items) {
             }
             
             var checkedClass = item.is_checked == 1 ? 'checked' : '';
-            var checkedIcon = item.is_checked == 1 ? 'fa-check-square-o' : 'fa-square-o';
-            var requiredLabel = item.is_required == 1 ? '<span class="label label-danger">Obligatorio</span>' : '';
+            var requiredLabel = item.is_required == 1 ? '<small class="label label-sm label-danger checklist-required">Obligatorio</small>' : '';
             
             html += `
                 <div class="checklist-item ${checkedClass}">
                     <div class="row">
-                        <div class="col-md-8">
-                            <label style="font-weight: normal; cursor: pointer;">
+                        <div class="col-md-8 col-sm-8">
+                            <label class="mt-checkbox mt-checkbox-outline checklist-checkbox">
                                 <input type="checkbox" 
+                                       class="checklist-toggle"
+                                       data-item-id="${item.id}"
                                        ${item.is_checked == 1 ? 'checked' : ''}
-                                       onchange="toggleItem(${item.id}, this.checked)">
-                                <i class="fa ${checkedIcon}" style="margin-left: 5px; margin-right: 5px;"></i>
-                                <strong>${item.item_label}</strong> ${requiredLabel}
+                                       onchange="toggleItem(${item.id}, this.checked, this)">
+                                <span></span>
+                                <strong>${item.item_label}</strong>
+                                ${requiredLabel}
                             </label>
-                            <p class="text-muted" style="margin-left: 25px; margin-bottom: 0;">${item.item_description || ''}</p>
-                            ${item.checked_at ? '<small class="text-success">✓ Verificado: ' + formatDate(item.checked_at) + '</small>' : ''}
+                            <p class="font-grey-mint checklist-description">${item.item_description || ''}</p>
+                            ${item.checked_at ? '<small class="font-green-jungle"><i class="fa fa-check"></i> Verificado: ' + formatDate(item.checked_at) + '</small>' : ''}
                         </div>
-                        <div class="col-md-4 text-right">
-                            <button class="btn btn-xs btn-info" onclick="attachEvidence(${item.id})" title="Adjuntar evidencia">
+                        <div class="col-md-4 col-sm-4 text-right">
+                            <button class="btn btn-sm blue btn-outline" onclick="attachEvidence(${item.id})" title="Adjuntar evidencia">
                                 <i class="fa fa-paperclip"></i> Evidencia
                             </button>
                         </div>
@@ -300,7 +302,11 @@ function initializeChecklist() {
 }
 
 // Toggle item del checklist
-function toggleItem(itemId, isChecked) {
+function toggleItem(itemId, isChecked, checkboxEl) {
+    if (checkboxEl) {
+        $(checkboxEl).closest('.checklist-item').toggleClass('checked', !!isChecked);
+    }
+
     $.ajax({
         url: 'ajax/provider_verification.php',
         type: 'POST',
@@ -324,10 +330,18 @@ function toggleItem(itemId, isChecked) {
                     $('#progress_text').text(percent + '%');
                 }
             } else {
+                if (checkboxEl) {
+                    checkboxEl.checked = !isChecked;
+                    $(checkboxEl).closest('.checklist-item').toggleClass('checked', !!checkboxEl.checked);
+                }
                 toastr.error(response.message);
             }
         },
         error: function() {
+            if (checkboxEl) {
+                checkboxEl.checked = !isChecked;
+                $(checkboxEl).closest('.checklist-item').toggleClass('checked', !!checkboxEl.checked);
+            }
             toastr.error('Error de conexión');
         }
     });

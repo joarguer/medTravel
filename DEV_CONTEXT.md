@@ -672,3 +672,39 @@ Nota de alcance:
   - ejecución restringida a sesión admin
   - sin PII en logs de aplicación ni en resumen técnico
   - preview de notificaciones admin de data deletion ahora usa DB y no expone email/teléfono.
+- Prueba E2E en servidor (5 pasos + SQL):
+  1. Crear un caso de prueba con cliente/usuario/bookings/mensajes usando email y/o phone de test.
+     - SQL base:
+       - `SELECT id, email, telefono, whatsapp FROM clientes WHERE email = 'qa+dd@dominio.com' OR telefono = '+15550001111' OR whatsapp = '+15550001111';`
+       - `SELECT id, usuario, email, telefono, celular, role_id FROM usuarios WHERE email = 'qa+dd@dominio.com' OR usuario = 'qa+dd@dominio.com' OR telefono = '+15550001111' OR celular = '+15550001111';`
+  2. Enviar solicitud en `https://medtravel.com.co/data-deletion.php` y capturar `request_id`.
+     - SQL:
+       - `SELECT id, request_id, status, created_at FROM data_deletion_requests WHERE request_id = 'DDR-XXXX' LIMIT 1;`
+  3. Procesar desde `admin/data_deletion_requests.php` con usuario ADMIN.
+     - SQL:
+       - `SELECT id, request_id, status, processed_at, processed_by_user_id, result_summary, last_error FROM data_deletion_requests WHERE request_id = 'DDR-XXXX' LIMIT 1;`
+  4. Verificar anonimización/borrado en tablas objetivo.
+     - SQL:
+       - `SELECT id, name, email, phone, additional_notes FROM booking_requests WHERE email = 'qa+dd@dominio.com' OR phone = '+15550001111';`
+       - `SELECT id, nombre, apellido, email, telefono, whatsapp, status FROM clientes WHERE email = 'qa+dd@dominio.com' OR telefono = '+15550001111' OR whatsapp = '+15550001111';`
+       - `SELECT COUNT(*) AS inbox_messages_remaining FROM inbox_messages WHERE sender_user_id IN (SELECT id FROM usuarios WHERE email = 'qa+dd@dominio.com');`
+  5. Reintentar procesamiento del mismo request y validar idempotencia.
+     - Esperado: respuesta `ok` con `message=already_completed` o `already_processing`, sin cambiar a `failed`.
+     - SQL:
+       - `SELECT status, result_summary, last_error FROM data_deletion_requests WHERE request_id = 'DDR-XXXX' LIMIT 1;`
+
+### 18) Provider verification badges in public cards (2026-02-20)
+- Se expone el nivel/estado de verificación del provider en frontend público, sin degradar UX cuando no hay datos:
+  - `offers.php` (cards de catálogo)
+  - `offer_detail.php` (ficha de oferta)
+  - `booking/wizard.php` (cards de ofertas médicas del paso wizard)
+- Regla de render:
+  - `verified` => `Verified <Level>`
+  - `in_review` => `In review <Level>`
+  - `pending` => `Validation level <Level>`
+  - sin `verification_level`/status soportado => no se muestra badge.
+- Compatibilidad:
+  - si la tabla `provider_verification` no existe en el entorno, las consultas hacen fallback seguro (`verification_status=''`, `verification_level=''`) y no rompen la página.
+- Ajustes admin relacionados:
+  - `admin/provider_verification.php`: orden de scripts corregido para evitar errores `jQuery is not defined` / `DataTable is not a function`.
+  - `admin/js/provider_verification.js`: checklist migrado a `mt-checkbox` y removido doble indicador visual de check.

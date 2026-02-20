@@ -17,15 +17,30 @@ $id_usuario = $_SESSION['id_usuario'];
         <?php echo $theme_layout_style;?>
         <style>
             .checklist-item {
-                padding: 10px;
+                padding: 12px 14px;
                 margin-bottom: 10px;
                 border: 1px solid #ddd;
                 border-radius: 4px;
-                background: #f9f9f9;
+                background: #fbfcfd;
             }
             .checklist-item.checked {
-                background: #e8f5e9;
-                border-color: #4caf50;
+                background: #edf7f0;
+                border-color: #69b97f;
+            }
+            .checklist-checkbox {
+                margin-bottom: 4px;
+                font-weight: normal;
+            }
+            .checklist-checkbox > strong {
+                margin-right: 8px;
+            }
+            .checklist-required {
+                margin-left: 6px;
+                vertical-align: middle;
+                position: static;
+            }
+            .checklist-description {
+                margin: 2px 0 0 28px;
             }
             .verification-badge {
                 font-size: 14px;
@@ -266,20 +281,14 @@ $id_usuario = $_SESSION['id_usuario'];
         </div>
         <!-- END MODAL -->
         
-        <!-- BEGIN CORE PLUGINS -->
-        <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-        <!-- END CORE PLUGINS -->
+        <!-- BEGIN THEME GLOBAL SCRIPTS -->
+        <?php echo $theme_layout_script;?>
+        <!-- END THEME GLOBAL SCRIPTS -->
         <!-- BEGIN PAGE LEVEL PLUGINS -->
         <script src="../../assets/global/scripts/datatable.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/datatables.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>
         <!-- END PAGE LEVEL PLUGINS -->
-        <!-- BEGIN THEME GLOBAL SCRIPTS -->
-        <?php echo $theme_layout_script;?>
-        <!-- END THEME GLOBAL SCRIPTS -->
         <script src="js/provider_verification.js" type="text/javascript"></script>
     </body>
 </html>

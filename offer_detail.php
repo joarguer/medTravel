@@ -1,6 +1,40 @@
 <?php
 include('inc/include.php');
 
+if (!function_exists('provider_verification_level_label')) {
+    function provider_verification_level_label($level)
+    {
+        $key = strtolower(trim((string)$level));
+        $map = [
+            'basic' => 'Basic',
+            'standard' => 'Standard',
+            'premium' => 'Premium',
+        ];
+        return $map[$key] ?? ucfirst($key);
+    }
+}
+
+if (!function_exists('provider_verification_public_badge')) {
+    function provider_verification_public_badge($status, $level)
+    {
+        $levelLabel = provider_verification_level_label($level);
+        if ($levelLabel === '') {
+            return ['', ''];
+        }
+        $statusKey = strtolower(trim((string)$status));
+        if ($statusKey === 'verified') {
+            return ['verified', 'Verified ' . $levelLabel];
+        }
+        if ($statusKey === 'in_review') {
+            return ['review', 'In review ' . $levelLabel];
+        }
+        if ($statusKey === 'pending') {
+            return ['level', 'Validation level ' . $levelLabel];
+        }
+        return ['', ''];
+    }
+}
+
 // Obtener configuración del header desde la base de datos
 $busca_header = mysqli_query($conexion,"SELECT * FROM offer_detail_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 if(mysqli_num_rows($busca_header) > 0) {
@@ -24,13 +58,29 @@ if ($offer_id == 0) {
 }
 
 // Consulta simplificada compatible con producción
+$hasProviderVerification = false;
+$pvTableCheck = mysqli_query($conexion, "SHOW TABLES LIKE 'provider_verification'");
+if ($pvTableCheck && mysqli_num_rows($pvTableCheck) > 0) {
+    $hasProviderVerification = true;
+}
+
+if ($hasProviderVerification) {
+    $verificationSelect = "COALESCE(pv.status, '') AS verification_status, COALESCE(pv.verification_level, '') AS verification_level,";
+    $verificationJoin = "LEFT JOIN provider_verification pv ON pv.provider_id = p.id";
+} else {
+    $verificationSelect = "'' AS verification_status, '' AS verification_level,";
+    $verificationJoin = "";
+}
+
 $query = "
     SELECT 
         o.id, o.title, o.description, o.price_from, o.currency,
+        {$verificationSelect}
         p.id as provider_id, p.name as provider_name, 
         p.city, p.phone, p.email, p.logo
     FROM provider_service_offers o
     INNER JOIN providers p ON o.provider_id = p.id
+    {$verificationJoin}
     WHERE o.id = ?
     LIMIT 1
 ";
@@ -59,6 +109,9 @@ if (mysqli_num_rows($result) == 0) {
 }
 
 $offer = mysqli_fetch_assoc($result);
+$verificationStatus = trim((string)($offer['verification_status'] ?? ''));
+$verificationLevel = trim((string)($offer['verification_level'] ?? ''));
+[$verificationBadgeKind, $verificationBadgeText] = provider_verification_public_badge($verificationStatus, $verificationLevel);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -168,6 +221,31 @@ $offer = mysqli_fetch_assoc($result);
         }
         .provider-card h3 i {
             color: #0f766e;
+        }
+        .provider-validation-chip {
+            margin-top: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 999px;
+            border: 1px solid #10b981;
+            background: #d1fae5;
+            color: #065f46;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .provider-validation-chip.review {
+            color: #92400e;
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+        .provider-validation-chip.level {
+            color: #1d4ed8;
+            background: #dbeafe;
+            border-color: #60a5fa;
         }
         .contact-item {
             display: flex;
@@ -444,6 +522,12 @@ $offer = mysqli_fetch_assoc($result);
                         <i class="fas fa-hospital"></i>
                         <?php echo htmlspecialchars($offer['provider_name']); ?>
                     </h3>
+                    <?php if ($verificationBadgeText !== ''): ?>
+                        <div class="provider-validation-chip <?php echo htmlspecialchars($verificationBadgeKind, ENT_QUOTES, 'UTF-8'); ?>">
+                            <i class="fas fa-shield-alt"></i>
+                            <?php echo htmlspecialchars($verificationBadgeText, ENT_QUOTES, 'UTF-8'); ?>
+                        </div>
+                    <?php endif; ?>
                     
                     <?php if (!empty($offer['city'])): ?>
                         <div class="contact-item">
