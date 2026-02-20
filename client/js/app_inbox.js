@@ -217,7 +217,7 @@
 
         var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(trimmed);
         var structuredReplyUpper = trimmed.toUpperCase();
-        if (isReply && feeGateActive) {
+        if (isReply) {
             if (structuredReplyUpper.indexOf('REQUEST LABS') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
                     '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="labs">UPLOAD LABS</button>' +
