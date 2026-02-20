@@ -153,6 +153,10 @@
             if (!activeDetailItemId) {
                 return;
             }
+            if (activeDetailFeeLocked) {
+                toastr.warning('Messaging is locked… Use quick replies.');
+                return;
+            }
             var text = ($('#provider-message-text').val() || '').trim();
             if (!text) {
                 toastr.warning('Escribe un mensaje antes de enviar');
@@ -517,6 +521,10 @@
             },
             success: function (response) {
                 if (!response || !response.ok) {
+                    if (response && response.code === 'FEE_REQUIRED') {
+                        toastr.warning('Messaging is locked… Use quick replies.');
+                        return;
+                    }
                     toastr.error((response && response.message) ? response.message : 'No se pudo enviar mensaje');
                     return;
                 }
@@ -524,7 +532,11 @@
                 toastr.success('Mensaje enviado');
                 loadMessages(itemId);
             },
-            error: function () {
+            error: function (xhr) {
+                if (xhr && xhr.status === 403 && xhr.responseJSON && xhr.responseJSON.code === 'FEE_REQUIRED') {
+                    toastr.warning('Messaging is locked… Use quick replies.');
+                    return;
+                }
                 toastr.error('Error de conexión al enviar mensaje');
             }
         });

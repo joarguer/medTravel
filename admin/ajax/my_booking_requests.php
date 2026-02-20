@@ -1384,9 +1384,40 @@ if ($action === 'send_message') {
         }
     }
 
-    $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
+    $feeLocked = false;
+    if ($bookingRequestId > 0) {
+        if ($hasFeeRequired && $hasBookingFeeStatus) {
+            $feeSql = "SELECT fee_required, fee_status FROM booking_requests WHERE id = ?";
+            if ($hasRequestsSoftDelete) {
+                $feeSql .= " AND is_deleted = 0";
+            }
+            $feeSql .= " LIMIT 1";
+            $stmtFee = mysqli_prepare($conexion, $feeSql);
+            if (!$stmtFee) {
+                json_err('db_prepare_error', 500);
+            }
+            mysqli_stmt_bind_param($stmtFee, 'i', $bookingRequestId);
+            if (!mysqli_stmt_execute($stmtFee)) {
+                $err = mysqli_stmt_error($stmtFee);
+                mysqli_stmt_close($stmtFee);
+                json_err('db_error: ' . $err, 500);
+            }
+            $feeRes = mysqli_stmt_get_result($stmtFee);
+            $feeRow = $feeRes ? mysqli_fetch_assoc($feeRes) : null;
+            mysqli_stmt_close($stmtFee);
+            if ($feeRow) {
+                $feeRequiredNow = (int)($feeRow['fee_required'] ?? 0) === 1;
+                $feeStatusNow = strtolower(trim((string)($feeRow['fee_status'] ?? 'pending')));
+                $feeLocked = ($feeRequiredNow && $feeStatusNow !== 'paid');
+            }
+        } else {
+            $feeLocked = is_booking_fee_required($conexion, $bookingRequestId);
+        }
+    }
     if ($feeLocked && !$isAdminSession) {
-        json_err('coordination_fee_required', 403);
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'message' => 'coordination_fee_required', 'code' => 'FEE_REQUIRED']);
+        exit;
     }
 
     $stamp = date('Y-m-d H:i:s');

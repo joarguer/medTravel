@@ -796,3 +796,8 @@ Nota de alcance:
 - `FINAL_APPROVED` se oculta en UI cuando el item ya esta `provider_confirmed`.
 - Guard backend explicito: `FINAL_APPROVED` sobre item ya `provider_confirmed` responde `409` con `code=ALREADY_CONFIRMED` (sin cambios de estado).
 - Acciones legacy `CONFIRMAR/RECHAZAR/PROPONER` se movieron del listado al modal de detalle para evitar transiciones fuera de contexto.
+
+### 24) Regla final fee lock modal provider (2026-02-20)
+- `fee_locked` en `get_detail` se calcula como: `fee_required=1 AND fee_status!='paid'`.
+- Con `fee_locked=1`, el modal muestra quick replies pre-fee y bloquea texto libre (`textarea` + `Send` disabled).
+- `send_message` valida server-side la misma regla y responde `403` con `code=FEE_REQUIRED` para providers.
