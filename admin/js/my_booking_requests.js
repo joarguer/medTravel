@@ -257,8 +257,12 @@
                         '<div class="alert alert-warning" style="margin-bottom:10px;">' +
                         'Messaging is locked until the coordination fee is paid. Use quick replies.</div>' +
                         '<div class="btn-group btn-group-sm" id="provider-quick-replies" role="group" style="margin-bottom:12px;">' +
-                        '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="DATES_OK">Dates available</button>' +
+                        '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="DATES_AVAILABLE">Dates available</button>' +
                         '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="DATES_NOT_AVAILABLE">Dates not available</button>' +
+                        '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="REQUEST_MEDICAL_HISTORY">REQUEST HISTORY</button>' +
+                        '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="REQUEST_LABS">REQUEST LABS</button>' +
+                        '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="REQUEST_IMAGING">REQUEST IMAGING</button>' +
+                        '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="REQUEST_PHOTOS">REQUEST PHOTOS</button>' +
                         '</div>';
                 }
 

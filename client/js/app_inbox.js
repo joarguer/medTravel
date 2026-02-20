@@ -177,19 +177,52 @@
         var text = String(body || '');
         var trimmed = text.trim();
         var label = '';
+        var isReply = false;
         if (trimmed.indexOf('[ACTION]') === 0) {
             label = 'Action';
             trimmed = trimmed.replace(/^\[ACTION\]\s*/i, '');
         } else if (trimmed.indexOf('[REPLY]') === 0) {
             label = 'Reply';
             trimmed = trimmed.replace(/^\[REPLY\]\s*/i, '');
+            isReply = true;
         }
-        if (label) {
-            return '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(trimmed);
+
+        if (!label) {
+            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
-        return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+
+        var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(trimmed);
+        if (isReply && feeGateActive) {
+            var replyUpper = trimmed.toUpperCase();
+            var showUploadCta = (
+                replyUpper === 'REQUEST HISTORY' ||
+                replyUpper === 'REQUEST LABS' ||
+                replyUpper === 'REQUEST IMAGING' ||
+                replyUpper === 'REQUEST PHOTOS'
+            );
+            if (showUploadCta) {
+                messageHtml += '<div style="margin-top:8px;">' +
+                    '<button type="button" class="btn btn-xs btn-success client-upload-cta">Upload medical documents</button>' +
+                    '</div>';
+            }
+        }
+
+        return messageHtml;
     }
 
+    $('#client-inbox-messages').on('click', '.client-upload-cta', function () {
+        var target = $('#client-doc-file');
+        if (!target.length) {
+            return;
+        }
+
+        var feeActions = $('#client-inbox-fee-actions');
+        if (feeActions.length) {
+            $('html, body').animate({ scrollTop: feeActions.offset().top - 20 }, 200);
+        }
+
+        target.trigger('click');
+    });
     function loadThreads() {
         $.ajax({
             url: '/client/ajax/inbox.php',

@@ -73,9 +73,10 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                     <div class="btn-group btn-group-sm" role="group">
                                         <button type="button" class="btn btn-default admin-quick-reply" data-reply="DATES_AVAILABLE">Dates available</button>
                                         <button type="button" class="btn btn-default admin-quick-reply" data-reply="DATES_NOT_AVAILABLE">Dates not available</button>
-                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_MEDICAL_HISTORY">Request medical history</button>
-                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_LABS">Request labs</button>
-                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_PHOTOS">Request photos</button>
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_MEDICAL_HISTORY">REQUEST HISTORY</button>
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_LABS">REQUEST LABS</button>
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_IMAGING">REQUEST IMAGING</button>
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_PHOTOS">REQUEST PHOTOS</button>
                                     </div>
                                 </div>
                                 <form id="admin-inbox-send-form" style="margin-top:12px;">

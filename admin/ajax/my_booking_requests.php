@@ -1450,7 +1450,12 @@ if ($action === 'send_quick_reply') {
     $replyKey = strtoupper(trim((string)($_POST['reply_key'] ?? '')));
     $quickReplies = [
         'DATES_OK' => 'Dates available',
-        'DATES_NOT_AVAILABLE' => 'Dates not available'
+        'DATES_AVAILABLE' => 'Dates available',
+        'DATES_NOT_AVAILABLE' => 'Dates not available',
+        'REQUEST_MEDICAL_HISTORY' => 'REQUEST HISTORY',
+        'REQUEST_LABS' => 'REQUEST LABS',
+        'REQUEST_IMAGING' => 'REQUEST IMAGING',
+        'REQUEST_PHOTOS' => 'REQUEST PHOTOS'
     ];
     if ($replyKey === '' || !isset($quickReplies[$replyKey])) {
         json_err('invalid_reply_key', 422);

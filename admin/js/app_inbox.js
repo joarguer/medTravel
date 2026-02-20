@@ -5,9 +5,10 @@
     var quickReplies = {
         DATES_AVAILABLE: 'Dates available',
         DATES_NOT_AVAILABLE: 'Dates not available',
-        REQUEST_MEDICAL_HISTORY: 'Please share your medical history.',
-        REQUEST_LABS: 'Please share recent lab results.',
-        REQUEST_PHOTOS: 'Please share the requested photos.'
+        REQUEST_MEDICAL_HISTORY: 'REQUEST HISTORY',
+        REQUEST_LABS: 'REQUEST LABS',
+        REQUEST_IMAGING: 'REQUEST IMAGING',
+        REQUEST_PHOTOS: 'REQUEST PHOTOS'
     };
 
     function esc(value) {

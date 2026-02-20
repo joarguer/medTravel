@@ -743,6 +743,7 @@ Nota de alcance:
   - `offer_detail.php`: si sesión cliente + `booking_id/request_id` en URL con fee pendiente, oculta phone/email y muestra `Unlock after Coordination Fee`.
   - `admin/app_inbox.php` + `admin/js/app_inbox.js`: si `fee_locked=1`, deshabilita texto libre y muestra quick replies.
   - `admin/ajax/inbox.php`: bloquea `send_message` para providers cuando fee pendiente; permite `send_quick_reply`.
+- Pre-fee structured communication: providers deben usar quick replies (fechas + solicitudes médicas) y el cliente ve un CTA de subida de documentos.
 - Prueba rápida:
   1. Ejecutar migración SQL.
   2. Confirmar un item desde provider (`provider_confirmed`) y validar:
