@@ -480,10 +480,74 @@ if ($action === 'send_quick_reply') {
         'REQUEST_MEDICAL_HISTORY' => 'REQUEST HISTORY',
         'REQUEST_LABS' => 'REQUEST LABS',
         'REQUEST_IMAGING' => 'REQUEST IMAGING',
-        'REQUEST_PHOTOS' => 'REQUEST PHOTOS'
+        'REQUEST_PHOTOS' => 'REQUEST PHOTOS',
+        'FINAL_APPROVED' => 'FINAL_APPROVED',
+        'FINAL_NOT_ELIGIBLE' => 'FINAL_NOT_ELIGIBLE'
     ];
     if ($key === '' || !isset($quickReplies[$key])) {
         admin_inbox_err('invalid_reply_key', 422);
+    }
+
+    $finalStatus = null;
+    if ($key === 'FINAL_APPROVED') {
+        $finalStatus = 'provider_confirmed';
+    } elseif ($key === 'FINAL_NOT_ELIGIBLE') {
+        $finalStatus = 'provider_rejected';
+    }
+
+    if ($finalStatus !== null) {
+        if (!inbox_table_exists($conexion, 'booking_request_items')) {
+            admin_inbox_err('booking_items_not_available', 409);
+        }
+        if (!inbox_table_has_column($conexion, 'booking_request_items', 'item_status')) {
+            admin_inbox_err('item_status_not_available', 409);
+        }
+
+        $hasItemsSoftDelete = inbox_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+        $hasItemUpdatedAt = inbox_table_has_column($conexion, 'booking_request_items', 'updated_at');
+        $hasProviderResponseAt = inbox_table_has_column($conexion, 'booking_request_items', 'provider_response_at');
+        $hasProviderResponseBy = inbox_table_has_column($conexion, 'booking_request_items', 'provider_response_by');
+
+        $setParts = ['bri.item_status = ?'];
+        $types = 's';
+        $params = [$finalStatus];
+        if ($hasItemUpdatedAt) {
+            $setParts[] = 'bri.updated_at = NOW()';
+        }
+        if ($hasProviderResponseAt) {
+            $setParts[] = 'bri.provider_response_at = NOW()';
+        }
+        if ($hasProviderResponseBy) {
+            $setParts[] = 'bri.provider_response_by = ?';
+            $types .= 'i';
+            $params[] = (int)$scope['user_id'];
+        }
+
+        $sql = "UPDATE booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                SET " . implode(', ', $setParts) . "
+                WHERE bri.id = ?";
+        $types .= 'i';
+        $params[] = (int)$ctx['item_id'];
+        if ($hasItemsSoftDelete) {
+            $sql .= ' AND bri.is_deleted = 0';
+        }
+        $sql .= (string)$scope['scope_where'];
+        $sql .= ' LIMIT 1';
+
+        $finalTypes = $types . (string)$scope['scope_types'];
+        $finalParams = array_merge($params, (array)$scope['scope_params']);
+
+        $stmtUpdate = mysqli_prepare($conexion, $sql);
+        if (!$stmtUpdate) {
+            admin_inbox_err('prepare_failed', 500);
+        }
+        if (!inbox_bind_stmt_params($stmtUpdate, $finalTypes, $finalParams) || !mysqli_stmt_execute($stmtUpdate)) {
+            $err = mysqli_stmt_error($stmtUpdate);
+            mysqli_stmt_close($stmtUpdate);
+            admin_inbox_err('update_failed: ' . $err, 500);
+        }
+        mysqli_stmt_close($stmtUpdate);
     }
 
     $message = '[REPLY] ' . $quickReplies[$key];

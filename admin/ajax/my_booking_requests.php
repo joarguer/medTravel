@@ -1582,6 +1582,156 @@ if ($action === 'propose_dates') {
     ]);
 }
 
+if ($action === 'send_final_decision') {
+    if ($isAdminSession) {
+        json_err('forbidden', 403);
+    }
+
+    $itemId = intval($_POST['item_id'] ?? 0);
+    if ($itemId <= 0) {
+        json_err('invalid_id', 422);
+    }
+
+    $decisionKey = strtoupper(trim((string)($_POST['decision_key'] ?? '')));
+    $reasonKey = strtoupper(trim((string)($_POST['reason_key'] ?? '')));
+    $decisionMap = [
+        'FINAL_APPROVED' => 'provider_confirmed',
+        'FINAL_NOT_ELIGIBLE' => 'provider_rejected'
+    ];
+    if ($decisionKey === '' || !isset($decisionMap[$decisionKey])) {
+        json_err('invalid_decision_key', 422);
+    }
+
+    $reasonMap = [
+        'NOT_A_FIT' => 'Not a fit',
+        'INSUFFICIENT_INFO' => 'Insufficient info',
+        'OUT_OF_SCOPE' => 'Out of scope',
+        'NOT_AVAILABLE' => 'Not available'
+    ];
+    $reasonLabel = '';
+    if ($reasonKey !== '' && isset($reasonMap[$reasonKey])) {
+        $reasonLabel = $reasonMap[$reasonKey];
+    }
+
+    $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
+    if (!$itemRow) {
+        json_err('not_found', 404);
+    }
+
+    $currentStatus = normalize_legacy_item_status($itemRow['current_status'] ?? '');
+    if ($currentStatus === 'cancelled' || $currentStatus === 'client_accepted' || $currentStatus === 'client_rejected') {
+        json_err('transition_not_allowed_from_' . $currentStatus, 409);
+    }
+
+    $targetStatus = $decisionMap[$decisionKey];
+    $shouldUpdate = ($currentStatus !== $targetStatus);
+
+    if ($shouldUpdate) {
+        $providerResponseBy = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : (isset($_SESSION['id']) ? intval($_SESSION['id']) : 0);
+        if ($providerResponseBy <= 0) {
+            $providerResponseBy = null;
+        }
+
+        $setParts = ['bri.item_status = ?'];
+        $types = 's';
+        $params = [$targetStatus];
+
+        if ($hasItemUpdatedAt) {
+            $setParts[] = 'bri.updated_at = NOW()';
+        }
+        if ($hasProviderResponseAt) {
+            $setParts[] = 'bri.provider_response_at = NOW()';
+        }
+        if ($hasProviderResponseBy) {
+            $setParts[] = 'bri.provider_response_by = ?';
+            $types .= 'i';
+            $params[] = $providerResponseBy;
+        }
+
+        $sql = "UPDATE booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                SET " . implode(', ', $setParts) . "
+                WHERE bri.id = ?";
+        $types .= 'i';
+        $params[] = $itemId;
+        if ($hasItemsSoftDelete) {
+            $sql .= ' AND bri.is_deleted = 0';
+        }
+        if ($hasRequestsSoftDelete) {
+            $sql .= ' AND br.is_deleted = 0';
+        }
+        $sql .= $scopeWhere;
+        $sql .= ' LIMIT 1';
+
+        $finalTypes = $types . $scopeTypes;
+        $finalParams = array_merge($params, $scopeParams);
+
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            json_err('db_prepare_error', 500);
+        }
+        bind_stmt_params($stmt, $finalTypes, $finalParams);
+        if (!mysqli_stmt_execute($stmt)) {
+            $err = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            json_err('db_error: ' . $err, 500);
+        }
+        mysqli_stmt_close($stmt);
+    }
+
+    $bookingRequestId = (int)($itemRow['booking_request_id'] ?? 0);
+    if ($bookingRequestId > 0) {
+        sync_booking_fee_gate_state($conexion, $bookingRequestId, $hasRequestsSoftDelete);
+        rollup_booking_status($conexion, $bookingRequestId, $hasRequestsSoftDelete);
+    }
+
+    if (!inbox_table_exists($conexion, 'inbox_messages')) {
+        json_err('inbox_messages_not_available', 409);
+    }
+
+    $message = '[REPLY] ' . $decisionKey;
+    if ($decisionKey === 'FINAL_NOT_ELIGIBLE' && $reasonLabel !== '') {
+        $message .= ': ' . $reasonLabel;
+    }
+
+    $threadId = inbox_thread_id('ITEM', $bookingRequestId, $itemId);
+    $senderRole = 'PROVIDER';
+    $senderUserId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+
+    $stmtMsg = mysqli_prepare(
+        $conexion,
+        "INSERT INTO inbox_messages
+            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+         VALUES (?, 'ITEM', ?, ?, ?, ?, ?)"
+    );
+    if (!$stmtMsg) {
+        json_err('db_prepare_error', 500);
+    }
+    mysqli_stmt_bind_param($stmtMsg, 'siisis', $threadId, $bookingRequestId, $itemId, $senderRole, $senderUserId, $message);
+    if (!mysqli_stmt_execute($stmtMsg)) {
+        $err = mysqli_stmt_error($stmtMsg);
+        mysqli_stmt_close($stmtMsg);
+        json_err('db_error: ' . $err, 500);
+    }
+    mysqli_stmt_close($stmtMsg);
+
+    json_ok([
+        'booking_request_id' => $bookingRequestId,
+        'thread_type' => 'ITEM',
+        'item_id' => $itemId,
+        'item_status' => $targetStatus,
+        'message' => [
+            'sender' => 'provider',
+            'type' => 'quick_reply',
+            'time' => date('Y-m-d H:i:s'),
+            'actor' => '',
+            'body' => $message,
+            'thread_type' => 'ITEM',
+            'thread_item_id' => $itemId,
+        ],
+    ]);
+}
+
 if ($action === 'send_quick_reply') {
     $itemId = intval($_POST['item_id'] ?? 0);
     if ($itemId <= 0) {

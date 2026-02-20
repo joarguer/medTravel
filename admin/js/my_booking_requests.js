@@ -211,6 +211,18 @@
             sendProviderQuickReply(activeDetailItemId, replyKey);
         });
 
+        $('#my_booking_detail_modal').on('click', '.btn-provider-final-decision', function () {
+            if (!activeDetailItemId) {
+                return;
+            }
+            var decisionKey = ($(this).data('decision') || '').toString();
+            if (!decisionKey) {
+                return;
+            }
+            var reasonKey = ($('#provider-final-reason').val() || '').toString();
+            sendProviderFinalDecision(activeDetailItemId, decisionKey, reasonKey);
+        });
+
         $('#my_booking_detail_modal').on('click', '#btn-provider-propose-dates', function () {
             if (!activeDetailItemId) {
                 return;
@@ -286,6 +298,18 @@
                         '<input type="date" class="form-control input-sm" id="provider-propose-date-from">' +
                         '<input type="date" class="form-control input-sm" id="provider-propose-date-to">' +
                         '<button type="button" class="btn btn-default btn-xs" id="btn-provider-propose-dates">PROPOSE DATES</button>' +
+                        '</div>' +
+                        '<div class="form-inline" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;">' +
+                        '<label style="margin:0;">Final decision</label>' +
+                        '<button type="button" class="btn btn-default btn-xs btn-provider-final-decision" data-decision="FINAL_APPROVED">FINAL APPROVED</button>' +
+                        '<button type="button" class="btn btn-default btn-xs btn-provider-final-decision" data-decision="FINAL_NOT_ELIGIBLE">NOT ELIGIBLE</button>' +
+                        '<select class="form-control input-sm" id="provider-final-reason">' +
+                        '<option value="">Reason (optional)</option>' +
+                        '<option value="NOT_A_FIT">Not a fit</option>' +
+                        '<option value="INSUFFICIENT_INFO">Insufficient info</option>' +
+                        '<option value="OUT_OF_SCOPE">Out of scope</option>' +
+                        '<option value="NOT_AVAILABLE">Not available</option>' +
+                        '</select>' +
                         '</div>';
                 }
 
@@ -504,6 +528,32 @@
             },
             error: function () {
                 toastr.error('Error de conexión al enviar respuesta');
+            }
+        });
+    }
+
+    function sendProviderFinalDecision(itemId, decisionKey, reasonKey) {
+        $.ajax({
+            url: 'ajax/my_booking_requests.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'send_final_decision',
+                item_id: itemId,
+                decision_key: decisionKey,
+                reason_key: reasonKey
+            },
+            success: function (response) {
+                if (!response || !response.ok) {
+                    toastr.error((response && response.message) ? response.message : 'No se pudo enviar la decision');
+                    return;
+                }
+                toastr.success('Decision enviada');
+                loadMessages(itemId);
+                loadRows();
+            },
+            error: function () {
+                toastr.error('Error de conexión al enviar la decision');
             }
         });
     }

@@ -77,6 +77,8 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_LABS">REQUEST LABS</button>
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_IMAGING">REQUEST IMAGING</button>
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_PHOTOS">REQUEST PHOTOS</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="FINAL_APPROVED">FINAL APPROVED</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="FINAL_NOT_ELIGIBLE">NOT ELIGIBLE</button>
                                     </div>
                                 </div>
                                 <form id="admin-inbox-send-form" style="margin-top:12px;">

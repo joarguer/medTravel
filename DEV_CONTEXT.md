@@ -766,10 +766,27 @@ Nota de alcance:
 
 ### 21) Pre-fee structured date proposal (2026-02-20)
 - Providers pueden proponer un rango de fechas pre-fee usando `provider_proposed_date_from`/`provider_proposed_date_to`.
-- El cliente acepta o rechaza desde Inbox y se actualiza `booking_request_items.item_status`.
+- El cliente acepta o rechaza desde Inbox con estado intermedio (no cierra el item).
 - Mensajeria estructurada:
   - Provider: `[REPLY] PROPOSED_DATES YYYY-MM-DD to YYYY-MM-DD`
   - Client: `[ACTION] Client accepted proposed dates` / `[ACTION] Client rejected proposed dates`
+- Estados:
+  - Accept dates => `awaiting_client`
+  - Reject dates => `provider_proposed_change`
 - Verificacion SQL rapida:
   - `SELECT id, item_status, provider_proposed_date_from, provider_proposed_date_to FROM booking_request_items WHERE id = <item_id>;`
+  - `SELECT id, body, created_at FROM inbox_messages WHERE item_id = <item_id> ORDER BY id DESC LIMIT 5;`
+
+### 22) Final agreement pre-fee (2026-02-20)
+- Cierre estructurado sin texto libre. El fee sigue en `pending` hasta pago real.
+- Estados por accion:
+  - Provider `FINAL_APPROVED` => `provider_confirmed`
+  - Provider `FINAL_NOT_ELIGIBLE` => `provider_rejected`
+  - Client `FINAL_ACCEPT_AND_PAY` => `client_accepted`
+  - Client `FINAL_DECLINE` => `client_rejected`
+- Mensajeria estructurada:
+  - Provider: `[REPLY] FINAL_APPROVED` / `[REPLY] FINAL_NOT_ELIGIBLE: <reason>`
+  - Client: `[ACTION] FINAL_ACCEPT_AND_PAY` / `[ACTION] FINAL_DECLINE`
+- Verificacion SQL rapida:
+  - `SELECT id, item_status FROM booking_request_items WHERE id = <item_id>;`
   - `SELECT id, body, created_at FROM inbox_messages WHERE item_id = <item_id> ORDER BY id DESC LIMIT 5;`

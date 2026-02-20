@@ -214,6 +214,24 @@
                 '</div>';
         }
 
+        if (isReply && trimmed.toUpperCase().indexOf('FINAL_APPROVED') === 0 && feeGateActive) {
+            messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
+                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_accept_and_pay">ACCEPT & PAY</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_decline">DECLINE</button>' +
+                '</div>';
+        }
+
+        if (label === 'Action' && trimmed.toUpperCase().indexOf('FINAL_ACCEPT_AND_PAY') === 0) {
+            var bookingId = currentThread && currentThread.booking_id ? currentThread.booking_id : 0;
+            var payUrl = '/booking.php';
+            if (bookingId) {
+                payUrl += '?request_id=' + encodeURIComponent(String(bookingId));
+            }
+            messageHtml += '<div style="margin-top:8px;">' +
+                '<a class="btn btn-xs btn-success" href="' + esc(payUrl) + '">Proceed to pay Coordination Fee</a>' +
+                '</div>';
+        }
+
         return messageHtml;
     }
 
@@ -237,6 +255,14 @@
             return;
         }
         sendDateDecision(action);
+    });
+
+    $('#client-inbox-messages').on('click', '.client-final-action', function () {
+        var action = ($(this).data('action') || '').toString();
+        if (!action) {
+            return;
+        }
+        sendFinalDecision(action);
     });
     function loadThreads() {
         $.ajax({
@@ -420,6 +446,38 @@
             loadThreads();
         }).fail(function () {
             toastr.error('Could not update dates');
+        });
+    }
+
+    function sendFinalDecision(actionKey) {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread before responding');
+            return;
+        }
+        var action = (actionKey || '').toString();
+        if (action !== 'final_accept_and_pay' && action !== 'final_decline') {
+            toastr.error('Invalid action');
+            return;
+        }
+
+        $.ajax({
+            url: '/client/ajax/inbox.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: action,
+                thread_id: currentThread.thread_id
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'Could not update final decision');
+                return;
+            }
+            toastr.success('Response sent');
+            loadMessages();
+            loadThreads();
+        }).fail(function () {
+            toastr.error('Could not update final decision');
         });
     }
 
