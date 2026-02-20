@@ -207,14 +207,15 @@
             }
         }
 
-        if (isReply && trimmed.toUpperCase().indexOf('PROPOSED_DATES') === 0) {
+        var structuredReplyUpper = trimmed.toUpperCase();
+        if (isReply && structuredReplyUpper.indexOf('PROPOSED_DATES') !== -1) {
             messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
                 '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT DATES</button>' +
                 '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">REJECT DATES</button>' +
                 '</div>';
         }
 
-        if (isReply && trimmed.toUpperCase().indexOf('FINAL_APPROVED') === 0 && feeGateActive) {
+        if (isReply && structuredReplyUpper.indexOf('FINAL_APPROVED') !== -1 && feeGateActive) {
             messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
                 '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_accept_and_pay">ACCEPT & PAY</button>' +
                 '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_decline">DECLINE</button>' +
