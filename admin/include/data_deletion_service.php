@@ -93,6 +93,49 @@ if (!function_exists('dd_build_in_clause')) {
     }
 }
 
+if (!function_exists('dd_unique_int_ids')) {
+    function dd_unique_int_ids($values)
+    {
+        $values = array_values(array_unique(array_map('intval', (array)$values)));
+        return array_values(array_filter($values, function ($v) {
+            return $v > 0;
+        }));
+    }
+}
+
+if (!function_exists('dd_select_ids_by_identifiers')) {
+    function dd_select_ids_by_identifiers($idsByEmail, $idsByPhone, $hasEmail, $hasPhone)
+    {
+        $idsByEmail = dd_unique_int_ids($idsByEmail);
+        $idsByPhone = dd_unique_int_ids($idsByPhone);
+
+        if ($hasEmail && $hasPhone) {
+            if (!empty($idsByEmail) && !empty($idsByPhone)) {
+                $intersection = dd_unique_int_ids(array_values(array_intersect($idsByEmail, $idsByPhone)));
+                if (!empty($intersection)) {
+                    return [$intersection, 'both_intersection'];
+                }
+                return [[], 'both_conflict_no_intersection'];
+            }
+            if (!empty($idsByEmail)) {
+                return [$idsByEmail, 'email_only_fallback'];
+            }
+            if (!empty($idsByPhone)) {
+                return [$idsByPhone, 'phone_only_fallback'];
+            }
+            return [[], 'none'];
+        }
+
+        if ($hasEmail) {
+            return [$idsByEmail, 'email_only'];
+        }
+        if ($hasPhone) {
+            return [$idsByPhone, 'phone_only'];
+        }
+        return [[], 'none'];
+    }
+}
+
 if (!function_exists('dd_exec_stmt')) {
     function dd_exec_stmt($conexion, $sql, $types = '', $params = [], $returnResult = false)
     {
@@ -627,6 +670,109 @@ if (!function_exists('dd_collect_crm_client_ids')) {
     }
 }
 
+if (!function_exists('dd_collect_booking_client_ids_by_booking_ids')) {
+    function dd_collect_booking_client_ids_by_booking_ids($conexion, $bookingIds)
+    {
+        $clientIds = [];
+        $bookingIds = dd_unique_int_ids($bookingIds);
+        if (empty($bookingIds) || !dd_table_exists($conexion, 'booking_requests') || !dd_column_exists($conexion, 'booking_requests', 'client_user_id')) {
+            return $clientIds;
+        }
+
+        $types = '';
+        $params = [];
+        $inClause = dd_build_in_clause($bookingIds, $types, $params, 'i');
+        if ($inClause === '') {
+            return $clientIds;
+        }
+
+        $sql = "SELECT client_user_id
+                FROM booking_requests
+                WHERE id IN ({$inClause})
+                  AND client_user_id IS NOT NULL
+                  AND client_user_id > 0";
+        $res = dd_exec_stmt($conexion, $sql, $types, $params, true);
+        while ($res && ($row = mysqli_fetch_assoc($res))) {
+            $clientIds[] = (int)$row['client_user_id'];
+        }
+        return dd_unique_int_ids($clientIds);
+    }
+}
+
+if (!function_exists('dd_resolve_deletion_target')) {
+    function dd_resolve_deletion_target($conexion, $emailRaw, $phoneRaw)
+    {
+        $email = dd_safe_trim($emailRaw, 255);
+        $phoneDigits = dd_normalize_phone($phoneRaw);
+        $hasEmail = ($email !== '');
+        $hasPhone = ($phoneDigits !== '');
+        if (!$hasEmail && !$hasPhone) {
+            throw new RuntimeException('invalid_target_contact');
+        }
+
+        $usersByEmail = $hasEmail ? dd_collect_user_ids($conexion, $email, '') : [];
+        $usersByPhone = $hasPhone ? dd_collect_user_ids($conexion, '', $phoneDigits) : [];
+        [$baseUserIds, $userMatchMode] = dd_select_ids_by_identifiers($usersByEmail, $usersByPhone, $hasEmail, $hasPhone);
+
+        $clientsByEmail = $hasEmail ? dd_collect_crm_client_ids($conexion, $email, '') : [];
+        $clientsByPhone = $hasPhone ? dd_collect_crm_client_ids($conexion, '', $phoneDigits) : [];
+        [$crmClientIds, $clientMatchMode] = dd_select_ids_by_identifiers($clientsByEmail, $clientsByPhone, $hasEmail, $hasPhone);
+
+        $bookingsByEmail = [];
+        $bookingsByPhone = [];
+        if ($hasEmail) {
+            [$bookingsByEmail] = dd_collect_booking_ids($conexion, $email, '', []);
+        }
+        if ($hasPhone) {
+            [$bookingsByPhone] = dd_collect_booking_ids($conexion, '', $phoneDigits, []);
+        }
+        [$bookingIds, $bookingMatchMode] = dd_select_ids_by_identifiers($bookingsByEmail, $bookingsByPhone, $hasEmail, $hasPhone);
+
+        $bookingClientIds = dd_collect_booking_client_ids_by_booking_ids($conexion, $bookingIds);
+        $candidateUserIds = dd_unique_int_ids(array_merge($baseUserIds, $bookingClientIds));
+
+        if (!empty($candidateUserIds)) {
+            [$bookingsByResolvedUsers, $clientIdsByResolvedUsers] = dd_collect_booking_ids($conexion, '', '', $candidateUserIds);
+            $bookingIds = dd_unique_int_ids(array_merge($bookingIds, $bookingsByResolvedUsers));
+            $candidateUserIds = dd_unique_int_ids(array_merge($candidateUserIds, $clientIdsByResolvedUsers));
+        }
+
+        $userRows = dd_fetch_users_by_ids($conexion, $candidateUserIds);
+        $clientRows = [];
+        $clientUserIds = [];
+        foreach ($userRows as $row) {
+            if (!dd_is_client_candidate($row)) {
+                continue;
+            }
+            $clientRows[] = $row;
+            $clientUserIds[] = (int)$row['id'];
+        }
+        $clientUserIds = dd_unique_int_ids($clientUserIds);
+
+        if (!empty($clientUserIds)) {
+            [$bookingsByFinalUsers] = dd_collect_booking_ids($conexion, '', '', $clientUserIds);
+            $bookingIds = dd_unique_int_ids(array_merge($bookingIds, $bookingsByFinalUsers));
+        }
+
+        return [
+            'request_email' => $email,
+            'request_phone_digits' => $phoneDigits,
+            'crm_client_ids' => dd_unique_int_ids($crmClientIds),
+            'client_user_ids' => $clientUserIds,
+            'client_rows' => $clientRows,
+            'booking_ids' => dd_unique_int_ids($bookingIds),
+            'user_match_mode' => $userMatchMode,
+            'client_match_mode' => $clientMatchMode,
+            'booking_match_mode' => $bookingMatchMode,
+            'identifier_conflict' => (
+                $userMatchMode === 'both_conflict_no_intersection'
+                || $clientMatchMode === 'both_conflict_no_intersection'
+                || $bookingMatchMode === 'both_conflict_no_intersection'
+            ),
+        ];
+    }
+}
+
 if (!function_exists('dd_delete_inbox_messages')) {
     function dd_delete_inbox_messages($conexion, $bookingIds, $userIds)
     {
@@ -801,6 +947,81 @@ if (!function_exists('dd_delete_provider_users')) {
     }
 }
 
+if (!function_exists('dd_get_allowed_file_roots')) {
+    function dd_get_allowed_file_roots($rootDir)
+    {
+        $roots = [];
+        $candidates = [
+            $rootDir . '/uploads',
+            $rootDir . '/img',
+            $rootDir . '/admin/uploads',
+            $rootDir . '/admin/img',
+            $rootDir . '/client/uploads',
+            $rootDir . '/client/img',
+        ];
+        foreach ($candidates as $path) {
+            $real = realpath($path);
+            if ($real !== false && is_dir($real)) {
+                $roots[] = rtrim($real, '/');
+            }
+        }
+        return array_values(array_unique($roots));
+    }
+}
+
+if (!function_exists('dd_is_path_in_allowed_roots')) {
+    function dd_is_path_in_allowed_roots($realFilePath, $allowedRoots)
+    {
+        $realFilePath = rtrim((string)$realFilePath, '/');
+        foreach ((array)$allowedRoots as $root) {
+            $root = rtrim((string)$root, '/');
+            if ($root === '') {
+                continue;
+            }
+            if ($realFilePath === $root || strpos($realFilePath, $root . '/') === 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+if (!function_exists('dd_resolve_safe_project_file_path')) {
+    function dd_resolve_safe_project_file_path($rootDir, $rawPath, $allowedRoots)
+    {
+        $rawPath = trim((string)$rawPath);
+        if ($rawPath === '') {
+            return '';
+        }
+        $rawPath = str_replace("\0", '', $rawPath);
+        $rawPath = str_replace('\\', '/', $rawPath);
+        $cleanPath = strtok($rawPath, '?');
+        if ($cleanPath === false) {
+            return '';
+        }
+        $cleanPath = trim($cleanPath);
+        if ($cleanPath === '') {
+            return '';
+        }
+
+        $isAbsolute = (bool)preg_match('/^([A-Za-z]:)?\//', $cleanPath);
+        if ($isAbsolute) {
+            $candidate = $cleanPath;
+        } else {
+            $candidate = rtrim((string)$rootDir, '/') . '/' . ltrim($cleanPath, '/');
+        }
+
+        $realCandidate = realpath($candidate);
+        if ($realCandidate === false || !is_file($realCandidate)) {
+            return '';
+        }
+        if (!dd_is_path_in_allowed_roots($realCandidate, $allowedRoots)) {
+            return '';
+        }
+        return $realCandidate;
+    }
+}
+
 if (!function_exists('dd_cleanup_certificates')) {
     function dd_cleanup_certificates($conexion, $userIds)
     {
@@ -820,6 +1041,7 @@ if (!function_exists('dd_cleanup_certificates')) {
         }
 
         $rootDir = realpath(dirname(__DIR__, 2));
+        $allowedRoots = $rootDir ? dd_get_allowed_file_roots($rootDir) : [];
         $selSql = "SELECT id, archivo FROM certificado WHERE id_usuario IN ({$inClause})";
         $res = dd_exec_stmt($conexion, $selSql, $types, $params, true);
         $filePaths = [];
@@ -833,16 +1055,12 @@ if (!function_exists('dd_cleanup_certificates')) {
             }
         }
 
-        foreach ($filePaths as $relativePath) {
-            if (!$rootDir) {
+        foreach ($filePaths as $storedPath) {
+            if (!$rootDir || empty($allowedRoots)) {
                 break;
             }
-            $candidate = $rootDir . '/' . ltrim($relativePath, '/');
-            $realCandidate = realpath($candidate);
-            if ($realCandidate === false || !is_file($realCandidate)) {
-                continue;
-            }
-            if (strpos($realCandidate, $rootDir) !== 0) {
+            $realCandidate = dd_resolve_safe_project_file_path($rootDir, $storedPath, $allowedRoots);
+            if ($realCandidate === '') {
                 continue;
             }
             if (@unlink($realCandidate)) {
@@ -875,25 +1093,17 @@ if (!function_exists('dd_cleanup_client_documents')) {
         }
 
         $rootDir = realpath(dirname(__DIR__, 2));
+        $allowedRoots = $rootDir ? dd_get_allowed_file_roots($rootDir) : [];
         $hasFilePath = dd_column_exists($conexion, 'client_documents', 'file_path');
         if ($rootDir && $hasFilePath) {
             $selSql = "SELECT file_path FROM client_documents WHERE client_id IN ({$inClause})";
             $res = dd_exec_stmt($conexion, $selSql, $types, $params, true);
             while ($res && ($row = mysqli_fetch_assoc($res))) {
-                $rawPath = trim((string)($row['file_path'] ?? ''));
-                if ($rawPath === '') {
+                if (empty($allowedRoots)) {
                     continue;
                 }
-                $cleanPath = strtok($rawPath, '?');
-                if ($cleanPath === false || $cleanPath === '') {
-                    continue;
-                }
-                $candidate = $rootDir . '/' . ltrim($cleanPath, '/');
-                $realCandidate = realpath($candidate);
-                if ($realCandidate === false || !is_file($realCandidate)) {
-                    continue;
-                }
-                if (strpos($realCandidate, $rootDir) !== 0) {
+                $realCandidate = dd_resolve_safe_project_file_path($rootDir, (string)($row['file_path'] ?? ''), $allowedRoots);
+                if ($realCandidate === '') {
                     continue;
                 }
                 if (@unlink($realCandidate)) {
@@ -1348,32 +1558,21 @@ if (!function_exists('dd_process_request')) {
                 [$requestDbId]
             );
 
-            $requestEmail = dd_safe_trim($requestRow['request_email'] ?? '', 255);
-            $requestPhoneDigits = dd_normalize_phone($requestRow['request_phone'] ?? '');
-
-            $candidateUserIds = dd_collect_user_ids($conexion, $requestEmail, $requestPhoneDigits);
-            $crmClientIds = dd_collect_crm_client_ids($conexion, $requestEmail, $requestPhoneDigits);
-            [$bookingIds, $bookingClientIds] = dd_collect_booking_ids($conexion, $requestEmail, $requestPhoneDigits, $candidateUserIds);
-            $candidateUserIds = array_values(array_unique(array_merge($candidateUserIds, $bookingClientIds)));
-
-            $userRows = dd_fetch_users_by_ids($conexion, $candidateUserIds);
-            $clientRows = [];
-            $clientUserIds = [];
-            foreach ($userRows as $row) {
-                if (dd_is_client_candidate($row)) {
-                    $clientRows[] = $row;
-                    $clientUserIds[] = (int)$row['id'];
-                }
-            }
-            $clientUserIds = array_values(array_unique(array_filter($clientUserIds)));
-
-            if (!empty($clientUserIds)) {
-                [$extraBookingIds, $extraClientIds] = dd_collect_booking_ids($conexion, '', '', $clientUserIds);
-                $bookingIds = array_values(array_unique(array_merge($bookingIds, $extraBookingIds)));
-                $clientUserIds = array_values(array_unique(array_merge($clientUserIds, $extraClientIds)));
-            }
+            $target = dd_resolve_deletion_target(
+                $conexion,
+                (string)($requestRow['request_email'] ?? ''),
+                (string)($requestRow['request_phone'] ?? '')
+            );
+            $crmClientIds = dd_unique_int_ids($target['crm_client_ids'] ?? []);
+            $clientUserIds = dd_unique_int_ids($target['client_user_ids'] ?? []);
+            $bookingIds = dd_unique_int_ids($target['booking_ids'] ?? []);
+            $clientRows = is_array($target['client_rows'] ?? null) ? $target['client_rows'] : [];
 
             $counts = [
+                'targets_users_matched' => count($clientUserIds),
+                'targets_clients_matched' => count($crmClientIds),
+                'targets_bookings_matched' => count($bookingIds),
+                'targets_identifier_conflict' => !empty($target['identifier_conflict']) ? 1 : 0,
                 'bookings_anonymized' => dd_anonymize_bookings($conexion, $bookingIds),
                 'inbox_messages_deleted' => dd_delete_inbox_messages($conexion, $bookingIds, $clientUserIds),
                 'inbox_reads_deleted' => dd_delete_inbox_reads($conexion, $clientUserIds),
@@ -1383,7 +1582,7 @@ if (!function_exists('dd_process_request')) {
 
             $certCleanup = dd_cleanup_certificates($conexion, $clientUserIds);
             $counts['certificado_rows_deleted'] = (int)$certCleanup['rows_deleted'];
-            $counts['files_deleted'] = (int)$certCleanup['files_deleted'];
+            $counts['certificado_files_deleted'] = (int)$certCleanup['files_deleted'];
 
             $clientDocsCleanup = dd_cleanup_client_documents($conexion, $crmClientIds);
             $counts['client_documents_deleted'] = (int)$clientDocsCleanup['rows_deleted'];

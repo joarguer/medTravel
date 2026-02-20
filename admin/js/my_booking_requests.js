@@ -1,6 +1,7 @@
 (function () {
     var table = null;
     var activeDetailItemId = 0;
+    var activeDetailFeeLocked = false;
 
     $(document).ready(function () {
         initTable();
@@ -198,6 +199,17 @@
             }
             sendProviderMessage(activeDetailItemId, text);
         });
+
+        $('#my_booking_detail_modal').on('click', '.btn-provider-quick-reply', function () {
+            if (!activeDetailItemId) {
+                return;
+            }
+            var replyKey = ($(this).data('reply') || '').toString();
+            if (!replyKey) {
+                return;
+            }
+            sendProviderQuickReply(activeDetailItemId, replyKey);
+        });
     }
 
     function loadRows() {
@@ -237,6 +249,18 @@
                 var d = response.data || {};
                 var itemsHistory = response.items_history || [];
                 activeDetailItemId = itemId;
+                activeDetailFeeLocked = !!d.fee_locked;
+                var messageDisabledAttr = activeDetailFeeLocked ? 'disabled' : '';
+                var quickRepliesHtml = '';
+                if (activeDetailFeeLocked) {
+                    quickRepliesHtml = '' +
+                        '<div class="alert alert-warning" style="margin-bottom:10px;">' +
+                        'Messaging is locked until the coordination fee is paid. Use quick replies.</div>' +
+                        '<div class="btn-group btn-group-sm" id="provider-quick-replies" role="group" style="margin-bottom:12px;">' +
+                        '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="DATES_OK">Dates available</button>' +
+                        '<button type="button" class="btn btn-default btn-provider-quick-reply" data-reply="DATES_NOT_AVAILABLE">Dates not available</button>' +
+                        '</div>';
+                }
 
                 var html = '' +
                     '<div class="row">' +
@@ -275,6 +299,13 @@
                     '<hr>' +
                     '<div class="row">' +
                         '<div class="col-md-12">' +
+                            '<h5>Medical documents</h5>' +
+                            renderDocuments(d.documents || []) +
+                        '</div>' +
+                    '</div>' +
+                    '<hr>' +
+                    '<div class="row">' +
+                        '<div class="col-md-12">' +
                             '<h5>Timeline de items (scope proveedor)</h5>' +
                             '<div class="table-responsive">' +
                                 '<table class="table table-striped table-bordered">' +
@@ -297,12 +328,13 @@
                     '<div class="row">' +
                         '<div class="col-md-12">' +
                             '<h5>Conversación</h5>' +
+                            quickRepliesHtml +
                             '<div id="provider-conversation-log" style="max-height:260px; overflow:auto; border:1px solid #e5e5e5; padding:10px; background:#fafafa;">Cargando mensajes...</div>' +
                             '<div class="form-group" style="margin-top:12px;">' +
                                 '<label for="provider-message-text">Enviar mensaje al cliente</label>' +
-                                '<textarea id="provider-message-text" class="form-control" rows="3" maxlength="2000" placeholder="Escribe tu mensaje..."></textarea>' +
+                                '<textarea id="provider-message-text" class="form-control" rows="3" maxlength="2000" placeholder="Escribe tu mensaje..." ' + messageDisabledAttr + '></textarea>' +
                             '</div>' +
-                            '<button type="button" id="btn-provider-send-message" class="btn btn-primary btn-sm"><i class="fa fa-paper-plane"></i> Send message</button>' +
+                            '<button type="button" id="btn-provider-send-message" class="btn btn-primary btn-sm" ' + messageDisabledAttr + '><i class="fa fa-paper-plane"></i> Send message</button>' +
                         '</div>' +
                     '</div>';
 
@@ -387,12 +419,13 @@
             var sender = (m.sender || 'system').toString();
             var senderClass = sender === 'client' ? 'label-info' : (sender === 'provider' ? 'label-success' : 'label-default');
             var actor = (m.actor || '').toString().trim();
+            var bodyHtml = formatStructuredBody(m.body || '');
             html += '<div class="well well-sm" style="margin-bottom:8px;">' +
                 '<div><span class="label ' + senderClass + '">' + escapeHtml(sender) + '</span>' +
                 (actor ? ' <small>[' + escapeHtml(actor) + ']</small>' : '') +
                 (m.time ? ' <small style="margin-left:6px;">' + escapeHtml(m.time) + '</small>' : '') +
                 '</div>' +
-                '<div style="margin-top:6px; white-space:pre-wrap;">' + escapeHtml(m.body || '') + '</div>' +
+                '<div style="margin-top:6px;">' + bodyHtml + '</div>' +
                 '</div>';
         });
         $log.html(html);
@@ -420,6 +453,30 @@
             },
             error: function () {
                 toastr.error('Error de conexión al enviar mensaje');
+            }
+        });
+    }
+
+    function sendProviderQuickReply(itemId, replyKey) {
+        $.ajax({
+            url: 'ajax/my_booking_requests.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'send_quick_reply',
+                item_id: itemId,
+                reply_key: replyKey
+            },
+            success: function (response) {
+                if (!response || !response.ok) {
+                    toastr.error((response && response.message) ? response.message : 'No se pudo enviar respuesta');
+                    return;
+                }
+                toastr.success('Respuesta enviada');
+                loadMessages(itemId);
+            },
+            error: function () {
+                toastr.error('Error de conexión al enviar respuesta');
             }
         });
     }
@@ -494,5 +551,57 @@
 
     function nl2brSafe(text) {
         return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    function formatStructuredBody(body) {
+        var text = String(body || '');
+        var trimmed = text.trim();
+        var label = '';
+        if (trimmed.indexOf('[ACTION]') === 0) {
+            label = 'Action';
+            trimmed = trimmed.replace(/^\[ACTION\]\s*/i, '');
+        } else if (trimmed.indexOf('[REPLY]') === 0) {
+            label = 'Reply';
+            trimmed = trimmed.replace(/^\[REPLY\]\s*/i, '');
+        }
+        if (label) {
+            return '<span class="label label-primary" style="margin-right:6px;">' + escapeHtml(label) + '</span>' + escapeHtml(trimmed);
+        }
+        return '<span style="white-space:pre-wrap;">' + escapeHtml(text) + '</span>';
+    }
+
+    function renderDocuments(documents) {
+        if (!documents || !documents.length) {
+            return '<p class="text-muted" style="margin:0;">No documents shared yet.</p>';
+        }
+
+        var html = '<div class="table-responsive"><table class="table table-striped table-bordered">' +
+            '<thead><tr><th>Document</th><th>Type</th><th>Uploaded</th><th>Size</th></tr></thead><tbody>';
+
+        documents.forEach(function (doc) {
+            var name = doc.title || doc.original_filename || doc.filename || 'Document';
+            var url = doc.download_url || '#';
+            var type = doc.document_type || '-';
+            var uploaded = doc.uploaded_at || '-';
+            var size = formatFileSize(doc.file_size);
+            html += '<tr>' +
+                '<td><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + escapeHtml(name) + '</a></td>' +
+                '<td>' + escapeHtml(type) + '</td>' +
+                '<td>' + escapeHtml(uploaded) + '</td>' +
+                '<td>' + escapeHtml(size) + '</td>' +
+                '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        return html;
+    }
+
+    function formatFileSize(bytes) {
+        var size = parseInt(bytes, 10);
+        if (!size || size <= 0) return '-';
+        if (size >= 1073741824) return (size / 1073741824).toFixed(2) + ' GB';
+        if (size >= 1048576) return (size / 1048576).toFixed(2) + ' MB';
+        if (size >= 1024) return (size / 1024).toFixed(2) + ' KB';
+        return size + ' bytes';
     }
 })();

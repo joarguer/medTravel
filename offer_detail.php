@@ -1,5 +1,8 @@
 <?php
 include('inc/include.php');
+require_once __DIR__ . '/inc/auth_client.php';
+require_once __DIR__ . '/client/include/client_notifications.php';
+require_once __DIR__ . '/inc/fee_gate.php';
 
 if (!function_exists('provider_verification_level_label')) {
     function provider_verification_level_label($level)
@@ -112,6 +115,16 @@ $offer = mysqli_fetch_assoc($result);
 $verificationStatus = trim((string)($offer['verification_status'] ?? ''));
 $verificationLevel = trim((string)($offer['verification_level'] ?? ''));
 [$verificationBadgeKind, $verificationBadgeText] = provider_verification_public_badge($verificationStatus, $verificationLevel);
+
+$hideProviderDirectContact = false;
+$feeGuardMessage = 'Unlock after Coordination Fee';
+$contextBookingId = isset($_GET['booking_id']) ? (int)$_GET['booking_id'] : (isset($_GET['request_id']) ? (int)$_GET['request_id'] : 0);
+if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_session() && isset($conexion) && $conexion) {
+    $ownerScope = client_build_booking_owner_scope($conexion, 'br', get_client_user_id(), client_get_session_email());
+    if (($ownerScope['sql'] ?? '1=0') !== '1=0') {
+        $hideProviderDirectContact = mt_fee_booking_required_for_owner_scope($conexion, $contextBookingId, $ownerScope);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -511,9 +524,15 @@ $verificationLevel = trim((string)($offer['verification_level'] ?? ''));
                     <a href="#booking-section" class="btn btn-book" onclick="scrollToBooking(<?php echo $offer['id']; ?>); return false;">
                         <i class="fas fa-calendar-check me-2"></i>Book This Service
                     </a>
-                    <a href="mailto:<?php echo htmlspecialchars($offer['email']); ?>" class="btn btn-outline-secondary mt-2" style="width: 100%; padding: 10px; text-align: center; display: block; text-decoration: none; color: #64748b; border: 1px solid #cbd5e1; border-radius: 8px;">
-                        <i class="fas fa-envelope me-2"></i>Email Provider
-                    </a>
+                    <?php if ($hideProviderDirectContact): ?>
+                        <div class="alert alert-warning mt-2 mb-0" style="padding:10px 12px; font-size: 13px;">
+                            <i class="fas fa-lock me-1"></i><?php echo htmlspecialchars($feeGuardMessage, ENT_QUOTES, 'UTF-8'); ?>
+                        </div>
+                    <?php elseif (!empty($offer['email'])): ?>
+                        <a href="mailto:<?php echo htmlspecialchars($offer['email']); ?>" class="btn btn-outline-secondary mt-2" style="width: 100%; padding: 10px; text-align: center; display: block; text-decoration: none; color: #64748b; border: 1px solid #cbd5e1; border-radius: 8px;">
+                            <i class="fas fa-envelope me-2"></i>Email Provider
+                        </a>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Provider Card -->
@@ -539,28 +558,38 @@ $verificationLevel = trim((string)($offer['verification_level'] ?? ''));
                         </div>
                     <?php endif; ?>
                     
-                    <?php if (!empty($offer['phone'])): ?>
+                    <?php if ($hideProviderDirectContact): ?>
                         <div class="contact-item">
-                            <i class="fas fa-phone"></i>
+                            <i class="fas fa-lock"></i>
                             <div>
-                                <strong>Phone</strong><br>
-                                <a href="tel:<?php echo htmlspecialchars($offer['phone']); ?>">
-                                    <?php echo htmlspecialchars($offer['phone']); ?>
-                                </a>
+                                <strong>Contact</strong><br>
+                                <?php echo htmlspecialchars($feeGuardMessage, ENT_QUOTES, 'UTF-8'); ?>
                             </div>
                         </div>
-                    <?php endif; ?>
-                    
-                    <?php if (!empty($offer['email'])): ?>
-                        <div class="contact-item">
-                            <i class="fas fa-envelope"></i>
-                            <div>
-                                <strong>Email</strong><br>
-                                <a href="mailto:<?php echo htmlspecialchars($offer['email']); ?>">
-                                    <?php echo htmlspecialchars($offer['email']); ?>
-                                </a>
+                    <?php else: ?>
+                        <?php if (!empty($offer['phone'])): ?>
+                            <div class="contact-item">
+                                <i class="fas fa-phone"></i>
+                                <div>
+                                    <strong>Phone</strong><br>
+                                    <a href="tel:<?php echo htmlspecialchars($offer['phone']); ?>">
+                                        <?php echo htmlspecialchars($offer['phone']); ?>
+                                    </a>
+                                </div>
                             </div>
-                        </div>
+                        <?php endif; ?>
+                        
+                        <?php if (!empty($offer['email'])): ?>
+                            <div class="contact-item">
+                                <i class="fas fa-envelope"></i>
+                                <div>
+                                    <strong>Email</strong><br>
+                                    <a href="mailto:<?php echo htmlspecialchars($offer['email']); ?>">
+                                        <?php echo htmlspecialchars($offer['email']); ?>
+                                    </a>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>

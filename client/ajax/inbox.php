@@ -6,11 +6,16 @@ require_client_auth_ajax();
 require_once __DIR__ . '/../../admin/include/conexion.php';
 require_once __DIR__ . '/../include/client_notifications.php';
 require_once __DIR__ . '/../../inc/inbox_utils.php';
+require_once __DIR__ . '/../../inc/fee_gate.php';
 
-function client_inbox_err($message, $code = 400)
+function client_inbox_err($message, $code = 400, $errorCode = '')
 {
     http_response_code($code);
-    echo json_encode(['ok' => false, 'message' => $message]);
+    $payload = ['ok' => false, 'message' => $message];
+    if ($errorCode !== '') {
+        $payload['code'] = $errorCode;
+    }
+    echo json_encode($payload);
     exit;
 }
 
@@ -267,7 +272,7 @@ if ($action === 'list_threads') {
     ]);
 }
 
-if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_message') {
+if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_message' || $action === 'send_quick_action') {
     $threadIdInput = (string)($_GET['thread_id'] ?? $_POST['thread_id'] ?? '');
     $threadType = (string)($_GET['thread_type'] ?? $_POST['thread_type'] ?? '');
     $requestId = (int)($_GET['request_id'] ?? $_POST['request_id'] ?? $_GET['booking_id'] ?? $_POST['booking_id'] ?? 0);
@@ -276,6 +281,12 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
     $ctx = client_inbox_resolve_context($conexion, $ownerScope, $threadType, $requestId, $itemId, $threadIdInput);
     if (empty($ctx['ok'])) {
         client_inbox_err((string)($ctx['message'] ?? 'invalid_thread'), (int)($ctx['status'] ?? 400));
+    }
+
+    $bookingRequestId = (int)($ctx['request_id'] ?? 0);
+    $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
+    if ($feeLocked && $action === 'send_message') {
+        client_inbox_err('coordination_fee_required', 403, 'FEE_REQUIRED');
     }
 }
 
@@ -324,6 +335,8 @@ if ($action === 'list_messages') {
         'request_id' => (int)$ctx['request_id'],
         'booking_id' => (int)$ctx['request_id'],
         'item_id' => (int)$ctx['item_id'],
+        'fee_locked' => !empty($feeLocked),
+        'fee_message' => !empty($feeLocked) ? 'Unlock after Coordination Fee.' : '',
         'messages' => $messages,
     ]);
 }
@@ -336,6 +349,63 @@ if ($action === 'send_message') {
     if ($message === '') {
         client_inbox_err('message_required', 422);
     }
+    if (mb_strlen($message) > 2000) {
+        client_inbox_err('message_too_long', 422);
+    }
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        "INSERT INTO inbox_messages
+            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+         VALUES (?, ?, ?, ?, 'CLIENT', ?, ?)"
+    );
+    if (!$stmt) {
+        client_inbox_err('prepare_failed', 500);
+    }
+    $threadId = (string)$ctx['thread_id'];
+    $threadType = (string)$ctx['thread_type'];
+    $requestId = (int)$ctx['request_id'];
+    $itemId = (int)$ctx['item_id'];
+    mysqli_stmt_bind_param($stmt, 'ssiiis', $threadId, $threadType, $requestId, $itemId, $clientUserId, $message);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        client_inbox_err('insert_failed: ' . $err, 500);
+    }
+    $messageId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+
+    client_inbox_ok([
+        'thread_id' => $threadId,
+        'thread_type' => $threadType,
+        'request_id' => $requestId,
+        'booking_id' => $requestId,
+        'item_id' => $itemId,
+        'message' => [
+            'id' => $messageId,
+            'sender' => 'client',
+            'body' => $message,
+            'time' => date('Y-m-d H:i:s'),
+        ],
+    ]);
+}
+
+if ($action === 'send_quick_action') {
+    if (!inbox_table_exists($conexion, 'inbox_messages')) {
+        client_inbox_err('inbox_messages_not_available', 409);
+    }
+
+    $actionKey = strtoupper(trim((string)($_POST['action_key'] ?? '')));
+    $quickActions = [
+        'REQUEST_AVAILABILITY' => 'Please confirm availability for my dates.',
+        'DATES_FLEXIBLE' => 'My dates are flexible.',
+        'DOCS_UPLOADED' => 'I have uploaded medical documents.'
+    ];
+    if ($actionKey === '' || !isset($quickActions[$actionKey])) {
+        client_inbox_err('invalid_action_key', 422);
+    }
+
+    $message = '[ACTION] ' . $quickActions[$actionKey];
     if (mb_strlen($message) > 2000) {
         client_inbox_err('message_too_long', 422);
     }

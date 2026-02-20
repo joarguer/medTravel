@@ -54,10 +54,15 @@ $action = isset($_POST['action']) ? $_POST['action'] : (isset($_GET['action']) ?
 $hasSoftDelete = table_has_column($conexion, 'booking_requests', 'is_deleted');
 $hasDeletedAt = table_has_column($conexion, 'booking_requests', 'deleted_at');
 $hasDeletedBy = table_has_column($conexion, 'booking_requests', 'deleted_by');
+$hasFeeStatus = table_has_column($conexion, 'booking_requests', 'fee_status');
+$hasFeeRequired = table_has_column($conexion, 'booking_requests', 'fee_required');
+$hasBookingUpdatedAt = table_has_column($conexion, 'booking_requests', 'updated_at');
 
 if ($action === 'get_all') {
     $query = "SELECT id, name, email, destination, booking_datetime, persons,
-                     selected_offers, status, origin, created_at
+                     selected_offers, status, origin, created_at,
+                     " . ($hasFeeStatus ? "fee_status" : "'pending' AS fee_status") . ",
+                     " . ($hasFeeRequired ? "fee_required" : "0 AS fee_required") . "
               FROM booking_requests
               WHERE 1=1";
     if ($hasSoftDelete) {
@@ -75,6 +80,110 @@ if ($action === 'get_all') {
         $data[] = $row;
     }
     json_success(['data' => $data]);
+}
+
+if ($action === 'mark_fee_paid') {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        json_error('Metodo no permitido', 405);
+    }
+    $bookingId = intval($_POST['booking_request_id'] ?? $_POST['booking_id'] ?? 0);
+    if ($bookingId <= 0) {
+        json_error('ID inválido');
+    }
+    if (!$hasFeeStatus) {
+        json_error('ejecuta migración Fee Gate', 409);
+    }
+
+    $bookingExistsSql = "SELECT id FROM booking_requests WHERE id = ?";
+    if ($hasSoftDelete) {
+        $bookingExistsSql .= " AND is_deleted = 0";
+    }
+    $bookingExistsSql .= " LIMIT 1";
+
+    $stmtExists = mysqli_prepare($conexion, $bookingExistsSql);
+    if (!$stmtExists) {
+        json_error('Error interno (prepare)', 500);
+    }
+    mysqli_stmt_bind_param($stmtExists, 'i', $bookingId);
+    if (!mysqli_stmt_execute($stmtExists)) {
+        $err = mysqli_stmt_error($stmtExists);
+        mysqli_stmt_close($stmtExists);
+        json_error('Error al consultar booking: ' . $err, 500);
+    }
+    $existsRes = mysqli_stmt_get_result($stmtExists);
+    $existsRow = $existsRes ? mysqli_fetch_assoc($existsRes) : null;
+    mysqli_stmt_close($stmtExists);
+    if (!$existsRow) {
+        json_error('Booking no encontrado', 404);
+    }
+
+    $hasConfirmedItems = false;
+    if (table_exists($conexion, 'booking_request_items') && table_has_column($conexion, 'booking_request_items', 'item_status')) {
+        $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
+        $normalizedStatusExpr = "CASE
+            WHEN item_status IS NULL OR item_status = '' OR item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+            ELSE item_status
+        END";
+        $confirmedSql = "SELECT 1
+                         FROM booking_request_items
+                         WHERE booking_request_id = ?
+                           AND {$normalizedStatusExpr} = 'provider_confirmed'";
+        if ($hasItemsSoftDelete) {
+            $confirmedSql .= " AND is_deleted = 0";
+        }
+        $confirmedSql .= " LIMIT 1";
+        $stmtConfirmed = mysqli_prepare($conexion, $confirmedSql);
+        if ($stmtConfirmed) {
+            mysqli_stmt_bind_param($stmtConfirmed, 'i', $bookingId);
+            if (mysqli_stmt_execute($stmtConfirmed)) {
+                $confirmedRes = mysqli_stmt_get_result($stmtConfirmed);
+                $hasConfirmedItems = ($confirmedRes && mysqli_fetch_assoc($confirmedRes));
+            }
+            mysqli_stmt_close($stmtConfirmed);
+        }
+    }
+
+    $sql = "UPDATE booking_requests SET fee_status = 'paid'";
+    if ($hasFeeRequired) {
+        $sql .= ", fee_required = ?";
+    }
+    if ($hasBookingUpdatedAt) {
+        $sql .= ", updated_at = NOW()";
+    }
+    $sql .= " WHERE id = ?";
+    if ($hasSoftDelete) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        json_error('Error interno (prepare)', 500);
+    }
+    if ($hasFeeRequired) {
+        $feeRequiredValue = $hasConfirmedItems ? 1 : 0;
+        mysqli_stmt_bind_param($stmt, 'ii', $feeRequiredValue, $bookingId);
+    } else {
+        mysqli_stmt_bind_param($stmt, 'i', $bookingId);
+    }
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        json_error('Error al marcar fee como pagado: ' . $err, 500);
+    }
+    $affected = mysqli_stmt_affected_rows($stmt);
+    mysqli_stmt_close($stmt);
+
+    if ($affected <= 0) {
+        json_error('No se actualizó el booking', 404);
+    }
+
+    json_success([
+        'message' => 'Coordination Fee marcado como pagado',
+        'booking_id' => $bookingId,
+        'fee_status' => 'paid',
+        'fee_required' => $hasFeeRequired ? ($hasConfirmedItems ? 1 : 0) : null,
+    ]);
 }
 
 if ($action === 'get_detail') {

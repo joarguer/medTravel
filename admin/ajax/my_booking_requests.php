@@ -2,6 +2,9 @@
 include '../include/conexion.php';
 require_once '../include/roles.php';
 require_once '../include/email_config.php';
+require_once __DIR__ . '/../../inc/email_template.php';
+require_once __DIR__ . '/../../inc/inbox_utils.php';
+require_once __DIR__ . '/../../inc/fee_gate.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -194,6 +197,83 @@ function sort_messages_by_time(&$messages)
     });
 }
 
+function strip_medtravel_services_requested_block($additionalNotes)
+{
+    $notes = trim((string)$additionalNotes);
+    if ($notes === '') {
+        return '';
+    }
+
+    $cleaned = preg_replace('/(?:\R|^)\s*MedTravel Services Requested:\s*(?:\R\s*-\s.*)*/i', '', $notes);
+    if (!is_string($cleaned)) {
+        return $notes;
+    }
+    $cleaned = preg_replace('/\R{3,}/', "\n\n", $cleaned);
+    return trim((string)$cleaned);
+}
+
+function find_explicit_provider_complementary_relation($conexion)
+{
+    $candidates = [
+        ['table' => 'provider_complementary_services', 'provider_col' => 'provider_id', 'service_col' => 'medtravel_service_id'],
+        ['table' => 'provider_medtravel_services', 'provider_col' => 'provider_id', 'service_col' => 'medtravel_service_id'],
+        ['table' => 'provider_complementary_service_map', 'provider_col' => 'provider_id', 'service_col' => 'medtravel_service_id'],
+        ['table' => 'medical_provider_complementary_services', 'provider_col' => 'provider_id', 'service_col' => 'medtravel_service_id'],
+        ['table' => 'provider_complementary_services', 'provider_col' => 'provider_id', 'service_col' => 'complementary_service_id'],
+        ['table' => 'provider_medtravel_services', 'provider_col' => 'provider_id', 'service_col' => 'complementary_service_id'],
+    ];
+
+    foreach ($candidates as $candidate) {
+        $table = $candidate['table'];
+        $providerCol = $candidate['provider_col'];
+        $serviceCol = $candidate['service_col'];
+        if (!table_exists($conexion, $table)) {
+            continue;
+        }
+        if (!table_has_column($conexion, $table, $providerCol) || !table_has_column($conexion, $table, $serviceCol)) {
+            continue;
+        }
+        return $candidate;
+    }
+
+    return null;
+}
+
+function build_medical_provider_scope($conexion, $providerId)
+{
+    $providerId = (int)$providerId;
+    $medicalClause = "(bri.item_type = 'medical_offer' AND EXISTS (
+        SELECT 1
+        FROM provider_service_offers o_scope
+        WHERE o_scope.id = bri.offer_id
+          AND o_scope.provider_id = ?
+    ))";
+
+    $relation = find_explicit_provider_complementary_relation($conexion);
+    if (is_array($relation)) {
+        $table = $relation['table'];
+        $providerCol = $relation['provider_col'];
+        $serviceCol = $relation['service_col'];
+        $complementaryClause = "(bri.item_type = 'complementary_service' AND EXISTS (
+            SELECT 1
+            FROM `{$table}` rel
+            WHERE rel.`{$providerCol}` = ?
+              AND rel.`{$serviceCol}` = bri.medtravel_service_id
+        ))";
+        return [
+            'where' => ' AND (' . $medicalClause . ' OR ' . $complementaryClause . ')',
+            'types' => 'ii',
+            'params' => [$providerId, $providerId],
+        ];
+    }
+
+    return [
+        'where' => ' AND ' . $medicalClause,
+        'types' => 'i',
+        'params' => [$providerId],
+    ];
+}
+
 function fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete)
 {
     $sql = "SELECT
@@ -267,6 +347,226 @@ function fetch_booking_additional_notes($conexion, $bookingRequestId, $hasReques
     return (string)($row['additional_notes'] ?? '');
 }
 
+function sync_booking_fee_gate_state($conexion, $bookingRequestId, $hasRequestsSoftDelete)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    if ($bookingRequestId <= 0) {
+        return;
+    }
+    if (!table_exists($conexion, 'booking_requests') || !table_exists($conexion, 'booking_request_items')) {
+        return;
+    }
+
+    $hasFeeStatus = table_has_column($conexion, 'booking_requests', 'fee_status');
+    $hasFeeRequired = table_has_column($conexion, 'booking_requests', 'fee_required');
+    if (!$hasFeeStatus && !$hasFeeRequired) {
+        return;
+    }
+    if (!table_has_column($conexion, 'booking_request_items', 'item_status')) {
+        return;
+    }
+
+    $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $normalizedStatusExpr = "CASE
+        WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+        ELSE bri.item_status
+    END";
+
+    $statsSql = "SELECT
+                    COUNT(*) AS total_count,
+                    SUM(CASE WHEN {$normalizedStatusExpr} = 'provider_confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
+                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
+                 FROM booking_request_items bri
+                 WHERE bri.booking_request_id = ?";
+    if ($hasItemsSoftDelete) {
+        $statsSql .= " AND bri.is_deleted = 0";
+    }
+    $statsSql .= " LIMIT 1";
+
+    $stmtStats = mysqli_prepare($conexion, $statsSql);
+    if (!$stmtStats) {
+        return;
+    }
+    mysqli_stmt_bind_param($stmtStats, 'i', $bookingRequestId);
+    if (!mysqli_stmt_execute($stmtStats)) {
+        mysqli_stmt_close($stmtStats);
+        return;
+    }
+    $statsRes = mysqli_stmt_get_result($stmtStats);
+    $statsRow = $statsRes ? mysqli_fetch_assoc($statsRes) : null;
+    mysqli_stmt_close($stmtStats);
+    if (!$statsRow) {
+        return;
+    }
+
+    $totalCount = (int)($statsRow['total_count'] ?? 0);
+    $confirmedCount = (int)($statsRow['confirmed_count'] ?? 0);
+    $terminalCount = (int)($statsRow['terminal_count'] ?? 0);
+
+    $targetFeeRequired = 0;
+    $targetFeeStatus = 'pending';
+    if ($confirmedCount > 0) {
+        $targetFeeRequired = 1;
+        $targetFeeStatus = 'pending';
+    } elseif ($totalCount > 0 && $terminalCount >= $totalCount) {
+        $targetFeeRequired = 0;
+        $targetFeeStatus = 'not_required';
+    }
+
+    $setParts = [];
+    $types = '';
+    $params = [];
+    if ($hasFeeRequired) {
+        $setParts[] = 'fee_required = ?';
+        $types .= 'i';
+        $params[] = $targetFeeRequired;
+    }
+    if ($hasFeeStatus) {
+        $setParts[] = "fee_status = CASE
+            WHEN LOWER(TRIM(COALESCE(fee_status, 'pending'))) = 'paid' THEN 'paid'
+            ELSE ?
+        END";
+        $types .= 's';
+        $params[] = $targetFeeStatus;
+    }
+    if (empty($setParts)) {
+        return;
+    }
+
+    $updateSql = "UPDATE booking_requests
+                  SET " . implode(', ', $setParts) . "
+                  WHERE id = ?";
+    $types .= 'i';
+    $params[] = $bookingRequestId;
+    if ($hasRequestsSoftDelete) {
+        $updateSql .= " AND is_deleted = 0";
+    }
+    $updateSql .= " LIMIT 1";
+
+    $stmtUpdate = mysqli_prepare($conexion, $updateSql);
+    if (!$stmtUpdate) {
+        return;
+    }
+    bind_stmt_params($stmtUpdate, $types, $params);
+    mysqli_stmt_execute($stmtUpdate);
+    mysqli_stmt_close($stmtUpdate);
+}
+
+function rollup_booking_status($conexion, $bookingRequestId, $hasRequestsSoftDelete)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    if ($bookingRequestId <= 0) {
+        return;
+    }
+    if (!table_exists($conexion, 'booking_requests') || !table_exists($conexion, 'booking_request_items')) {
+        return;
+    }
+    if (!table_has_column($conexion, 'booking_requests', 'status')) {
+        return;
+    }
+    if (!table_has_column($conexion, 'booking_request_items', 'item_status')) {
+        return;
+    }
+
+    $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $normalizedStatusExpr = "CASE
+        WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+        ELSE bri.item_status
+    END";
+
+    $statsSql = "SELECT
+                    COUNT(*) AS total_count,
+                    SUM(CASE WHEN {$normalizedStatusExpr} = 'provider_confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
+                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
+                 FROM booking_request_items bri
+                 WHERE bri.booking_request_id = ?";
+    if ($hasItemsSoftDelete) {
+        $statsSql .= " AND bri.is_deleted = 0";
+    }
+    $statsSql .= " LIMIT 1";
+
+    $stmtStats = mysqli_prepare($conexion, $statsSql);
+    if (!$stmtStats) {
+        return;
+    }
+    mysqli_stmt_bind_param($stmtStats, 'i', $bookingRequestId);
+    if (!mysqli_stmt_execute($stmtStats)) {
+        mysqli_stmt_close($stmtStats);
+        return;
+    }
+    $statsRes = mysqli_stmt_get_result($stmtStats);
+    $statsRow = $statsRes ? mysqli_fetch_assoc($statsRes) : null;
+    mysqli_stmt_close($stmtStats);
+    if (!$statsRow) {
+        return;
+    }
+
+    $totalCount = (int)($statsRow['total_count'] ?? 0);
+    $confirmedCount = (int)($statsRow['confirmed_count'] ?? 0);
+    $terminalCount = (int)($statsRow['terminal_count'] ?? 0);
+
+    $targetStatus = 'pending';
+    if ($confirmedCount > 0) {
+        $targetStatus = 'confirmed';
+    } elseif ($totalCount > 0 && $terminalCount >= $totalCount) {
+        $targetStatus = 'cancelled';
+    }
+
+    $currentSql = "SELECT status FROM booking_requests WHERE id = ?";
+    if ($hasRequestsSoftDelete) {
+        $currentSql .= " AND is_deleted = 0";
+    }
+    $currentSql .= " LIMIT 1";
+    $stmtCurrent = mysqli_prepare($conexion, $currentSql);
+    if (!$stmtCurrent) {
+        return;
+    }
+    mysqli_stmt_bind_param($stmtCurrent, 'i', $bookingRequestId);
+    if (!mysqli_stmt_execute($stmtCurrent)) {
+        mysqli_stmt_close($stmtCurrent);
+        return;
+    }
+    $currentRes = mysqli_stmt_get_result($stmtCurrent);
+    $currentRow = $currentRes ? mysqli_fetch_assoc($currentRes) : null;
+    mysqli_stmt_close($stmtCurrent);
+    if (!$currentRow) {
+        return;
+    }
+    $currentStatus = strtolower(trim((string)($currentRow['status'] ?? '')));
+
+    if ($targetStatus === 'pending' && $currentStatus !== 'pending') {
+        return;
+    }
+    if ($currentStatus === $targetStatus) {
+        return;
+    }
+
+    $setParts = ['status = ?'];
+    $types = 's';
+    $params = [$targetStatus];
+    if (table_has_column($conexion, 'booking_requests', 'updated_at')) {
+        $setParts[] = 'updated_at = NOW()';
+    }
+
+    $updateSql = "UPDATE booking_requests
+                  SET " . implode(', ', $setParts) . "
+                  WHERE id = ?";
+    $types .= 'i';
+    $params[] = $bookingRequestId;
+    if ($hasRequestsSoftDelete) {
+        $updateSql .= " AND is_deleted = 0";
+    }
+    $updateSql .= " LIMIT 1";
+
+    $stmtUpdate = mysqli_prepare($conexion, $updateSql);
+    if (!$stmtUpdate) {
+        return;
+    }
+    bind_stmt_params($stmtUpdate, $types, $params);
+    mysqli_stmt_execute($stmtUpdate);
+    mysqli_stmt_close($stmtUpdate);
+}
+
 if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
     json_err('forbidden', 403);
 }
@@ -278,8 +578,20 @@ if (!table_exists($conexion, 'booking_request_items')) {
 $providerId = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
 $serviceProviderId = isset($_SESSION['service_provider_id']) ? intval($_SESSION['service_provider_id']) : 0;
 $isAdminSession = is_role_admin_session();
+$isComplementarySession = is_complementary_user_session();
+$sessionRoleText = strtolower(trim((string)($_SESSION['rol'] ?? '')));
+$sessionRoleId = current_role_id();
+$hasComplementaryRoleHint = strpos($sessionRoleText, 'complement') !== false || strpos($sessionRoleText, 'partner') !== false;
+$isLikelyMedicalProviderRole = in_array((int)$sessionRoleId, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true)
+    || strpos($sessionRoleText, 'prestador') !== false
+    || (!$hasComplementaryRoleHint && strpos($sessionRoleText, 'provider') !== false);
+$isMedicalProviderSession = !$isAdminSession && ($isLikelyMedicalProviderRole || ($providerId > 0 && !$isComplementarySession));
 
-if (!$isAdminSession && $providerId <= 0 && $serviceProviderId <= 0) {
+if ($isMedicalProviderSession && $providerId <= 0) {
+    json_err('provider_id_required', 401);
+}
+
+if (!$isAdminSession && !$isMedicalProviderSession && $serviceProviderId <= 0) {
     json_err('forbidden', 403);
 }
 
@@ -302,6 +614,8 @@ $providerAllowedTargets = [
 
 $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
 $hasRequestsSoftDelete = table_has_column($conexion, 'booking_requests', 'is_deleted');
+$hasItemsProviderId = table_has_column($conexion, 'booking_request_items', 'provider_id');
+$hasItemsServiceProviderId = table_has_column($conexion, 'booking_request_items', 'service_provider_id');
 $hasItemStatus = table_has_column($conexion, 'booking_request_items', 'item_status');
 $hasItemCreatedAt = table_has_column($conexion, 'booking_request_items', 'created_at');
 $hasItemUpdatedAt = table_has_column($conexion, 'booking_request_items', 'updated_at');
@@ -325,6 +639,8 @@ $hasAdditionalNotes = table_has_column($conexion, 'booking_requests', 'additiona
 $hasBookingName = table_has_column($conexion, 'booking_requests', 'name');
 $hasBookingEmail = table_has_column($conexion, 'booking_requests', 'email');
 $hasBookingPhone = table_has_column($conexion, 'booking_requests', 'phone');
+$hasBookingFeeStatus = table_has_column($conexion, 'booking_requests', 'fee_status');
+$hasBookingClientUserId = table_has_column($conexion, 'booking_requests', 'client_user_id');
 $hasBookingOrigin = table_has_column($conexion, 'booking_requests', 'origin');
 $hasBookingPersons = table_has_column($conexion, 'booking_requests', 'persons');
 $hasBookingCategory = table_has_column($conexion, 'booking_requests', 'category');
@@ -348,18 +664,24 @@ if ($isAdminSession) {
     $scopeWhere = '';
     $scopeTypes = '';
     $scopeParams = [];
-} elseif ($providerId > 0 && $serviceProviderId > 0) {
-    $scopeWhere = ' AND (bri.provider_id = ? OR bri.service_provider_id = ?)';
-    $scopeTypes = 'ii';
-    $scopeParams = [$providerId, $serviceProviderId];
-} elseif ($providerId > 0) {
-    $scopeWhere = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?))';
-    $scopeTypes = 'ii';
-    $scopeParams = [$providerId, $providerId];
+} elseif ($isMedicalProviderSession) {
+    if ($hasItemsProviderId) {
+        $scopeWhere = " AND bri.provider_id = ? AND bri.item_type = 'medical_offer'";
+        $scopeTypes = 'i';
+        $scopeParams = [$providerId];
+    } else {
+        $medicalScope = build_medical_provider_scope($conexion, $providerId);
+        $scopeWhere = (string)$medicalScope['where'];
+        $scopeTypes = (string)$medicalScope['types'];
+        $scopeParams = is_array($medicalScope['params']) ? $medicalScope['params'] : [];
+    }
 } else {
-    $scopeWhere = ' AND ((bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?) OR (bri.provider_id IS NOT NULL AND bri.provider_id = ?))';
-    $scopeTypes = 'ii';
-    $scopeParams = [$serviceProviderId, $serviceProviderId];
+    if (!$hasItemsServiceProviderId) {
+        json_err('service_provider_id_not_available', 409);
+    }
+    $scopeWhere = " AND bri.service_provider_id = ? AND bri.item_type = 'complementary_service'";
+    $scopeTypes = 'i';
+    $scopeParams = [$serviceProviderId];
 }
 
 $timelineFromExpr = $hasTimelineFrom ? 'br.timeline_from' : 'NULL';
@@ -537,6 +859,9 @@ if ($action === 'list') {
     $res = mysqli_stmt_get_result($stmt);
     $rows = [];
     while ($row = mysqli_fetch_assoc($res)) {
+        if ($isMedicalProviderSession && isset($row['additional_notes'])) {
+            $row['additional_notes'] = strip_medtravel_services_requested_block((string)$row['additional_notes']);
+        }
         $rows[] = $row;
     }
     mysqli_stmt_close($stmt);
@@ -553,6 +878,8 @@ if ($action === 'get_detail') {
     $bookingNameExpr = $hasBookingName ? 'br.name' : "''";
     $bookingEmailExpr = $hasBookingEmail ? 'br.email' : "''";
     $bookingPhoneExpr = $hasBookingPhone ? 'br.phone' : "''";
+    $bookingFeeStatusExpr = $hasBookingFeeStatus ? 'br.fee_status' : "'pending'";
+    $bookingClientUserExpr = $hasBookingClientUserId ? 'br.client_user_id' : 'NULL';
     $bookingOriginExpr = $hasBookingOrigin ? 'br.origin' : "''";
     $bookingPersonsExpr = $hasBookingPersons ? 'br.persons' : "''";
     $bookingCategoryExpr = $hasBookingCategory ? 'br.category' : "''";
@@ -576,6 +903,8 @@ if ($action === 'get_detail') {
                 {$bookingNameExpr} AS client_name,
                 {$bookingEmailExpr} AS client_email,
                 {$bookingPhoneExpr} AS client_phone,
+                {$bookingFeeStatusExpr} AS fee_status,
+                {$bookingClientUserExpr} AS client_user_id,
                 {$bookingOriginExpr} AS origin,
                 br.destination,
                 {$bookingPersonsExpr} AS persons,
@@ -641,9 +970,96 @@ if ($action === 'get_detail') {
         json_err('not_found', 404);
     }
 
+    if (!$isAdminSession) {
+        $feeStatus = strtolower(trim((string)($row['fee_status'] ?? '')));
+        $itemStatus = strtolower(trim((string)($row['item_status'] ?? '')));
+        $allowedItemStatuses = ['provider_confirmed', 'client_accepted'];
+        $canShowContact = ($feeStatus === 'paid');
+        if ($canShowContact && $itemStatus !== '' && !in_array($itemStatus, $allowedItemStatuses, true)) {
+            $canShowContact = false;
+        }
+        if (!$canShowContact) {
+            $row['client_email'] = 'Locked until Coordination Fee is paid';
+            $row['client_phone'] = 'Locked until Coordination Fee is paid';
+        }
+    }
+
     $bookingRequestId = (int)$row['booking_request_id'];
-    $row['messages'] = parse_additional_notes_messages((string)($row['additional_notes'] ?? ''));
+    $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
+    $row['fee_locked'] = $feeLocked ? 1 : 0;
+    $rawAdditionalNotes = (string)($row['additional_notes'] ?? '');
+    $row['messages'] = parse_additional_notes_messages($rawAdditionalNotes);
+    if ($isMedicalProviderSession) {
+        $row['additional_notes'] = strip_medtravel_services_requested_block($rawAdditionalNotes);
+    }
     sort_messages_by_time($row['messages']);
+
+    $documents = [];
+    $documentsError = '';
+    $clientId = (int)($row['client_user_id'] ?? 0);
+    if ($clientId <= 0 && $hasBookingEmail) {
+        $clientEmail = trim((string)($row['client_email'] ?? ''));
+        if ($clientEmail !== '' && table_exists($conexion, 'clientes') && table_has_column($conexion, 'clientes', 'email')) {
+            $clientLookupSql = "SELECT id FROM clientes WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1";
+            $stmtClient = mysqli_prepare($conexion, $clientLookupSql);
+            if ($stmtClient) {
+                mysqli_stmt_bind_param($stmtClient, 's', $clientEmail);
+                if (mysqli_stmt_execute($stmtClient)) {
+                    $clientRes = mysqli_stmt_get_result($stmtClient);
+                    $clientRow = $clientRes ? mysqli_fetch_assoc($clientRes) : null;
+                    if ($clientRow) {
+                        $clientId = (int)($clientRow['id'] ?? 0);
+                    }
+                }
+                mysqli_stmt_close($stmtClient);
+            }
+        }
+    }
+
+    if ($clientId > 0 && table_exists($conexion, 'client_documents')) {
+        $docHasShared = table_has_column($conexion, 'client_documents', 'shared_with_provider');
+        $docHasRequestId = table_has_column($conexion, 'client_documents', 'booking_request_id');
+        $docHasItemId = table_has_column($conexion, 'client_documents', 'item_id');
+
+        if (!$docHasRequestId || !$docHasItemId) {
+            $documentsError = 'client_documents_scope_missing';
+        } else {
+            $docSql = "SELECT id, document_type, file_path, filename, original_filename, file_size, mime_type, title, uploaded_at, booking_request_id, item_id
+                       FROM client_documents WHERE client_id = ?";
+
+            $docTypes = 'i';
+            $docParams = [$clientId];
+            if ($docHasShared) {
+                $docSql .= " AND shared_with_provider = 1";
+            }
+            $docSql .= " AND booking_request_id = ?";
+            $docTypes .= 'i';
+            $docParams[] = $bookingRequestId;
+            if ($itemId > 0) {
+                $docSql .= " AND (item_id = ? OR item_id IS NULL)";
+                $docTypes .= 'i';
+                $docParams[] = $itemId;
+            }
+            $docSql .= " ORDER BY uploaded_at DESC";
+
+            $stmtDocs = mysqli_prepare($conexion, $docSql);
+            if ($stmtDocs) {
+                bind_stmt_params($stmtDocs, $docTypes, $docParams);
+                if (mysqli_stmt_execute($stmtDocs)) {
+                    $docRes = mysqli_stmt_get_result($stmtDocs);
+                    while ($docRes && ($docRow = mysqli_fetch_assoc($docRes))) {
+                        $docRow['download_url'] = '/admin/ajax/download_medical_document.php?doc_id=' . (int)($docRow['id'] ?? 0);
+                        $documents[] = $docRow;
+                    }
+                }
+                mysqli_stmt_close($stmtDocs);
+            }
+        }
+    }
+    $row['documents'] = $documents;
+    if ($documentsError !== '') {
+        $row['documents_error'] = $documentsError;
+    }
 
     $history = [];
     $historySql = "SELECT
@@ -749,6 +1165,8 @@ if ($action === 'list_messages') {
             json_err('not_found', 404);
         }
     }
+
+    $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
 
     $parsedMessages = parse_additional_notes_messages(fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete));
     $messages = [];
@@ -860,11 +1278,42 @@ if ($action === 'list_messages') {
         }
     }
 
+    if (inbox_table_exists($conexion, 'inbox_messages')) {
+        $threadId = inbox_thread_id($threadType, $bookingRequestId, $itemId);
+        $stmtInbox = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? ORDER BY id ASC");
+        if ($stmtInbox) {
+            mysqli_stmt_bind_param($stmtInbox, 's', $threadId);
+            if (mysqli_stmt_execute($stmtInbox)) {
+                $resInbox = mysqli_stmt_get_result($stmtInbox);
+                while ($resInbox && ($rowInbox = mysqli_fetch_assoc($resInbox))) {
+                    $body = (string)($rowInbox['body'] ?? '');
+                    $type = 'inbox_message';
+                    if (stripos($body, '[ACTION]') === 0) {
+                        $type = 'quick_action';
+                    } elseif (stripos($body, '[REPLY]') === 0) {
+                        $type = 'quick_reply';
+                    }
+                    $messages[] = [
+                        'sender' => inbox_sender_to_ui($rowInbox['sender_role'] ?? ''),
+                        'type' => $type,
+                        'time' => (string)($rowInbox['created_at'] ?? ''),
+                        'actor' => '',
+                        'body' => $body,
+                        'thread_type' => $threadType,
+                        'thread_item_id' => $threadType === 'ITEM' ? $itemId : 0,
+                    ];
+                }
+            }
+            mysqli_stmt_close($stmtInbox);
+        }
+    }
+
     sort_messages_by_time($messages);
     json_ok([
         'booking_request_id' => $bookingRequestId,
         'thread_type' => $threadType,
         'item_id' => $threadType === 'ITEM' ? $itemId : 0,
+        'fee_locked' => $feeLocked ? 1 : 0,
         'messages' => $messages
     ]);
 }
@@ -927,6 +1376,11 @@ if ($action === 'send_message') {
         }
     }
 
+    $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
+    if ($feeLocked && !$isAdminSession) {
+        json_err('coordination_fee_required', 403);
+    }
+
     $stamp = date('Y-m-d H:i:s');
     $normalizedMessage = normalize_message_text($messageText);
     $actor = 'provider';
@@ -983,6 +1437,71 @@ if ($action === 'send_message') {
             'body' => $normalizedMessage,
             'thread_type' => $threadType,
             'thread_item_id' => $threadType === 'ITEM' ? $itemId : 0,
+        ],
+    ]);
+}
+
+if ($action === 'send_quick_reply') {
+    $itemId = intval($_POST['item_id'] ?? 0);
+    if ($itemId <= 0) {
+        json_err('invalid_id', 422);
+    }
+
+    $replyKey = strtoupper(trim((string)($_POST['reply_key'] ?? '')));
+    $quickReplies = [
+        'DATES_OK' => 'Dates available',
+        'DATES_NOT_AVAILABLE' => 'Dates not available'
+    ];
+    if ($replyKey === '' || !isset($quickReplies[$replyKey])) {
+        json_err('invalid_reply_key', 422);
+    }
+
+    $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
+    if (!$itemRow) {
+        json_err('not_found', 404);
+    }
+    $bookingRequestId = (int)$itemRow['booking_request_id'];
+    if ($bookingRequestId <= 0) {
+        json_err('invalid_booking_id', 422);
+    }
+    if (!inbox_table_exists($conexion, 'inbox_messages')) {
+        json_err('inbox_messages_not_available', 409);
+    }
+
+    $message = '[REPLY] ' . $quickReplies[$replyKey];
+    $threadId = inbox_thread_id('ITEM', $bookingRequestId, $itemId);
+    $senderRole = $isAdminSession ? 'ADMIN' : 'PROVIDER';
+    $senderUserId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        "INSERT INTO inbox_messages
+            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+         VALUES (?, 'ITEM', ?, ?, ?, ?, ?)"
+    );
+    if (!$stmt) {
+        json_err('db_prepare_error', 500);
+    }
+    mysqli_stmt_bind_param($stmt, 'siisis', $threadId, $bookingRequestId, $itemId, $senderRole, $senderUserId, $message);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        json_err('db_error: ' . $err, 500);
+    }
+    mysqli_stmt_close($stmt);
+
+    json_ok([
+        'booking_request_id' => $bookingRequestId,
+        'thread_type' => 'ITEM',
+        'item_id' => $itemId,
+        'message' => [
+            'sender' => $isAdminSession ? 'admin' : 'provider',
+            'type' => 'quick_reply',
+            'time' => date('Y-m-d H:i:s'),
+            'actor' => '',
+            'body' => $message,
+            'thread_type' => 'ITEM',
+            'thread_item_id' => $itemId,
         ],
     ]);
 }
@@ -1201,6 +1720,12 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         json_err('not_found_or_no_change', 404);
     }
 
+    $bookingRequestId = (int)($itemRow['booking_request_id'] ?? 0);
+    if ($bookingRequestId > 0) {
+        sync_booking_fee_gate_state($conexion, $bookingRequestId, $hasRequestsSoftDelete);
+        rollup_booking_status($conexion, $bookingRequestId, $hasRequestsSoftDelete);
+    }
+
     try {
         $notifySql = "SELECT
                         br.id AS booking_id,
@@ -1295,14 +1820,29 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
             $subject = 'Update on your MedTravel request #' . $bookingId;
             $safeClientName = $clientName !== '' ? $clientName : 'Patient';
             $safeItemName = $itemName !== '' ? $itemName : ('Item #' . $itemId);
+            $loginUrl = 'https://medtravel.com.co/login.php';
 
-            $htmlBody = '<p>Hello ' . safe_html($safeClientName) . ',</p>'
+            $contentHtml = '<p>Hello ' . safe_html($safeClientName) . ',</p>'
                 . '<p>There is a new update on your MedTravel request.</p>'
                 . '<p><strong>Request ID:</strong> #' . safe_html((string)$bookingId) . '<br>'
                 . '<strong>Service:</strong> ' . safe_html($safeItemName) . '<br>'
                 . '<strong>New status:</strong> ' . safe_html($statusLabel) . '</p>'
                 . $summaryHtml
                 . '<p>You can log in to your client portal to review details.</p>';
+
+            $htmlBody = $contentHtml;
+            if (function_exists('renderMedTravelEmail')) {
+                $htmlBody = renderMedTravelEmail(
+                    'Request update',
+                    'There is a new update on your MedTravel request.',
+                    $contentHtml,
+                    'This is an automated message.',
+                    [
+                        'text' => 'Log in to your client portal',
+                        'url' => $loginUrl,
+                    ]
+                );
+            }
 
             $altBody = "Hello {$safeClientName},\n\n"
                 . "There is a new update on your MedTravel request.\n"

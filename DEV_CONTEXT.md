@@ -258,6 +258,19 @@ Criterio: se listan **todos** los `.md` detectados, con el primer encabezado/lí
 | 3 | `client` | Público | `none` |
 
 - Roles 1 y 2: no requieren empresa asignada para login.
+
+### C) Regla de ownership en booking_request_items (2026-02-20)
+- Medical: `booking_request_items.provider_id` apunta a `providers.id` y `service_provider_id` debe ser NULL.
+- Complementary: `booking_request_items.service_provider_id` apunta a `service_providers.id` y `provider_id` debe ser NULL.
+- El listado de prestadores debe filtrar por su columna de dominio correspondiente y excluir items con ownership NULL.
+
+**Verificacion SQL**
+```sql
+SELECT id, item_type, offer_id, medtravel_service_id, provider_id, service_provider_id
+FROM booking_request_items
+WHERE booking_request_id = <ID>
+ORDER BY id ASC;
+```
 - Roles 4 y 12: requieren `provider_id` válido.
 - Rol 13: requiere `service_provider_id` válido y activo.
 - Rol 3 (`client`): no requiere empresa/scope en admin.
@@ -708,3 +721,42 @@ Nota de alcance:
 - Ajustes admin relacionados:
   - `admin/provider_verification.php`: orden de scripts corregido para evitar errores `jQuery is not defined` / `DataTable is not a function`.
   - `admin/js/provider_verification.js`: checklist migrado a `mt-checkbox` y removido doble indicador visual de check.
+
+### 19) Fee Gate for client coordination (2026-02-20)
+- Migración DB: `sql/2026_02_20_booking_requests_fee_gate.sql`
+  - agrega en `booking_requests`:
+    - `fee_status` (`not_required|pending|paid`, default `pending`)
+    - `fee_required` (`TINYINT(1)`, default `0`)
+- Helper central: `inc/fee_gate.php`
+  - `is_booking_fee_paid($conexion, $booking_request_id)`
+  - `is_booking_fee_required($conexion, $booking_request_id)`
+- En `admin/ajax/my_booking_requests.php`:
+  - al cambiar un item por flujo provider (`provider_confirmed/rejected/proposed_change`) se recalcula fee del booking:
+    - si hay algún `provider_confirmed` => `fee_required=1`, `fee_status='pending'` (si no estaba `paid`)
+    - si todos quedan `provider_rejected/cancelled` y no hay confirmados => `fee_required=0`, `fee_status='not_required'` (si no estaba `paid`)
+- Bloqueo server-side:
+  - `client/ajax/inbox.php`: para booking con fee requerido y no pagado devuelve `403` + `{ok:false, code:'FEE_REQUIRED'}` al enviar mensajes y al abrir/leer hilo `CARE`.
+  - `client/ajax/calendar.php`: para booking con fee requerido y no pagado devuelve `403` + `{ok:false, code:'FEE_REQUIRED'}` en `accept_event`.
+- UI mínima:
+  - `client/app_inbox.php` + `client/js/app_inbox.js`: aviso y deshabilitado de envío ante `FEE_REQUIRED`.
+  - `client/app_calendar.php` + `client/js/app_calendar.js`: aviso y deshabilitado de aceptación ante `FEE_REQUIRED`.
+  - `offer_detail.php`: si sesión cliente + `booking_id/request_id` en URL con fee pendiente, oculta phone/email y muestra `Unlock after Coordination Fee`.
+- Prueba rápida:
+  1. Ejecutar migración SQL.
+  2. Confirmar un item desde provider (`provider_confirmed`) y validar:
+     - `SELECT id, fee_required, fee_status FROM booking_requests WHERE id = <booking_id>;`
+  3. Como cliente, abrir Inbox/Calendar del booking y confirmar `403/FEE_REQUIRED` en acciones bloqueadas.
+  4. Simular pago (`fee_status='paid'`) y reintentar: debe permitir interacción.
+  5. Si todos items quedan `provider_rejected/cancelled`, validar `fee_status='not_required'`.
+
+### 20) Medical documents pre-fee uploads (2026-02-20)
+- Ruta final de uploads: `uploads/medical_docs/` (relativa a la raiz del proyecto).
+  - En produccion, el servidor debe tener permisos de escritura sobre `uploads/medical_docs/`.
+  - La carpeta se versiona con `uploads/medical_docs/.gitkeep`.
+- Scoping estricto por booking/item en `client_documents`:
+  - Columnas requeridas: `booking_request_id` (INT NULL), `item_id` (INT NULL).
+  - Migracion: `sql/2026_02_20_client_documents_request_item_scope.sql`.
+- Descarga segura (provider/admin):
+  - Endpoint: `admin/ajax/download_medical_document.php?doc_id=...`.
+  - Admin: acceso total.
+  - Provider: solo si el documento pertenece a un `booking_request/item` dentro de su scope (`provider_id`/`service_provider_id` + `item_type`).

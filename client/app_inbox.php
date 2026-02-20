@@ -1,5 +1,47 @@
 <?php
 include __DIR__ . '/include/include.php';
+require_once __DIR__ . '/../inc/fee_gate.php';
+
+$clientFeeGateActive = false;
+if (isset($conexion) && $conexion) {
+    $ownerScope = client_build_booking_owner_scope($conexion, 'br', (int)$clientUserId, client_get_session_email());
+    $requestId = isset($_GET['request_id']) ? (int)$_GET['request_id'] : (isset($_GET['booking_id']) ? (int)$_GET['booking_id'] : 0);
+    $itemId = isset($_GET['item_id']) ? (int)$_GET['item_id'] : 0;
+    $bookingIdForFee = $requestId > 0 ? $requestId : 0;
+
+    if ($bookingIdForFee <= 0 && $itemId > 0 && ($ownerScope['sql'] ?? '1=0') !== '1=0') {
+        $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+        $hasRequestsSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+        $sql = "SELECT bri.booking_request_id
+                FROM booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                WHERE bri.id = ? AND (" . $ownerScope['sql'] . ")";
+        if ($hasItemsSoftDelete) {
+            $sql .= " AND bri.is_deleted = 0";
+        }
+        if ($hasRequestsSoftDelete) {
+            $sql .= " AND br.is_deleted = 0";
+        }
+        $sql .= " LIMIT 1";
+        $stmt = mysqli_prepare($conexion, $sql);
+        if ($stmt) {
+            $types = 'i' . (string)($ownerScope['types'] ?? '');
+            $params = array_merge([$itemId], is_array($ownerScope['params'] ?? null) ? $ownerScope['params'] : []);
+            if (mt_fee_bind_stmt_params($stmt, $types, $params) && mysqli_stmt_execute($stmt)) {
+                $res = mysqli_stmt_get_result($stmt);
+                $row = $res ? mysqli_fetch_assoc($res) : null;
+                if ($row) {
+                    $bookingIdForFee = (int)($row['booking_request_id'] ?? 0);
+                }
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    if ($bookingIdForFee > 0) {
+        $clientFeeGateActive = is_booking_fee_required($conexion, $bookingIdForFee);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -47,14 +89,61 @@ include __DIR__ . '/include/include.php';
                             <div class="inbox-header">
                                 <h1 id="client-inbox-title">Select a thread</h1>
                             </div>
+                            <div id="client-inbox-fee-alert" class="note note-warning" style="<?php echo $clientFeeGateActive ? '' : 'display:none;'; ?>">
+                                <strong>Coordination Fee required.</strong>
+                                Unlock after Coordination Fee.
+                            </div>
+                            <div id="client-inbox-fee-actions" class="well" style="display:none;margin-bottom:12px;">
+                                <h4 style="margin-top:0;">Quick actions</h4>
+                                <p class="text-muted" style="margin-bottom:10px;">Messaging is limited until the coordination fee is paid.</p>
+                                <div class="btn-group btn-group-sm" id="client-inbox-quick-actions" role="group" style="margin-bottom:12px;">
+                                    <button type="button" class="btn btn-default client-quick-action" data-action="REQUEST_AVAILABILITY">Ask about availability</button>
+                                    <button type="button" class="btn btn-default client-quick-action" data-action="DATES_FLEXIBLE">My dates are flexible</button>
+                                    <button type="button" class="btn btn-default client-quick-action" data-action="DOCS_UPLOADED">I uploaded documents</button>
+                                </div>
+                                <hr style="margin:12px 0;">
+                                <h4 style="margin-top:0;">Upload medical documents</h4>
+                                <form id="client-inbox-doc-form" enctype="multipart/form-data">
+                                    <div class="row">
+                                        <div class="col-sm-6">
+                                            <div class="form-group">
+                                                <label for="client-doc-type">Document type</label>
+                                                <select class="form-control" id="client-doc-type">
+                                                    <option value="medical_history">Medical history</option>
+                                                    <option value="lab_results">Lab results</option>
+                                                    <option value="prescription">Prescription</option>
+                                                    <option value="insurance">Insurance</option>
+                                                    <option value="photos">Photos</option>
+                                                    <option value="other">Other</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <div class="form-group">
+                                                <label for="client-doc-file">File</label>
+                                                <input type="file" class="form-control" id="client-doc-file" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="client-doc-title">Title (optional)</label>
+                                        <input type="text" class="form-control" id="client-doc-title" maxlength="255" placeholder="Document title">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="client-doc-description">Description (optional)</label>
+                                        <textarea class="form-control" id="client-doc-description" rows="2" maxlength="500" placeholder="Short description"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-success btn-sm" id="client-doc-upload-btn"><i class="fa fa-upload"></i> Upload document</button>
+                                </form>
+                            </div>
                             <div class="inbox-content" id="client-inbox-content" style="display:none;">
                                 <div id="client-inbox-messages" style="max-height:420px;overflow:auto;border:1px solid #eef1f5;padding:12px;background:#fff;"></div>
                                 <form id="client-inbox-send-form" style="margin-top:12px;">
                                     <div class="form-group" style="margin-bottom:8px;">
                                         <label for="client-inbox-message">Write a message</label>
-                                        <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..."></textarea>
+                                        <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..." <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>></textarea>
                                     </div>
-                                    <button type="submit" class="btn btn-primary"><i class="fa fa-paper-plane"></i> Send</button>
+                                    <button type="submit" class="btn btn-primary" id="client-inbox-send-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
                                 </form>
                             </div>
                             <div class="inbox-content" id="client-inbox-empty">
@@ -71,6 +160,11 @@ include __DIR__ . '/include/include.php';
 
 <?php echo $theme_layout_script; ?>
 <script src="/client/js/notifications.js" type="text/javascript"></script>
+<script type="text/javascript">
+window.ClientInboxConfig = {
+    feeGateActive: <?php echo $clientFeeGateActive ? 'true' : 'false'; ?>
+};
+</script>
 <script src="/client/js/app_inbox.js" type="text/javascript"></script>
 </body>
 </html>

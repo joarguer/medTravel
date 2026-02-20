@@ -22,6 +22,9 @@ function dd_admin_json_err($message, $status = 400)
 if (!is_role_admin_session()) {
     dd_admin_json_err('forbidden', 403);
 }
+if (!user_can(PERM_SETTINGS_MANAGE)) {
+    dd_admin_json_err('forbidden', 403);
+}
 
 $action = $_POST['action'] ?? $_GET['action'] ?? 'list';
 
@@ -63,10 +66,20 @@ if ($action === 'process') {
             dd_admin_json_err('not_found', 404);
         }
         if ($msg === 'already_completed') {
-            dd_admin_json_err('already_completed', 409);
+            dd_admin_json_ok([
+                'message' => 'already_completed',
+                'request_ref' => '',
+                'result_summary' => '',
+                'counts' => [],
+            ]);
         }
         if ($msg === 'already_processing') {
-            dd_admin_json_err('already_processing', 409);
+            dd_admin_json_ok([
+                'message' => 'already_processing',
+                'request_ref' => '',
+                'result_summary' => '',
+                'counts' => [],
+            ]);
         }
         if ($msg === 'invalid_request_id') {
             dd_admin_json_err('invalid_request_id', 422);

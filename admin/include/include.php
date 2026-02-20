@@ -112,6 +112,18 @@ if (isset($conexion)) {
                 $items_has_soft_delete = true;
             }
 
+            $items_has_provider_id = false;
+            $items_provider_id_check = mysqli_query($conexion, "SHOW COLUMNS FROM booking_request_items LIKE 'provider_id'");
+            if ($items_provider_id_check && mysqli_num_rows($items_provider_id_check) > 0) {
+                $items_has_provider_id = true;
+            }
+
+            $items_has_service_provider_id = false;
+            $items_service_provider_id_check = mysqli_query($conexion, "SHOW COLUMNS FROM booking_request_items LIKE 'service_provider_id'");
+            if ($items_service_provider_id_check && mysqli_num_rows($items_service_provider_id_check) > 0) {
+                $items_has_service_provider_id = true;
+            }
+
             $items_has_status = false;
             $items_status_check = mysqli_query($conexion, "SHOW COLUMNS FROM booking_request_items LIKE 'item_status'");
             if ($items_status_check && mysqli_num_rows($items_status_check) > 0) {
@@ -121,22 +133,27 @@ if (isset($conexion)) {
                 ? "CASE WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin','pending_review') THEN 'pending_provider' ELSE bri.item_status END"
                 : "'pending_provider'";
 
-            // Misma lógica de scope/filtros que admin/ajax/my_booking_requests.php (list).
+            // Scope estricto por ownership (como en admin/ajax/my_booking_requests.php).
             $scope_where = '';
             $scope_types = '';
             $scope_values = [];
-            if ($provider_id > 0 && $service_provider_id > 0) {
-                $scope_where = ' AND (bri.provider_id = ? OR bri.service_provider_id = ?)';
-                $scope_types = 'ii';
-                $scope_values = [$provider_id, $service_provider_id];
+            $is_complementary_scope = $es_complementario && $service_provider_id > 0;
+            if ($is_complementary_scope) {
+                if ($items_has_service_provider_id) {
+                    $scope_where = " AND bri.service_provider_id = ? AND bri.item_type = 'complementary_service'";
+                    $scope_types = 'i';
+                    $scope_values = [$service_provider_id];
+                } else {
+                    $scope_where = ' AND 1=0';
+                }
             } elseif ($provider_id > 0) {
-                $scope_where = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?))';
-                $scope_types = 'ii';
-                $scope_values = [$provider_id, $provider_id];
-            } elseif ($service_provider_id > 0) {
-                $scope_where = ' AND ((bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?) OR (bri.provider_id IS NOT NULL AND bri.provider_id = ?))';
-                $scope_types = 'ii';
-                $scope_values = [$service_provider_id, $service_provider_id];
+                if ($items_has_provider_id) {
+                    $scope_where = " AND bri.provider_id = ? AND bri.item_type = 'medical_offer'";
+                    $scope_types = 'i';
+                    $scope_values = [$provider_id];
+                } else {
+                    $scope_where = ' AND 1=0';
+                }
             }
 
             $count_sql = "SELECT COUNT(*) AS total

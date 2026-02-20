@@ -66,6 +66,16 @@ function renderBookingRequestsTable(data) {
             {
                 data: null,
                 render: function(data, type, row) {
+                    var feeRequired = parseInt(row.fee_required, 10) || 0;
+                    var feeStatus = (row.fee_status || '').toString().toLowerCase();
+                    var feeButton = '';
+                    if (feeRequired === 1 && feeStatus !== 'paid') {
+                        feeButton = `
+                            <button class="btn btn-xs btn-warning" onclick="markFeePaid(${row.id})">
+                                <i class="fa fa-check"></i> Mark Fee Paid
+                            </button>
+                        `;
+                    }
                     return `
                         <button class="btn btn-xs btn-primary" onclick="viewBookingDetail(${row.id})">
                             <i class="fa fa-eye"></i> View
@@ -73,6 +83,7 @@ function renderBookingRequestsTable(data) {
                         <button class="btn btn-xs btn-success" onclick="updateStatus(${row.id}, 'contacted')">
                             <i class="fa fa-phone"></i> Contact
                         </button>
+                        ${feeButton}
                         <button class="btn btn-xs btn-danger" onclick="deleteBooking(${row.id})">
                             <i class="fa fa-trash"></i>
                         </button>
@@ -338,6 +349,32 @@ function updateStatus(id, status) {
                 loadBookingRequests();
             } else {
                 toastr.error(response.message || 'Error updating status');
+            }
+        },
+        error: function() {
+            toastr.error('Connection error');
+        }
+    });
+}
+
+function markFeePaid(bookingId) {
+    var confirmation = prompt('Type "PAID" to confirm marking the fee as paid:');
+    if (!confirmation || confirmation.trim().toUpperCase() !== 'PAID') {
+        toastr.info('Confirmation not provided.');
+        return;
+    }
+
+    $.ajax({
+        url: 'ajax/booking_requests.php',
+        type: 'POST',
+        data: { action: 'mark_fee_paid', booking_id: bookingId },
+        dataType: 'json',
+        success: function(response) {
+            if (response && response.success) {
+                toastr.success('Fee marked as paid');
+                loadBookingRequests();
+            } else {
+                toastr.error((response && response.message) ? response.message : 'Error marking fee as paid');
             }
         },
         error: function() {

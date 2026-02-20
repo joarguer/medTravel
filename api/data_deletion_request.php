@@ -31,8 +31,12 @@ $email = dd_public_sanitize_text($_POST['email'] ?? '', 255);
 $name = dd_public_sanitize_text($_POST['name'] ?? '', 255);
 $message = dd_public_sanitize_text($_POST['message'] ?? '', 5000);
 
-if ($phone === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    echo json_encode(['ok' => false, 'error' => 'phone_and_email_required']);
+if ($phone === '' && $email === '') {
+    echo json_encode(['ok' => false, 'error' => 'email_or_phone_required']);
+    exit;
+}
+if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    echo json_encode(['ok' => false, 'error' => 'invalid_email']);
     exit;
 }
 
@@ -63,8 +67,12 @@ try {
     $body  = "<p>New data deletion request.</p>";
     $body .= "<ul>";
     $body .= "<li><strong>Request ID:</strong> " . htmlspecialchars($requestId, ENT_QUOTES, 'UTF-8') . "</li>";
-    $body .= "<li><strong>Phone:</strong> " . htmlspecialchars($phone, ENT_QUOTES, 'UTF-8') . "</li>";
-    $body .= "<li><strong>Email:</strong> " . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . "</li>";
+    if ($phone !== '') {
+        $body .= "<li><strong>Phone:</strong> " . htmlspecialchars($phone, ENT_QUOTES, 'UTF-8') . "</li>";
+    }
+    if ($email !== '') {
+        $body .= "<li><strong>Email:</strong> " . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . "</li>";
+    }
     if ($name !== '') {
         $body .= "<li><strong>Name:</strong> " . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . "</li>";
     }
@@ -73,7 +81,20 @@ try {
     }
     $body .= "</ul>";
     $mail->Body = $body;
-    $mail->AltBody = "Request ID: {$requestId}\nPhone: {$phone}\nEmail: {$email}\nName: {$name}\nMessage: {$message}";
+    $altLines = ["Request ID: {$requestId}"];
+    if ($phone !== '') {
+        $altLines[] = "Phone: {$phone}";
+    }
+    if ($email !== '') {
+        $altLines[] = "Email: {$email}";
+    }
+    if ($name !== '') {
+        $altLines[] = "Name: {$name}";
+    }
+    if ($message !== '') {
+        $altLines[] = "Message: {$message}";
+    }
+    $mail->AltBody = implode("\n", $altLines);
     $mail->send();
 } catch (Throwable $e) {
     $mailError = true;

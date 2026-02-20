@@ -1,6 +1,7 @@
 (function () {
     var config = window.ClientCalendarConfig || {};
     var currentEvent = null;
+    var feeGateActive = !!config.feeGateActive;
 
     function esc(str) {
         return String(str || '')
@@ -82,6 +83,32 @@
         return base + '?thread_id=' + encodeURIComponent(String(threadId));
     }
 
+    function setFeeGateState(enabled, message) {
+        feeGateActive = !!enabled;
+        var $alert = $('#client-calendar-fee-alert');
+        var $acceptBtn = $('#client-calendar-accept-btn');
+        var $changeBtn = $('#client-calendar-request-change-btn');
+
+        if ($alert.length) {
+            if (feeGateActive) {
+                var text = message || 'Unlock after Coordination Fee.';
+                $alert.html('<strong>Coordination Fee required.</strong> ' + esc(text));
+                $alert.show();
+            } else {
+                $alert.hide();
+            }
+        }
+
+        if ($acceptBtn.length) {
+            $acceptBtn.prop('disabled', feeGateActive);
+        }
+        if ($changeBtn.length) {
+            if (feeGateActive) {
+                $changeBtn.hide();
+            }
+        }
+    }
+
     function openDetail(event) {
         currentEvent = event || null;
         if (!currentEvent) return;
@@ -108,11 +135,21 @@
         var isProposed = (status === 'proposed');
         $('#client-calendar-accept-btn').toggle(isProposed);
         $('#client-calendar-request-change-btn').toggle(isProposed);
+        if (feeGateActive && isProposed) {
+            $('#client-calendar-accept-btn').prop('disabled', true);
+            $('#client-calendar-request-change-btn').hide();
+        } else {
+            $('#client-calendar-accept-btn').prop('disabled', false);
+        }
         $('#client-calendar-detail-modal').modal('show');
     }
 
     function acceptCurrentEvent() {
         if (!currentEvent || !currentEvent.id) {
+            return;
+        }
+        if (feeGateActive) {
+            toastr.warning('Unlock after Coordination Fee');
             return;
         }
         $.ajax({
@@ -131,7 +168,13 @@
             toastr.success('Schedule accepted');
             $('#client-calendar-detail-modal').modal('hide');
             $('#client-calendar').fullCalendar('refetchEvents');
-        }).fail(function () {
+        }).fail(function (xhr) {
+            var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            if (res && res.code === 'FEE_REQUIRED') {
+                setFeeGateState(true, 'Unlock after Coordination Fee.');
+                toastr.warning('Unlock after Coordination Fee');
+                return;
+            }
             toastr.error('Could not accept proposal');
         });
     }
@@ -185,6 +228,9 @@
     }
 
     $(function () {
+        if (feeGateActive) {
+            setFeeGateState(true, 'Unlock after Coordination Fee.');
+        }
         initCalendar();
         $('#client-calendar-accept-btn').on('click', function (e) {
             e.preventDefault();

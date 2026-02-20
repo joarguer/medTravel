@@ -1,5 +1,14 @@
 <?php
 include __DIR__ . '/include/include.php';
+require_once __DIR__ . '/../inc/fee_gate.php';
+
+$clientFeeGateActive = false;
+if (isset($conexion) && $conexion) {
+    $ownerScope = client_build_booking_owner_scope($conexion, 'br', (int)$clientUserId, client_get_session_email());
+    if (($ownerScope['sql'] ?? '1=0') !== '1=0') {
+        $clientFeeGateActive = mt_fee_any_required_for_owner_scope($conexion, $ownerScope);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -41,6 +50,10 @@ include __DIR__ . '/include/include.php';
                         </div>
                     </div>
                     <div class="portlet-body">
+                        <div id="client-calendar-fee-alert" class="note note-warning" style="<?php echo $clientFeeGateActive ? '' : 'display:none;'; ?>">
+                            <strong>Coordination Fee required.</strong>
+                            Unlock after Coordination Fee.
+                        </div>
                         <div id="client-calendar"></div>
                     </div>
                 </div>
@@ -87,7 +100,8 @@ window.ClientCalendarConfig = {
     listUrl: '/client/ajax/calendar.php',
     acceptUrl: '/client/ajax/calendar.php',
     requestBase: '/client/request_detail.php',
-    inboxBase: '/client/app_inbox.php'
+    inboxBase: '/client/app_inbox.php',
+    feeGateActive: <?php echo $clientFeeGateActive ? 'true' : 'false'; ?>
 };
 </script>
 <script src="/client/js/app_calendar.js" type="text/javascript"></script>

@@ -26,6 +26,7 @@ $serviceProviderId = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['s
 $roleId = current_role_id();
 $isStrictAdminRole = in_array((int)$roleId, [ROLE_ADMIN, ROLE_ADMINISTRATIVE], true);
 $isAdmin = $isStrictAdminRole || (is_role_admin_session() && $providerId <= 0 && $serviceProviderId <= 0);
+$isComplementarySession = is_complementary_user_session();
 $userId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
 
 if (!$isAdmin && $providerId <= 0 && $serviceProviderId <= 0) {
@@ -36,18 +37,24 @@ $scopeWhere = '';
 $scopeTypes = '';
 $scopeParams = [];
 if (!$isAdmin) {
-    if ($providerId > 0 && $serviceProviderId > 0) {
-        $scopeWhere = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?))';
-        $scopeTypes = 'ii';
-        $scopeParams = [$providerId, $serviceProviderId];
+    $hasItemsProviderId = inbox_table_has_column($conexion, 'booking_request_items', 'provider_id');
+    $hasItemsServiceProviderId = inbox_table_has_column($conexion, 'booking_request_items', 'service_provider_id');
+    if ($isComplementarySession && $serviceProviderId > 0) {
+        if ($hasItemsServiceProviderId) {
+            $scopeWhere = " AND bri.service_provider_id = ? AND bri.item_type = 'complementary_service'";
+            $scopeTypes = 'i';
+            $scopeParams = [$serviceProviderId];
+        } else {
+            $scopeWhere = ' AND 1=0';
+        }
     } elseif ($providerId > 0) {
-        $scopeWhere = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?))';
-        $scopeTypes = 'ii';
-        $scopeParams = [$providerId, $providerId];
-    } else {
-        $scopeWhere = ' AND ((bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?) OR (bri.provider_id IS NOT NULL AND bri.provider_id = ?))';
-        $scopeTypes = 'ii';
-        $scopeParams = [$serviceProviderId, $serviceProviderId];
+        if ($hasItemsProviderId) {
+            $scopeWhere = " AND bri.provider_id = ? AND bri.item_type = 'medical_offer'";
+            $scopeTypes = 'i';
+            $scopeParams = [$providerId];
+        } else {
+            $scopeWhere = ' AND 1=0';
+        }
     }
 }
 

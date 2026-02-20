@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../admin/include/email_config.php';
 require_once __DIR__ . '/../include/client_notifications.php';
 require_once __DIR__ . '/../../inc/calendar_utils.php';
 require_once __DIR__ . '/../../inc/inbox_utils.php';
+require_once __DIR__ . '/../../inc/fee_gate.php';
 
 function calendar_client_ok($data = [])
 {
@@ -15,10 +16,14 @@ function calendar_client_ok($data = [])
     exit;
 }
 
-function calendar_client_err($message, $status = 400)
+function calendar_client_err($message, $status = 400, $errorCode = '')
 {
     http_response_code($status);
-    echo json_encode(['ok' => false, 'message' => $message]);
+    $payload = ['ok' => false, 'message' => $message];
+    if ($errorCode !== '') {
+        $payload['code'] = $errorCode;
+    }
+    echo json_encode($payload);
     exit;
 }
 
@@ -250,6 +255,11 @@ if ($action === 'accept_event') {
     mysqli_stmt_close($stmt);
     if (!$eventRow) {
         calendar_client_err('forbidden_or_not_found', 404);
+    }
+
+    $eventRequestId = (int)($eventRow['request_id'] ?? 0);
+    if ($eventRequestId > 0 && is_booking_fee_required($conexion, $eventRequestId)) {
+        calendar_client_err('coordination_fee_required', 403, 'FEE_REQUIRED');
     }
 
     $status = calendar_normalize_status($eventRow['status'] ?? '');
