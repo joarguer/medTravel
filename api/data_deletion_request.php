@@ -1,87 +1,88 @@
 <?php
-// Simple API to log data deletion requests and notify support
 session_start();
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['ok' => false, 'error' => 'Method not allowed']);
+    echo json_encode(['ok' => false, 'error' => 'method_not_allowed']);
     exit;
 }
 
-// Basic rate limit (per session): 1 request every 60 seconds
-if (isset($_SESSION['dd_last']) && (time() - $_SESSION['dd_last'] < 60)) {
-    echo json_encode(['ok' => false, 'error' => 'Please wait before sending another request.']);
+if (isset($_SESSION['dd_last']) && (time() - (int)$_SESSION['dd_last'] < 60)) {
+    echo json_encode(['ok' => false, 'error' => 'rate_limited']);
     exit;
 }
 
-function sanitize($v){ return trim(filter_var($v, FILTER_SANITIZE_STRING)); }
+function dd_public_sanitize_text($value, $maxLen = 0)
+{
+    $value = trim((string)$value);
+    $value = preg_replace('/\s+/', ' ', $value);
+    if ($value === null) {
+        $value = '';
+    }
+    if ($maxLen > 0 && strlen($value) > $maxLen) {
+        $value = substr($value, 0, $maxLen);
+    }
+    return $value;
+}
 
-$phone   = isset($_POST['phone']) ? sanitize($_POST['phone']) : '';
-$email   = isset($_POST['email']) ? trim($_POST['email']) : '';
-$name    = isset($_POST['name']) ? sanitize($_POST['name']) : '';
-$message = isset($_POST['message']) ? sanitize($_POST['message']) : '';
+$phone = dd_public_sanitize_text($_POST['phone'] ?? '', 80);
+$email = dd_public_sanitize_text($_POST['email'] ?? '', 255);
+$name = dd_public_sanitize_text($_POST['name'] ?? '', 255);
+$message = dd_public_sanitize_text($_POST['message'] ?? '', 5000);
 
 if ($phone === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    echo json_encode(['ok' => false, 'error' => 'Phone and valid email are required.']);
+    echo json_encode(['ok' => false, 'error' => 'phone_and_email_required']);
     exit;
 }
 
-$ip = $_SERVER['REMOTE_ADDR'] ?? '';
-$ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
-$request_id = date('Ymd-His') . '-' . random_int(1000,9999);
-$timestamp = date('c');
+require_once __DIR__ . '/../admin/include/conexion.php';
+require_once __DIR__ . '/../admin/include/data_deletion_service.php';
 
-$payload = [
-    'request_id' => $request_id,
-    'timestamp' => $timestamp,
-    'ip' => $ip,
-    'user_agent' => $ua,
-    'phone' => $phone,
-    'email' => $email,
-    'name' => $name,
-    'message' => $message
-];
-
-// Log JSON line
-$logDir = __DIR__ . '/../admin/logs';
-if (!file_exists($logDir)) {
-    @mkdir($logDir, 0777, true);
+try {
+    $requestId = dd_create_request($conexion, [
+        'phone' => $phone,
+        'email' => $email,
+        'name' => $name,
+        'message' => $message,
+        'ip' => dd_public_sanitize_text($_SERVER['REMOTE_ADDR'] ?? '', 64),
+        'user_agent' => dd_public_sanitize_text($_SERVER['HTTP_USER_AGENT'] ?? '', 512),
+    ]);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'error' => 'request_persist_failed']);
+    exit;
 }
-$logFile = $logDir . '/data_deletion.log';
-file_put_contents($logFile, json_encode($payload, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND);
 
-// Try to email support using existing mailer config
-$mail_sent = false;
-$mail_error = null;
+$mailError = false;
 try {
     require_once __DIR__ . '/../admin/include/email_config.php';
     $mail = getMailer('patientcare');
     $mail->addAddress('info@medtravel.com', 'Data Deletion Support');
-    $mail->Subject = 'Data Deletion Request ' . $request_id;
+    $mail->Subject = 'Data Deletion Request ' . $requestId;
     $body  = "<p>New data deletion request.</p>";
     $body .= "<ul>";
-    $body .= "<li><strong>Request ID:</strong> {$request_id}</li>";
-    $body .= "<li><strong>Phone:</strong> " . htmlspecialchars($phone) . "</li>";
-    $body .= "<li><strong>Email:</strong> " . htmlspecialchars($email) . "</li>";
-    $body .= "<li><strong>Name:</strong> " . htmlspecialchars($name) . "</li>";
-    $body .= "<li><strong>Message:</strong> " . nl2br(htmlspecialchars($message)) . "</li>";
-    $body .= "<li><strong>IP:</strong> {$ip}</li>";
-    $body .= "<li><strong>User-Agent:</strong> " . htmlspecialchars($ua) . "</li>";
-    $body .= "<li><strong>Timestamp:</strong> {$timestamp}</li>";
+    $body .= "<li><strong>Request ID:</strong> " . htmlspecialchars($requestId, ENT_QUOTES, 'UTF-8') . "</li>";
+    $body .= "<li><strong>Phone:</strong> " . htmlspecialchars($phone, ENT_QUOTES, 'UTF-8') . "</li>";
+    $body .= "<li><strong>Email:</strong> " . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . "</li>";
+    if ($name !== '') {
+        $body .= "<li><strong>Name:</strong> " . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . "</li>";
+    }
+    if ($message !== '') {
+        $body .= "<li><strong>Message:</strong> " . nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8')) . "</li>";
+    }
     $body .= "</ul>";
     $mail->Body = $body;
-    $mail->AltBody = "Request ID: {$request_id}\nPhone: {$phone}\nEmail: {$email}\nName: {$name}\nMessage: {$message}\nIP: {$ip}\nUA: {$ua}\nTimestamp: {$timestamp}";
+    $mail->AltBody = "Request ID: {$requestId}\nPhone: {$phone}\nEmail: {$email}\nName: {$name}\nMessage: {$message}";
     $mail->send();
-    $mail_sent = true;
-} catch (Exception $e) {
-    $mail_error = $e->getMessage();
+} catch (Throwable $e) {
+    $mailError = true;
 }
 
 $_SESSION['dd_last'] = time();
 
-if ($mail_error) {
-    echo json_encode(['ok' => true, 'request_id' => $request_id, 'warning' => 'Logged but email not sent: '.$mail_error]);
+if ($mailError) {
+    echo json_encode(['ok' => true, 'request_id' => $requestId, 'warning' => 'support_email_not_sent']);
 } else {
-    echo json_encode(['ok' => true, 'request_id' => $request_id]);
+    echo json_encode(['ok' => true, 'request_id' => $requestId]);
 }

@@ -650,3 +650,25 @@ Nota de alcance:
   - full reset requiere confirmación adicional explícita.
 - Logging:
   - registra preview/execute en `admin/logs/cleanup.log` y `error_log`.
+
+### 17) Data deletion workflow (2026-02-20)
+- Documento canónico de operación: `docs/data_deletion_workflow.md`
+- Nuevo flujo end-to-end de eliminación de datos:
+  - público: `data-deletion.php` -> `api/data_deletion_request.php`
+  - admin: `admin/data_deletion_requests.php` + `admin/ajax/data_deletion_requests.php`
+- Persistencia en DB:
+  - nueva tabla `data_deletion_requests` (migración: `sql/2026_02_20_data_deletion_requests.sql`)
+  - estados: `pending`, `processing`, `completed`, `failed`
+  - auditoría: `processed_at`, `processed_by_user_id`, `result_summary`, `last_error`
+- Proceso real (transaccional) implementado en `admin/include/data_deletion_service.php`:
+  - resuelve usuario(s) y booking(s) por email/teléfono/client_user_id
+  - elimina mensajes/calendario relacionados (`inbox_messages`, `inbox_thread_reads`, `calendar_events`)
+  - anonimiza PII en `booking_requests` y `usuarios`
+  - anonimiza CRM de clientes y artefactos asociados (`clientes`, `appointments`, `travel_packages`)
+  - limpia vínculos/sesiones y adjuntos asociados (`provider_users`, `sessiones_activas`, `certificado`, `client_documents`)
+  - elimina notificaciones CRM de cliente (`notifications`)
+  - bloquea doble ejecución (`completed` no re-procesa)
+- Seguridad:
+  - ejecución restringida a sesión admin
+  - sin PII en logs de aplicación ni en resumen técnico
+  - preview de notificaciones admin de data deletion ahora usa DB y no expone email/teléfono.

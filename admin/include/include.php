@@ -16,6 +16,7 @@ $es_prestador = false;
 $es_complementario = false;
 // Load roles helpers
 require_once __DIR__ . '/roles.php';
+require_once __DIR__ . '/data_deletion_service.php';
 $es_admin = is_role_admin_session();
 if (isset($_SESSION['provider_id']) && !empty($_SESSION['provider_id'])) {
     $es_prestador = true;
@@ -288,23 +289,18 @@ if (isset($conexion)) {
 
     // Solicitudes de eliminación de datos (solo admin)
     if ($es_admin) {
-        $deletion_log = __DIR__ . '/../logs/data_deletion.log';
-        if (file_exists($deletion_log)) {
-            $lines = file($deletion_log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            $deletion_count = count($lines);
-            $last = array_slice($lines, -5);
-            foreach (array_reverse($last) as $line) {
-                $entry = json_decode($line, true);
-                if (!$entry) continue;
-                $req = htmlspecialchars($entry['request_id'] ?? '', ENT_QUOTES, 'UTF-8');
-                $phone = htmlspecialchars($entry['phone'] ?? '', ENT_QUOTES, 'UTF-8');
-                $email = htmlspecialchars($entry['email'] ?? '', ENT_QUOTES, 'UTF-8');
-                $time = htmlspecialchars($entry['timestamp'] ?? '', ENT_QUOTES, 'UTF-8');
+        if (dd_table_exists($conexion, 'data_deletion_requests')) {
+            $deletion_count = dd_count_open_requests($conexion);
+            $recentDeletionRows = dd_fetch_recent_open_requests($conexion, 5);
+            foreach ($recentDeletionRows as $entry) {
+                $req = htmlspecialchars((string)($entry['request_id'] ?? ''), ENT_QUOTES, 'UTF-8');
+                $status = htmlspecialchars((string)($entry['status'] ?? 'pending'), ENT_QUOTES, 'UTF-8');
+                $time = htmlspecialchars((string)($entry['created_at'] ?? ''), ENT_QUOTES, 'UTF-8');
                 $deletion_list_html .= '<li>'
                     . '<a href="data_deletion_requests.php">'
                     . '<span class="details">'
                     . '<span class="label label-sm label-icon label-warning md-skip"><i class="fa fa-trash"></i></span>'
-                    . $req . ' • ' . $phone . ' • ' . $email . '<br><small>' . $time . '</small>'
+                    . $req . ' • ' . $status . '<br><small>' . $time . '</small>'
                     . '</span></a></li>';
             }
         }
