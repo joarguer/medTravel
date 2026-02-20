@@ -80,11 +80,6 @@
                     render: function (row) {
                         var html = '<button class="btn btn-xs btn-primary btn-view" data-id="' + row.item_id + '"><i class="fa fa-eye"></i> Ver</button>';
                         html += ' <button class="btn btn-xs purple btn-open-calendar" data-item-id="' + row.item_id + '"><i class="fa fa-calendar"></i> Calendar</button>';
-                        if (row.item_status === 'pending_provider') {
-                            html += ' <button class="btn btn-xs btn-success btn-provider-confirm" data-id="' + row.item_id + '"><i class="fa fa-check"></i> Confirmar</button>';
-                            html += ' <button class="btn btn-xs btn-danger btn-provider-reject" data-id="' + row.item_id + '"><i class="fa fa-times"></i> Rechazar</button>';
-                            html += ' <button class="btn btn-xs btn-warning btn-provider-propose" data-id="' + row.item_id + '" data-currency="' + escapeHtml(row.item_currency || 'USD') + '"><i class="fa fa-edit"></i> Proponer</button>';
-                        }
                         return html;
                     }
                 }
@@ -108,15 +103,6 @@
             }
         });
 
-        $('#my_booking_requests_table').on('click', '.btn-provider-confirm', function () {
-            var itemId = parseInt($(this).data('id'), 10) || 0;
-            if (itemId <= 0) return;
-            if (!confirm('¿Deseas confirmar disponibilidad para este item?')) {
-                return;
-            }
-            sendProviderAction('provider_confirm', { item_id: itemId });
-        });
-
         $('#my_booking_requests_table').on('click', '.btn-open-calendar', function () {
             var itemId = parseInt($(this).data('item-id'), 10) || 0;
             if (itemId <= 0) {
@@ -124,31 +110,6 @@
             }
             var threadId = 'ITEM:' + itemId;
             window.location = 'app_calendar.php?thread_type=ITEM&item_id=' + encodeURIComponent(String(itemId)) + '&thread_id=' + encodeURIComponent(threadId);
-        });
-
-        $('#my_booking_requests_table').on('click', '.btn-provider-reject', function () {
-            var itemId = parseInt($(this).data('id'), 10) || 0;
-            if (itemId <= 0) return;
-            $('#provider_reject_item_id').val(itemId);
-            $('#provider_reject_reason').val('');
-            $('#provider_reject_modal').modal('show');
-        });
-
-        $('#my_booking_requests_table').on('click', '.btn-provider-propose', function () {
-            var itemId = parseInt($(this).data('id'), 10) || 0;
-            if (itemId <= 0) return;
-            var currency = ($(this).data('currency') || 'USD').toString().toUpperCase();
-            if (currency !== 'USD' && currency !== 'COP') {
-                currency = 'USD';
-            }
-
-            $('#provider_propose_item_id').val(itemId);
-            $('#provider_proposed_date_from').val('');
-            $('#provider_proposed_date_to').val('');
-            $('#provider_proposed_price').val('');
-            $('#provider_proposed_currency').val(currency);
-            $('#provider_proposed_notes').val('');
-            $('#provider_propose_modal').modal('show');
         });
 
         $('#btn-provider-reject-save').on('click', function () {
@@ -223,6 +184,43 @@
             sendProviderFinalDecision(activeDetailItemId, decisionKey, reasonKey);
         });
 
+        $('#my_booking_detail_modal').on('click', '#btn-modal-provider-confirm', function () {
+            if (!activeDetailItemId) {
+                return;
+            }
+            if (!confirm('¿Deseas confirmar disponibilidad para este item?')) {
+                return;
+            }
+            sendProviderAction('provider_confirm', { item_id: activeDetailItemId });
+        });
+
+        $('#my_booking_detail_modal').on('click', '#btn-modal-provider-reject', function () {
+            if (!activeDetailItemId) {
+                return;
+            }
+            $('#provider_reject_item_id').val(activeDetailItemId);
+            $('#provider_reject_reason').val('');
+            $('#provider_reject_modal').modal('show');
+        });
+
+        $('#my_booking_detail_modal').on('click', '#btn-modal-provider-propose', function () {
+            if (!activeDetailItemId) {
+                return;
+            }
+            var currency = ($('#provider-modal-currency').val() || 'USD').toString().toUpperCase();
+            if (currency !== 'USD' && currency !== 'COP') {
+                currency = 'USD';
+            }
+
+            $('#provider_propose_item_id').val(activeDetailItemId);
+            $('#provider_proposed_date_from').val('');
+            $('#provider_proposed_date_to').val('');
+            $('#provider_proposed_price').val('');
+            $('#provider_proposed_currency').val(currency);
+            $('#provider_proposed_notes').val('');
+            $('#provider_propose_modal').modal('show');
+        });
+
         $('#my_booking_detail_modal').on('click', '#btn-provider-propose-dates', function () {
             if (!activeDetailItemId) {
                 return;
@@ -280,8 +278,17 @@
                 activeDetailItemId = itemId;
                 activeDetailFeeLocked = !!d.fee_locked;
                 var messageDisabledAttr = activeDetailFeeLocked ? 'disabled' : '';
+                var statusNow = (d.item_status || '').toString();
+                var canShowLegacyActions = (statusNow === 'pending_provider');
+                var canShowFinalApproved = statusNow !== 'provider_confirmed';
                 var quickRepliesHtml = '';
                 if (activeDetailFeeLocked) {
+                    var finalButtonsHtml = '';
+                    if (canShowFinalApproved) {
+                        finalButtonsHtml += '<button type="button" class="btn btn-default btn-xs btn-provider-final-decision" data-decision="FINAL_APPROVED">FINAL APPROVED</button>';
+                    }
+                    finalButtonsHtml += '<button type="button" class="btn btn-default btn-xs btn-provider-final-decision" data-decision="FINAL_NOT_ELIGIBLE">NOT ELIGIBLE</button>';
+
                     quickRepliesHtml = '' +
                         '<div class="alert alert-warning" style="margin-bottom:10px;">' +
                         'Messaging is locked until the coordination fee is paid. Use quick replies.</div>' +
@@ -301,8 +308,7 @@
                         '</div>' +
                         '<div class="form-inline" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;">' +
                         '<label style="margin:0;">Final decision</label>' +
-                        '<button type="button" class="btn btn-default btn-xs btn-provider-final-decision" data-decision="FINAL_APPROVED">FINAL APPROVED</button>' +
-                        '<button type="button" class="btn btn-default btn-xs btn-provider-final-decision" data-decision="FINAL_NOT_ELIGIBLE">NOT ELIGIBLE</button>' +
+                        finalButtonsHtml +
                         '<select class="form-control input-sm" id="provider-final-reason">' +
                         '<option value="">Reason (optional)</option>' +
                         '<option value="NOT_A_FIT">Not a fit</option>' +
@@ -312,6 +318,18 @@
                         '</select>' +
                         '</div>';
                 }
+
+                    var modalActionsHtml = '';
+                    if (canShowLegacyActions) {
+                        modalActionsHtml = '' +
+                        '<div class="form-inline" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;">' +
+                        '<label style="margin:0;">Item actions</label>' +
+                        '<button type="button" class="btn btn-success btn-xs" id="btn-modal-provider-confirm">CONFIRMAR</button>' +
+                        '<button type="button" class="btn btn-danger btn-xs" id="btn-modal-provider-reject">RECHAZAR</button>' +
+                        '<button type="button" class="btn btn-warning btn-xs" id="btn-modal-provider-propose">PROPONER</button>' +
+                        '<input type="hidden" id="provider-modal-currency" value="' + escapeHtml(d.item_currency || 'USD') + '">' +
+                        '</div>';
+                    }
 
                 var html = '' +
                     '<div class="row">' +
@@ -379,6 +397,7 @@
                     '<div class="row">' +
                         '<div class="col-md-12">' +
                             '<h5>Conversación</h5>' +
+                            modalActionsHtml +
                             quickRepliesHtml +
                             '<div id="provider-conversation-log" style="max-height:260px; overflow:auto; border:1px solid #e5e5e5; padding:10px; background:#fafafa;">Cargando mensajes...</div>' +
                             '<div class="form-group" style="margin-top:12px;">' +

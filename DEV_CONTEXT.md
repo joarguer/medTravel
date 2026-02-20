@@ -790,3 +790,9 @@ Nota de alcance:
 - Verificacion SQL rapida:
   - `SELECT id, item_status FROM booking_request_items WHERE id = <item_id>;`
   - `SELECT id, body, created_at FROM inbox_messages WHERE item_id = <item_id> ORDER BY id DESC LIMIT 5;`
+
+### 23) Ajustes UX/guards pre-fee (2026-02-20)
+- En modal provider (`my_booking_requests`), la botonera estructurada se muestra siempre que `fee_locked=1`, sin depender de `item_status`.
+- `FINAL_APPROVED` se oculta en UI cuando el item ya esta `provider_confirmed`.
+- Guard backend explicito: `FINAL_APPROVED` sobre item ya `provider_confirmed` responde `409` con `code=ALREADY_CONFIRMED` (sin cambios de estado).
+- Acciones legacy `CONFIRMAR/RECHAZAR/PROPONER` se movieron del listado al modal de detalle para evitar transiciones fuera de contexto.

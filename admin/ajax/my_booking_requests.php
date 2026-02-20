@@ -1623,6 +1623,16 @@ if ($action === 'send_final_decision') {
         json_err('transition_not_allowed_from_' . $currentStatus, 409);
     }
 
+    if ($decisionKey === 'FINAL_APPROVED' && $currentStatus === 'provider_confirmed') {
+        http_response_code(409);
+        echo json_encode([
+            'ok' => false,
+            'code' => 'ALREADY_CONFIRMED',
+            'message' => 'already_confirmed'
+        ]);
+        exit;
+    }
+
     $targetStatus = $decisionMap[$decisionKey];
     $shouldUpdate = ($currentStatus !== $targetStatus);
 
