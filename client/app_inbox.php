@@ -93,6 +93,10 @@ if (isset($conexion) && $conexion) {
                                 <strong>Coordination Fee required.</strong>
                                 Unlock after Coordination Fee.
                             </div>
+                            <div id="client-inbox-structured-alert" class="note note-info" style="display:none; margin-bottom:12px;">
+                                <strong>There are pending structured actions in a service thread.</strong>
+                                <a id="client-go-service-thread" class="btn btn-default btn-xs" style="margin-left:10px;" href="#">Go to Service Thread</a>
+                            </div>
                             <div id="client-inbox-fee-actions" class="well" style="display:none;margin-bottom:12px;">
                                 <h4 style="margin-top:0;">Quick actions</h4>
                                 <p class="text-muted" style="margin-bottom:10px;">Messaging is limited until the coordination fee is paid.</p>

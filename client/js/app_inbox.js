@@ -173,6 +173,30 @@
         }
     }
 
+    function setStructuredCareAlert(visible, requestId, itemId) {
+        var $alert = $('#client-inbox-structured-alert');
+        var $link = $('#client-go-service-thread');
+        if (!$alert.length || !$link.length) {
+            return;
+        }
+        if (!visible) {
+            $alert.hide();
+            $link.attr('href', '#');
+            return;
+        }
+        var reqId = parseInt(requestId || 0, 10);
+        var itmId = parseInt(itemId || 0, 10);
+        if (reqId <= 0 || itmId <= 0) {
+            $alert.hide();
+            $link.attr('href', '#');
+            return;
+        }
+        var url = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(reqId)) +
+            '&thread_type=ITEM&item_id=' + encodeURIComponent(String(itmId));
+        $link.attr('href', url);
+        $alert.show();
+    }
+
     function formatMessageBody(body) {
         var text = String(body || '');
         var trimmed = text.trim();
@@ -329,6 +353,13 @@
             var computedFeeLocked = (feeRequired && feeStatus !== 'paid');
             var feeLocked = !!res.fee_locked || computedFeeLocked;
             setFeeGateState(feeLocked, res.fee_message || 'Unlock after Coordination Fee.');
+            var isCareThread = String(currentThread.thread_type || '').toUpperCase() === 'CARE';
+            var hasStructuredItemActions = !!res.has_structured_item_actions;
+            setStructuredCareAlert(
+                isCareThread && hasStructuredItemActions,
+                res.request_id || currentThread.booking_id || 0,
+                res.structured_item_id || 0
+            );
 
             var title = 'General - Request #' + currentThread.booking_id;
             if (currentThread.thread_type === 'ITEM') {
@@ -339,6 +370,7 @@
             markCurrentThreadRead();
         }).fail(function (xhr) {
             var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            setStructuredCareAlert(false, 0, 0);
             if (res && res.code === 'FEE_REQUIRED') {
                 setFeeGateState(true, 'Unlock after Coordination Fee.');
                 $('#client-inbox-title').text('Coordination fee required');
@@ -533,6 +565,7 @@
     }
 
     $(function () {
+        setStructuredCareAlert(false, 0, 0);
         if (feeGateActive) {
             setFeeGateState(true, 'Unlock after Coordination Fee.');
         }

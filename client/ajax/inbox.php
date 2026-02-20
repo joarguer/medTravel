@@ -388,12 +388,57 @@ if ($action === 'list_messages') {
         }
     }
 
+    $hasStructuredItemActions = false;
+    $structuredItemId = 0;
+    if (strtoupper((string)($ctx['thread_type'] ?? '')) === 'CARE'
+        && inbox_table_exists($conexion, 'inbox_messages')
+        && inbox_table_exists($conexion, 'booking_request_items')) {
+        $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+        $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+        $structuredSql = "SELECT im.item_id
+                          FROM inbox_messages im
+                          INNER JOIN booking_request_items bri ON bri.id = im.item_id
+                          INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                          WHERE im.request_id = ?
+                            AND im.thread_type = 'ITEM'
+                            AND im.item_id > 0
+                            AND (" . $ownerScope['sql'] . ")
+                            AND (
+                                im.body LIKE '[REPLY] PROPOSED_DATES%'
+                                OR im.body LIKE '[REPLY] FINAL_APPROVED%'
+                            )";
+        if ($hasItemsSoftDelete) {
+            $structuredSql .= " AND bri.is_deleted = 0";
+        }
+        if ($hasBookingSoftDelete) {
+            $structuredSql .= " AND br.is_deleted = 0";
+        }
+        $structuredSql .= " ORDER BY im.id ASC LIMIT 1";
+
+        $stmtStructured = mysqli_prepare($conexion, $structuredSql);
+        if ($stmtStructured) {
+            $types = 'i' . $ownerScope['types'];
+            $params = array_merge([(int)$ctx['request_id']], $ownerScope['params']);
+            if (inbox_bind_stmt_params($stmtStructured, $types, $params) && mysqli_stmt_execute($stmtStructured)) {
+                $structuredRes = mysqli_stmt_get_result($stmtStructured);
+                $structuredRow = $structuredRes ? mysqli_fetch_assoc($structuredRes) : null;
+                if ($structuredRow) {
+                    $structuredItemId = (int)($structuredRow['item_id'] ?? 0);
+                    $hasStructuredItemActions = $structuredItemId > 0;
+                }
+            }
+            mysqli_stmt_close($stmtStructured);
+        }
+    }
+
     client_inbox_ok([
         'thread_id' => $ctx['thread_id'],
         'thread_type' => $ctx['thread_type'],
         'request_id' => (int)$ctx['request_id'],
         'booking_id' => (int)$ctx['request_id'],
         'item_id' => (int)$ctx['item_id'],
+        'has_structured_item_actions' => $hasStructuredItemActions,
+        'structured_item_id' => $structuredItemId,
         'fee_required' => $feeRequired,
         'fee_status' => $feeStatus,
         'fee_locked' => !empty($feeLocked),
