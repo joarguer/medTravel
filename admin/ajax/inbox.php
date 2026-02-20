@@ -2,6 +2,7 @@
 include '../include/conexion.php';
 require_once '../include/roles.php';
 require_once '../../inc/inbox_utils.php';
+require_once '../../inc/fee_gate.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -39,17 +40,17 @@ function admin_inbox_build_scope()
     $scopeParams = [];
     if (!$isAdmin) {
         if ($providerId > 0 && $serviceProviderId > 0) {
-            $scopeWhere = ' AND (bri.provider_id = ? OR bri.service_provider_id = ?)';
+            $scopeWhere = " AND ((bri.provider_id = ? AND bri.item_type = 'medical_offer') OR (bri.service_provider_id = ? AND bri.item_type = 'complementary_service'))";
             $scopeTypes = 'ii';
             $scopeParams = [$providerId, $serviceProviderId];
         } elseif ($providerId > 0) {
-            $scopeWhere = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?))';
-            $scopeTypes = 'ii';
-            $scopeParams = [$providerId, $providerId];
+            $scopeWhere = " AND bri.provider_id = ? AND bri.item_type = 'medical_offer'";
+            $scopeTypes = 'i';
+            $scopeParams = [$providerId];
         } else {
-            $scopeWhere = ' AND ((bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?) OR (bri.provider_id IS NOT NULL AND bri.provider_id = ?))';
-            $scopeTypes = 'ii';
-            $scopeParams = [$serviceProviderId, $serviceProviderId];
+            $scopeWhere = " AND bri.service_provider_id = ? AND bri.item_type = 'complementary_service'";
+            $scopeTypes = 'i';
+            $scopeParams = [$serviceProviderId];
         }
     }
 
@@ -330,7 +331,7 @@ if ($action === 'list_threads') {
     ]);
 }
 
-if ($action === 'list_messages' || $action === 'send_message' || $action === 'mark_read') {
+if ($action === 'list_messages' || $action === 'send_message' || $action === 'send_quick_reply' || $action === 'mark_read') {
     $threadIdInput = (string)($_GET['thread_id'] ?? $_POST['thread_id'] ?? '');
     $threadType = (string)($_GET['thread_type'] ?? $_POST['thread_type'] ?? '');
     $requestId = (int)($_GET['request_id'] ?? $_POST['request_id'] ?? $_GET['booking_request_id'] ?? $_POST['booking_request_id'] ?? 0);
@@ -343,6 +344,10 @@ if ($action === 'list_messages' || $action === 'send_message' || $action === 'ma
 }
 
 if ($action === 'list_messages') {
+    $bookingRequestId = (int)($ctx['request_id'] ?? 0);
+    $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
+        ? is_booking_fee_required($conexion, $bookingRequestId)
+        : false;
     $messages = [];
     if (inbox_table_exists($conexion, 'inbox_messages')) {
         $stmt = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? ORDER BY id ASC");
@@ -387,6 +392,7 @@ if ($action === 'list_messages') {
         'request_id' => (int)$ctx['request_id'],
         'booking_request_id' => (int)$ctx['request_id'],
         'item_id' => (int)$ctx['item_id'],
+        'fee_locked' => $feeLocked ? 1 : 0,
         'messages' => $messages,
     ]);
 }
@@ -394,6 +400,19 @@ if ($action === 'list_messages') {
 if ($action === 'send_message') {
     if (!inbox_table_exists($conexion, 'inbox_messages')) {
         admin_inbox_err('inbox_messages_not_available', 409);
+    }
+    $bookingRequestId = (int)($ctx['request_id'] ?? 0);
+    $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
+        ? is_booking_fee_required($conexion, $bookingRequestId)
+        : false;
+    if ($feeLocked) {
+        http_response_code(403);
+        echo json_encode([
+            'ok' => false,
+            'code' => 'FEE_REQUIRED',
+            'error' => 'Coordination Fee required',
+        ]);
+        exit;
     }
     $message = trim((string)($_POST['message'] ?? ''));
     if ($message === '') {
@@ -418,6 +437,71 @@ if ($action === 'send_message') {
     $threadType = (string)$ctx['thread_type'];
     $requestId = (int)$ctx['request_id'];
     $itemId = (int)$ctx['item_id'];
+    mysqli_stmt_bind_param($stmt, 'ssiisis', $threadId, $threadType, $requestId, $itemId, $senderRole, $senderUserId, $message);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        admin_inbox_err('insert_failed: ' . $err, 500);
+    }
+    $messageId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+
+    admin_inbox_ok([
+        'thread_id' => $threadId,
+        'thread_type' => $threadType,
+        'request_id' => $requestId,
+        'booking_request_id' => $requestId,
+        'item_id' => $itemId,
+        'message' => [
+            'id' => $messageId,
+            'sender' => inbox_sender_to_ui($senderRole),
+            'body' => $message,
+            'time' => date('Y-m-d H:i:s'),
+        ],
+    ]);
+}
+
+if ($action === 'send_quick_reply') {
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+        admin_inbox_err('method_not_allowed', 405);
+    }
+    if (!inbox_table_exists($conexion, 'inbox_messages')) {
+        admin_inbox_err('inbox_messages_not_available', 409);
+    }
+
+    if (strtoupper((string)($ctx['thread_type'] ?? '')) !== 'ITEM') {
+        admin_inbox_err('invalid_thread_type', 422);
+    }
+
+    $key = strtoupper(trim((string)($_POST['reply_key'] ?? '')));
+    $quickReplies = [
+        'DATES_AVAILABLE' => 'Dates available',
+        'DATES_NOT_AVAILABLE' => 'Dates not available',
+        'REQUEST_MEDICAL_HISTORY' => 'Please share your medical history.',
+        'REQUEST_LABS' => 'Please share recent lab results.',
+        'REQUEST_PHOTOS' => 'Please share the requested photos.'
+    ];
+    if ($key === '' || !isset($quickReplies[$key])) {
+        admin_inbox_err('invalid_reply_key', 422);
+    }
+
+    $message = '[REPLY] ' . $quickReplies[$key];
+    $threadId = (string)$ctx['thread_id'];
+    $threadType = (string)$ctx['thread_type'];
+    $requestId = (int)$ctx['request_id'];
+    $itemId = (int)$ctx['item_id'];
+    $senderRole = (string)$scope['reader_role'];
+    $senderUserId = (int)$scope['user_id'];
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        "INSERT INTO inbox_messages
+            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+    if (!$stmt) {
+        admin_inbox_err('prepare_failed', 500);
+    }
     mysqli_stmt_bind_param($stmt, 'ssiisis', $threadId, $threadType, $requestId, $itemId, $senderRole, $senderUserId, $message);
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);

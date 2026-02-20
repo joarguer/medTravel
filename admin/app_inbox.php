@@ -64,6 +64,20 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                             </div>
                             <div class="inbox-content" id="admin-inbox-content" style="display:none;">
                                 <div id="admin-inbox-messages" style="max-height:420px;overflow:auto;border:1px solid #eef1f5;padding:12px;background:#fff;"></div>
+                                <div id="admin-inbox-fee-alert" class="note note-warning" style="display:none;margin-top:12px;">
+                                    <strong>Coordination Fee required.</strong>
+                                    Use quick replies while the fee is pending.
+                                </div>
+                                <div id="admin-inbox-quick-replies" style="display:none;margin-top:12px;">
+                                    <label>Quick replies</label>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="DATES_AVAILABLE">Dates available</button>
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="DATES_NOT_AVAILABLE">Dates not available</button>
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_MEDICAL_HISTORY">Request medical history</button>
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_LABS">Request labs</button>
+                                        <button type="button" class="btn btn-default admin-quick-reply" data-reply="REQUEST_PHOTOS">Request photos</button>
+                                    </div>
+                                </div>
                                 <form id="admin-inbox-send-form" style="margin-top:12px;">
                                     <div class="form-group" style="margin-bottom:8px;">
                                         <label for="admin-inbox-message">Write a message</label>

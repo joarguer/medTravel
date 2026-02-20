@@ -1,6 +1,14 @@
 (function () {
     var currentThread = null;
     var preferredThread = null;
+    var feeGateActive = false;
+    var quickReplies = {
+        DATES_AVAILABLE: 'Dates available',
+        DATES_NOT_AVAILABLE: 'Dates not available',
+        REQUEST_MEDICAL_HISTORY: 'Please share your medical history.',
+        REQUEST_LABS: 'Please share recent lab results.',
+        REQUEST_PHOTOS: 'Please share the requested photos.'
+    };
 
     function esc(value) {
         return String(value || '')
@@ -134,6 +142,35 @@
         }
     }
 
+    function setFeeGateState(enabled) {
+        feeGateActive = !!enabled;
+        var $alert = $('#admin-inbox-fee-alert');
+        var $quick = $('#admin-inbox-quick-replies');
+        var $msg = $('#admin-inbox-message');
+        var $send = $('#admin-inbox-send-form button[type="submit"]');
+
+        if ($alert.length) {
+            if (feeGateActive) {
+                $alert.show();
+            } else {
+                $alert.hide();
+            }
+        }
+        if ($quick.length) {
+            if (feeGateActive) {
+                $quick.show();
+            } else {
+                $quick.hide();
+            }
+        }
+        if ($msg.length) {
+            $msg.prop('disabled', feeGateActive);
+        }
+        if ($send.length) {
+            $send.prop('disabled', feeGateActive);
+        }
+    }
+
     function loadThreads() {
         $.ajax({
             url: 'ajax/inbox.php',
@@ -190,6 +227,8 @@
                 return;
             }
 
+            setFeeGateState(!!res.fee_locked);
+
             var title = 'Request #' + currentThread.booking_request_id;
             if (currentThread.thread_type === 'ITEM') {
                 title = 'Item #' + currentThread.item_id + ' - Request #' + currentThread.booking_request_id;
@@ -207,6 +246,10 @@
     function sendMessage() {
         var text = $.trim($('#admin-inbox-message').val() || '');
         if (!currentThread || !currentThread.thread_id) return;
+        if (feeGateActive) {
+            toastr.warning('Coordination Fee required');
+            return;
+        }
         if (!text) {
             toastr.warning('Write a message before sending');
             return;
@@ -223,6 +266,11 @@
             }
         }).done(function (res) {
             if (!res || res.ok !== true) {
+                if (res && res.code === 'FEE_REQUIRED') {
+                    setFeeGateState(true);
+                    toastr.warning('Coordination Fee required');
+                    return;
+                }
                 toastr.error((res && res.message) ? res.message : 'Could not send message');
                 return;
             }
@@ -232,6 +280,37 @@
             loadThreads();
         }).fail(function () {
             toastr.error('Could not send message');
+        });
+    }
+
+    function sendQuickReply(replyKey) {
+        if (!currentThread || !currentThread.thread_id) return;
+        var key = (replyKey || '').toString().toUpperCase();
+        if (!quickReplies[key]) {
+            toastr.error('Invalid quick reply');
+            return;
+        }
+
+        $.ajax({
+            url: 'ajax/inbox.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'send_quick_reply',
+                thread_id: currentThread.thread_id,
+                thread_type: currentThread.thread_type,
+                reply_key: key
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'Could not send quick reply');
+                return;
+            }
+            toastr.success('Quick reply sent');
+            loadMessages();
+            loadThreads();
+        }).fail(function () {
+            toastr.error('Could not send quick reply');
         });
     }
 
@@ -271,6 +350,11 @@
         $('#admin-inbox-send-form').on('submit', function (e) {
             e.preventDefault();
             sendMessage();
+        });
+
+        $('#admin-inbox-quick-replies').on('click', '.admin-quick-reply', function () {
+            var key = $(this).data('reply') || '';
+            sendQuickReply(key);
         });
 
         loadThreads();
