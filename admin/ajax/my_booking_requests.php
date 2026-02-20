@@ -879,6 +879,7 @@ if ($action === 'get_detail') {
     $bookingEmailExpr = $hasBookingEmail ? 'br.email' : "''";
     $bookingPhoneExpr = $hasBookingPhone ? 'br.phone' : "''";
     $bookingFeeStatusExpr = $hasBookingFeeStatus ? 'br.fee_status' : "'pending'";
+    $bookingFeeRequiredExpr = $hasFeeRequired ? 'br.fee_required' : '0';
     $bookingClientUserExpr = $hasBookingClientUserId ? 'br.client_user_id' : 'NULL';
     $bookingOriginExpr = $hasBookingOrigin ? 'br.origin' : "''";
     $bookingPersonsExpr = $hasBookingPersons ? 'br.persons' : "''";
@@ -904,6 +905,7 @@ if ($action === 'get_detail') {
                 {$bookingEmailExpr} AS client_email,
                 {$bookingPhoneExpr} AS client_phone,
                 {$bookingFeeStatusExpr} AS fee_status,
+                {$bookingFeeRequiredExpr} AS fee_required,
                 {$bookingClientUserExpr} AS client_user_id,
                 {$bookingOriginExpr} AS origin,
                 br.destination,
@@ -985,7 +987,13 @@ if ($action === 'get_detail') {
     }
 
     $bookingRequestId = (int)$row['booking_request_id'];
-    $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
+    $feeStatusNow = strtolower(trim((string)($row['fee_status'] ?? 'pending')));
+    $feeRequiredNow = (int)($row['fee_required'] ?? 0) === 1;
+    if ($hasFeeRequired && $hasBookingFeeStatus) {
+        $feeLocked = ($feeRequiredNow && $feeStatusNow !== 'paid');
+    } else {
+        $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
+    }
     $row['fee_locked'] = $feeLocked ? 1 : 0;
     $rawAdditionalNotes = (string)($row['additional_notes'] ?? '');
     $row['messages'] = parse_additional_notes_messages($rawAdditionalNotes);

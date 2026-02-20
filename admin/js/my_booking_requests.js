@@ -276,7 +276,10 @@
                 var d = response.data || {};
                 var itemsHistory = response.items_history || [];
                 activeDetailItemId = itemId;
-                activeDetailFeeLocked = !!d.fee_locked;
+                var feeRequiredNow = parseInt(d.fee_required || 0, 10) === 1;
+                var feeStatusNow = (d.fee_status || '').toString().toLowerCase();
+                var computedFeeLocked = (feeRequiredNow && feeStatusNow !== 'paid');
+                activeDetailFeeLocked = !!d.fee_locked || computedFeeLocked;
                 var messageDisabledAttr = activeDetailFeeLocked ? 'disabled' : '';
                 var statusNow = (d.item_status || '').toString();
                 var canShowLegacyActions = (statusNow === 'pending_provider');
@@ -375,6 +378,20 @@
                     '<hr>' +
                     '<div class="row">' +
                         '<div class="col-md-12">' +
+                            '<h5>Conversación</h5>' +
+                            modalActionsHtml +
+                            quickRepliesHtml +
+                            '<div id="provider-conversation-log" style="max-height:260px; overflow:auto; border:1px solid #e5e5e5; padding:10px; background:#fafafa;">Cargando mensajes...</div>' +
+                            '<div class="form-group" style="margin-top:12px;">' +
+                                '<label for="provider-message-text">Enviar mensaje al cliente</label>' +
+                                '<textarea id="provider-message-text" class="form-control" rows="3" maxlength="2000" placeholder="Escribe tu mensaje..." ' + messageDisabledAttr + '></textarea>' +
+                            '</div>' +
+                            '<button type="button" id="btn-provider-send-message" class="btn btn-primary btn-sm" ' + messageDisabledAttr + '><i class="fa fa-paper-plane"></i> Send message</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<hr>' +
+                    '<div class="row">' +
+                        '<div class="col-md-12">' +
                             '<h5>Timeline de items (scope proveedor)</h5>' +
                             '<div class="table-responsive">' +
                                 '<table class="table table-striped table-bordered">' +
@@ -391,20 +408,6 @@
                                     '<tbody id="provider-item-history-body">' + renderItemsHistory(itemsHistory) + '</tbody>' +
                                 '</table>' +
                             '</div>' +
-                        '</div>' +
-                    '</div>' +
-                    '<hr>' +
-                    '<div class="row">' +
-                        '<div class="col-md-12">' +
-                            '<h5>Conversación</h5>' +
-                            modalActionsHtml +
-                            quickRepliesHtml +
-                            '<div id="provider-conversation-log" style="max-height:260px; overflow:auto; border:1px solid #e5e5e5; padding:10px; background:#fafafa;">Cargando mensajes...</div>' +
-                            '<div class="form-group" style="margin-top:12px;">' +
-                                '<label for="provider-message-text">Enviar mensaje al cliente</label>' +
-                                '<textarea id="provider-message-text" class="form-control" rows="3" maxlength="2000" placeholder="Escribe tu mensaje..." ' + messageDisabledAttr + '></textarea>' +
-                            '</div>' +
-                            '<button type="button" id="btn-provider-send-message" class="btn btn-primary btn-sm" ' + messageDisabledAttr + '><i class="fa fa-paper-plane"></i> Send message</button>' +
                         '</div>' +
                     '</div>';
 
