@@ -640,6 +640,7 @@ $hasBookingName = table_has_column($conexion, 'booking_requests', 'name');
 $hasBookingEmail = table_has_column($conexion, 'booking_requests', 'email');
 $hasBookingPhone = table_has_column($conexion, 'booking_requests', 'phone');
 $hasBookingFeeStatus = table_has_column($conexion, 'booking_requests', 'fee_status');
+$hasFeeRequired = table_has_column($conexion, 'booking_requests', 'fee_required');
 $hasBookingClientUserId = table_has_column($conexion, 'booking_requests', 'client_user_id');
 $hasBookingOrigin = table_has_column($conexion, 'booking_requests', 'origin');
 $hasBookingPersons = table_has_column($conexion, 'booking_requests', 'persons');
