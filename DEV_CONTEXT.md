@@ -763,3 +763,13 @@ Nota de alcance:
   - Endpoint: `admin/ajax/download_medical_document.php?doc_id=...`.
   - Admin: acceso total.
   - Provider: solo si el documento pertenece a un `booking_request/item` dentro de su scope (`provider_id`/`service_provider_id` + `item_type`).
+
+### 21) Pre-fee structured date proposal (2026-02-20)
+- Providers pueden proponer un rango de fechas pre-fee usando `provider_proposed_date_from`/`provider_proposed_date_to`.
+- El cliente acepta o rechaza desde Inbox y se actualiza `booking_request_items.item_status`.
+- Mensajeria estructurada:
+  - Provider: `[REPLY] PROPOSED_DATES YYYY-MM-DD to YYYY-MM-DD`
+  - Client: `[ACTION] Client accepted proposed dates` / `[ACTION] Client rejected proposed dates`
+- Verificacion SQL rapida:
+  - `SELECT id, item_status, provider_proposed_date_from, provider_proposed_date_to FROM booking_request_items WHERE id = <item_id>;`
+  - `SELECT id, body, created_at FROM inbox_messages WHERE item_id = <item_id> ORDER BY id DESC LIMIT 5;`

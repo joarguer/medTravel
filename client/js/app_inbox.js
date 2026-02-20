@@ -207,6 +207,13 @@
             }
         }
 
+        if (isReply && trimmed.toUpperCase().indexOf('PROPOSED_DATES') === 0) {
+            messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
+                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT DATES</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">REJECT DATES</button>' +
+                '</div>';
+        }
+
         return messageHtml;
     }
 
@@ -222,6 +229,14 @@
         }
 
         target.trigger('click');
+    });
+
+    $('#client-inbox-messages').on('click', '.client-date-action', function () {
+        var action = ($(this).data('action') || '').toString();
+        if (!action) {
+            return;
+        }
+        sendDateDecision(action);
     });
     function loadThreads() {
         $.ajax({
@@ -373,6 +388,38 @@
             loadThreads();
         }).fail(function () {
             toastr.error('Could not send quick action');
+        });
+    }
+
+    function sendDateDecision(actionKey) {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread before responding');
+            return;
+        }
+        var action = (actionKey || '').toString();
+        if (action !== 'accept_dates' && action !== 'reject_dates') {
+            toastr.error('Invalid action');
+            return;
+        }
+
+        $.ajax({
+            url: '/client/ajax/inbox.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: action,
+                thread_id: currentThread.thread_id
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'Could not update dates');
+                return;
+            }
+            toastr.success('Response sent');
+            loadMessages();
+            loadThreads();
+        }).fail(function () {
+            toastr.error('Could not update dates');
         });
     }
 

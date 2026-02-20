@@ -210,6 +210,23 @@
             }
             sendProviderQuickReply(activeDetailItemId, replyKey);
         });
+
+        $('#my_booking_detail_modal').on('click', '#btn-provider-propose-dates', function () {
+            if (!activeDetailItemId) {
+                return;
+            }
+            var dateFrom = ($('#provider-propose-date-from').val() || '').trim();
+            var dateTo = ($('#provider-propose-date-to').val() || '').trim();
+            if (!dateFrom || !dateTo) {
+                toastr.warning('Selecciona ambas fechas');
+                return;
+            }
+            if (dateFrom > dateTo) {
+                toastr.warning('El rango de fechas no es valido');
+                return;
+            }
+            sendProviderProposedDates(activeDetailItemId, dateFrom, dateTo);
+        });
     }
 
     function loadRows() {
@@ -263,6 +280,12 @@
                         '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="REQUEST_LABS">REQUEST LABS</button>' +
                         '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="REQUEST_IMAGING">REQUEST IMAGING</button>' +
                         '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="REQUEST_PHOTOS">REQUEST PHOTOS</button>' +
+                        '</div>' +
+                        '<div class="form-inline" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">' +
+                        '<label style="margin:0;">Propose dates</label>' +
+                        '<input type="date" class="form-control input-sm" id="provider-propose-date-from">' +
+                        '<input type="date" class="form-control input-sm" id="provider-propose-date-to">' +
+                        '<button type="button" class="btn btn-default btn-xs" id="btn-provider-propose-dates">PROPOSE DATES</button>' +
                         '</div>';
                 }
 
@@ -481,6 +504,34 @@
             },
             error: function () {
                 toastr.error('Error de conexión al enviar respuesta');
+            }
+        });
+    }
+
+    function sendProviderProposedDates(itemId, dateFrom, dateTo) {
+        $.ajax({
+            url: 'ajax/my_booking_requests.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'propose_dates',
+                item_id: itemId,
+                date_from: dateFrom,
+                date_to: dateTo
+            },
+            success: function (response) {
+                if (!response || !response.ok) {
+                    toastr.error((response && response.message) ? response.message : 'No se pudo enviar la propuesta');
+                    return;
+                }
+                $('#provider-propose-date-from').val('');
+                $('#provider-propose-date-to').val('');
+                toastr.success('Fechas propuestas');
+                loadMessages(itemId);
+                loadRows();
+            },
+            error: function () {
+                toastr.error('Error de conexión al proponer fechas');
             }
         });
     }
