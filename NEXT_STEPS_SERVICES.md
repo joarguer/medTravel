@@ -530,36 +530,80 @@ Evidencia:
 - Email profesional implementado.
 - Portal cliente seguro operativo.
 
-### 8. Negotiation as structured proposals (no free chat in early stage)
-- Regla oficial:
-  - La negociación temprana proveedor-cliente se hace solo con acciones estructuradas en Inbox.
-  - No se habilita chat libre en early stage.
-  - No se abre canal paralelo desde modal de `my_booking_requests` (solo CTA hacia Inbox).
-- `action_types` vigentes para MVP:
-  - Provider (ITEM):
-    - `REQUEST_ADDITIONAL_INFO`
-    - `PROPOSE_QUOTE_ADJUSTMENT`
-  - Client (ITEM):
-    - `ACCEPT_PROPOSAL`
-    - `REQUEST_CHANGES`
-    - `REJECT_PROPOSAL`
-- Etapas/estados reutilizados del sistema:
-  - Emision de solicitud/propuesta provider: `awaiting_client`.
-  - Respuesta client acepta: `client_accepted`.
-  - Respuesta client pide cambios: `provider_proposed_change`.
-  - Respuesta client rechaza: `client_rejected`.
-- Permisos en etapa temprana:
-  - Permitido: quick actions, structured actions y upload de documentos.
-  - Bloqueado: `send_message` libre mientras aplique fee/stage gate.
-- Seguridad/ownership:
-  - Solo `thread_type=ITEM`.
-  - Provider/complementary limitado por scope de asignacion real del item.
-  - Cliente limitado por owner scope de su booking/item.
-- Persistencia sin nuevas tablas:
-  - Eventos estructurados en `inbox_messages.body` con JSON parseable:
-    - `[REQUEST_INFO] {...}`
-    - `[PROPOSE_QUOTE] {...}`
-    - `[PROPOSAL_RESPONSE] {...}`
+### Negotiation Architecture (Canonical – 2026)
+
+#### 1. Thread Types
+
+##### CARE (MedTravel Coordination)
+- Canal Cliente ↔ MedTravel.
+- Siempre visible en cliente.
+- En early stage el cliente puede enviar mensajes libres.
+- CARE no aplica stage gate (`FREE_MESSAGE_BLOCKED`).
+- CARE puede quedar sujeto a fee gate (`FEE_REQUIRED`) según la solicitud.
+
+##### ITEM (Provider Negotiation)
+- Canal Cliente ↔ Proveedor (médico o complementario).
+- En early stage:
+  - Cliente: solo estructurado.
+  - Proveedor: solo estructurado.
+  - Sin mensaje libre para ITEM.
+- En etapa avanzada del item, se habilita mensaje libre en ITEM.
+
+#### 2. Early Stage Rules (Canonical)
+
+| Rol | CARE | ITEM |
+|---|---|---|
+| Cliente | Libre (si no hay fee lock) | Estructurado |
+| Proveedor | N/A | Estructurado |
+| Admin | Libre en CARE | Operación por estado del item |
+
+#### 3. Structured Negotiation Actions
+
+##### Provider → Client
+- `REQUEST_ADDITIONAL_INFO`
+- `PROPOSE_QUOTE_ADJUSTMENT`
+
+##### Client → Provider
+- `ACCEPT_PROPOSAL`
+- `REQUEST_CHANGES`
+- `REJECT_PROPOSAL`
+- `DOCS_NOT_AVAILABLE`
+
+##### Persistencia
+- `inbox_messages` (sin tablas nuevas).
+- Prefijos:
+  - `[REQUEST_INFO]`
+  - `[PROPOSE_QUOTE]`
+  - `[PROPOSAL_RESPONSE]`
+- Efecto de estado:
+  - Structured actions de provider llevan ITEM a `awaiting_client`.
+  - Respuestas cliente mueven a `client_accepted`, `provider_proposed_change` o `client_rejected`.
+- Ownership:
+  - Validación por `thread_type=ITEM` + scope de proveedor/cliente por `item_id`.
+
+#### 4. UI Canonical Behavior
+
+##### Provider Inbox
+- Compose bloqueado en early stage para ITEM.
+- Tarjetas estructuradas visuales para mensajes con prefijo.
+- Panel de ayuda colapsable en español.
+
+##### Client Inbox
+- CARE permite mensaje libre en early stage (si no hay fee lock).
+- ITEM mantiene bloqueo en early stage.
+- Encabezados humanizados (sin `Item #X - Request #Y`).
+
+#### 5. Canonical UX Principle
+- No exponer IDs técnicos en encabezado de conversación.
+- Mostrar nombre de servicio + referencia comercial (`Solicitud #`).
+
+#### 6. Flujo canónico end-to-end (booking → negociación)
+1. Creación de booking por cliente.
+2. Generación y visibilidad de hilos CARE e ITEM.
+3. Coordinación inicial en CARE (cliente-medtravel).
+4. Negociación estructurada por ITEM en etapa temprana.
+5. Respuestas del cliente (acciones y documentos).
+6. Evolución de estado del item y habilitación de mensaje libre al avanzar etapa.
 
 ### Próximos pasos
 - [ ] Semáforo visual en portal cliente por item.
