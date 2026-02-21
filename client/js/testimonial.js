@@ -18,7 +18,7 @@
         if (value > 5) value = 5;
         var html = '';
         for (var i = 1; i <= 5; i++) {
-            html += '<i class="fas fa-star ' + (i <= value ? 'text-primary' : 'text-muted') + '"></i>';
+            html += '<i class="fas fa-star' + (i <= value ? '' : ' muted') + '"></i>';
         }
         return html;
     }
