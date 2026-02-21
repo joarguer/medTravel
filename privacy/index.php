@@ -6,7 +6,7 @@ $head_privacy = str_replace(
     ['<title>MedTravel - Tourism and Health </title>', '<meta content="" name="description">'],
     [
         '<title>MedTravel | Privacy Policy</title>',
-        '<meta content="Learn how MedTravel collects and uses personal information when you contact us via web chat or WhatsApp." name="description">'
+        '<meta content="Learn how MedTravel collects, uses, and shares information for medical coordination services, including cross-border data transfers and payments processed in the United States." name="description">'
     ],
     $head
 );
@@ -17,6 +17,10 @@ $head_privacy = str_replace(
     '<meta content="width=device-width, initial-scale=1.0" name="viewport">' . "\n    <base href=\"/\">",
     $head_privacy
 );
+
+// Version string (do NOT break if constants missing)
+$privacy_version = defined('PRIVACY_VERSION') ? PRIVACY_VERSION : 'v1.1-FL-USA';
+$effective_date = 'February 21, 2026';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -48,7 +52,9 @@ $head_privacy = str_replace(
         <div class="container-fluid bg-breadcrumb">
             <div class="container text-center py-5" style="max-width: 900px;">
                 <h1 class="text-white display-4 mb-3">Privacy Policy</h1>
-                <p class="text-white-50 mb-0">Last updated: February 2, 2026</p>
+                <p class="text-white-50 mb-0">
+                    Version: <?php echo htmlspecialchars($privacy_version); ?> · Effective Date: <?php echo htmlspecialchars($effective_date); ?>
+                </p>
             </div>
         </div>
         <!-- Header End -->
@@ -58,79 +64,116 @@ $head_privacy = str_replace(
             <div class="row justify-content-center">
                 <div class="col-lg-10 col-xl-9">
                     <div class="bg-white p-4 p-md-5 shadow-sm rounded">
-                        <h2 class="mb-3">Privacy Policy</h2>
-                        <p class="text-muted">Last updated: February 2, 2026</p>
 
-                        <h3 class="mt-4">1. Who we are</h3>
-                        <p>MedTravel helps individuals explore and coordinate medical travel options, including information requests, service coordination, and support during the planning process.</p>
-                        <p>This Privacy Policy explains how we collect, use, and protect personal information when you interact with MedTravel through our website, web chat, or messaging channels such as WhatsApp.</p>
+                        <h2 class="mb-2">Privacy Policy</h2>
+                        <p class="text-muted mb-4">
+                            <strong>Version:</strong> <?php echo htmlspecialchars($privacy_version); ?><br>
+                            <strong>Effective Date:</strong> <?php echo htmlspecialchars($effective_date); ?>
+                        </p>
 
-                        <h3 class="mt-4">2. Information we collect</h3>
-                        <h4 class="mt-3">2.1 Information you provide</h4>
+                        <h3 class="mt-4">1. Scope and Role</h3>
+                        <p>
+                            MedTravel ("Company," "we," "us," or "our") is a medical coordination platform operating from Florida, United States.
+                            We connect patients with independent healthcare providers and related travel services. This Privacy Policy describes how we collect,
+                            use, and share information when you use our platform.
+                        </p>
+
+                        <h3 class="mt-4">2. Information We Collect</h3>
+                        <p>Depending on your request, we may collect:</p>
                         <ul>
-                            <li>Contact information such as name, phone number, and email address.</li>
-                            <li>Conversation information from messages you send through web chat or WhatsApp.</li>
-                            <li>Information necessary to respond to your request, coordinate services, provide quotes, or follow up on inquiries.</li>
-                        </ul>
-                        <div class="alert alert-warning mt-3" role="alert" style="border-left: 4px solid #ffc107;">
-                            <strong>Important health-related notice:</strong><br>
-                            Please do not send sensitive medical information (such as medical records, diagnoses, test results, identification documents, or insurance details) through WhatsApp or web chat. If sensitive information is required, MedTravel will provide a more appropriate and secure method.
-                        </div>
-
-                        <h4 class="mt-4">2.2 Information collected automatically</h4>
-                        <ul>
-                            <li>Basic technical data (device type, browser, IP address, timestamps).</li>
-                            <li>Security and operational logs used to protect the service and prevent abuse.</li>
-                        </ul>
-
-                        <h3 class="mt-4">3. How we use your information</h3>
-                        <p>We use personal information to:</p>
-                        <ul>
-                            <li>Respond to inquiries and provide customer support.</li>
-                            <li>Coordinate and manage requests related to medical travel services.</li>
-                            <li>Send operational communications (confirmations, reminders, follow-ups).</li>
-                            <li>Improve service quality and internal performance.</li>
-                            <li>Maintain security, prevent fraud, and ensure platform reliability.</li>
+                            <li>Contact details (name, email, phone).</li>
+                            <li>Identity details you choose to provide (date of birth, passport or government ID).</li>
+                            <li>Medical and health-related information you voluntarily submit.</li>
+                            <li>Travel and coordination details (destination, dates, preferences, budget).</li>
+                            <li>Technical data (IP address, user agent, device/browser information, access timestamps).</li>
+                            <li>Payment and transaction data for coordination fees (processed by third parties).</li>
                         </ul>
 
-                        <h3 class="mt-4">4. Legal basis and consent</h3>
-                        <p>By contacting MedTravel and voluntarily providing your information, you consent to the collection and use of that information for the purposes described in this Privacy Policy. Where required, additional consent may be requested.</p>
-
-                        <h3 class="mt-4">5. WhatsApp and messaging communications</h3>
-                        <p>When you communicate with MedTravel via WhatsApp, messaging is subject to WhatsApp platform rules.</p>
+                        <h3 class="mt-4">3. How We Use Information</h3>
                         <ul>
-                            <li>WhatsApp may enforce a 24-hour messaging window following your last message.</li>
-                            <li>In certain cases, MedTravel may use pre-approved message templates for notifications or follow-ups, as required by WhatsApp.</li>
+                            <li>Coordinate services with independent providers you select.</li>
+                            <li>Communicate with you about requests, updates, or missing information.</li>
+                            <li>Process coordination fees and manage payment support.</li>
+                            <li>Prevent fraud, misuse, and security incidents.</li>
+                            <li>Improve platform functionality and reliability.</li>
+                            <li>Comply with applicable laws and lawful requests.</li>
                         </ul>
-                        <p><strong>Opt-out:</strong> You may request to stop non-essential messages at any time by replying “STOP” or by contacting us using the details below.</p>
 
-                        <h3 class="mt-4">6. Sharing information with third parties</h3>
-                        <p>MedTravel does not sell personal information.</p>
-                        <p>We may share limited data with trusted service providers strictly as necessary to operate the service, including messaging infrastructure and customer communication systems. These providers are authorized to use information only for providing services to MedTravel.</p>
+                        <h3 class="mt-4">4. Medical Information and HIPAA</h3>
+                        <p>
+                            MedTravel does not provide medical advice, diagnosis, or treatment. We are not a healthcare provider and are not a HIPAA covered entity
+                            or business associate. Medical information you submit is used solely to coordinate your request and is shared with independent providers
+                            at your direction.
+                        </p>
 
-                        <h3 class="mt-4">7. Data retention</h3>
-                        <p>Personal information is retained only for as long as reasonably necessary to provide support, maintain service continuity, comply with legal obligations, resolve disputes, and improve operations.</p>
+                        <h3 class="mt-4">5. Sharing with Providers and Third Parties</h3>
+                        <p>We may share information with:</p>
+                        <ul>
+                            <li>Independent healthcare providers and travel service providers you choose.</li>
+                            <li>Payment processors and financial institutions involved in coordination fees.</li>
+                            <li>Technology vendors that support hosting, security, or communications.</li>
+                            <li>Legal authorities when required by law.</li>
+                        </ul>
+                        <p>We do not sell personal information.</p>
 
-                        <h3 class="mt-4">8. Security</h3>
-                        <p>We implement reasonable administrative, technical, and organizational safeguards to protect personal information. However, no system can be guaranteed to be completely secure.</p>
+                        <h3 class="mt-4">6. Payments, Commissions, and Chargebacks</h3>
+                        <p>
+                            MedTravel operates on a coordination fee or commission model. Payments are processed by U.S.-based payment processors.
+                            We do not store full payment card numbers. Chargebacks or payment disputes may require sharing transaction data with processors.
+                        </p>
 
-                        <h3 class="mt-4">9. Your rights</h3>
-                        <p>Depending on applicable laws, you may have the right to request access, correction, or deletion of your personal information, or to restrict certain processing activities.</p>
-                        <p>Requests can be made using the contact details below.</p>
+                        <h3 class="mt-4">7. International Data Transfers</h3>
+                        <p>
+                            Your request may involve providers or services outside the United States. Your information may be transferred and processed
+                            internationally to coordinate services. By using the platform, you consent to these transfers.
+                        </p>
 
-                        <h3 class="mt-4">10. Cookies and similar technologies</h3>
-                        <p>Our website may use cookies or similar technologies to ensure essential functionality, understand basic usage patterns, and improve performance. You can control cookies through your browser settings.</p>
+                        <h3 class="mt-4">8. Cookies and Tracking</h3>
+                        <p>
+                            We use cookies and similar technologies to improve performance, security, and user experience. You can control cookies
+                            through your browser settings.
+                        </p>
 
-                        <h3 class="mt-4">11. Contact information</h3>
-                        <p>If you have questions about this Privacy Policy or about how your information is handled, you may contact us at:</p>
-                        <ul class="mb-5">
-                            <li>WhatsApp: +57 3502431667</li>
+                        <h3 class="mt-4">9. Data Retention</h3>
+                        <p>
+                            We retain information for as long as necessary to provide services, comply with legal obligations, resolve disputes,
+                            and enforce agreements.
+                        </p>
+
+                        <h3 class="mt-4">10. Security</h3>
+                        <p>
+                            We implement reasonable technical and organizational safeguards to protect information. No system is completely secure,
+                            and we cannot guarantee absolute security.
+                        </p>
+
+                        <h3 class="mt-4">11. Your Choices and Rights</h3>
+                        <p>
+                            Subject to applicable U.S. and Florida law, you may request access, correction, or deletion of certain personal data,
+                            subject to identity verification and legal limitations.
+                        </p>
+
+                        <h3 class="mt-4">12. Children’s Privacy</h3>
+                        <p>
+                            The platform is intended for users 18 and older. We do not knowingly collect personal information from children.
+                        </p>
+
+                        <h3 class="mt-4">13. Governing Law</h3>
+                        <p>
+                            This Privacy Policy is governed by the laws of the State of Florida, United States.
+                        </p>
+
+                        <h3 class="mt-4">14. Changes to This Policy</h3>
+                        <p>
+                            We may update this Privacy Policy from time to time. When updated, we will revise the version number and effective date.
+                            Continued use of the platform constitutes acceptance of the revised policy.
+                        </p>
+
+                        <h3 class="mt-4">15. Contact</h3>
+                        <p>If you have questions about this Privacy Policy, please contact MedTravel before submitting a booking request.</p>
+                        <ul class="mb-0">
                             <li>Email: privacy@medtravel.com</li>
                         </ul>
 
-                        <h3 class="mt-4">Resumen en Español (informativo)</h3>
-                        <p>MedTravel recopila datos de contacto y mensajes enviados por web chat o WhatsApp para responder solicitudes, coordinar servicios y brindar soporte. No vendemos información personal. No se debe enviar información médica sensible por WhatsApp o chat web. WhatsApp puede aplicar reglas como la ventana de 24 horas y el uso de plantillas aprobadas.<br>
-                        Contacto: WhatsApp +57 3502431667 | privacy@medtravel.com</p>
                     </div>
                 </div>
             </div>

@@ -162,7 +162,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 <div class="form-check text-white">
                     <input class="form-check-input" type="checkbox" name="terms_accepted" id="book-terms" value="1" required>
                     <label class="form-check-label" for="book-terms">
-                        I agree to the <a href="/terms.php" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy.php" target="_blank" rel="noopener">Privacy Policy</a>
+                        I agree to the <a href="/terms.php" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy/" target="_blank" rel="noopener">Privacy Policy</a>
                     </label>
                 </div>
                 <div class="text-warning small mt-2 d-none" id="book-terms-error">
