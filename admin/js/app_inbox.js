@@ -48,6 +48,16 @@
         }
     }
 
+    function renderStructuredParseFallback(prefix) {
+        return '<div class="admin-structured-card">' +
+            '<div class="admin-structured-header">' +
+                '<span class="admin-structured-title">Structured message</span>' +
+                '<span class="label label-default admin-structured-badge">' + esc(prefix) + '</span>' +
+            '</div>' +
+            '<div class="admin-structured-body">Unable to parse this message.</div>' +
+        '</div>';
+    }
+
     function docTypeLabel(type) {
         var labels = {
             labs: 'Labs',
@@ -81,7 +91,7 @@
     function renderStructuredRequestInfo(text) {
         var payload = parseStructuredJson('[REQUEST_INFO]', text);
         if (!payload) {
-            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+            return renderStructuredParseFallback('[REQUEST_INFO]');
         }
 
         var requiredTypes = Array.isArray(payload.required_types) ? payload.required_types : [];
@@ -109,7 +119,7 @@
     function renderStructuredProposeQuote(text) {
         var payload = parseStructuredJson('[PROPOSE_QUOTE]', text);
         if (!payload) {
-            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+            return renderStructuredParseFallback('[PROPOSE_QUOTE]');
         }
 
         var amount = formatCurrencyAmount(payload.amount, payload.currency || 'USD');
@@ -131,7 +141,7 @@
     function renderStructuredProposalResponse(text) {
         var payload = parseStructuredJson('[PROPOSAL_RESPONSE]', text);
         if (!payload) {
-            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+            return renderStructuredParseFallback('[PROPOSAL_RESPONSE]');
         }
 
         var action = String(payload.action_type || '').toUpperCase();
