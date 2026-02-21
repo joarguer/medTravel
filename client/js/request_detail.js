@@ -37,28 +37,59 @@
         return html;
     }
 
-    function buildItemInboxLinks(items, bookingId) {
+    function firstItemId(items) {
         if (!items || !items.length) {
-            return '<p class="text-muted" style="margin:0;">No item-specific threads available.</p>';
+            return 0;
         }
-        var html = '<div class="list-group">';
-        items.forEach(function (item) {
-            var itemId = parseInt(item.id || 0, 10);
-            if (!itemId) {
-                return;
+        for (var i = 0; i < items.length; i++) {
+            var itemId = parseInt(items[i] && items[i].id ? items[i].id : 0, 10);
+            if (itemId > 0) {
+                return itemId;
             }
-            var typeLabel = String(item.item_type_label || '');
-            var itemName = String(item.name || ('Item #' + itemId));
-            var label = 'Message ' + (typeLabel ? (typeLabel + ' Provider') : 'Provider');
-            var url = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(bookingId || 0)) +
-                '&thread_type=ITEM&item_id=' + encodeURIComponent(String(itemId));
-            html += '<a class="list-group-item" href="' + esc(url) + '">' +
-                '<strong>' + esc(label) + '</strong>' +
-                '<br><small>' + esc(itemName) + '</small>' +
-                '</a>';
-        });
-        html += '</div>';
-        return html;
+        }
+        return 0;
+    }
+
+    function updateCommunicationLinks(medical, complementary, bookingId) {
+        var requestId = parseInt(bookingId || 0, 10);
+        if (requestId <= 0) {
+            return;
+        }
+
+        var medicalItemId = firstItemId(medical);
+        var complementaryItemId = firstItemId(complementary);
+
+        var careUrl = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=CARE';
+        var medicalUrl = medicalItemId > 0
+            ? '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ITEM&item_id=' + encodeURIComponent(String(medicalItemId))
+            : careUrl;
+        var complementaryUrl = complementaryItemId > 0
+            ? '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ITEM&item_id=' + encodeURIComponent(String(complementaryItemId))
+            : careUrl;
+
+        var $medicalBtn = $('#client-open-inbox-medical');
+        if ($medicalBtn.length) {
+            $medicalBtn.attr('href', medicalUrl);
+        }
+        var $complementaryBtn = $('#client-open-inbox-complementary');
+        if ($complementaryBtn.length) {
+            $complementaryBtn.attr('href', complementaryUrl);
+        }
+
+        var $linksBox = $('#client-inbox-item-links');
+        if ($linksBox.length) {
+            var info = [];
+            if (medicalItemId > 0) {
+                info.push('Medical item #' + medicalItemId);
+            }
+            if (complementaryItemId > 0) {
+                info.push('Complementary item #' + complementaryItemId);
+            }
+            var text = info.length
+                ? ('Buttons route to: ' + info.join(' · '))
+                : 'No item-specific thread found yet. Buttons will open general inbox.';
+            $linksBox.find('p.text-muted').text(text);
+        }
     }
 
     function renderDetail(payload) {
@@ -90,13 +121,7 @@
 
         $('#client-request-detail-body').html(html);
 
-        var allItems = [];
-        allItems = allItems.concat(medical || []);
-        allItems = allItems.concat(complementary || []);
-        var $linksBox = $('#client-inbox-item-links');
-        if ($linksBox.length) {
-            $linksBox.html(buildItemInboxLinks(allItems, booking.id || 0));
-        }
+        updateCommunicationLinks(medical, complementary, booking.id || 0);
     }
 
     function loadDetail(bookingId) {

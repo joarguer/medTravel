@@ -52,6 +52,100 @@ if (isset($conexion) && $conexion) {
     <?php echo $theme_global_style; ?>
     <?php echo $theme_layout_style; ?>
     <link href="/assets/apps/css/inbox.css" rel="stylesheet" type="text/css" />
+    <style type="text/css">
+        #client-inbox-thread-list {
+            margin-top: 10px;
+        }
+        #client-inbox-thread-list .mt-thread-item {
+            margin: 0;
+            border-bottom: 1px solid #eef1f5;
+            background: #fff;
+        }
+        #client-inbox-thread-list .mt-thread-link {
+            display: block;
+            padding: 10px 12px;
+            text-decoration: none;
+            color: inherit;
+            border-left: 3px solid transparent;
+        }
+        #client-inbox-thread-list .mt-thread-item:hover .mt-thread-link {
+            background: #f7f9fb;
+        }
+        #client-inbox-thread-list .mt-thread-item.active .mt-thread-link {
+            background: #eef4ff;
+            border-left-color: #5b9bd1;
+        }
+        #client-inbox-thread-list .mt-thread-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        #client-inbox-thread-list .mt-thread-main {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        #client-inbox-thread-list .mt-thread-title {
+            font-weight: 600;
+            color: #2f353b;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #client-inbox-thread-list .mt-thread-item.unread .mt-thread-title {
+            font-weight: 700;
+        }
+        #client-inbox-thread-list .mt-thread-sub {
+            margin-top: 3px;
+            color: #7f8c9d;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #client-inbox-thread-list .mt-thread-preview {
+            margin-top: 2px;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #client-inbox-thread-list .mt-dot {
+            margin: 0 4px;
+        }
+        #client-inbox-thread-list .mt-thread-meta {
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-start;
+            flex-direction: column;
+            gap: 4px;
+            flex: 0 0 auto;
+            text-align: right;
+        }
+        #client-inbox-thread-list .mt-badge,
+        #client-inbox-thread-list .mt-unread {
+            font-size: 10px;
+            padding: 3px 6px;
+            line-height: 1.2;
+        }
+        #client-inbox-thread-list .mt-time {
+            font-size: 11px;
+            color: #95a5a6;
+            white-space: nowrap;
+        }
+        @media (max-width: 767px) {
+            #client-inbox-thread-list .mt-thread-row {
+                flex-direction: column;
+                gap: 6px;
+            }
+            #client-inbox-thread-list .mt-thread-meta {
+                flex-direction: row;
+                align-items: center;
+                justify-content: flex-start;
+                text-align: left;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
 <div class="wrapper">
@@ -125,10 +219,11 @@ if (isset($conexion) && $conexion) {
                                         <div class="col-sm-6">
                                             <div class="form-group">
                                                 <label for="client-doc-file">File</label>
-                                                <input type="file" class="form-control" id="client-doc-file" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx">
+                                                <input type="file" class="form-control" id="client-doc-file" name="client_doc_files[]" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" multiple>
                                             </div>
                                         </div>
                                     </div>
+                                    <div id="client-doc-batch" style="margin-top:10px;"></div>
                                     <div class="form-group">
                                         <label for="client-doc-title">Title (optional)</label>
                                         <input type="text" class="form-control" id="client-doc-title" maxlength="255" placeholder="Document title">
@@ -138,6 +233,7 @@ if (isset($conexion) && $conexion) {
                                         <textarea class="form-control" id="client-doc-description" rows="2" maxlength="500" placeholder="Short description"></textarea>
                                     </div>
                                     <button type="submit" class="btn btn-success btn-sm" id="client-doc-upload-btn"><i class="fa fa-upload"></i> Upload document</button>
+                                    <div id="client-doc-upload-status" style="margin-top:10px;"></div>
                                 </form>
                             </div>
                             <div class="inbox-content" id="client-inbox-content" style="display:none;">
@@ -148,6 +244,7 @@ if (isset($conexion) && $conexion) {
                                         <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..." <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>></textarea>
                                     </div>
                                     <button type="submit" class="btn btn-primary" id="client-inbox-send-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
+                                    <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Messaging will be available after the initial review. Please use the options above.</div>
                                 </form>
                             </div>
                             <div class="inbox-content" id="client-inbox-empty">

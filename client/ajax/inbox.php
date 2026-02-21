@@ -81,6 +81,53 @@ function client_inbox_fee_gate_state($conexion, $bookingRequestId)
     ];
 }
 
+function client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate = null)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $feeGate = is_array($feeGate) ? $feeGate : client_inbox_fee_gate_state($conexion, $bookingRequestId);
+    $feeLocked = !empty($feeGate['fee_locked']);
+
+    $status = 'pending';
+    if ($bookingRequestId > 0 && inbox_table_exists($conexion, 'booking_requests') && client_table_has_column($conexion, 'booking_requests', 'status')) {
+        $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+        $statusSql = "SELECT status FROM booking_requests WHERE id = ?";
+        if ($hasBookingSoftDelete) {
+            $statusSql .= " AND is_deleted = 0";
+        }
+        $statusSql .= " LIMIT 1";
+
+        $stmtStatus = mysqli_prepare($conexion, $statusSql);
+        if ($stmtStatus) {
+            mysqli_stmt_bind_param($stmtStatus, 'i', $bookingRequestId);
+            if (mysqli_stmt_execute($stmtStatus)) {
+                $statusRes = mysqli_stmt_get_result($stmtStatus);
+                $statusRow = $statusRes ? mysqli_fetch_assoc($statusRes) : null;
+                if ($statusRow) {
+                    $status = client_status_label((string)($statusRow['status'] ?? 'pending'));
+                }
+            }
+            mysqli_stmt_close($stmtStatus);
+        }
+    }
+
+    $stageAllowsFreeMessage = client_status_is_update($status);
+    $canSendFreeMessage = (!$feeLocked && $stageAllowsFreeMessage);
+    $reason = '';
+    if ($feeLocked) {
+        $reason = 'fee_locked';
+    } elseif (!$stageAllowsFreeMessage) {
+        $reason = 'initial_review';
+    }
+
+    return [
+        'booking_status' => $status,
+        'stage_allows_free_message' => $stageAllowsFreeMessage,
+        'can_send_free_message' => $canSendFreeMessage,
+        'blocked_reason' => $reason,
+        'notice' => $stageAllowsFreeMessage ? '' : 'Messaging will be available after the initial review. Please use the options above.',
+    ];
+}
+
 function client_inbox_resolve_context($conexion, $ownerScope, $threadType, $requestId, $itemId, $threadIdInput)
 {
     $threadType = strtoupper(trim((string)$threadType));
@@ -344,8 +391,15 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
     $feeLocked = !empty($feeGate['fee_locked']);
     $feeRequired = (int)($feeGate['fee_required'] ?? 0);
     $feeStatus = (string)($feeGate['fee_status'] ?? 'pending');
-    if ($feeLocked && $action === 'send_message') {
-        client_inbox_err('coordination_fee_required', 403, 'FEE_REQUIRED');
+    $freeMessageState = client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate);
+    $canSendFreeMessage = !empty($freeMessageState['can_send_free_message']);
+    if ($action === 'send_message') {
+        if ($feeLocked) {
+            client_inbox_err('coordination_fee_required', 403, 'FEE_REQUIRED');
+        }
+        if (!$canSendFreeMessage) {
+            client_inbox_err('free_message_blocked', 403, 'FREE_MESSAGE_BLOCKED');
+        }
     }
 }
 
@@ -431,6 +485,55 @@ if ($action === 'list_messages') {
         }
     }
 
+    $documents = [];
+    if (client_table_exists($conexion, 'client_documents')) {
+        $docHasRequestId = client_table_has_column($conexion, 'client_documents', 'booking_request_id');
+        $docHasItemId = client_table_has_column($conexion, 'client_documents', 'item_id');
+        if ($docHasRequestId && $docHasItemId) {
+            $selectCols = ['id', 'file_path', 'filename', 'original_filename', 'document_type', 'booking_request_id', 'item_id'];
+            if (client_table_has_column($conexion, 'client_documents', 'file_size')) {
+                $selectCols[] = 'file_size';
+            }
+            if (client_table_has_column($conexion, 'client_documents', 'mime_type')) {
+                $selectCols[] = 'mime_type';
+            }
+            if (client_table_has_column($conexion, 'client_documents', 'title')) {
+                $selectCols[] = 'title';
+            }
+            if (client_table_has_column($conexion, 'client_documents', 'description')) {
+                $selectCols[] = 'description';
+            }
+            $orderByColumn = client_table_has_column($conexion, 'client_documents', 'uploaded_at') ? 'uploaded_at' : 'id';
+
+            $docSql = "SELECT " . implode(', ', $selectCols) . "
+                       FROM client_documents
+                       WHERE client_id = ? AND booking_request_id = ?";
+            $docTypes = 'ii';
+            $docParams = [$clientUserId, (int)$ctx['request_id']];
+
+            if (strtoupper((string)($ctx['thread_type'] ?? 'CARE')) === 'ITEM' && (int)($ctx['item_id'] ?? 0) > 0) {
+                $docSql .= " AND (item_id = ? OR item_id IS NULL)";
+                $docTypes .= 'i';
+                $docParams[] = (int)$ctx['item_id'];
+            }
+
+            $docSql .= " ORDER BY " . $orderByColumn . " DESC";
+
+            $stmtDocs = mysqli_prepare($conexion, $docSql);
+            if ($stmtDocs) {
+                if (inbox_bind_stmt_params($stmtDocs, $docTypes, $docParams) && mysqli_stmt_execute($stmtDocs)) {
+                    $docRes = mysqli_stmt_get_result($stmtDocs);
+                    while ($docRes && ($docRow = mysqli_fetch_assoc($docRes))) {
+                        $filePath = ltrim((string)($docRow['file_path'] ?? ''), '/');
+                        $docRow['download_url'] = $filePath !== '' ? '/uploads/medical_docs/' . $filePath : '';
+                        $documents[] = $docRow;
+                    }
+                }
+                mysqli_stmt_close($stmtDocs);
+            }
+        }
+    }
+
     client_inbox_ok([
         'thread_id' => $ctx['thread_id'],
         'thread_type' => $ctx['thread_type'],
@@ -443,6 +546,10 @@ if ($action === 'list_messages') {
         'fee_status' => $feeStatus,
         'fee_locked' => !empty($feeLocked),
         'fee_message' => !empty($feeLocked) ? 'Unlock after Coordination Fee.' : '',
+        'can_send_free_message' => !empty($freeMessageState['can_send_free_message']),
+        'free_message_blocked_reason' => (string)($freeMessageState['blocked_reason'] ?? ''),
+        'free_message_notice' => (string)($freeMessageState['notice'] ?? ''),
+        'documents' => $documents,
         'messages' => $messages,
     ]);
 }

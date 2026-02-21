@@ -19,17 +19,95 @@ function client_doc_ok($data = [])
     exit;
 }
 
+function client_doc_normalize_upload_files($files)
+{
+    if (!is_array($files) || !isset($files['name'])) {
+        return [];
+    }
+
+    if (!is_array($files['name'])) {
+        return [[
+            'name' => (string)($files['name'] ?? ''),
+            'type' => (string)($files['type'] ?? ''),
+            'tmp_name' => (string)($files['tmp_name'] ?? ''),
+            'error' => (int)($files['error'] ?? UPLOAD_ERR_NO_FILE),
+            'size' => (int)($files['size'] ?? 0),
+        ]];
+    }
+
+    $normalized = [];
+    $count = count($files['name']);
+    for ($i = 0; $i < $count; $i++) {
+        $normalized[] = [
+            'name' => (string)($files['name'][$i] ?? ''),
+            'type' => (string)($files['type'][$i] ?? ''),
+            'tmp_name' => (string)($files['tmp_name'][$i] ?? ''),
+            'error' => (int)($files['error'][$i] ?? UPLOAD_ERR_NO_FILE),
+            'size' => (int)($files['size'][$i] ?? 0),
+        ];
+    }
+
+    return $normalized;
+}
+
+function client_doc_enum_first_value($type)
+{
+    if (!preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", (string)$type, $m)) {
+        return '';
+    }
+    if (empty($m[1][0])) {
+        return '';
+    }
+    return stripcslashes((string)$m[1][0]);
+}
+
 if (!isset($conexion) || !$conexion) {
     client_doc_err('db_not_available', 500);
 }
-if (!client_table_exists($conexion, 'client_documents')) {
+$tableName = 'client_documents';
+$tableExists = client_table_exists($conexion, $tableName);
+if (!$tableExists) {
     client_doc_err('client_documents_not_available', 409);
 }
 
-$hasDocRequestId = client_table_has_column($conexion, 'client_documents', 'booking_request_id');
-$hasDocItemId = client_table_has_column($conexion, 'client_documents', 'item_id');
-if (!$hasDocRequestId || !$hasDocItemId) {
-    client_doc_err('client_documents_scope_missing', 409);
+$bookingRequestIdInput = isset($_POST['booking_request_id']) ? (int)$_POST['booking_request_id'] : 0;
+$requestId = isset($_POST['request_id']) ? (int)$_POST['request_id'] : 0;
+$itemId = isset($_POST['item_id']) ? (int)$_POST['item_id'] : 0;
+$threadType = strtoupper(trim((string)($_POST['thread_type'] ?? '')));
+$requiredSchemaCols = ['client_id', 'file_path', 'filename', 'original_filename', 'booking_request_id', 'item_id'];
+$existingCols = [];
+$showColsSql = "SHOW COLUMNS FROM `client_documents`";
+$db = $conexion;
+if (!$db) {
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'message' => 'db_not_available']);
+    exit;
+}
+
+$showColsRes = mysqli_query($db, $showColsSql);
+if ($showColsRes === false) {
+    client_doc_err('db_schema_check_failed', 500);
+}
+
+while ($row = mysqli_fetch_assoc($showColsRes)) {
+    $field = strtolower(trim((string)($row['Field'] ?? '')));
+    if ($field !== '') {
+        $existingCols[$field] = true;
+    }
+}
+
+if (empty($existingCols)) {
+    client_doc_err('db_schema_check_failed', 500);
+}
+$missingCols = [];
+foreach ($requiredSchemaCols as $col) {
+    if (!isset($existingCols[strtolower($col)])) {
+        $missingCols[] = $col;
+    }
+}
+
+if (!empty($missingCols)) {
+    client_doc_err('client_documents_schema_missing', 409);
 }
 
 $clientUserId = get_client_user_id();
@@ -42,9 +120,14 @@ if ($ownerScope['sql'] === '1=0') {
     client_doc_err('booking_owner_scope_unavailable', 409);
 }
 
-$requestId = isset($_POST['request_id']) ? (int)$_POST['request_id'] : 0;
-$itemId = isset($_POST['item_id']) ? (int)$_POST['item_id'] : 0;
-$bookingId = $requestId;
+if ($threadType === 'CARE') {
+    $itemId = 0;
+}
+$bookingId = $bookingRequestIdInput > 0 ? $bookingRequestIdInput : $requestId;
+
+if ($bookingId <= 0 && $itemId <= 0) {
+    client_doc_err('client_documents_scope_missing', 422);
+}
 
 $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
 $hasRequestsSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
@@ -80,7 +163,7 @@ if ($bookingId <= 0) {
     client_doc_err('invalid_booking_id', 422);
 }
 
-$verifySql = "SELECT br.id FROM booking_requests br WHERE br.id = ? AND (" . $ownerScope['sql'] . ")";
+$verifySql = "SELECT br.id, " . (client_table_has_column($conexion, 'booking_requests', 'email') ? 'br.email' : "''") . " AS booking_email FROM booking_requests br WHERE br.id = ? AND (" . $ownerScope['sql'] . ")";
 if ($hasRequestsSoftDelete) {
     $verifySql .= " AND br.is_deleted = 0";
 }
@@ -99,7 +182,126 @@ $verifyRes = mysqli_stmt_get_result($stmtVerify);
 $verifyRow = $verifyRes ? mysqli_fetch_assoc($verifyRes) : null;
 mysqli_stmt_close($stmtVerify);
 if (!$verifyRow) {
-    client_doc_err('request_not_found', 404);
+    client_doc_err('forbidden', 403);
+}
+
+$resolvedClientId = 0;
+$sessionClientEmail = strtolower(trim((string)client_get_session_email()));
+$bookingClientEmail = strtolower(trim((string)($verifyRow['booking_email'] ?? '')));
+$resolvedClientEmail = $bookingClientEmail !== '' ? $bookingClientEmail : $sessionClientEmail;
+
+if ($resolvedClientEmail === '' || !client_table_exists($conexion, 'clientes') || !client_table_has_column($conexion, 'clientes', 'email')) {
+    client_doc_err('client_not_resolved', 422);
+}
+
+$stmtClient = mysqli_prepare($conexion, "SELECT id FROM clientes WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
+if ($stmtClient) {
+    mysqli_stmt_bind_param($stmtClient, 's', $resolvedClientEmail);
+    if (!mysqli_stmt_execute($stmtClient)) {
+        mysqli_stmt_close($stmtClient);
+        client_doc_err('execute_failed', 500);
+    }
+    $resClient = mysqli_stmt_get_result($stmtClient);
+    $rowClient = $resClient ? mysqli_fetch_assoc($resClient) : null;
+    mysqli_stmt_close($stmtClient);
+    if ($rowClient) {
+        $resolvedClientId = (int)($rowClient['id'] ?? 0);
+    }
+}
+
+if ($resolvedClientId <= 0) {
+    $displayName = trim((string)get_client_display_name());
+    $nameParts = preg_split('/\s+/', $displayName);
+    $fallbackNombre = trim((string)($nameParts[0] ?? 'Client'));
+    $fallbackApellido = trim((string)(count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : 'Client'));
+
+    $requiredCols = [];
+    $requiredTypes = [];
+    $showClientesCols = mysqli_query($conexion, "SHOW COLUMNS FROM `clientes`");
+    if ($showClientesCols) {
+        while ($colRow = mysqli_fetch_assoc($showClientesCols)) {
+            $field = trim((string)($colRow['Field'] ?? ''));
+            $type = strtolower(trim((string)($colRow['Type'] ?? '')));
+            $isNullable = strtoupper(trim((string)($colRow['Null'] ?? 'YES')));
+            $defaultVal = $colRow['Default'] ?? null;
+            $extra = strtolower(trim((string)($colRow['Extra'] ?? '')));
+
+            if ($field === '' || strpos($extra, 'auto_increment') !== false) {
+                continue;
+            }
+            if ($isNullable === 'NO' && $defaultVal === null) {
+                $requiredCols[] = $field;
+                $requiredTypes[$field] = $type;
+            }
+        }
+    }
+
+    if (empty($requiredCols)) {
+        client_doc_err('client_not_resolved', 422);
+    }
+
+    $insertCols = [];
+    $insertVals = [];
+    $insertTypes = '';
+    $insertParams = [];
+
+    foreach ($requiredCols as $field) {
+        $fieldLower = strtolower($field);
+        $type = (string)($requiredTypes[$field] ?? '');
+        $value = null;
+
+        if ($fieldLower === 'email') {
+            $value = $resolvedClientEmail;
+            $insertTypes .= 's';
+        } elseif ($fieldLower === 'nombre') {
+            $value = $fallbackNombre;
+            $insertTypes .= 's';
+        } elseif ($fieldLower === 'apellido') {
+            $value = $fallbackApellido;
+            $insertTypes .= 's';
+        } elseif (strpos($type, 'enum(') === 0 || strpos($type, 'set(') === 0) {
+            $value = client_doc_enum_first_value($type);
+            $insertTypes .= 's';
+        } elseif (preg_match('/int|decimal|float|double|real|bit/', $type)) {
+            $value = 0;
+            $insertTypes .= 'i';
+        } elseif (strpos($type, 'datetime') !== false || strpos($type, 'timestamp') !== false) {
+            $value = date('Y-m-d H:i:s');
+            $insertTypes .= 's';
+        } elseif (strpos($type, 'date') !== false) {
+            $value = date('Y-m-d');
+            $insertTypes .= 's';
+        } elseif (strpos($type, 'time') !== false) {
+            $value = date('H:i:s');
+            $insertTypes .= 's';
+        } elseif (strpos($type, 'year') !== false) {
+            $value = date('Y');
+            $insertTypes .= 's';
+        } else {
+            $value = '';
+            $insertTypes .= 's';
+        }
+
+        $insertCols[] = $field;
+        $insertVals[] = '?';
+        $insertParams[] = $value;
+    }
+
+    $insertClienteSql = "INSERT INTO clientes (" . implode(', ', $insertCols) . ") VALUES (" . implode(', ', $insertVals) . ")";
+    $stmtInsertCliente = mysqli_prepare($conexion, $insertClienteSql);
+    if (!$stmtInsertCliente) {
+        client_doc_err('client_not_resolved', 422);
+    }
+    if (!client_bind_params($stmtInsertCliente, $insertTypes, $insertParams) || !mysqli_stmt_execute($stmtInsertCliente)) {
+        mysqli_stmt_close($stmtInsertCliente);
+        client_doc_err('client_not_resolved', 422);
+    }
+    $resolvedClientId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmtInsertCliente);
+}
+
+if ($resolvedClientId <= 0) {
+    client_doc_err('client_not_resolved', 422);
 }
 
 if ($itemId > 0 && client_table_exists($conexion, 'booking_request_items')) {
@@ -132,22 +334,23 @@ if ($itemId > 0 && client_table_exists($conexion, 'booking_request_items')) {
     }
 }
 
-if (!isset($_FILES['document']) || $_FILES['document']['error'] === UPLOAD_ERR_NO_FILE) {
+if (isset($_FILES['client_doc_files'])) {
+    $files = client_doc_normalize_upload_files($_FILES['client_doc_files']);
+} elseif (isset($_FILES['document'])) {
+    $files = client_doc_normalize_upload_files($_FILES['document']);
+} else {
+    $files = [];
+}
+
+if (empty($files)) {
     client_doc_err('file_required', 422);
 }
 
-$file = $_FILES['document'];
-if ($file['error'] !== UPLOAD_ERR_OK) {
-    client_doc_err('upload_error', 400);
-}
-
 $maxFileSize = 10 * 1024 * 1024;
-if ($file['size'] > $maxFileSize) {
-    client_doc_err('file_too_large', 422);
-}
 
 $allowedTypes = [
     'application/pdf',
+    'application/x-pdf',
     'image/jpeg',
     'image/jpg',
     'image/png',
@@ -157,20 +360,7 @@ $allowedTypes = [
 ];
 $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx'];
 
-$finfo = finfo_open(FILEINFO_MIME_TYPE);
-$mimeType = finfo_file($finfo, $file['tmp_name']);
-finfo_close($finfo);
-
-if (!in_array($mimeType, $allowedTypes, true)) {
-    client_doc_err('file_type_not_allowed', 422);
-}
-
-$fileExtension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-if (!in_array($fileExtension, $allowedExtensions, true)) {
-    client_doc_err('file_extension_not_allowed', 422);
-}
-
-$documentType = strtolower(trim((string)($_POST['document_type'] ?? 'other')));
+$documentTypeMaster = strtolower(trim((string)($_POST['document_type'] ?? 'other')));
 $allowedDocTypes = [
     'passport',
     'id_card',
@@ -184,8 +374,20 @@ $allowedDocTypes = [
     'photos',
     'other'
 ];
-if (!in_array($documentType, $allowedDocTypes, true)) {
-    $documentType = 'other';
+if (!in_array($documentTypeMaster, $allowedDocTypes, true)) {
+    $documentTypeMaster = 'other';
+}
+
+$titleMaster = trim((string)($_POST['title'] ?? ''));
+$descriptionMaster = trim((string)($_POST['description'] ?? ''));
+
+$metaByIndex = [];
+$metaRaw = trim((string)($_POST['meta_json'] ?? ''));
+if ($metaRaw !== '') {
+    $decodedMeta = json_decode($metaRaw, true);
+    if (is_array($decodedMeta)) {
+        $metaByIndex = $decodedMeta;
+    }
 }
 
 $uploadRoot = __DIR__ . '/../../uploads/medical_docs/';
@@ -196,135 +398,288 @@ if (!is_dir($clientDir)) {
     }
 }
 
-$filename = uniqid('doc_' . $clientUserId . '_') . '.' . $fileExtension;
-$filePath = 'client_' . $clientUserId . '/' . $filename;
-$fullPath = $clientDir . $filename;
+$hasDocumentType = client_table_has_column($conexion, 'client_documents', 'document_type');
+$hasFileSize = client_table_has_column($conexion, 'client_documents', 'file_size');
+$hasMimeType = client_table_has_column($conexion, 'client_documents', 'mime_type');
+$hasFileExtension = client_table_has_column($conexion, 'client_documents', 'file_extension');
+$hasTitle = client_table_has_column($conexion, 'client_documents', 'title');
+$hasDescription = client_table_has_column($conexion, 'client_documents', 'description');
+$hasSharedWithProvider = client_table_has_column($conexion, 'client_documents', 'shared_with_provider');
+$hasUploadedBy = client_table_has_column($conexion, 'client_documents', 'uploaded_by');
 
-if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
-    client_doc_err('file_save_failed', 500);
+$results = [];
+$uploadedCount = 0;
+$firstUploaded = null;
+
+foreach ($files as $index => $file) {
+    $originalFilename = trim((string)($file['name'] ?? ''));
+    $fileError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($fileError === UPLOAD_ERR_NO_FILE) {
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'file_required',
+            'original_filename' => $originalFilename,
+        ];
+        continue;
+    }
+    if ($fileError !== UPLOAD_ERR_OK) {
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'upload_error',
+            'original_filename' => $originalFilename,
+        ];
+        continue;
+    }
+
+    $fileSize = (int)($file['size'] ?? 0);
+    if ($fileSize > $maxFileSize) {
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'file_too_large',
+            'original_filename' => $originalFilename,
+        ];
+        continue;
+    }
+
+    $tmpName = (string)($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'invalid_tmp_file',
+            'original_filename' => $originalFilename,
+        ];
+        continue;
+    }
+
+    $fileExtension = strtolower(pathinfo($originalFilename, PATHINFO_EXTENSION));
+    if (!in_array($fileExtension, $allowedExtensions, true)) {
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'file_extension_not_allowed',
+            'original_filename' => $originalFilename,
+        ];
+        continue;
+    }
+
+    $mimeType = '';
+    if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo ? (string)finfo_file($finfo, $tmpName) : '';
+        if ($finfo) {
+            finfo_close($finfo);
+        }
+    } elseif (function_exists('mime_content_type')) {
+        $mimeType = (string)(@mime_content_type($tmpName) ?: '');
+    }
+    if ($mimeType === '') {
+        $mimeType = 'application/octet-stream';
+    }
+    if ($mimeType !== 'application/octet-stream' && !in_array($mimeType, $allowedTypes, true)) {
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'file_type_not_allowed',
+            'original_filename' => $originalFilename,
+        ];
+        continue;
+    }
+
+    $meta = is_array($metaByIndex[$index] ?? null) ? $metaByIndex[$index] : [];
+    $documentType = strtolower(trim((string)($meta['doc_type'] ?? $meta['document_type'] ?? $documentTypeMaster)));
+    if (!in_array($documentType, $allowedDocTypes, true)) {
+        $documentType = 'other';
+    }
+    $title = trim((string)($meta['title'] ?? $titleMaster));
+    $description = trim((string)($meta['description'] ?? $descriptionMaster));
+
+    $filename = uniqid('doc_' . $clientUserId . '_') . '.' . $fileExtension;
+    $filePath = 'client_' . $clientUserId . '/' . $filename;
+    $fullPath = $clientDir . $filename;
+
+    if (!move_uploaded_file($tmpName, $fullPath)) {
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'file_save_failed',
+            'original_filename' => (string)($file['name'] ?? ''),
+        ];
+        continue;
+    }
+
+    $columns = [];
+    $placeholders = [];
+    $types = '';
+    $params = [];
+
+    $columns[] = 'client_id';
+    $placeholders[] = '?';
+    $types .= 'i';
+    $params[] = $resolvedClientId;
+
+    if ($hasDocumentType) {
+        $columns[] = 'document_type';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $documentType;
+    }
+
+    $columns[] = 'file_path';
+    $placeholders[] = '?';
+    $types .= 's';
+    $params[] = $filePath;
+
+    $columns[] = 'filename';
+    $placeholders[] = '?';
+    $types .= 's';
+    $params[] = $filename;
+
+    $columns[] = 'original_filename';
+    $placeholders[] = '?';
+    $types .= 's';
+    $params[] = $originalFilename;
+
+    if ($hasFileSize) {
+        $columns[] = 'file_size';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = $fileSize;
+    }
+
+    if ($hasMimeType) {
+        $columns[] = 'mime_type';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $mimeType;
+    }
+
+    if ($hasFileExtension) {
+        $columns[] = 'file_extension';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $fileExtension;
+    }
+
+    if ($title !== '' && $hasTitle) {
+        $columns[] = 'title';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $title;
+    }
+
+    if ($description !== '' && $hasDescription) {
+        $columns[] = 'description';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $description;
+    }
+
+    if ($hasSharedWithProvider) {
+        $columns[] = 'shared_with_provider';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = 1;
+    }
+
+    if ($hasUploadedBy) {
+        $columns[] = 'uploaded_by';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = $clientUserId;
+    }
+
+    $columns[] = 'booking_request_id';
+    $placeholders[] = '?';
+    $types .= 'i';
+    $params[] = $bookingId;
+
+    $columns[] = 'item_id';
+    if ($itemId > 0) {
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = $itemId;
+    } else {
+        $placeholders[] = 'NULL';
+    }
+
+    $insertSql = "INSERT INTO client_documents (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
+    $stmtInsert = mysqli_prepare($conexion, $insertSql);
+    if (!$stmtInsert) {
+        @unlink($fullPath);
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'insert_prepare_failed',
+            'original_filename' => $originalFilename,
+        ];
+        continue;
+    }
+
+    if (!client_bind_params($stmtInsert, $types, $params) || !mysqli_stmt_execute($stmtInsert)) {
+        $err = mysqli_stmt_error($stmtInsert);
+        mysqli_stmt_close($stmtInsert);
+        @unlink($fullPath);
+        $results[] = [
+            'index' => $index,
+            'ok' => false,
+            'message' => 'insert_failed: ' . $err,
+            'original_filename' => $originalFilename,
+        ];
+        continue;
+    }
+
+    $documentId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmtInsert);
+    $uploadedCount++;
+
+    $successItem = [
+        'index' => $index,
+        'ok' => true,
+        'document_id' => $documentId,
+        'file_path' => $filePath,
+        'original_filename' => $originalFilename,
+    ];
+    if ($firstUploaded === null) {
+        $firstUploaded = $successItem;
+    }
+    $results[] = $successItem;
 }
 
-$requiredCols = ['client_id', 'file_path', 'filename', 'original_filename'];
-foreach ($requiredCols as $col) {
-    if (!client_table_has_column($conexion, 'client_documents', $col)) {
-        @unlink($fullPath);
-        client_doc_err('client_documents_missing_columns', 409);
+if ($uploadedCount <= 0) {
+    http_response_code(422);
+    echo json_encode([
+        'ok' => false,
+        'message' => 'upload_failed',
+        'results' => $results,
+    ]);
+    exit;
+}
+
+$warnings = [];
+foreach ($results as $r) {
+    if (empty($r['ok'])) {
+        $warnings[] = $r;
     }
 }
 
-$title = trim((string)($_POST['title'] ?? ''));
-$description = trim((string)($_POST['description'] ?? ''));
+$response = [
+    'uploaded_count' => $uploadedCount,
+    'results' => $results,
+];
 
-$columns = [];
-$placeholders = [];
-$types = '';
-$params = [];
-
-$columns[] = 'client_id';
-$placeholders[] = '?';
-$types .= 'i';
-$params[] = $clientUserId;
-
-if (client_table_has_column($conexion, 'client_documents', 'document_type')) {
-    $columns[] = 'document_type';
-    $placeholders[] = '?';
-    $types .= 's';
-    $params[] = $documentType;
+if ($firstUploaded) {
+    $response['document_id'] = (int)($firstUploaded['document_id'] ?? 0);
+    $response['file_path'] = (string)($firstUploaded['file_path'] ?? '');
+    $response['original_filename'] = (string)($firstUploaded['original_filename'] ?? '');
 }
 
-$columns[] = 'file_path';
-$placeholders[] = '?';
-$types .= 's';
-$params[] = $filePath;
-
-$columns[] = 'filename';
-$placeholders[] = '?';
-$types .= 's';
-$params[] = $filename;
-
-$columns[] = 'original_filename';
-$placeholders[] = '?';
-$types .= 's';
-$params[] = (string)$file['name'];
-
-if (client_table_has_column($conexion, 'client_documents', 'file_size')) {
-    $columns[] = 'file_size';
-    $placeholders[] = '?';
-    $types .= 'i';
-    $params[] = (int)$file['size'];
+if (!empty($warnings)) {
+    $response['warning'] = 'partial_upload';
+    $response['warnings'] = $warnings;
 }
 
-if (client_table_has_column($conexion, 'client_documents', 'mime_type')) {
-    $columns[] = 'mime_type';
-    $placeholders[] = '?';
-    $types .= 's';
-    $params[] = $mimeType;
-}
-
-if (client_table_has_column($conexion, 'client_documents', 'file_extension')) {
-    $columns[] = 'file_extension';
-    $placeholders[] = '?';
-    $types .= 's';
-    $params[] = $fileExtension;
-}
-
-if ($title !== '' && client_table_has_column($conexion, 'client_documents', 'title')) {
-    $columns[] = 'title';
-    $placeholders[] = '?';
-    $types .= 's';
-    $params[] = $title;
-}
-
-if ($description !== '' && client_table_has_column($conexion, 'client_documents', 'description')) {
-    $columns[] = 'description';
-    $placeholders[] = '?';
-    $types .= 's';
-    $params[] = $description;
-}
-
-if (client_table_has_column($conexion, 'client_documents', 'shared_with_provider')) {
-    $columns[] = 'shared_with_provider';
-    $placeholders[] = '?';
-    $types .= 'i';
-    $params[] = 1;
-}
-
-if (client_table_has_column($conexion, 'client_documents', 'uploaded_by')) {
-    $columns[] = 'uploaded_by';
-    $placeholders[] = '?';
-    $types .= 'i';
-    $params[] = $clientUserId;
-}
-
-$columns[] = 'booking_request_id';
-$placeholders[] = '?';
-$types .= 'i';
-$params[] = $bookingId;
-
-$columns[] = 'item_id';
-$placeholders[] = '?';
-$types .= 'i';
-$params[] = $itemId > 0 ? $itemId : null;
-
-$insertSql = "INSERT INTO client_documents (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
-$stmtInsert = mysqli_prepare($conexion, $insertSql);
-if (!$stmtInsert) {
-    @unlink($fullPath);
-    client_doc_err('insert_prepare_failed', 500);
-}
-
-if (!client_bind_params($stmtInsert, $types, $params) || !mysqli_stmt_execute($stmtInsert)) {
-    $err = mysqli_stmt_error($stmtInsert);
-    mysqli_stmt_close($stmtInsert);
-    @unlink($fullPath);
-    client_doc_err('insert_failed: ' . $err, 500);
-}
-
-$documentId = (int)mysqli_insert_id($conexion);
-mysqli_stmt_close($stmtInsert);
-
-client_doc_ok([
-    'document_id' => $documentId,
-    'file_path' => $filePath,
-    'original_filename' => (string)$file['name']
-]);
+client_doc_ok($response);

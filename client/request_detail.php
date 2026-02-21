@@ -71,7 +71,13 @@ if ($requestId <= 0) {
                                     </a>
                                 </p>
                                 <div id="client-inbox-item-links" style="margin-top:10px;">
-                                    <p class="text-muted" style="margin:0;">Item threads will appear here when available.</p>
+                                    <a class="btn btn-default" id="client-open-inbox-medical" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=CARE">
+                                        <i class="icon-bubble"></i> Message Medical Provider
+                                    </a>
+                                    <a class="btn btn-default" id="client-open-inbox-complementary" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=CARE" style="margin-left:8px;">
+                                        <i class="icon-bubble"></i> Message Complementary Provider
+                                    </a>
+                                    <p class="text-muted" style="margin:8px 0 0 0;">Buttons route to the first available item by category.</p>
                                 </div>
                             </div>
                         </div>
