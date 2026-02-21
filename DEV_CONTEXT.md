@@ -892,3 +892,37 @@ Nota de alcance:
 5. Cliente responde con acciones estructuradas y/o carga documentos.
 6. Estados del item evolucionan según aceptación, cambios o rechazo.
 7. Al pasar a etapa avanzada del item, mensajería libre se habilita en ITEM.
+
+---
+
+## L) Incidente 2026-02-21: upload de imagenes en Home Edit
+
+### Sintoma
+- `admin/ajax/home_edit.php` responde `error2: upload_error` con `error_code = 1` y `file_size = 0` al subir imagenes (ej. Accommodation).
+
+### Causa raiz
+- `error_code = 1` corresponde a `UPLOAD_ERR_INI_SIZE` (archivo excede `upload_max_filesize` o el POST supera `post_max_size`).
+- La ruta `img/services/` no se valida/crea ni se verifica permisos antes de mover el archivo.
+
+### Solucion aplicada (codigo)
+- Manejo explicito de errores de `$_FILES['file']` y reporte de limites (`upload_max_filesize`, `post_max_size`).
+- Verificacion/creacion de carpeta `img/services` y chequeo de permisos.
+
+**Archivos**
+- `admin/ajax/home_edit.php` (bloque `edit_service_img`).
+
+### Checklist de servidor
+- `upload_max_filesize`
+- `post_max_size`
+- `memory_limit`
+- `max_file_uploads`
+- `file_uploads`
+
+### Ruta de guardado y permisos
+- Ruta real: `img/services/` (relativa al root del sitio).
+- Requiere permisos de escritura para el usuario del servidor web.
+
+### Recomendaciones operativas
+- Resolucion recomendada: 1200x800.
+- Peso recomendado: menor a 2MB.
+- Ver limite efectivo con `ini_get('upload_max_filesize')` y `ini_get('post_max_size')`.

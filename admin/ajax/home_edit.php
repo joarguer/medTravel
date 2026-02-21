@@ -150,7 +150,32 @@ if($tipo == 'edit_service'){
 if($tipo == 'edit_service_img'){
     $id = $_REQUEST["id"];
     $title = $_REQUEST["title"];
-    $ruta = "../../img/services/".$id."_".$title."_".$_FILES['file']['name'];
+    if (!isset($_FILES['file']) || !is_array($_FILES['file'])) {
+        $resultados['status'] = 'error2: missing_file';
+        echo json_encode($resultados);
+        exit;
+    }
+    if (!empty($_FILES['file']['error']) && $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+        $resultados['status'] = 'error2: upload_error';
+        $resultados['error_code'] = $_FILES['file']['error'];
+        $resultados['file_size'] = $_FILES['file']['size'] ?? 0;
+        $resultados['upload_max_filesize'] = ini_get('upload_max_filesize');
+        $resultados['post_max_size'] = ini_get('post_max_size');
+        echo json_encode($resultados);
+        exit;
+    }
+    $safeName = basename($_FILES['file']['name']);
+    $upload_dir = "../../img/services";
+    if (!is_dir($upload_dir)) {
+        @mkdir($upload_dir, 0755, true);
+    }
+    if (!is_dir($upload_dir) || !is_writable($upload_dir)) {
+        $resultados['status'] = 'error2: upload_path_not_writable';
+        $resultados['ruta'] = $upload_dir;
+        echo json_encode($resultados);
+        exit;
+    }
+    $ruta = $upload_dir."/".$id."_".$title."_".$safeName;
     if (($_FILES["file"]["type"] == "image/pjpeg") || ($_FILES["file"]["type"] == "image/jpeg") || ($_FILES["file"]["type"] == "image/png") || ($_FILES["file"]["type"] == "image/gif")) {
         $busco = mysqli_query($conexion,"SELECT img FROM home_services WHERE id = '$id'");
         if(mysqli_num_rows($busco) > 0){
@@ -163,7 +188,7 @@ if($tipo == 'edit_service_img'){
             }
         }
         if (move_uploaded_file($_FILES["file"]["tmp_name"], $ruta)) {
-            $ruta   = "img/services/".$id."_".$title."_".$_FILES['file']['name']."?".rand();
+            $ruta   = "img/services/".$id."_".$title."_".$safeName."?".rand();
             $busca  = mysqli_query($conexion,"UPDATE home_services SET img = '$ruta' WHERE id = '$id'");
             $resultados['status'] = 'success';
             $resultados['ruta'] = $ruta;
