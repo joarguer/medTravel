@@ -2,6 +2,7 @@
     var config = window.ClientInboxConfig || {};
     var currentThread = null;
     var preferredThread = null;
+    var autoSelectItemRequestId = 0;
     var selectedFiles = [];
     var currentDocuments = [];
     var feeGateActive = !!config.feeGateActive;
@@ -9,7 +10,8 @@
     var quickActions = {
         REQUEST_AVAILABILITY: 'Please confirm availability for my dates.',
         DATES_FLEXIBLE: 'My dates are flexible.',
-        DOCS_UPLOADED: 'I have uploaded medical documents.'
+        DOCS_UPLOADED: 'I have uploaded medical documents.',
+        DOCS_NOT_AVAILABLE: "I don't have the requested documents yet."
     };
 
     function esc(value) {
@@ -340,6 +342,29 @@
         if (!selectedKey && currentThread && currentThread.thread_id) {
             selectedKey = String(currentThread.thread_id);
         }
+        if (!selectedKey && autoSelectItemRequestId > 0) {
+            for (var k = 0; k < threads.length; k++) {
+                var autoThread = threads[k] || {};
+                var autoReqId = parseInt(autoThread.booking_id || autoThread.request_id || 0, 10);
+                var autoType = String(autoThread.thread_type || '').toUpperCase();
+                if (autoReqId === autoSelectItemRequestId && autoType === 'ITEM') {
+                    selectedKey = String(autoThread.thread_id || '');
+                    break;
+                }
+            }
+            if (!selectedKey) {
+                for (var m = 0; m < threads.length; m++) {
+                    var careThread = threads[m] || {};
+                    var careReqId = parseInt(careThread.booking_id || careThread.request_id || 0, 10);
+                    var careType = String(careThread.thread_type || '').toUpperCase();
+                    if (careReqId === autoSelectItemRequestId && careType === 'CARE') {
+                        selectedKey = String(careThread.thread_id || '');
+                        break;
+                    }
+                }
+            }
+            autoSelectItemRequestId = 0;
+        }
         if (!selectedKey) {
             selectedKey = String(threads[0].thread_id || '');
         }
@@ -350,8 +375,14 @@
             var unread = parseInt(thread.unread_count || 0, 10);
             var active = (threadId === selectedKey);
             var threadTypeRaw = String(thread.thread_type || 'CARE').toUpperCase();
-            var threadTypeSub = (threadTypeRaw === 'CARE') ? 'GENERAL' : threadTypeRaw;
+            var threadTypeSub = (threadTypeRaw === 'CARE') ? 'MEDTRAVEL' : threadTypeRaw;
             var requestId = parseInt(thread.booking_id || thread.request_id || 0, 10);
+            var displayTitle = String(thread.title || 'Thread');
+            if (threadTypeRaw === 'CARE') {
+                displayTitle = requestId > 0
+                    ? ('MedTravel Coordination - Request #' + requestId)
+                    : 'MedTravel Coordination';
+            }
             var location = String(thread.subtitle || '').trim();
             var timeLabel = formatThreadTime(thread.updated_at || '');
             var previewText = getThreadPreviewText(thread);
@@ -368,7 +399,7 @@
                 ' data-item-id="' + esc(thread.item_id || 0) + '">' +
                 '<div class="mt-thread-row">' +
                     '<div class="mt-thread-main">' +
-                        '<div class="mt-thread-title">' + esc(thread.title || 'Thread') + '</div>' +
+                        '<div class="mt-thread-title">' + esc(displayTitle) + '</div>' +
                         '<div class="mt-thread-sub">' +
                             '<span class="mt-thread-request">Request #' + esc(requestId > 0 ? String(requestId) : '-') + '</span>' +
                             '<span class="mt-dot">•</span>' +
@@ -515,6 +546,17 @@
     function formatMessageBody(body) {
         var text = String(body || '');
         var trimmed = text.trim();
+
+        if (trimmed.indexOf('[REQUEST_INFO]') === 0) {
+            return renderRequestInfoCard(trimmed);
+        }
+        if (trimmed.indexOf('[PROPOSE_QUOTE]') === 0) {
+            return renderProposeQuoteCard(trimmed);
+        }
+        if (trimmed.indexOf('[PROPOSAL_RESPONSE]') === 0) {
+            return renderProposalResponseCard(trimmed);
+        }
+
         var label = '';
         var isReply = false;
         if (trimmed.indexOf('[ACTION]') === 0) {
@@ -595,6 +637,99 @@
         return messageHtml;
     }
 
+    function parseStructuredJson(prefix, fullText) {
+        var jsonText = String(fullText || '').replace(prefix, '').trim();
+        if (!jsonText) return null;
+        try {
+            var parsed = JSON.parse(jsonText);
+            return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function normalizeDocTypeLabel(t) {
+        var map = {
+            labs: 'Labs',
+            imaging: 'Imaging',
+            photos: 'Photos',
+            medical_history: 'Medical history',
+            other: 'Other'
+        };
+        var key = String(t || '').toLowerCase();
+        return map[key] || key || 'Other';
+    }
+
+    function renderRequestInfoCard(fullText) {
+        var payload = parseStructuredJson('[REQUEST_INFO]', fullText);
+        if (!payload) {
+            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+        }
+        var types = $.isArray(payload.required_types) ? payload.required_types : [];
+        var note = String(payload.note || '').trim();
+        var listHtml = types.length
+            ? ('<ul style="margin:6px 0 0 18px;padding:0;">' + types.map(function (t) {
+                return '<li>' + esc(normalizeDocTypeLabel(t)) + '</li>';
+            }).join('') + '</ul>')
+            : '<div class="text-muted">No specific document type provided.</div>';
+
+        var actionButtons = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
+            '<button type="button" class="btn btn-default btn-xs client-request-info-response" data-response="DOCS_UPLOADED">I\'ve uploaded the documents</button>' +
+            '<button type="button" class="btn btn-default btn-xs client-request-info-response" data-response="DOCS_NOT_AVAILABLE">I don\'t have them</button>' +
+            '</div>';
+
+        return '<div class="panel panel-default" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Provider requested additional information</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                '<div><strong>Requested types:</strong></div>' +
+                listHtml +
+                (note ? '<div style="margin-top:8px;"><strong>Note:</strong> ' + esc(note) + '</div>' : '') +
+                actionButtons +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderProposeQuoteCard(fullText) {
+        var payload = parseStructuredJson('[PROPOSE_QUOTE]', fullText);
+        if (!payload) {
+            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+        }
+        var amount = String(payload.amount || '').trim();
+        var currency = String(payload.currency || 'USD').trim().toUpperCase() || 'USD';
+        var notes = String(payload.notes || '').trim();
+
+        var actionsHtml = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
+            '<button type="button" class="btn btn-default btn-xs client-proposal-response" data-action-type="ACCEPT_PROPOSAL">ACCEPT_PROPOSAL</button>' +
+            '<button type="button" class="btn btn-default btn-xs client-proposal-response" data-action-type="REQUEST_CHANGES">REQUEST_CHANGES</button>' +
+            '<button type="button" class="btn btn-default btn-xs client-proposal-response" data-action-type="REJECT_PROPOSAL">REJECT_PROPOSAL</button>' +
+            '</div>';
+
+        return '<div class="panel panel-default" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Provider quote adjustment</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                '<div><strong>Amount:</strong> ' + esc(amount || '0.00') + ' ' + esc(currency) + '</div>' +
+                (notes ? '<div style="margin-top:8px;"><strong>Notes:</strong> ' + esc(notes) + '</div>' : '') +
+                actionsHtml +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderProposalResponseCard(fullText) {
+        var payload = parseStructuredJson('[PROPOSAL_RESPONSE]', fullText);
+        if (!payload) {
+            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+        }
+        var actionType = String(payload.action_type || '').toUpperCase();
+        var notes = String(payload.notes || '').trim();
+        return '<div class="panel panel-default" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Proposal response</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                '<div><strong>Action:</strong> ' + esc(actionType || 'UNKNOWN') + '</div>' +
+                (notes ? '<div style="margin-top:8px;"><strong>Notes:</strong> ' + esc(notes) + '</div>' : '') +
+            '</div>' +
+        '</div>';
+    }
+
     $('#client-inbox-messages').on('click', '.client-upload-cta', function () {
         var target = $('#client-doc-file');
         if (!target.length) {
@@ -645,6 +780,28 @@
         }
         window.location.href = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) +
             '&thread_type=ITEM&item_id=' + encodeURIComponent(String(itemId)) + '#client-inbox-fee-actions';
+    });
+
+    $('#client-inbox-messages').on('click', '.client-request-info-response', function () {
+        var response = String($(this).data('response') || '').toUpperCase();
+        if (!response) {
+            return;
+        }
+        sendQuickAction(response);
+        if (response === 'DOCS_UPLOADED') {
+            var feeActions = $('#client-inbox-fee-actions');
+            if (feeActions.length) {
+                $('html, body').animate({ scrollTop: feeActions.offset().top - 20 }, 200);
+            }
+        }
+    });
+
+    $('#client-inbox-messages').on('click', '.client-proposal-response', function () {
+        var actionType = String($(this).data('action-type') || '').toUpperCase();
+        if (!actionType) {
+            return;
+        }
+        sendProposalResponse(actionType);
     });
     function loadThreads() {
         $.ajax({
@@ -828,6 +985,45 @@
         });
     }
 
+    function sendProposalResponse(actionType) {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread before responding');
+            return;
+        }
+        if (String(currentThread.thread_type || '').toUpperCase() !== 'ITEM') {
+            toastr.warning('Open a service thread to respond');
+            return;
+        }
+        var allowed = ['ACCEPT_PROPOSAL', 'REQUEST_CHANGES', 'REJECT_PROPOSAL'];
+        var normalized = String(actionType || '').toUpperCase();
+        if (allowed.indexOf(normalized) === -1) {
+            toastr.error('Invalid proposal response');
+            return;
+        }
+
+        $.ajax({
+            url: '/client/ajax/inbox.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'send_structured_action',
+                thread_id: currentThread.thread_id,
+                action_type: normalized,
+                notes: ''
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'Could not send proposal response');
+                return;
+            }
+            toastr.success('Response sent');
+            loadMessages();
+            loadThreads();
+        }).fail(function () {
+            toastr.error('Could not send proposal response');
+        });
+    }
+
     function sendDateDecision(actionKey) {
         if (!currentThread || !currentThread.thread_id) {
             toastr.warning('Select a thread before responding');
@@ -980,16 +1176,28 @@
         var params = new URLSearchParams(window.location.search);
         var threadId = String(params.get('thread_id') || '');
         var requestId = parseInt(params.get('request_id') || '0', 10);
+        var hasThreadTypeParam = params.has('thread_type');
+        var hasItemIdParam = params.has('item_id');
         var threadType = String(params.get('thread_type') || 'CARE').toUpperCase();
         var itemId = parseInt(params.get('item_id') || '0', 10);
         if (threadId) {
             preferredThread = { threadId: threadId };
-        } else if (requestId > 0 && (threadType === 'CARE' || threadType === 'ITEM')) {
-            preferredThread = {
-                requestId: requestId,
-                threadType: threadType,
-                itemId: itemId
-            };
+        } else if (requestId > 0) {
+            if (hasThreadTypeParam && threadType === 'CARE') {
+                preferredThread = {
+                    requestId: requestId,
+                    threadType: 'CARE',
+                    itemId: 0
+                };
+            } else if (hasItemIdParam && itemId > 0) {
+                preferredThread = {
+                    requestId: requestId,
+                    threadType: 'ITEM',
+                    itemId: itemId
+                };
+            } else {
+                autoSelectItemRequestId = requestId;
+            }
         }
 
         $('#client-inbox-refresh').on('click', function () {

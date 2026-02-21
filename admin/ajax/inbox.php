@@ -20,6 +20,81 @@ function admin_inbox_err($message, $status = 400)
     exit;
 }
 
+function admin_inbox_status_label($status)
+{
+    $status = trim((string)$status);
+    if ($status === '') {
+        return 'pending';
+    }
+    if ($status === 'pending_admin' || $status === 'pending_review') {
+        return 'pending_provider';
+    }
+    return $status;
+}
+
+function admin_inbox_status_is_update($status)
+{
+    $status = admin_inbox_status_label($status);
+    return in_array($status, [
+        'provider_confirmed',
+        'provider_rejected',
+        'provider_proposed_change',
+        'awaiting_client',
+        'client_accepted',
+        'client_rejected',
+        'cancelled',
+    ], true);
+}
+
+function admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $feeLocked = !empty($feeLocked);
+    $isAdmin = !empty($scope['is_admin']);
+
+    $status = 'pending';
+    if ($bookingRequestId > 0 && inbox_table_exists($conexion, 'booking_requests') && inbox_table_has_column($conexion, 'booking_requests', 'status')) {
+        $hasRequestsSoftDelete = inbox_table_has_column($conexion, 'booking_requests', 'is_deleted');
+        $statusSql = "SELECT status FROM booking_requests WHERE id = ?";
+        if ($hasRequestsSoftDelete) {
+            $statusSql .= " AND is_deleted = 0";
+        }
+        $statusSql .= " LIMIT 1";
+
+        $stmtStatus = mysqli_prepare($conexion, $statusSql);
+        if ($stmtStatus) {
+            mysqli_stmt_bind_param($stmtStatus, 'i', $bookingRequestId);
+            if (mysqli_stmt_execute($stmtStatus)) {
+                $statusRes = mysqli_stmt_get_result($stmtStatus);
+                $statusRow = $statusRes ? mysqli_fetch_assoc($statusRes) : null;
+                if ($statusRow) {
+                    $status = admin_inbox_status_label((string)($statusRow['status'] ?? 'pending'));
+                }
+            }
+            mysqli_stmt_close($stmtStatus);
+        }
+    }
+
+    $stageAllowsFreeMessage = admin_inbox_status_is_update($status);
+    $canSendFreeMessage = $isAdmin ? true : (!$feeLocked && $stageAllowsFreeMessage);
+    $reason = '';
+    if (!$isAdmin) {
+        if ($feeLocked) {
+            $reason = 'fee_locked';
+        } elseif (!$stageAllowsFreeMessage) {
+            $reason = 'initial_review';
+        }
+    }
+
+    return [
+        'booking_status' => $status,
+        'stage_allows_free_message' => $stageAllowsFreeMessage,
+        'can_send_free_message' => $canSendFreeMessage,
+        'blocked_reason' => $reason,
+        'notice' => $stageAllowsFreeMessage ? '' : 'Messaging will be available after the initial review. Please use the options above.',
+    ];
+}
+
 function admin_inbox_build_scope()
 {
     $providerId = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
@@ -207,6 +282,19 @@ function admin_inbox_resolve_context($conexion, $scope, $threadType, $requestId,
     ];
 }
 
+function admin_inbox_decode_payload($raw)
+{
+    $raw = trim((string)$raw);
+    if ($raw === '') {
+        return [];
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return null;
+    }
+    return $decoded;
+}
+
 if (!isset($conexion) || !$conexion) {
     admin_inbox_err('db_not_available', 500);
 }
@@ -331,7 +419,7 @@ if ($action === 'list_threads') {
     ]);
 }
 
-if ($action === 'list_messages' || $action === 'send_message' || $action === 'send_quick_reply' || $action === 'mark_read') {
+if ($action === 'list_messages' || $action === 'send_message' || $action === 'send_quick_reply' || $action === 'send_structured_action' || $action === 'mark_read') {
     $threadIdInput = (string)($_GET['thread_id'] ?? $_POST['thread_id'] ?? '');
     $threadType = (string)($_GET['thread_type'] ?? $_POST['thread_type'] ?? '');
     $requestId = (int)($_GET['request_id'] ?? $_POST['request_id'] ?? $_GET['booking_request_id'] ?? $_POST['booking_request_id'] ?? 0);
@@ -348,6 +436,7 @@ if ($action === 'list_messages') {
     $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
         ? is_booking_fee_required($conexion, $bookingRequestId)
         : false;
+    $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
     $messages = [];
     if (inbox_table_exists($conexion, 'inbox_messages')) {
         $stmt = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? ORDER BY id ASC");
@@ -393,6 +482,9 @@ if ($action === 'list_messages') {
         'booking_request_id' => (int)$ctx['request_id'],
         'item_id' => (int)$ctx['item_id'],
         'fee_locked' => $feeLocked ? 1 : 0,
+        'can_send_free_message' => !empty($freeMessageState['can_send_free_message']),
+        'free_message_blocked_reason' => (string)($freeMessageState['blocked_reason'] ?? ''),
+        'free_message_notice' => (string)($freeMessageState['notice'] ?? ''),
         'messages' => $messages,
     ]);
 }
@@ -405,12 +497,23 @@ if ($action === 'send_message') {
     $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
         ? is_booking_fee_required($conexion, $bookingRequestId)
         : false;
+    $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
+    $canSendFreeMessage = !empty($freeMessageState['can_send_free_message']);
     if ($feeLocked) {
         http_response_code(403);
         echo json_encode([
             'ok' => false,
             'code' => 'FEE_REQUIRED',
             'error' => 'Coordination Fee required',
+        ]);
+        exit;
+    }
+    if (!$canSendFreeMessage) {
+        http_response_code(403);
+        echo json_encode([
+            'ok' => false,
+            'code' => 'FREE_MESSAGE_BLOCKED',
+            'error' => 'Messaging is temporarily limited. Please use the options above.',
         ]);
         exit;
     }
@@ -582,6 +685,183 @@ if ($action === 'send_quick_reply') {
         'request_id' => $requestId,
         'booking_request_id' => $requestId,
         'item_id' => $itemId,
+        'message' => [
+            'id' => $messageId,
+            'sender' => inbox_sender_to_ui($senderRole),
+            'body' => $message,
+            'time' => date('Y-m-d H:i:s'),
+        ],
+    ]);
+}
+
+if ($action === 'send_structured_action') {
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+        admin_inbox_err('method_not_allowed', 405);
+    }
+    if (!inbox_table_exists($conexion, 'inbox_messages')) {
+        admin_inbox_err('inbox_messages_not_available', 409);
+    }
+    if (!inbox_table_exists($conexion, 'booking_request_items')) {
+        admin_inbox_err('booking_items_not_available', 409);
+    }
+    if (!inbox_table_has_column($conexion, 'booking_request_items', 'item_status')) {
+        admin_inbox_err('item_status_not_available', 409);
+    }
+    if (strtoupper((string)($ctx['thread_type'] ?? '')) !== 'ITEM') {
+        admin_inbox_err('invalid_thread_type', 422);
+    }
+
+    $actionType = strtoupper(trim((string)($_POST['action_type'] ?? '')));
+    $allowedActionTypes = ['REQUEST_ADDITIONAL_INFO', 'PROPOSE_QUOTE_ADJUSTMENT'];
+    if (!in_array($actionType, $allowedActionTypes, true)) {
+        admin_inbox_err('invalid_action_type', 422);
+    }
+
+    $payload = admin_inbox_decode_payload((string)($_POST['payload_json'] ?? ''));
+    if ($payload === null) {
+        admin_inbox_err('invalid_payload_json', 422);
+    }
+
+    $messagePrefix = '';
+    $structuredPayload = [];
+    if ($actionType === 'REQUEST_ADDITIONAL_INFO') {
+        $allowedTypes = ['labs', 'imaging', 'photos', 'medical_history', 'other'];
+        $requiredTypes = [];
+        if (isset($payload['required_types']) && is_array($payload['required_types'])) {
+            foreach ($payload['required_types'] as $t) {
+                $type = strtolower(trim((string)$t));
+                if ($type !== '' && in_array($type, $allowedTypes, true) && !in_array($type, $requiredTypes, true)) {
+                    $requiredTypes[] = $type;
+                }
+            }
+        }
+        if (empty($requiredTypes)) {
+            admin_inbox_err('required_types_missing', 422);
+        }
+        $note = trim((string)($payload['note'] ?? ''));
+        if (mb_strlen($note) > 500) {
+            admin_inbox_err('note_too_long', 422);
+        }
+
+        $messagePrefix = '[REQUEST_INFO] ';
+        $structuredPayload = [
+            'action_type' => 'REQUEST_ADDITIONAL_INFO',
+            'required_types' => $requiredTypes,
+            'note' => $note,
+        ];
+    } else {
+        $amountRaw = trim((string)($payload['amount'] ?? ''));
+        $amount = is_numeric($amountRaw) ? (float)$amountRaw : 0;
+        if ($amount <= 0) {
+            admin_inbox_err('invalid_amount', 422);
+        }
+        $currency = strtoupper(trim((string)($payload['currency'] ?? 'USD')));
+        if ($currency === '') {
+            $currency = 'USD';
+        }
+        if (mb_strlen($currency) > 10) {
+            admin_inbox_err('invalid_currency', 422);
+        }
+        $notes = trim((string)($payload['notes'] ?? ''));
+        if (mb_strlen($notes) > 500) {
+            admin_inbox_err('notes_too_long', 422);
+        }
+
+        $messagePrefix = '[PROPOSE_QUOTE] ';
+        $structuredPayload = [
+            'action_type' => 'PROPOSE_QUOTE_ADJUSTMENT',
+            'amount' => number_format($amount, 2, '.', ''),
+            'currency' => $currency,
+            'notes' => $notes,
+        ];
+    }
+
+    $jsonPayload = json_encode($structuredPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($jsonPayload === false) {
+        admin_inbox_err('payload_encode_failed', 500);
+    }
+    $message = $messagePrefix . $jsonPayload;
+    if (mb_strlen($message) > 2000) {
+        admin_inbox_err('message_too_long', 422);
+    }
+
+    $hasItemsSoftDelete = inbox_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $hasItemUpdatedAt = inbox_table_has_column($conexion, 'booking_request_items', 'updated_at');
+    $hasProviderResponseAt = inbox_table_has_column($conexion, 'booking_request_items', 'provider_response_at');
+    $hasProviderResponseBy = inbox_table_has_column($conexion, 'booking_request_items', 'provider_response_by');
+
+    $setParts = ['bri.item_status = ?'];
+    $types = 's';
+    $params = ['awaiting_client'];
+    if ($hasItemUpdatedAt) {
+        $setParts[] = 'bri.updated_at = NOW()';
+    }
+    if ($hasProviderResponseAt) {
+        $setParts[] = 'bri.provider_response_at = NOW()';
+    }
+    if ($hasProviderResponseBy) {
+        $setParts[] = 'bri.provider_response_by = ?';
+        $types .= 'i';
+        $params[] = (int)$scope['user_id'];
+    }
+
+    $sql = "UPDATE booking_request_items bri
+            INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+            SET " . implode(', ', $setParts) . "
+            WHERE bri.id = ?";
+    $types .= 'i';
+    $params[] = (int)$ctx['item_id'];
+    if ($hasItemsSoftDelete) {
+        $sql .= ' AND bri.is_deleted = 0';
+    }
+    $sql .= (string)$scope['scope_where'];
+    $sql .= ' LIMIT 1';
+
+    $updateTypes = $types . (string)$scope['scope_types'];
+    $updateParams = array_merge($params, (array)$scope['scope_params']);
+    $stmtUpdate = mysqli_prepare($conexion, $sql);
+    if (!$stmtUpdate) {
+        admin_inbox_err('prepare_failed', 500);
+    }
+    if (!inbox_bind_stmt_params($stmtUpdate, $updateTypes, $updateParams) || !mysqli_stmt_execute($stmtUpdate)) {
+        $err = mysqli_stmt_error($stmtUpdate);
+        mysqli_stmt_close($stmtUpdate);
+        admin_inbox_err('update_failed: ' . $err, 500);
+    }
+    mysqli_stmt_close($stmtUpdate);
+
+    $threadId = (string)$ctx['thread_id'];
+    $threadType = (string)$ctx['thread_type'];
+    $requestId = (int)$ctx['request_id'];
+    $itemId = (int)$ctx['item_id'];
+    $senderRole = (string)$scope['reader_role'];
+    $senderUserId = (int)$scope['user_id'];
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        "INSERT INTO inbox_messages
+            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+    if (!$stmt) {
+        admin_inbox_err('prepare_failed', 500);
+    }
+    mysqli_stmt_bind_param($stmt, 'ssiisis', $threadId, $threadType, $requestId, $itemId, $senderRole, $senderUserId, $message);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        admin_inbox_err('insert_failed: ' . $err, 500);
+    }
+    $messageId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+
+    admin_inbox_ok([
+        'thread_id' => $threadId,
+        'thread_type' => $threadType,
+        'request_id' => $requestId,
+        'booking_request_id' => $requestId,
+        'item_id' => $itemId,
+        'item_status' => 'awaiting_client',
         'message' => [
             'id' => $messageId,
             'sender' => inbox_sender_to_ui($senderRole),

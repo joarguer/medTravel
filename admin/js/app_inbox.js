@@ -2,6 +2,7 @@
     var currentThread = null;
     var preferredThread = null;
     var feeGateActive = false;
+    var freeMessageAllowed = true;
     var quickReplies = {
         DATES_AVAILABLE: 'Dates available',
         DATES_NOT_AVAILABLE: 'Dates not available',
@@ -47,6 +48,72 @@
         return tType === 'CARE';
     }
 
+    function formatThreadTime(value) {
+        var raw = String(value || '').trim();
+        if (!raw) return '';
+        var date = new Date(raw.replace(' ', 'T'));
+        if (isNaN(date.getTime())) {
+            return '';
+        }
+
+        var now = new Date();
+        var sameDay = now.getFullYear() === date.getFullYear() &&
+            now.getMonth() === date.getMonth() &&
+            now.getDate() === date.getDate();
+
+        var hh = date.getHours();
+        var mm = date.getMinutes();
+        var hhText = (hh < 10 ? '0' : '') + hh;
+        var mmText = (mm < 10 ? '0' : '') + mm;
+        if (sameDay) {
+            return hhText + ':' + mmText;
+        }
+
+        var dd = date.getDate();
+        var mon = date.getMonth() + 1;
+        var ddText = (dd < 10 ? '0' : '') + dd;
+        var monText = (mon < 10 ? '0' : '') + mon;
+        return ddText + '/' + monText;
+    }
+
+    function getThreadPreviewText(thread) {
+        if (!thread || typeof thread !== 'object') {
+            return '';
+        }
+
+        var raw = '';
+        if (typeof thread.last_message_preview !== 'undefined' && thread.last_message_preview !== null && thread.last_message_preview !== '') {
+            raw = thread.last_message_preview;
+        } else if (typeof thread.last_message !== 'undefined' && thread.last_message !== null && thread.last_message !== '') {
+            if (typeof thread.last_message === 'object') {
+                if (typeof thread.last_message.body !== 'undefined' && thread.last_message.body !== null && thread.last_message.body !== '') {
+                    raw = thread.last_message.body;
+                } else if (typeof thread.last_message.content !== 'undefined' && thread.last_message.content !== null && thread.last_message.content !== '') {
+                    raw = thread.last_message.content;
+                }
+            } else {
+                raw = thread.last_message;
+            }
+        } else if (typeof thread.last_activity_text !== 'undefined' && thread.last_activity_text !== null && thread.last_activity_text !== '') {
+            raw = thread.last_activity_text;
+        } else if (typeof thread.last_message_body !== 'undefined' && thread.last_message_body !== null && thread.last_message_body !== '') {
+            raw = thread.last_message_body;
+        } else if (typeof thread.preview !== 'undefined' && thread.preview !== null && thread.preview !== '') {
+            raw = thread.preview;
+        }
+
+        var normalized = String(raw || '').replace(/\s+/g, ' ').trim();
+        if (!normalized) {
+            return '';
+        }
+
+        if (normalized.length > 110) {
+            normalized = normalized.slice(0, 110).trim() + '…';
+        }
+
+        return normalized;
+    }
+
     function renderThreads(threads) {
         var $list = $('#admin-inbox-thread-list');
         if (!$list.length) return;
@@ -80,15 +147,40 @@
             var threadId = String(thread.thread_id || '');
             var unread = parseInt(thread.unread_count || 0, 10);
             var active = threadId === selectedKey;
-            var badge = unread > 0 ? '<span class="badge badge-danger" style="margin-left:6px;">' + unread + '</span>' : '';
-            html += '<li class="' + (active ? 'active' : '') + '">' +
-                '<a href="javascript:;" class="admin-thread-link"' +
+            var threadTypeRaw = String(thread.thread_type || 'CARE').toUpperCase();
+            var threadTypeSub = (threadTypeRaw === 'CARE') ? 'GENERAL' : threadTypeRaw;
+            var requestId = parseInt(thread.booking_request_id || thread.request_id || 0, 10);
+            var location = String(thread.subtitle || '').trim();
+            var timeLabel = formatThreadTime(thread.updated_at || '');
+            var previewText = getThreadPreviewText(thread);
+            var unreadMeta = unread > 0 ? '<span class="badge badge-danger mt-unread">' + unread + '</span>' : '';
+            var timeHtml = timeLabel ? '<div class="mt-time">' + esc(timeLabel) + '</div>' : '';
+            var previewHtml = previewText ? '<div class="mt-thread-preview text-muted">Last: ' + esc(previewText) + '</div>' : '';
+            var liClasses = 'mt-thread-item' + (active ? ' active' : '') + (unread > 0 ? ' unread' : '');
+
+            html += '<li class="' + liClasses + '">' +
+                '<a href="javascript:;" class="admin-thread-link mt-thread-link"' +
                 ' data-thread-id="' + esc(threadId) + '"' +
                 ' data-thread-type="' + esc(thread.thread_type) + '"' +
                 ' data-booking-id="' + esc(thread.booking_request_id || thread.request_id || 0) + '"' +
                 ' data-item-id="' + esc(thread.item_id || 0) + '">' +
-                esc(thread.title || 'Thread') + badge +
-                (thread.subtitle ? '<small style="display:block;margin-top:4px;opacity:.8;">' + esc(thread.subtitle) + '</small>' : '') +
+                '<div class="mt-thread-row">' +
+                    '<div class="mt-thread-main">' +
+                        '<div class="mt-thread-title">' + esc(thread.title || 'Thread') + '</div>' +
+                        '<div class="mt-thread-sub">' +
+                            '<span class="mt-thread-request">Request #' + esc(requestId > 0 ? String(requestId) : '-') + '</span>' +
+                            '<span class="mt-dot">•</span>' +
+                            '<span class="mt-thread-type">' + esc(threadTypeSub) + '</span>' +
+                            (location ? '<span class="mt-dot">•</span><span class="mt-thread-location">' + esc(location) + '</span>' : '') +
+                        '</div>' +
+                        previewHtml +
+                    '</div>' +
+                    '<div class="mt-thread-meta">' +
+                        '<span class="badge badge-info mt-badge">' + esc(threadTypeRaw) + '</span>' +
+                        unreadMeta +
+                        timeHtml +
+                    '</div>' +
+                '</div>' +
                 '</a>' +
                 '</li>';
         });
@@ -149,8 +241,6 @@
         feeGateActive = !!enabled;
         var $alert = $('#admin-inbox-fee-alert');
         var $quick = $('#admin-inbox-quick-replies');
-        var $msg = $('#admin-inbox-message');
-        var $send = $('#admin-inbox-send-form button[type="submit"]');
 
         if ($alert.length) {
             if (feeGateActive) {
@@ -159,18 +249,54 @@
                 $alert.hide();
             }
         }
+        if ($quick.length && feeGateActive) {
+            $quick.show();
+        }
+    }
+
+    function setComposeGateState(canSendFreeMessage, noticeMessage) {
+        freeMessageAllowed = !!canSendFreeMessage;
+        var composeBlocked = feeGateActive || !freeMessageAllowed;
+
+        var $quick = $('#admin-inbox-quick-replies');
+        var $msg = $('#admin-inbox-message');
+        var $send = $('#admin-inbox-send-form button[type="submit"]');
+        var $note = $('#admin-inbox-compose-note');
+
         if ($quick.length) {
-            if (feeGateActive) {
+            if (composeBlocked) {
                 $quick.show();
             } else {
                 $quick.hide();
             }
         }
         if ($msg.length) {
-            $msg.prop('disabled', feeGateActive);
+            $msg.prop('disabled', composeBlocked);
         }
         if ($send.length) {
-            $send.prop('disabled', feeGateActive);
+            $send.prop('disabled', composeBlocked);
+        }
+
+        if ($note.length) {
+            if (!freeMessageAllowed) {
+                $note.text(noticeMessage || 'Messaging will be available after the initial review. Please use the options above.');
+                $note.show();
+            } else {
+                $note.hide();
+            }
+        }
+
+        toggleStructuredActionButtons(composeBlocked);
+    }
+
+    function toggleStructuredActionButtons(composeBlocked) {
+        var $box = $('#admin-inbox-structured-actions');
+        if (!$box.length) return;
+        var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+        if (composeBlocked && isItemThread) {
+            $box.show();
+        } else {
+            $box.hide();
         }
     }
 
@@ -230,7 +356,10 @@
                 return;
             }
 
-            setFeeGateState(!!res.fee_locked);
+            var feeLocked = !!res.fee_locked;
+            setFeeGateState(feeLocked);
+            var canSendFreeMessage = (typeof res.can_send_free_message === 'boolean') ? res.can_send_free_message : !feeLocked;
+            setComposeGateState(canSendFreeMessage, res.free_message_notice || '');
 
             var title = 'Request #' + currentThread.booking_request_id;
             if (currentThread.thread_type === 'ITEM') {
@@ -241,7 +370,18 @@
             $('#admin-inbox-title').text(title);
             renderMessages(res.messages || []);
             markCurrentRead();
-        }).fail(function () {
+        }).fail(function (xhr) {
+            var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            if (res && res.code === 'FEE_REQUIRED') {
+                setFeeGateState(true);
+                setComposeGateState(true, '');
+                toastr.warning('Coordination Fee required');
+                return;
+            }
+            if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
+                setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                return;
+            }
             toastr.error('Could not load messages');
         });
     }
@@ -249,6 +389,9 @@
     function sendMessage() {
         var text = $.trim($('#admin-inbox-message').val() || '');
         if (!currentThread || !currentThread.thread_id) return;
+        if (!freeMessageAllowed) {
+            return;
+        }
         if (feeGateActive) {
             toastr.warning('Coordination Fee required');
             return;
@@ -271,7 +414,12 @@
             if (!res || res.ok !== true) {
                 if (res && res.code === 'FEE_REQUIRED') {
                     setFeeGateState(true);
+                    setComposeGateState(true, '');
                     toastr.warning('Coordination Fee required');
+                    return;
+                }
+                if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
+                    setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
                     return;
                 }
                 toastr.error((res && res.message) ? res.message : 'Could not send message');
@@ -281,7 +429,18 @@
             toastr.success('Message sent');
             loadMessages();
             loadThreads();
-        }).fail(function () {
+        }).fail(function (xhr) {
+            var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            if (res && res.code === 'FEE_REQUIRED') {
+                setFeeGateState(true);
+                setComposeGateState(true, '');
+                toastr.warning('Coordination Fee required');
+                return;
+            }
+            if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
+                setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                return;
+            }
             toastr.error('Could not send message');
         });
     }
@@ -314,6 +473,39 @@
             loadThreads();
         }).fail(function () {
             toastr.error('Could not send quick reply');
+        });
+    }
+
+    function sendStructuredAction(actionType, payload) {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread before sending');
+            return;
+        }
+        if (String(currentThread.thread_type || '').toUpperCase() !== 'ITEM') {
+            toastr.warning('Structured proposals are only available in service threads');
+            return;
+        }
+
+        $.ajax({
+            url: 'ajax/inbox.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'send_structured_action',
+                thread_id: currentThread.thread_id,
+                action_type: String(actionType || ''),
+                payload_json: JSON.stringify(payload || {})
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'Could not send structured action');
+                return;
+            }
+            toastr.success('Structured action sent');
+            loadMessages();
+            loadThreads();
+        }).fail(function () {
+            toastr.error('Could not send structured action');
         });
     }
 
@@ -358,6 +550,78 @@
         $('#admin-inbox-quick-replies').on('click', '.admin-quick-reply', function () {
             var key = $(this).data('reply') || '';
             sendQuickReply(key);
+        });
+
+        $('#admin-open-request-info').on('click', function () {
+            if (!currentThread || String(currentThread.thread_type || '').toUpperCase() !== 'ITEM') {
+                toastr.warning('Open a service thread first');
+                return;
+            }
+            $('#admin-request-info-types input[type="checkbox"]').prop('checked', false);
+            $('#admin-request-info-note').val('');
+            $('#adminRequestInfoModal').modal('show');
+        });
+
+        $('#admin-submit-request-info').on('click', function () {
+            var selected = [];
+            $('#admin-request-info-types input[type="checkbox"]:checked').each(function () {
+                selected.push(String($(this).val() || ''));
+            });
+            var note = $.trim($('#admin-request-info-note').val() || '');
+            if (!selected.length) {
+                toastr.warning('Select at least one required document type');
+                return;
+            }
+            if (note.length > 500) {
+                toastr.warning('Note is too long');
+                return;
+            }
+            sendStructuredAction('REQUEST_ADDITIONAL_INFO', {
+                required_types: selected,
+                note: note
+            });
+            $('#adminRequestInfoModal').modal('hide');
+        });
+
+        $('#admin-open-propose-quote').on('click', function () {
+            if (!currentThread || String(currentThread.thread_type || '').toUpperCase() !== 'ITEM') {
+                toastr.warning('Open a service thread first');
+                return;
+            }
+            $('#admin-propose-amount').val('');
+            $('#admin-propose-currency').val('USD');
+            $('#admin-propose-notes').val('');
+            $('#adminProposeQuoteModal').modal('show');
+        });
+
+        $('#admin-submit-propose-quote').on('click', function () {
+            var amountRaw = $.trim($('#admin-propose-amount').val() || '');
+            var amount = parseFloat(amountRaw);
+            var currency = $.trim($('#admin-propose-currency').val() || 'USD').toUpperCase();
+            var notes = $.trim($('#admin-propose-notes').val() || '');
+
+            if (!isFinite(amount) || amount <= 0) {
+                toastr.warning('Enter a valid amount');
+                return;
+            }
+            if (!currency) {
+                currency = 'USD';
+            }
+            if (currency.length > 10) {
+                toastr.warning('Invalid currency');
+                return;
+            }
+            if (notes.length > 500) {
+                toastr.warning('Notes are too long');
+                return;
+            }
+
+            sendStructuredAction('PROPOSE_QUOTE_ADJUSTMENT', {
+                amount: amount.toFixed(2),
+                currency: currency,
+                notes: notes
+            });
+            $('#adminProposeQuoteModal').modal('hide');
         });
 
         loadThreads();

@@ -375,7 +375,7 @@ if ($action === 'list_threads') {
     ]);
 }
 
-if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_message' || $action === 'send_quick_action' || $action === 'accept_dates' || $action === 'reject_dates' || $action === 'final_accept_and_pay' || $action === 'final_decline') {
+if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_message' || $action === 'send_quick_action' || $action === 'send_structured_action' || $action === 'accept_dates' || $action === 'reject_dates' || $action === 'final_accept_and_pay' || $action === 'final_decline') {
     $threadIdInput = (string)($_GET['thread_id'] ?? $_POST['thread_id'] ?? '');
     $threadType = (string)($_GET['thread_type'] ?? $_POST['thread_type'] ?? '');
     $requestId = (int)($_GET['request_id'] ?? $_POST['request_id'] ?? $_GET['booking_id'] ?? $_POST['booking_id'] ?? 0);
@@ -460,6 +460,8 @@ if ($action === 'list_messages') {
                             AND (
                                 im.body LIKE '[REPLY] PROPOSED_DATES%'
                                 OR im.body LIKE '[REPLY] FINAL_APPROVED%'
+                                OR im.body LIKE '[REQUEST_INFO] %'
+                                OR im.body LIKE '[PROPOSE_QUOTE] %'
                             )";
         if ($hasItemsSoftDelete) {
             $structuredSql .= " AND bri.is_deleted = 0";
@@ -612,7 +614,8 @@ if ($action === 'send_quick_action') {
     $quickActions = [
         'REQUEST_AVAILABILITY' => 'Please confirm availability for my dates.',
         'DATES_FLEXIBLE' => 'My dates are flexible.',
-        'DOCS_UPLOADED' => 'I have uploaded medical documents.'
+        'DOCS_UPLOADED' => 'I have uploaded medical documents.',
+        'DOCS_NOT_AVAILABLE' => 'I don\'t have the requested documents yet.'
     ];
     if ($actionKey === '' || !isset($quickActions[$actionKey])) {
         client_inbox_err('invalid_action_key', 422);
@@ -651,6 +654,128 @@ if ($action === 'send_quick_action') {
         'request_id' => $requestId,
         'booking_id' => $requestId,
         'item_id' => $itemId,
+        'message' => [
+            'id' => $messageId,
+            'sender' => 'client',
+            'body' => $message,
+            'time' => date('Y-m-d H:i:s'),
+        ],
+    ]);
+}
+
+if ($action === 'send_structured_action') {
+    if (!inbox_table_exists($conexion, 'booking_request_items')) {
+        client_inbox_err('booking_items_not_available', 409);
+    }
+    if (!client_table_has_column($conexion, 'booking_request_items', 'item_status')) {
+        client_inbox_err('item_status_not_available', 409);
+    }
+    if (!inbox_table_exists($conexion, 'inbox_messages')) {
+        client_inbox_err('inbox_messages_not_available', 409);
+    }
+
+    if (strtoupper((string)($ctx['thread_type'] ?? '')) !== 'ITEM') {
+        client_inbox_err('invalid_thread_type', 422);
+    }
+
+    $itemId = (int)($ctx['item_id'] ?? 0);
+    if ($itemId <= 0) {
+        client_inbox_err('invalid_item_id', 422);
+    }
+
+    $actionType = strtoupper(trim((string)($_POST['action_type'] ?? '')));
+    $allowedTypes = ['ACCEPT_PROPOSAL', 'REQUEST_CHANGES', 'REJECT_PROPOSAL'];
+    if (!in_array($actionType, $allowedTypes, true)) {
+        client_inbox_err('invalid_action_type', 422);
+    }
+
+    $notes = trim((string)($_POST['notes'] ?? ''));
+    if (mb_strlen($notes) > 500) {
+        client_inbox_err('notes_too_long', 422);
+    }
+
+    $targetStatus = 'provider_proposed_change';
+    if ($actionType === 'ACCEPT_PROPOSAL') {
+        $targetStatus = 'client_accepted';
+    } elseif ($actionType === 'REJECT_PROPOSAL') {
+        $targetStatus = 'client_rejected';
+    }
+
+    $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+    $hasItemUpdatedAt = client_table_has_column($conexion, 'booking_request_items', 'updated_at');
+
+    $sql = "UPDATE booking_request_items bri
+            INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+            SET bri.item_status = ?";
+    if ($hasItemUpdatedAt) {
+        $sql .= ', bri.updated_at = NOW()';
+    }
+    $sql .= " WHERE bri.id = ? AND (" . $ownerScope['sql'] . ")";
+    if ($hasItemsSoftDelete) {
+        $sql .= ' AND bri.is_deleted = 0';
+    }
+    if ($hasBookingSoftDelete) {
+        $sql .= ' AND br.is_deleted = 0';
+    }
+    $sql .= ' LIMIT 1';
+
+    $types = 'si' . $ownerScope['types'];
+    $params = array_merge([$targetStatus, $itemId], $ownerScope['params']);
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        client_inbox_err('prepare_failed', 500);
+    }
+    if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        client_inbox_err('update_failed: ' . $err, 500);
+    }
+    $affected = mysqli_stmt_affected_rows($stmt);
+    mysqli_stmt_close($stmt);
+    if ($affected <= 0) {
+        client_inbox_err('not_found_or_no_change', 404);
+    }
+
+    $payload = [
+        'action_type' => $actionType,
+        'notes' => $notes,
+    ];
+    $payloadJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($payloadJson === false) {
+        client_inbox_err('payload_encode_failed', 500);
+    }
+    $message = '[PROPOSAL_RESPONSE] ' . $payloadJson;
+
+    $stmtMsg = mysqli_prepare(
+        $conexion,
+        "INSERT INTO inbox_messages
+            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+         VALUES (?, ?, ?, ?, 'CLIENT', ?, ?)"
+    );
+    if (!$stmtMsg) {
+        client_inbox_err('prepare_failed', 500);
+    }
+    $threadId = (string)$ctx['thread_id'];
+    $threadType = (string)$ctx['thread_type'];
+    $requestId = (int)$ctx['request_id'];
+    mysqli_stmt_bind_param($stmtMsg, 'ssiiis', $threadId, $threadType, $requestId, $itemId, $clientUserId, $message);
+    if (!mysqli_stmt_execute($stmtMsg)) {
+        $err = mysqli_stmt_error($stmtMsg);
+        mysqli_stmt_close($stmtMsg);
+        client_inbox_err('insert_failed: ' . $err, 500);
+    }
+    $messageId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmtMsg);
+
+    client_inbox_ok([
+        'thread_id' => $threadId,
+        'thread_type' => $threadType,
+        'request_id' => $requestId,
+        'booking_id' => $requestId,
+        'item_id' => $itemId,
+        'item_status' => $targetStatus,
         'message' => [
             'id' => $messageId,
             'sender' => 'client',
