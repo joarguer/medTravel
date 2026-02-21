@@ -90,7 +90,7 @@ include __DIR__ . '/include/include.php';
             </div>
 
             <div class="row">
-                <div class="col-md-8">
+                <div class="col-md-12">
                     <div class="portlet light bordered">
                         <div class="portlet-title">
                             <div class="caption">
