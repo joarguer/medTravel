@@ -18,7 +18,7 @@
         if (value > 5) value = 5;
         var html = '';
         for (var i = 1; i <= 5; i++) {
-            html += '<i class="fas fa-star' + (i <= value ? '' : ' muted') + '"></i>';
+            html += '<i class="fa fa-star' + (i <= value ? '' : ' muted') + '"></i>';
         }
         return html;
     }
@@ -45,7 +45,7 @@
         var safeComment = safe(truncate(comment, 260));
 
         previewName.html(safeName || '');
-        previewLocation.html(safeLocation || '');
+        previewLocation.html(safeLocation || '<span style="color:#bbb">City, State</span>');
         previewComment.html(safeComment || commentPlaceholder);
         previewInitial.text(initialFromName(name));
         previewStars.html(buildStars(rating));
