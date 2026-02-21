@@ -318,6 +318,24 @@
         return normalized;
     }
 
+    function cleanServiceTitle(rawTitle) {
+        var title = String(rawTitle || '').trim();
+        if (!title) {
+            return 'Servicio';
+        }
+        title = title.replace(/\s*-\s*Request\s*#\d+\s*$/i, '').trim();
+        title = title.replace(/\s*-\s*Solicitud\s*#\d+\s*$/i, '').trim();
+        return title || 'Servicio';
+    }
+
+    function renderInboxHeader($target, headingText, requestId) {
+        if (!$target || !$target.length) return;
+        var safeHeading = esc(headingText || 'Inbox');
+        var requestLabel = parseInt(requestId || 0, 10);
+        var safeRequest = requestLabel > 0 ? String(requestLabel) : '-';
+        $target.html('<h2 style="margin:0;">' + safeHeading + '</h2><small class="text-muted">Solicitud #' + esc(safeRequest) + '</small>');
+    }
+
     function renderThreads(threads) {
         var $list = $('#client-inbox-thread-list');
         if (!$list.length) return;
@@ -435,7 +453,8 @@
             thread_id: String(selected.thread_id || ''),
             thread_type: String(selected.thread_type || 'CARE'),
             booking_id: parseInt(selected.booking_id || selected.request_id || 0, 10),
-            item_id: parseInt(selected.item_id || 0, 10)
+            item_id: parseInt(selected.item_id || 0, 10),
+            thread_title: String(selected.title || '')
         };
         preferredThread = null;
         if (changed) {
@@ -878,11 +897,9 @@
             );
             currentDocuments = $.isArray(res.documents) ? res.documents : [];
 
-            var title = 'General - Request #' + currentThread.booking_id;
-            if (currentThread.thread_type === 'ITEM') {
-                title = 'Item #' + currentThread.item_id + ' - Request #' + currentThread.booking_id;
-            }
-            $('#client-inbox-title').text(title);
+            var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM';
+            var headingText = isItemThread ? cleanServiceTitle(currentThread.thread_title || '') : 'MedTravel Coordination';
+            renderInboxHeader($('#client-inbox-title'), headingText, currentThread.booking_id);
             renderMessages(res.messages || []);
             markCurrentThreadRead();
         }).fail(function (xhr) {
@@ -891,7 +908,7 @@
             if (res && res.code === 'FEE_REQUIRED') {
                 setFeeGateState(true, 'Unlock after Coordination Fee.');
                 setComposeGateState(true, '');
-                $('#client-inbox-title').text('Coordination fee required');
+                renderInboxHeader($('#client-inbox-title'), 'MedTravel Coordination', currentThread && currentThread.booking_id ? currentThread.booking_id : 0);
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
@@ -1210,7 +1227,8 @@
                 thread_id: String($a.data('thread-id') || ''),
                 thread_type: String($a.data('thread-type') || 'CARE'),
                 booking_id: parseInt($a.data('booking-id') || 0, 10),
-                item_id: parseInt($a.data('item-id') || 0, 10)
+                item_id: parseInt($a.data('item-id') || 0, 10),
+                thread_title: $.trim($a.find('.mt-thread-title').text() || '')
             };
             $('#client-inbox-thread-list li').removeClass('active');
             $a.closest('li').addClass('active');

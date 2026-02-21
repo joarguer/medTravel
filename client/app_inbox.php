@@ -181,7 +181,7 @@ if (isset($conexion) && $conexion) {
                         </div>
                         <div class="col-md-9 inbox-body">
                             <div class="inbox-header">
-                                <h1 id="client-inbox-title">Select a thread</h1>
+                                <div id="client-inbox-title">Select a thread</div>
                             </div>
                             <div id="client-inbox-fee-alert" class="note note-warning" style="<?php echo $clientFeeGateActive ? '' : 'display:none;'; ?>">
                                 <strong>Coordination Fee required.</strong>

@@ -215,7 +215,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                 </div>
                             </div>
                             <div class="inbox-header">
-                                <h1 id="admin-inbox-title">Select a thread</h1>
+                                <div id="admin-inbox-title">Select a thread</div>
                             </div>
                             <div class="inbox-content" id="admin-inbox-content" style="display:none;">
                                 <div id="admin-inbox-messages" style="max-height:420px;overflow:auto;border:1px solid #eef1f5;padding:12px;background:#fff;"></div>

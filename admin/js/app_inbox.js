@@ -264,6 +264,24 @@
         return normalized;
     }
 
+    function cleanServiceTitle(rawTitle) {
+        var title = String(rawTitle || '').trim();
+        if (!title) {
+            return 'Servicio';
+        }
+        title = title.replace(/\s*-\s*Request\s*#\d+\s*$/i, '').trim();
+        title = title.replace(/\s*-\s*Solicitud\s*#\d+\s*$/i, '').trim();
+        return title || 'Servicio';
+    }
+
+    function renderInboxHeader($target, headingText, requestId) {
+        if (!$target || !$target.length) return;
+        var safeHeading = esc(headingText || 'Inbox');
+        var requestLabel = parseInt(requestId || 0, 10);
+        var safeRequest = requestLabel > 0 ? String(requestLabel) : '-';
+        $target.html('<h2 style="margin:0;">' + safeHeading + '</h2><small class="text-muted">Solicitud #' + esc(safeRequest) + '</small>');
+    }
+
     function renderThreads(threads) {
         var $list = $('#admin-inbox-thread-list');
         if (!$list.length) return;
@@ -352,7 +370,8 @@
             thread_id: String(selected.thread_id || ''),
             thread_type: String(selected.thread_type || 'ITEM'),
             booking_request_id: parseInt(selected.booking_request_id || selected.request_id || 0, 10),
-            item_id: parseInt(selected.item_id || 0, 10)
+            item_id: parseInt(selected.item_id || 0, 10),
+            thread_title: String(selected.title || '')
         };
         preferredThread = null;
         if (changed) {
@@ -593,13 +612,9 @@
             var canSendFreeMessage = (typeof res.can_send_free_message === 'boolean') ? res.can_send_free_message : !feeLocked;
             setComposeGateState(canSendFreeMessage, res.free_message_notice || '');
 
-            var title = 'Request #' + currentThread.booking_request_id;
-            if (currentThread.thread_type === 'ITEM') {
-                title = 'Item #' + currentThread.item_id + ' - Request #' + currentThread.booking_request_id;
-            } else {
-                title = 'General - Request #' + currentThread.booking_request_id;
-            }
-            $('#admin-inbox-title').text(title);
+            var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM';
+            var headingText = isItemThread ? cleanServiceTitle(currentThread.thread_title || '') : 'MedTravel Coordination';
+            renderInboxHeader($('#admin-inbox-title'), headingText, currentThread.booking_request_id);
             renderMessages(res.messages || []);
             markCurrentRead();
         }).fail(function (xhr) {
@@ -767,7 +782,8 @@
                 thread_id: String($a.data('thread-id') || ''),
                 thread_type: String($a.data('thread-type') || 'ITEM'),
                 booking_request_id: parseInt($a.data('booking-id') || 0, 10),
-                item_id: parseInt($a.data('item-id') || 0, 10)
+                item_id: parseInt($a.data('item-id') || 0, 10),
+                thread_title: $.trim($a.find('.mt-thread-title').text() || '')
             };
             $('#admin-inbox-thread-list li').removeClass('active');
             $a.closest('li').addClass('active');
