@@ -1,42 +1,183 @@
 <?php
 session_start();
 include('../include/conexion.php');
+require_once '../include/roles.php';
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
+
+function clientes_table_exists($conexion, $table)
+{
+    static $cache = [];
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $res = mysqli_query($conexion, "SHOW TABLES LIKE '{$tableEsc}'");
+    $cache[$table] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$table];
+}
+
+function clientes_table_has_column($conexion, $table, $column)
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+    $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$key];
+}
+
+function clientes_bind_stmt_params($stmt, $types, &$values)
+{
+    if ($types === '' || empty($values)) {
+        return true;
+    }
+    $bind = [$types];
+    foreach ($values as $k => &$v) {
+        $bind[] = &$v;
+    }
+    return call_user_func_array([$stmt, 'bind_param'], $bind);
+}
 
 $tipo = isset($_POST['tipo']) ? $_POST['tipo'] : '';
 $id_usuario = $_SESSION['id_usuario'];
 
 // GET: Obtener lista de clientes
 if ($tipo == 'get') {
-    $sql = "SELECT 
-                id,
-                CONCAT(nombre, ' ', apellido) as nombre_completo,
-                nombre,
-                apellido,
-                email,
-                telefono,
-                pais,
-                estado,
-                ciudad,
-                status,
-                origen_contacto,
-                created_at,
-                updated_at
-            FROM clientes 
-            ORDER BY id DESC";
-    
-    $resultado = mysqli_query($conexion, $sql);
-    
+    $providerId = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
+    $serviceProviderId = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
+    $isAdminSession = is_role_admin_session();
+    $isComplementarySession = is_complementary_user_session();
+    $sessionRoleText = strtolower(trim((string)($_SESSION['rol'] ?? '')));
+    $sessionRoleId = current_role_id();
+    $hasComplementaryRoleHint = strpos($sessionRoleText, 'complement') !== false || strpos($sessionRoleText, 'partner') !== false;
+    $isLikelyMedicalProviderRole = in_array((int)$sessionRoleId, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true)
+        || strpos($sessionRoleText, 'prestador') !== false
+        || (!$hasComplementaryRoleHint && strpos($sessionRoleText, 'provider') !== false);
+    $isMedicalProviderSession = !$isAdminSession && ($isLikelyMedicalProviderRole || ($providerId > 0 && !$isComplementarySession));
+
+    $baseSql = "SELECT
+                    c.id,
+                    CONCAT(c.nombre, ' ', c.apellido) AS nombre_completo,
+                    c.nombre,
+                    c.apellido,
+                    c.email,
+                    c.telefono,
+                    c.pais,
+                    c.estado,
+                    c.ciudad,
+                    c.status,
+                    c.origen_contacto,
+                    c.created_at,
+                    c.updated_at
+                FROM clientes c";
+
+    $whereParts = [];
+    $types = '';
+    $params = [];
+
+    if (!$isAdminSession) {
+        if (!clientes_table_exists($conexion, 'booking_requests') || !clientes_table_exists($conexion, 'booking_request_items')) {
+            echo json_encode(['success' => true, 'data' => []]);
+            exit;
+        }
+
+        $hasBrSoftDelete = clientes_table_has_column($conexion, 'booking_requests', 'is_deleted');
+        $hasBriSoftDelete = clientes_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+        $hasBrEmail = clientes_table_has_column($conexion, 'booking_requests', 'email');
+        $hasBrClientUserId = clientes_table_has_column($conexion, 'booking_requests', 'client_user_id');
+        $hasUsuariosTable = clientes_table_exists($conexion, 'usuarios');
+        $hasUsuariosEmail = $hasUsuariosTable && clientes_table_has_column($conexion, 'usuarios', 'email');
+        $hasBriProviderId = clientes_table_has_column($conexion, 'booking_request_items', 'provider_id');
+        $hasBriServiceProviderId = clientes_table_has_column($conexion, 'booking_request_items', 'service_provider_id');
+
+        $clientMatchParts = [];
+        if ($hasBrEmail) {
+            $clientMatchParts[] = "LOWER(TRIM(br.email)) = LOWER(TRIM(c.email))";
+        }
+        if ($hasBrClientUserId && $hasUsuariosEmail) {
+            $clientMatchParts[] = "EXISTS (
+                SELECT 1
+                FROM usuarios u_cli
+                WHERE u_cli.id = br.client_user_id
+                  AND LOWER(TRIM(u_cli.email)) = LOWER(TRIM(c.email))
+            )";
+        }
+
+        if (empty($clientMatchParts)) {
+            echo json_encode(['success' => true, 'data' => []]);
+            exit;
+        }
+
+        $providerScope = '';
+        if ($isMedicalProviderSession) {
+            if ($providerId <= 0 || !$hasBriProviderId) {
+                echo json_encode(['success' => true, 'data' => []]);
+                exit;
+            }
+            $providerScope = "bri.provider_id = ? AND bri.item_type = 'medical_offer'";
+            $types .= 'i';
+            $params[] = $providerId;
+        } else {
+            if ($serviceProviderId <= 0 || !$hasBriServiceProviderId) {
+                echo json_encode(['success' => true, 'data' => []]);
+                exit;
+            }
+            $providerScope = "bri.service_provider_id = ? AND bri.item_type = 'complementary_service'";
+            $types .= 'i';
+            $params[] = $serviceProviderId;
+        }
+
+        $existsSql = "EXISTS (
+            SELECT 1
+            FROM booking_requests br
+            INNER JOIN booking_request_items bri ON bri.booking_request_id = br.id
+            WHERE ({$providerScope})";
+        if ($hasBrSoftDelete) {
+            $existsSql .= " AND br.is_deleted = 0";
+        }
+        if ($hasBriSoftDelete) {
+            $existsSql .= " AND bri.is_deleted = 0";
+        }
+        $existsSql .= " AND (" . implode(' OR ', $clientMatchParts) . ")
+        )";
+
+        $whereParts[] = $existsSql;
+    }
+
+    $sql = $baseSql;
+    if (!empty($whereParts)) {
+        $sql .= " WHERE " . implode(' AND ', $whereParts);
+    }
+    $sql .= " ORDER BY c.id DESC";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        echo json_encode(['success' => false, 'message' => 'Error al preparar consulta de clientes: ' . mysqli_error($conexion)]);
+        exit;
+    }
+
+    if (!clientes_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        echo json_encode(['success' => false, 'message' => 'Error al obtener clientes: ' . $err]);
+        exit;
+    }
+
+    $resultado = mysqli_stmt_get_result($stmt);
+    $clientes = array();
     if ($resultado) {
-        $clientes = array();
         while ($row = mysqli_fetch_assoc($resultado)) {
             $clientes[] = $row;
         }
-        echo json_encode(['success' => true, 'data' => $clientes]);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Error al obtener clientes: ' . mysqli_error($conexion)]);
     }
+    mysqli_stmt_close($stmt);
+
+    echo json_encode(['success' => true, 'data' => $clientes]);
 }
 
 // GET_ONE: Obtener un cliente específico
