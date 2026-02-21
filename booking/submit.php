@@ -28,6 +28,38 @@ function table_has_column_local($conexion, $table, $column)
     return $cache[$key];
 }
 
+function booking_client_ip_local()
+{
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        return $_SERVER['HTTP_CLIENT_IP'];
+    }
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        return $_SERVER['HTTP_X_FORWARDED_FOR'];
+    }
+    if (!empty($_SERVER['HTTP_X_FORWARDED'])) {
+        return $_SERVER['HTTP_X_FORWARDED'];
+    }
+    if (!empty($_SERVER['HTTP_FORWARDED_FOR'])) {
+        return $_SERVER['HTTP_FORWARDED_FOR'];
+    }
+    if (!empty($_SERVER['HTTP_FORWARDED'])) {
+        return $_SERVER['HTTP_FORWARDED'];
+    }
+    return $_SERVER['REMOTE_ADDR'] ?? '';
+}
+
+function booking_wants_json_response_local()
+{
+    $accept = isset($_SERVER['HTTP_ACCEPT']) ? strtolower((string)$_SERVER['HTTP_ACCEPT']) : '';
+    if ($accept !== '' && strpos($accept, 'application/json') !== false) {
+        return true;
+    }
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        return true;
+    }
+    return false;
+}
+
 function table_columns_meta_local($conexion, $table)
 {
     static $cache = [];
@@ -449,12 +481,33 @@ function run_static_booking_insert_local($conexion, $data)
     }
 
     $hasClientUserId = table_has_column_local($conexion, 'booking_requests', 'client_user_id');
+    $hasTermsAccepted = table_has_column_local($conexion, 'booking_requests', 'terms_accepted');
+    $hasTermsAcceptedAt = table_has_column_local($conexion, 'booking_requests', 'terms_accepted_at');
+    $hasTermsVersion = table_has_column_local($conexion, 'booking_requests', 'terms_version');
+    $hasTermsIp = table_has_column_local($conexion, 'booking_requests', 'terms_ip');
+    $hasTermsUserAgent = table_has_column_local($conexion, 'booking_requests', 'terms_user_agent');
+
     $columns = [
         'name', 'email', 'phone', 'origin', 'booking_datetime', 'destination', 'persons', 'category',
         'special_request', 'selected_offers', 'budget', 'timeline', 'additional_notes'
     ];
     if ($hasClientUserId) {
         $columns[] = 'client_user_id';
+    }
+    if ($hasTermsAccepted) {
+        $columns[] = 'terms_accepted';
+    }
+    if ($hasTermsAcceptedAt) {
+        $columns[] = 'terms_accepted_at';
+    }
+    if ($hasTermsVersion) {
+        $columns[] = 'terms_version';
+    }
+    if ($hasTermsIp) {
+        $columns[] = 'terms_ip';
+    }
+    if ($hasTermsUserAgent) {
+        $columns[] = 'terms_user_agent';
     }
     $result['columns'] = $columns;
 
@@ -466,61 +519,18 @@ function run_static_booking_insert_local($conexion, $data)
         return $result;
     }
 
-    $name = (string)($data['name'] ?? '');
-    $email = (string)($data['email'] ?? '');
-    $phone = $data['phone'] ?? null;
-    $origin = $data['origin'] ?? null;
-    $bookingDatetime = $data['booking_datetime'] ?? null;
-    $destination = $data['destination'] ?? null;
-    $persons = $data['persons'] ?? null;
-    $category = $data['category'] ?? null;
-    $specialRequest = $data['special_request'] ?? null;
-    $selectedOffers = $data['selected_offers'] ?? null;
-    $budget = $data['budget'] ?? null;
-    $timeline = $data['timeline'] ?? null;
-    $additionalNotes = $data['additional_notes'] ?? null;
-    $clientUserId = (isset($data['client_user_id']) && (int)$data['client_user_id'] > 0) ? (string)((int)$data['client_user_id']) : null;
-
-    if ($hasClientUserId) {
-        if (!mysqli_stmt_bind_param(
-            $stmt,
-            'ssssssssssssss',
-            $name,
-            $email,
-            $phone,
-            $origin,
-            $bookingDatetime,
-            $destination,
-            $persons,
-            $category,
-            $specialRequest,
-            $selectedOffers,
-            $budget,
-            $timeline,
-            $additionalNotes,
-            $clientUserId
-        )) {
-            $result['error'] = 'bind_failed: ' . mysqli_stmt_error($stmt);
-            mysqli_stmt_close($stmt);
-            return $result;
+    $values = [];
+    $types = '';
+    foreach ($columns as $col) {
+        $val = $data[$col] ?? null;
+        if ($col === 'client_user_id' && ($val === '' || $val === 0)) {
+            $val = null;
         }
-    } elseif (!mysqli_stmt_bind_param(
-        $stmt,
-        'sssssssssssss',
-        $name,
-        $email,
-        $phone,
-        $origin,
-        $bookingDatetime,
-        $destination,
-        $persons,
-        $category,
-        $specialRequest,
-        $selectedOffers,
-        $budget,
-        $timeline,
-        $additionalNotes
-    )) {
+        $values[] = $val;
+        $types .= value_type_local($val);
+    }
+
+    if (!bind_stmt_params_local($stmt, $types, $values)) {
         $result['error'] = 'bind_failed: ' . mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
         return $result;
@@ -1668,6 +1678,44 @@ if (empty($booking['name']) || empty($booking['email'])) {
     exit;
 }
 
+$termsAccepted = 0;
+if (isset($booking['terms_accepted'])) {
+    $termsAccepted = (int)$booking['terms_accepted'];
+} elseif (isset($_POST['terms_accepted'])) {
+    $termsAccepted = (int)$_POST['terms_accepted'];
+}
+
+if ($termsAccepted !== 1) {
+    booking_runtime_log_local('submit_abort_terms_not_accepted');
+    if (booking_wants_json_response_local()) {
+        http_response_code(422);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok' => false,
+            'code' => 'TERMS_NOT_ACCEPTED',
+            'message' => 'You must accept the Terms to continue.'
+        ]);
+        exit;
+    }
+    $_SESSION['booking_request_status'] = 'error';
+    $_SESSION['booking_request_message'] = 'You must accept the Terms to continue.';
+    header('Location: wizard.php');
+    exit;
+}
+
+$termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.0';
+$termsAcceptedAt = !empty($booking['terms_accepted_at']) ? (string)$booking['terms_accepted_at'] : date('Y-m-d H:i:s');
+$termsIp = !empty($booking['terms_ip']) ? (string)$booking['terms_ip'] : booking_client_ip_local();
+$termsUserAgent = !empty($booking['terms_user_agent']) ? (string)$booking['terms_user_agent'] : (string)($_SERVER['HTTP_USER_AGENT'] ?? '');
+$termsUserAgent = substr($termsUserAgent, 0, 255);
+
+$booking['terms_accepted'] = 1;
+$booking['terms_version'] = $termsVersion;
+$booking['terms_accepted_at'] = $termsAcceptedAt;
+$booking['terms_ip'] = $termsIp;
+$booking['terms_user_agent'] = $termsUserAgent;
+$_SESSION['booking_request'] = $booking;
+
 $selected_offers = post_int_array_local('selected_offers');
 $medtravel_services = post_int_array_local('medtravel_services');
 
@@ -1742,6 +1790,11 @@ $staticPayload = [
     'timeline' => ($timeline !== '' ? (string)$timeline : null),
     'additional_notes' => ($additional_notes !== '' ? (string)$additional_notes : null),
     'client_user_id' => $clientUserForBooking,
+    'terms_accepted' => 1,
+    'terms_accepted_at' => $termsAcceptedAt,
+    'terms_version' => $termsVersion,
+    'terms_ip' => $termsIp,
+    'terms_user_agent' => $termsUserAgent,
 ];
 
 $attemptStatic = run_static_booking_insert_local($conexion, $staticPayload);
@@ -1773,6 +1826,11 @@ if (!$saved) {
         'client_user_id' => $clientUserForBooking,
         'status' => 'pending',
         'created_at' => date('Y-m-d H:i:s'),
+        'terms_accepted' => 1,
+        'terms_accepted_at' => $termsAcceptedAt,
+        'terms_version' => $termsVersion,
+        'terms_ip' => $termsIp,
+        'terms_user_agent' => $termsUserAgent,
     ];
 
     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$timeline_from)) {
@@ -1813,6 +1871,11 @@ if (!$saved) {
             'client_user_id' => $clientUserForBooking,
             'status' => 'pending',
             'created_at' => date('Y-m-d H:i:s'),
+            'terms_accepted' => 1,
+            'terms_accepted_at' => $termsAcceptedAt,
+            'terms_version' => $termsVersion,
+            'terms_ip' => $termsIp,
+            'terms_user_agent' => $termsUserAgent,
         ];
         $attemptFallback = run_dynamic_insert_local($conexion, 'booking_requests', $fallbackData, ['name', 'email'], 'fallback');
         $saved = $attemptFallback['ok'];
@@ -1828,6 +1891,11 @@ if (!$saved) {
                 'client_user_id' => $clientUserForBooking,
                 'status' => 'pending',
                 'created_at' => date('Y-m-d H:i:s'),
+                'terms_accepted' => 1,
+                'terms_accepted_at' => $termsAcceptedAt,
+                'terms_version' => $termsVersion,
+                'terms_ip' => $termsIp,
+                'terms_user_agent' => $termsUserAgent,
             ];
             $attemptMinimal = run_dynamic_insert_local($conexion, 'booking_requests', $minimalData, ['name', 'email'], 'minimal');
             $saved = $attemptMinimal['ok'];

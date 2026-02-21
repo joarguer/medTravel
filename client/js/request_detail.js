@@ -37,6 +37,16 @@
         return html;
     }
 
+    function termsDisplay(booking) {
+        var accepted = parseInt(booking.terms_accepted || 0, 10) === 1;
+        if (!accepted) {
+            return 'Not recorded';
+        }
+        var version = booking.terms_version ? (' (' + esc(booking.terms_version) + ')') : '';
+        var date = booking.terms_accepted_at ? (' on ' + esc(booking.terms_accepted_at)) : '';
+        return 'Yes' + version + date;
+    }
+
     function firstItemId(items) {
         if (!items || !items.length) {
             return 0;
@@ -110,6 +120,10 @@
             '<div class="row">' +
             '<div class="col-md-6"><p><strong>Status:</strong> ' + statusBadge(booking.status || '') + '</p></div>' +
             '<div class="col-md-6"><p><strong>Total estimated:</strong> ' + esc(totalDisplay) + '</p></div>' +
+            '</div>' +
+            '<div class="row">' +
+            '<div class="col-md-6"><p><strong>Terms accepted:</strong> ' + termsDisplay(booking) + '</p></div>' +
+            '<div class="col-md-6"></div>' +
             '</div>';
 
         if (booking.special_request) {

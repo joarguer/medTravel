@@ -94,6 +94,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
     }
     
     $texts = get_booking_texts();
+    $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.0';
     ?>
     <form method="POST" action="/booking/step-1.php" class="book-tour-form">
         <input type="hidden" name="origin" value="<?php echo htmlspecialchars($origin, ENT_QUOTES); ?>">
@@ -155,6 +156,17 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 <div class="form-floating">
                     <textarea name="special_request" class="form-control bg-white border-0" placeholder="Tell us about your needs" id="book-message" style="height: 100px"></textarea>
                     <label for="book-message"><i class="fas fa-comment-medical me-2"></i>Tell us about your needs</label>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="form-check text-white">
+                    <input class="form-check-input" type="checkbox" name="terms_accepted" id="book-terms" value="1" required>
+                    <label class="form-check-label" for="book-terms">
+                        I agree to the <a href="/terms.php" target="_blank" rel="noopener">Terms of Service and Medical Disclaimer (<?php echo htmlspecialchars($termsVersion); ?>)</a>
+                    </label>
+                </div>
+                <div class="text-warning small mt-2 d-none" id="book-terms-error">
+                    You must accept the Terms to continue.
                 </div>
             </div>
             <div class="col-12">
@@ -269,6 +281,35 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 });
             }
 
+            function configureTermsGate(form) {
+                if (!form || form.dataset.mtTermsBound === '1') return;
+                form.dataset.mtTermsBound = '1';
+
+                var checkbox = form.querySelector('[name="terms_accepted"]');
+                var submitBtn = form.querySelector('button[type="submit"]');
+                var errorBox = document.getElementById('book-terms-error');
+                if (!checkbox || !submitBtn) return;
+
+                function updateState(showError) {
+                    var accepted = !!checkbox.checked;
+                    submitBtn.disabled = !accepted;
+                    if (errorBox) {
+                        errorBox.classList.toggle('d-none', accepted || !showError);
+                    }
+                }
+
+                updateState(false);
+                checkbox.addEventListener('change', function() {
+                    updateState(false);
+                });
+                form.addEventListener('submit', function(e) {
+                    if (!checkbox.checked) {
+                        e.preventDefault();
+                        updateState(true);
+                    }
+                });
+            }
+
             function hydrateBookingForm(attemptIndex) {
                 var tryIndex = typeof attemptIndex === 'number' ? attemptIndex : 0;
                 var form = document.querySelector('.book-tour-form');
@@ -323,6 +364,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 }
 
                 bindSubmitPersistence(form);
+                configureTermsGate(form);
                 logDebug('hydrated form', form);
             }
 

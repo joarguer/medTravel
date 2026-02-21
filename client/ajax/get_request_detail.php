@@ -32,12 +32,25 @@ $hasTimeline = client_table_has_column($conexion, 'booking_requests', 'timeline'
 $hasStatus = client_table_has_column($conexion, 'booking_requests', 'status');
 $hasSpecialRequest = client_table_has_column($conexion, 'booking_requests', 'special_request');
 $hasAdditionalNotes = client_table_has_column($conexion, 'booking_requests', 'additional_notes');
+$hasTermsAccepted = client_table_has_column($conexion, 'booking_requests', 'terms_accepted');
+$hasTermsVersion = client_table_has_column($conexion, 'booking_requests', 'terms_version');
+$hasTermsAcceptedAt = client_table_has_column($conexion, 'booking_requests', 'terms_accepted_at');
+$hasTermsAcceptedDate = client_table_has_column($conexion, 'booking_requests', 'terms_accepted_date');
 
 $bookingSql = "SELECT br.id, br.created_at, br.destination";
 $bookingSql .= $hasTimeline ? ", br.timeline" : ", '' AS timeline";
 $bookingSql .= $hasStatus ? ", br.status" : ", 'pending' AS status";
 $bookingSql .= $hasSpecialRequest ? ", br.special_request" : ", '' AS special_request";
 $bookingSql .= $hasAdditionalNotes ? ", br.additional_notes" : ", '' AS additional_notes";
+$bookingSql .= $hasTermsAccepted ? ", br.terms_accepted" : ", 0 AS terms_accepted";
+if ($hasTermsAcceptedAt) {
+    $bookingSql .= ", br.terms_accepted_at";
+} elseif ($hasTermsAcceptedDate) {
+    $bookingSql .= ", br.terms_accepted_date AS terms_accepted_at";
+} else {
+    $bookingSql .= ", NULL AS terms_accepted_at";
+}
+$bookingSql .= $hasTermsVersion ? ", br.terms_version" : ", '' AS terms_version";
 $bookingSql .= " FROM booking_requests br WHERE br.id = ? AND (" . $ownerScope['sql'] . ")";
 if ($hasBookingSoftDelete) {
     $bookingSql .= " AND br.is_deleted = 0";
@@ -272,6 +285,9 @@ echo json_encode([
         'status' => client_status_label($booking['status'] ?? ''),
         'special_request' => (string)($booking['special_request'] ?? ''),
         'additional_notes' => (string)($booking['additional_notes'] ?? ''),
+        'terms_accepted' => isset($booking['terms_accepted']) ? (int)$booking['terms_accepted'] : 0,
+        'terms_version' => (string)($booking['terms_version'] ?? ''),
+        'terms_accepted_at' => (string)($booking['terms_accepted_at'] ?? ''),
     ],
     'items' => $itemsPayload,
 ]);

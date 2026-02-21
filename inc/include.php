@@ -1,5 +1,6 @@
 <?php
 include(__DIR__ . "/../admin/include/conexion.php");
+include_once(__DIR__ . '/constants.php');
 include_once(__DIR__ . '/booking_form.php');
 
 // Simple guard to avoid rendering dead/legal placeholder links in the footer.
