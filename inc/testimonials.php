@@ -28,11 +28,19 @@ if (!function_exists('mt_testimonials_fetch_approved')) {
 if (!function_exists('mt_testimonials_avatar_path')) {
     function mt_testimonials_avatar_path(array $row)
     {
-        $path = trim((string)($row['avatar_path'] ?? ''));
-        if ($path === '') {
-            $path = 'img/testimonial-1.jpg';
+        return trim((string)($row['avatar_path'] ?? ''));
+    }
+}
+
+if (!function_exists('mt_testimonials_initial')) {
+    function mt_testimonials_initial($name)
+    {
+        $name = trim((string)$name);
+        if ($name === '') {
+            return 'M';
         }
-        return $path;
+        $initial = strtoupper(substr($name, 0, 1));
+        return $initial !== '' ? $initial : 'M';
     }
 }
 

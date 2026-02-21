@@ -602,13 +602,18 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                         $name = mt_testimonials_escape($testimonial['client_name'] ?? '');
                         $location = mt_testimonials_escape($testimonial['client_location'] ?? '');
                         $stars = mt_testimonials_render_stars($testimonial['rating'] ?? 5);
+                        $initial = mt_testimonials_escape(mt_testimonials_initial($testimonial['client_name'] ?? ''));
                     ?>
                     <div class="testimonial-item text-center rounded pb-4">
                         <div class="testimonial-comment bg-light rounded p-4">
                             <p class="text-center mb-5"><?php echo $comment; ?></p>
                         </div>
                         <div class="testimonial-img p-1">
-                            <img src="<?php echo $avatar; ?>" class="img-fluid rounded-circle" alt="Image">
+                            <?php if ($avatar !== '') { ?>
+                                <img src="<?php echo $avatar; ?>" class="img-fluid rounded-circle" alt="Image">
+                            <?php } else { ?>
+                                <div class="testimonial-avatar-default"><?php echo $initial; ?></div>
+                            <?php } ?>
                         </div>
                         <div style="margin-top: -35px;">
                             <h5 class="mb-0"><?php echo $name; ?></h5>

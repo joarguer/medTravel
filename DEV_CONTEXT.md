@@ -957,6 +957,12 @@ Nota de alcance:
 - Archivo: `index.php`.
 - Origen: `inc/testimonials.php` -> `mt_testimonials_fetch_approved()`.
 
+### Avatar neutro (sin imagen)
+- Regla: si `avatar_path` es NULL/vacio, se renderiza inicial del nombre en circulo azul.
+- Implementado en `index.php` con helper `mt_testimonials_initial()`.
+- CSS scoped en `css/style.css` (clase `.testimonial-avatar-default`).
+- No se usan fotos de personas por neutralidad/compliance.
+
 ### Paginas UI
 - Cliente: `client/testimonial.php`.
 - Admin: `admin/testimonials.php`.
