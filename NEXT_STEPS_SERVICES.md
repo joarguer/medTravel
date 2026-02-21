@@ -530,6 +530,37 @@ Evidencia:
 - Email profesional implementado.
 - Portal cliente seguro operativo.
 
+### 8. Negotiation as structured proposals (no free chat in early stage)
+- Regla oficial:
+  - La negociación temprana proveedor-cliente se hace solo con acciones estructuradas en Inbox.
+  - No se habilita chat libre en early stage.
+  - No se abre canal paralelo desde modal de `my_booking_requests` (solo CTA hacia Inbox).
+- `action_types` vigentes para MVP:
+  - Provider (ITEM):
+    - `REQUEST_ADDITIONAL_INFO`
+    - `PROPOSE_QUOTE_ADJUSTMENT`
+  - Client (ITEM):
+    - `ACCEPT_PROPOSAL`
+    - `REQUEST_CHANGES`
+    - `REJECT_PROPOSAL`
+- Etapas/estados reutilizados del sistema:
+  - Emision de solicitud/propuesta provider: `awaiting_client`.
+  - Respuesta client acepta: `client_accepted`.
+  - Respuesta client pide cambios: `provider_proposed_change`.
+  - Respuesta client rechaza: `client_rejected`.
+- Permisos en etapa temprana:
+  - Permitido: quick actions, structured actions y upload de documentos.
+  - Bloqueado: `send_message` libre mientras aplique fee/stage gate.
+- Seguridad/ownership:
+  - Solo `thread_type=ITEM`.
+  - Provider/complementary limitado por scope de asignacion real del item.
+  - Cliente limitado por owner scope de su booking/item.
+- Persistencia sin nuevas tablas:
+  - Eventos estructurados en `inbox_messages.body` con JSON parseable:
+    - `[REQUEST_INFO] {...}`
+    - `[PROPOSE_QUOTE] {...}`
+    - `[PROPOSAL_RESPONSE] {...}`
+
 ### Próximos pasos
 - [ ] Semáforo visual en portal cliente por item.
 - [ ] Notificación automática al cliente cuando proveedor responda.

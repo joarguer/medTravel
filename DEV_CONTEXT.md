@@ -806,3 +806,31 @@ Nota de alcance:
 - `client/ajax/inbox.php` (`list_messages`) calcula `fee_locked` con `fee_required=1 AND fee_status!='paid'` desde `booking_requests`, para CARE e ITEM.
 - En pre-fee, el cliente ve `Quick actions`, y texto libre queda bloqueado por UI + backend (`send_message` => `403` `code=FEE_REQUIRED`).
 - Se exponen `fee_required`, `fee_status` y `fee_locked` en el payload para render consistente del inbox.
+
+### 26) Negotiation as structured proposals (no free chat in early stage) (2026-02-21)
+- Regla oficial de producto:
+  - La negociación temprana NO usa chat libre.
+  - Se ejecuta solo dentro de Inbox con acciones estructuradas y trazables.
+  - `my_booking_requests` se mantiene como CTA hacia Inbox (sin canal paralelo).
+- Etapas/estados involucrados (reuso de estados reales):
+  - Pre-fee / early stage: compose libre bloqueado por `fee_locked` y por `free_message_state`.
+  - Structured negotiation mueve ITEM a `awaiting_client` cuando proveedor emite solicitud/propuesta.
+  - Respuesta cliente:
+    - `ACCEPT_PROPOSAL` => `client_accepted`
+    - `REQUEST_CHANGES` => `provider_proposed_change`
+    - `REJECT_PROPOSAL` => `client_rejected`
+- Nuevos `action_type` estructurados:
+  - Provider (ITEM): `REQUEST_ADDITIONAL_INFO`, `PROPOSE_QUOTE_ADJUSTMENT`
+  - Client (ITEM): `ACCEPT_PROPOSAL`, `REQUEST_CHANGES`, `REJECT_PROPOSAL`
+- Persistencia (sin tablas nuevas):
+  - `inbox_messages.body` con prefijos JSON parseables:
+    - `[REQUEST_INFO] {...}`
+    - `[PROPOSE_QUOTE] {...}`
+    - `[PROPOSAL_RESPONSE] {...}`
+- Qué se permite en early stage:
+  - Permitido: quick actions, structured actions, upload de documentos.
+  - Bloqueado: `send_message` libre hasta cumplir gating.
+- Seguridad/ownership:
+  - Todas las structured actions se validan solo para `thread_type=ITEM`.
+  - Provider/admin usa `admin_inbox_resolve_context` + `scope_where` (provider/service_provider asignado al ITEM).
+  - Cliente usa `client_inbox_resolve_context` + owner scope (`client_user_id`/email normalizado).
