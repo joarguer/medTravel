@@ -966,3 +966,8 @@ Nota de alcance:
 ### Paginas UI
 - Cliente: `client/testimonial.php`.
 - Admin: `admin/testimonials.php`.
+
+### Preview en cliente
+- `client/testimonial.php` incluye preview en vivo con el mismo markup del card del home.
+- JS: `client/js/testimonial.js` actualiza nombre, ubicacion, rating y comentario con escape HTML.
+- Avatar sigue fallback neutral por inicial; no hay upload.

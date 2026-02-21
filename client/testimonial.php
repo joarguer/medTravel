@@ -9,6 +9,45 @@ include __DIR__ . '/include/include.php';
     <?php echo $global_first_style; ?>
     <?php echo $theme_global_style; ?>
     <?php echo $theme_layout_style; ?>
+    <style>
+        #client-testimonial-preview {
+            margin-bottom: 20px;
+        }
+        #client-testimonial-preview .testimonial-item {
+            max-width: 520px;
+            margin: 0 auto;
+        }
+        #client-testimonial-preview .testimonial-img {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 3px solid #1f3c88;
+            border-style: dotted;
+            border-radius: 50%;
+        }
+        #client-testimonial-preview .testimonial-avatar-default {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: #1f3c88;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 34px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        #client-testimonial-preview .testimonial-comment {
+            background: #f8f9fa;
+        }
+        #client-testimonial-preview .testimonial-stars i {
+            margin: 0 1px;
+        }
+    </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
 <div class="wrapper">
@@ -42,6 +81,22 @@ include __DIR__ . '/include/include.php';
                         </div>
                         <div class="portlet-body">
                             <div id="testimonial-status" class="alert alert-info">Loading testimonial status...</div>
+                            <div id="client-testimonial-preview">
+                                <h4 class="font-blue" style="margin-bottom: 15px;">Preview</h4>
+                                <div class="testimonial-item text-center rounded pb-4">
+                                    <div class="testimonial-comment bg-light rounded p-4">
+                                        <p class="text-center mb-5" id="testimonial_preview_comment">Your testimonial will appear like this.</p>
+                                    </div>
+                                    <div class="testimonial-img p-1">
+                                        <div class="testimonial-avatar-default" id="testimonial_preview_initial">M</div>
+                                    </div>
+                                    <div style="margin-top: -35px;">
+                                        <h5 class="mb-0" id="testimonial_preview_name"><?php echo htmlspecialchars($clientName, ENT_QUOTES, 'UTF-8'); ?></h5>
+                                        <p class="mb-0" id="testimonial_preview_location"></p>
+                                        <div class="d-flex justify-content-center testimonial-stars" id="testimonial_preview_stars"></div>
+                                    </div>
+                                </div>
+                            </div>
                             <form id="testimonialForm">
                                 <div class="form-group">
                                     <label>Name</label>
