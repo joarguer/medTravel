@@ -105,6 +105,41 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             color: #95a5a6;
             white-space: nowrap;
         }
+        #admin-inbox-messages .admin-structured-card {
+            border: 1px solid #dfe6ee;
+            border-radius: 4px;
+            background: #fff;
+            padding: 10px;
+        }
+        #admin-inbox-messages .admin-structured-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        #admin-inbox-messages .admin-structured-icon {
+            color: #5b9bd1;
+            font-size: 15px;
+        }
+        #admin-inbox-messages .admin-structured-title {
+            font-weight: 700;
+            color: #2f353b;
+            flex: 1 1 auto;
+            min-width: 180px;
+        }
+        #admin-inbox-messages .admin-structured-badge {
+            font-size: 10px;
+            line-height: 1.2;
+            padding: 3px 7px;
+        }
+        #admin-inbox-messages .admin-structured-list {
+            margin: 6px 0 0 18px;
+            padding: 0;
+        }
+        #admin-inbox-messages .admin-structured-note {
+            margin-top: 8px;
+        }
         @media (max-width: 767px) {
             #admin-inbox-thread-list .mt-thread-row {
                 flex-direction: column;

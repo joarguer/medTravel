@@ -31,6 +31,145 @@
         return 'default';
     }
 
+    function parseStructuredJson(prefix, text) {
+        var raw = String(text || '').trim();
+        if (raw.indexOf(prefix) !== 0) {
+            return null;
+        }
+        var jsonText = raw.slice(prefix.length).trim();
+        if (!jsonText) {
+            return null;
+        }
+        try {
+            var payload = JSON.parse(jsonText);
+            return payload && typeof payload === 'object' ? payload : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function docTypeLabel(type) {
+        var labels = {
+            labs: 'Labs',
+            imaging: 'Imaging',
+            photos: 'Photos',
+            medical_history: 'Medical history',
+            other: 'Other'
+        };
+        var key = String(type || '').toLowerCase();
+        return labels[key] || key || 'Other';
+    }
+
+    function formatCurrencyAmount(amount, currency) {
+        var value = parseFloat(String(amount || '0'));
+        if (!isFinite(value)) {
+            value = 0;
+        }
+        var cur = String(currency || 'USD').toUpperCase() || 'USD';
+        try {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: cur,
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(value);
+        } catch (e) {
+            return value.toFixed(2) + ' ' + cur;
+        }
+    }
+
+    function renderStructuredRequestInfo(text) {
+        var payload = parseStructuredJson('[REQUEST_INFO]', text);
+        if (!payload) {
+            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+        }
+
+        var requiredTypes = Array.isArray(payload.required_types) ? payload.required_types : [];
+        var note = String(payload.note || '').trim();
+        var listHtml = requiredTypes.length
+            ? ('<ul class="admin-structured-list">' + requiredTypes.map(function (t) {
+                return '<li>' + esc(docTypeLabel(t)) + '</li>';
+            }).join('') + '</ul>')
+            : '<div class="text-muted">No document types specified.</div>';
+
+        return '<div class="admin-structured-card admin-structured-request">' +
+            '<div class="admin-structured-header">' +
+                '<i class="fa fa-file-medical-o admin-structured-icon" aria-hidden="true"></i>' +
+                '<span class="admin-structured-title">Additional Information Requested</span>' +
+                '<span class="label label-warning admin-structured-badge">Awaiting Client</span>' +
+            '</div>' +
+            '<div class="admin-structured-body">' +
+                '<div><strong>Requested types</strong></div>' +
+                listHtml +
+                (note ? '<div class="admin-structured-note"><strong>Note:</strong> ' + esc(note) + '</div>' : '') +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderStructuredProposeQuote(text) {
+        var payload = parseStructuredJson('[PROPOSE_QUOTE]', text);
+        if (!payload) {
+            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+        }
+
+        var amount = formatCurrencyAmount(payload.amount, payload.currency || 'USD');
+        var notes = String(payload.notes || '').trim();
+
+        return '<div class="admin-structured-card admin-structured-proposal">' +
+            '<div class="admin-structured-header">' +
+                '<i class="fa fa-money admin-structured-icon" aria-hidden="true"></i>' +
+                '<span class="admin-structured-title">Quote Adjustment Proposal</span>' +
+                '<span class="label label-warning admin-structured-badge">Awaiting Client Response</span>' +
+            '</div>' +
+            '<div class="admin-structured-body">' +
+                '<div><strong>Amount:</strong> ' + esc(amount) + '</div>' +
+                (notes ? '<div class="admin-structured-note"><strong>Justification:</strong> ' + esc(notes) + '</div>' : '') +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderStructuredProposalResponse(text) {
+        var payload = parseStructuredJson('[PROPOSAL_RESPONSE]', text);
+        if (!payload) {
+            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+        }
+
+        var action = String(payload.action_type || '').toUpperCase();
+        var notes = String(payload.notes || '').trim();
+        var map = {
+            ACCEPT_PROPOSAL: { cls: 'success', label: 'Accepted' },
+            REQUEST_CHANGES: { cls: 'warning', label: 'Changes Requested' },
+            REJECT_PROPOSAL: { cls: 'danger', label: 'Rejected' },
+            DOCS_NOT_AVAILABLE: { cls: 'default', label: 'Documents Not Available' }
+        };
+        var badge = map[action] || { cls: 'default', label: action || 'Response' };
+
+        return '<div class="admin-structured-card admin-structured-response">' +
+            '<div class="admin-structured-header">' +
+                '<i class="fa fa-check-circle admin-structured-icon" aria-hidden="true"></i>' +
+                '<span class="admin-structured-title">Proposal Response</span>' +
+                '<span class="label label-' + esc(badge.cls) + ' admin-structured-badge">' + esc(badge.label) + '</span>' +
+            '</div>' +
+            '<div class="admin-structured-body">' +
+                (notes ? '<div class="admin-structured-note"><strong>Note:</strong> ' + esc(notes) + '</div>' : '<div class="text-muted">No additional notes.</div>') +
+            '</div>' +
+        '</div>';
+    }
+
+    function formatAdminMessageBody(body) {
+        var text = String(body || '').trim();
+        if (text.indexOf('[REQUEST_INFO]') === 0) {
+            return renderStructuredRequestInfo(text);
+        }
+        if (text.indexOf('[PROPOSE_QUOTE]') === 0) {
+            return renderStructuredProposeQuote(text);
+        }
+        if (text.indexOf('[PROPOSAL_RESPONSE]') === 0) {
+            return renderStructuredProposalResponse(text);
+        }
+        return '<span style="white-space:pre-wrap;">' + esc(body || '') + '</span>';
+    }
+
     function matchesPreferred(thread, preferred) {
         if (!thread || !preferred) return false;
         if (preferred.threadId && String(thread.thread_id || '') === String(preferred.threadId)) {
@@ -220,11 +359,12 @@
 
         var html = '';
         messages.forEach(function (m) {
+            var bodyHtml = formatAdminMessageBody(m.body || '');
             html += '<div class="well well-sm" style="margin-bottom:10px;">' +
                 '<div><span class="label label-' + senderClass(m.sender) + '">' + esc(m.sender || 'system') + '</span>' +
                 (m.time ? '<small style="margin-left:8px;">' + esc(m.time) + '</small>' : '') +
                 '</div>' +
-                '<div style="margin-top:6px;white-space:pre-wrap;">' + esc(m.body || '') + '</div>' +
+                '<div style="margin-top:6px;">' + bodyHtml + '</div>' +
                 '</div>';
         });
         $box.html(html);
