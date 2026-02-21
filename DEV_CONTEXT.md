@@ -176,7 +176,7 @@ Criterio: se listan **todos** los `.md` detectados, con el primer encabezado/lí
 - `booking/step-1.php`, `booking/wizard.php`, `booking/submit.php`: flujo de booking.
 - `index.php`: mezcla sección hardcode y sección dinámica para servicios.
 
-#### Booking: aceptación de términos (v1.0)
+#### Booking: aceptación de términos (v1.1)
 - La aceptación ocurre en el primer formulario público renderizado por `inc/booking_form.php` (checkbox obligatorio con link a `/terms.php`).
 - `booking/step-1.php` valida la aceptación y guarda en sesión: `terms_accepted`, `terms_accepted_at`, `terms_version`, `terms_ip`, `terms_user_agent`.
 - `booking/submit.php` hace enforcement backend (sin bypass frontend) y persiste los campos en `booking_requests` cuando existen en el schema.

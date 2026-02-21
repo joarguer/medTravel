@@ -94,7 +94,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
     }
     
     $texts = get_booking_texts();
-    $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.0';
+    $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
     ?>
     <form method="POST" action="/booking/step-1.php" class="book-tour-form">
         <input type="hidden" name="origin" value="<?php echo htmlspecialchars($origin, ENT_QUOTES); ?>">

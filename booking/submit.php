@@ -1703,7 +1703,7 @@ if ($termsAccepted !== 1) {
     exit;
 }
 
-$termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.0';
+$termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
 $termsAcceptedAt = !empty($booking['terms_accepted_at']) ? (string)$booking['terms_accepted_at'] : date('Y-m-d H:i:s');
 $termsIp = !empty($booking['terms_ip']) ? (string)$booking['terms_ip'] : booking_client_ip_local();
 $termsUserAgent = !empty($booking['terms_user_agent']) ? (string)$booking['terms_user_agent'] : (string)($_SERVER['HTTP_USER_AGENT'] ?? '');

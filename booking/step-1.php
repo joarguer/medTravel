@@ -52,7 +52,7 @@ if (!isset($_POST['terms_accepted']) || (string)$_POST['terms_accepted'] !== '1'
     exit;
 }
 
-$termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.0';
+$termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
 $input['terms_accepted'] = '1';
 $input['terms_version'] = $termsVersion;
 $input['terms_accepted_at'] = date('Y-m-d H:i:s');
