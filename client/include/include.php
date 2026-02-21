@@ -72,6 +72,7 @@ $theme_global_style = '<link href="/assets/global/css/components-md.min.css" rel
 
 $theme_layout_style = '<link href="/assets/layouts/layout5/css/layout.min.css" rel="stylesheet" type="text/css" />
                        <link href="/assets/layouts/layout5/css/custom.min.css" rel="stylesheet" type="text/css" />
+                       <link href="/assets/layouts/layout5/css/medtravel_ui_unified.css" rel="stylesheet" type="text/css" />
                        <link href="/assets/global/plugins/bootstrap-toastr/toastr.min.css" rel="stylesheet" type="text/css" />
                        <link rel="shortcut icon" href="/favicon.ico" />';
 

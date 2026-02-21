@@ -1,0 +1,100 @@
+/* MedTravel unified layout overrides (client/admin/provider) */
+
+.page-header .navbar.mega-menu {
+    border-bottom: 1px solid #e7ecf1;
+}
+
+.page-header .page-logo {
+    padding-left: 6px;
+    padding-right: 10px;
+}
+
+.page-header .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-header .topbar-actions .btn.btn-sm.dropdown-toggle {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-header .topbar-actions .btn-group .dropdown-menu-v2 {
+    min-width: 260px;
+    border: 1px solid #e7ecf1;
+}
+
+.page-header .topbar-actions .badge {
+    font-size: 10px;
+    line-height: 1.2;
+}
+
+.page-header .navbar-nav > li > a {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 16px 14px;
+}
+
+.page-header .navbar-nav > li.active > a,
+.page-header .navbar-nav > li.open > a,
+.page-header .navbar-nav > li > a:hover,
+.page-header .navbar-nav > li > a:focus {
+    background: #f5f8fc;
+}
+
+.page-header .navbar-nav .dropdown-menu {
+    border: 1px solid #e7ecf1;
+}
+
+.page-header .navbar-nav .dropdown-menu > li > a {
+    font-size: 13px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.page-header .navbar-nav .dropdown-menu > li.active > a,
+.page-header .navbar-nav .dropdown-menu > li > a:hover,
+.page-header .navbar-nav .dropdown-menu > li > a:focus {
+    background: #eef4ff;
+}
+
+.page-header .navbar-nav .dropdown-menu .more-dropdown-sub.active > a {
+    background: #eef4ff;
+}
+
+.breadcrumbs {
+    margin-bottom: 16px;
+}
+
+.breadcrumbs h1 {
+    font-weight: 600;
+}
+
+.page-content .btn {
+    border-radius: 3px;
+}
+
+.page-content .portlet,
+.page-content .note,
+.page-content .well {
+    border-radius: 3px;
+}
+
+@media (max-width: 991px) {
+    .page-header .topbar-actions {
+        gap: 4px;
+    }
+
+    .page-header .topbar-actions .btn.btn-sm.dropdown-toggle {
+        min-height: 34px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+    }
+
+    .page-header .navbar-nav > li > a {
+        padding: 10px 14px;
+    }
+}
