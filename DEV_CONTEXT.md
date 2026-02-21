@@ -926,3 +926,37 @@ Nota de alcance:
 - Resolucion recomendada: 1200x800.
 - Peso recomendado: menor a 2MB.
 - Ver limite efectivo con `ini_get('upload_max_filesize')` y `ini_get('post_max_size')`.
+
+---
+
+## M) Testimonials dinamicos (Home + Cliente + Admin)
+
+### Flujo
+- Cliente crea o actualiza testimonio -> `status = pending`.
+- Admin aprueba/rechaza desde panel.
+- Home renderiza solo `status = approved`.
+
+### Regla de negocio
+- Un cliente puede tener solo 1 testimonio aprobado a la vez.
+- Al aprobar uno nuevo, los anteriores aprobados del mismo cliente pasan a `archived`.
+
+### Tabla y migracion
+- Tabla: `testimonials`.
+- Migracion: `sql/2026_02_21_testimonials.sql` (idempotente).
+
+### Endpoints
+- Cliente: `client/ajax/testimonials.php`
+  - `action=get_mine`
+  - `action=create_or_update`
+- Admin: `admin/ajax/testimonials.php`
+  - `action=list`
+  - `action=approve`
+  - `action=reject`
+
+### Render Home
+- Archivo: `index.php`.
+- Origen: `inc/testimonials.php` -> `mt_testimonials_fetch_approved()`.
+
+### Paginas UI
+- Cliente: `client/testimonial.php`.
+- Admin: `admin/testimonials.php`.

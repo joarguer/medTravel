@@ -522,11 +522,11 @@ require_once __DIR__ . '/menu_helpers.php';
 $current = menu_current_script();
 
 $dashboard_pages = array('index.php');
-$management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
+$management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php','my_booking_requests.php','app_inbox.php','app_calendar.php','testimonials.php');
 $medical_group_pages = array('service_categories.php','service_catalog.php','providers.php','provider_verification.php','provider_offers.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $complementary_scope_pages = array('providers_complementary.php','medtravel_services.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
-$clients_booking_pages = array('clientes.php','booking_requests.php','app_inbox.php','app_calendar.php');
+$clients_booking_pages = array('clientes.php','booking_requests.php','app_inbox.php','app_calendar.php','testimonials.php');
 $admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','informes.php','email_settings.php','data_deletion_requests.php','cleanup.php');
 $admin_users_pages = array('mis_datos.php','usuarios.php','crear_usuario.php','roles.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
@@ -599,6 +599,9 @@ if ($es_admin) {
                                             </li>
                                             <li'.menu_li_class('booking_requests.php').'>
                                                 <a href="./booking_requests.php">Solicitudes de Booking</a>
+                                            </li>
+                                            <li'.menu_li_class('testimonials.php').'>
+                                                <a href="./testimonials.php">Testimonials</a>
                                             </li>
                                             <li'.menu_li_class('app_inbox.php').'>
                                                 <a href="./app_inbox.php">Inbox Solicitudes</a>

@@ -3,6 +3,7 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 include('inc/include.php'); 
+require_once __DIR__ . '/inc/testimonials.php';
 $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 ?>
@@ -593,86 +594,31 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                     <h1 class="mb-0">What Our Clients Say!</h1>
                 </div>
                 <div class="testimonial-carousel owl-carousel">
+                    <?php
+                    $testimonials = mt_testimonials_fetch_approved($conexion, 6);
+                    foreach ($testimonials as $testimonial) {
+                        $comment = nl2br(mt_testimonials_escape($testimonial['comment'] ?? ''));
+                        $avatar = mt_testimonials_escape(mt_testimonials_avatar_path($testimonial));
+                        $name = mt_testimonials_escape($testimonial['client_name'] ?? '');
+                        $location = mt_testimonials_escape($testimonial['client_location'] ?? '');
+                        $stars = mt_testimonials_render_stars($testimonial['rating'] ?? 5);
+                    ?>
                     <div class="testimonial-item text-center rounded pb-4">
                         <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">MedTravel perfectly coordinated my medical trip to Colombia. From the airport to the clinic, everything was impeccable. The post-operative follow-up gave me great peace of mind.
-                            </p>
+                            <p class="text-center mb-5"><?php echo $comment; ?></p>
                         </div>
                         <div class="testimonial-img p-1">
-                            <img src="img/testimonial-1.jpg" class="img-fluid rounded-circle" alt="Image">
+                            <img src="<?php echo $avatar; ?>" class="img-fluid rounded-circle" alt="Image">
                         </div>
                         <div style="margin-top: -35px;">
-                            <h5 class="mb-0">Sarah Johnson</h5>
-                            <p class="mb-0">Miami, Florida</p>
+                            <h5 class="mb-0"><?php echo $name; ?></h5>
+                            <p class="mb-0"><?php echo $location; ?></p>
                             <div class="d-flex justify-content-center">
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
+                                <?php echo $stars; ?>
                             </div>
                         </div>
                     </div>
-                    <div class="testimonial-item text-center rounded pb-4">
-                        <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Excellent service. The team was always available, communication was clear and the hotel they booked was close to the clinic. Highly recommended.
-                            </p>
-                        </div>
-                        <div class="testimonial-img p-1">
-                            <img src="img/testimonial-2.jpg" class="img-fluid rounded-circle" alt="Image">
-                        </div>
-                        <div style="margin-top: -35px;">
-                            <h5 class="mb-0">Michael Anderson</h5>
-                            <p class="mb-0">Orlando, Florida</p>
-                            <div class="d-flex justify-content-center">
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="testimonial-item text-center rounded pb-4">
-                        <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">I felt safe throughout the entire process. The coordination with the doctors was professional and the 24/7 support helped me a lot when I had questions.
-                            </p>
-                        </div>
-                        <div class="testimonial-img p-1">
-                            <img src="img/testimonial-3.jpg" class="img-fluid rounded-circle" alt="Image">
-                        </div>
-                        <div style="margin-top: -35px;">
-                            <h5 class="mb-0">Jennifer Martinez</h5>
-                            <p class="mb-0">Tampa, Florida</p>
-                            <div class="d-flex justify-content-center">
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="testimonial-item text-center rounded pb-4">
-                        <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Amazing experience. They coordinated my flight, transportation and accommodation. The bilingual team made everything easy. Worth every penny.
-                            </p>
-                        </div>
-                        <div class="testimonial-img p-1">
-                            <img src="img/testimonial-4.jpg" class="img-fluid rounded-circle" alt="Image">
-                        </div>
-                        <div style="margin-top: -35px;">
-                            <h5 class="mb-0">Robert Williams</h5>
-                            <p class="mb-0">Jacksonville, Florida</p>
-                            <div class="d-flex justify-content-center">
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                            </div>
-                        </div>
-                    </div>
+                    <?php } ?>
                 </div>
             </div>
         </div>

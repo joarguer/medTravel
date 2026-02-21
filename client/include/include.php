@@ -127,6 +127,9 @@ $top_header = '<div class="clearfix navbar-fixed-top">
                             <li>
                                 <a href="/client/app_inbox.php"><i class="icon-envelope-open"></i> My Inbox</a>
                             </li>
+                            <li>
+                                <a href="/client/testimonial.php"><i class="icon-speech"></i> My Testimonial</a>
+                            </li>
                             <li class="divider"></li>
                             <li>
                                 <a href="/admin/include/salir.php"><i class="icon-key"></i> Log Out</a>
@@ -152,6 +155,9 @@ $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-respon
                         </li>
                         <li' . client_menu_li_class(['mis_datos.php'], 'dropdown dropdown-fw dropdown-fw-disabled') . '>
                             <a href="/client/mis_datos.php" class="text-uppercase"><i class="icon-user"></i> Mis Datos</a>
+                        </li>
+                        <li' . client_menu_li_class(['testimonial.php'], 'dropdown dropdown-fw dropdown-fw-disabled') . '>
+                            <a href="/client/testimonial.php" class="text-uppercase"><i class="icon-speech"></i> Testimonial</a>
                         </li>
                     </ul>
                  </div>';
