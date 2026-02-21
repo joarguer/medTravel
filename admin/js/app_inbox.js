@@ -1,4 +1,5 @@
 (function () {
+    var helpConfig = window.AdminInboxHelpConfig || {};
     var currentThread = null;
     var preferredThread = null;
     var feeGateActive = false;
@@ -379,6 +380,87 @@
         });
         $box.html(html);
         $box.scrollTop($box[0].scrollHeight);
+    }
+
+    function inboxHelpStorageKey() {
+        var userId = parseInt(helpConfig.userId || 0, 10);
+        var role = String(helpConfig.role || '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        var suffix = '';
+        if (userId > 0) {
+            suffix += '_u' + userId;
+        }
+        if (role) {
+            suffix += '_r' + role;
+        }
+        return 'mt_admin_inbox_help_collapsed' + suffix;
+    }
+
+    function readInboxHelpCollapsed() {
+        var key = inboxHelpStorageKey();
+        var value = null;
+        try {
+            value = localStorage.getItem(key);
+        } catch (e) {
+            value = null;
+        }
+        if (value !== '0' && value !== '1') {
+            return true;
+        }
+        return value === '1';
+    }
+
+    function writeInboxHelpCollapsed(collapsed) {
+        var key = inboxHelpStorageKey();
+        try {
+            localStorage.setItem(key, collapsed ? '1' : '0');
+        } catch (e) {
+        }
+    }
+
+    function applyInboxHelpState(collapsed) {
+        var $panel = $('#admin-inbox-help-collapse');
+        var $btn = $('#admin-inbox-help-toggle');
+        if (!$panel.length) {
+            return;
+        }
+        $panel.collapse(collapsed ? 'hide' : 'show');
+        if ($btn.length) {
+            $btn.attr('aria-expanded', collapsed ? 'false' : 'true');
+        }
+    }
+
+    function bindInboxHelpPanel() {
+        var $panel = $('#admin-inbox-help-collapse');
+        var $btn = $('#admin-inbox-help-toggle');
+        var $header = $('#admin-inbox-help-header');
+        if (!$panel.length || !$btn.length) {
+            return;
+        }
+
+        var collapsed = readInboxHelpCollapsed();
+        applyInboxHelpState(collapsed);
+
+        var toggle = function (evt) {
+            if (evt) {
+                evt.preventDefault();
+            }
+            var isOpen = $panel.hasClass('in');
+            var nextCollapsed = isOpen;
+            applyInboxHelpState(nextCollapsed);
+            writeInboxHelpCollapsed(nextCollapsed);
+        };
+
+        $btn.on('click', toggle);
+        $header.on('click', toggle);
+
+        $panel.on('shown.bs.collapse', function () {
+            $btn.attr('aria-expanded', 'true');
+            writeInboxHelpCollapsed(false);
+        });
+        $panel.on('hidden.bs.collapse', function () {
+            $btn.attr('aria-expanded', 'false');
+            writeInboxHelpCollapsed(true);
+        });
     }
 
     function refreshHeaderNotifications() {
@@ -773,6 +855,8 @@
             });
             $('#adminProposeQuoteModal').modal('hide');
         });
+
+        bindInboxHelpPanel();
 
         loadThreads();
     });

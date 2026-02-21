@@ -188,6 +188,32 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                             </ul>
                         </div>
                         <div class="col-md-9 inbox-body">
+                            <div id="admin-inbox-help-wrap" style="margin-bottom:12px;">
+                                <button type="button" class="btn btn-xs btn-default" id="admin-inbox-help-toggle" aria-expanded="false" aria-controls="admin-inbox-help-collapse">
+                                    ¿Cómo usar la botonera?
+                                </button>
+                                <div id="admin-inbox-help-collapse" class="panel panel-default collapse" style="margin-top:8px; margin-bottom:0;">
+                                    <div class="panel-heading" style="cursor:pointer;" id="admin-inbox-help-header">
+                                        <strong>🛈 Guía rápida para usar la botonera</strong>
+                                    </div>
+                                    <div class="panel-body" style="padding-top:10px;">
+                                        <p style="margin-bottom:8px;"><strong>Guía rápida: cómo usar este Inbox</strong></p>
+                                        <ul style="margin:0 0 0 18px; padding:0;">
+                                            <li>Este Inbox funciona por etapas: al inicio NO se permite escribir mensajes libres.</li>
+                                            <li>Usa los botones de “Respuestas rápidas” para avanzar el caso:</li>
+                                            <li style="list-style:none; margin-left:8px;">• “DATES AVAILABLE / NOT AVAILABLE”: confirma disponibilidad de fechas.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “REQUEST HISTORY / LABS / IMAGING / PHOTOS”: solicita información clínica específica.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “FINAL APPROVED”: úsalo solo cuando el caso esté listo para aprobación final.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “NOT ELIGIBLE”: si el paciente no aplica para el servicio.</li>
+                                            <li>En “Propuestas estructuradas”:</li>
+                                            <li style="list-style:none; margin-left:8px;">• “REQUEST ADDITIONAL INFO”: pide documentos o datos faltantes (queda registrado como tarjeta).</li>
+                                            <li style="list-style:none; margin-left:8px;">• “PROPOSE QUOTE ADJUSTMENT”: propone ajuste de cotización con justificación.</li>
+                                            <li>El paciente responderá con botones (Aceptar / Pedir cambios / Rechazar) o subirá documentos.</li>
+                                            <li>Importante: Mantén toda la comunicación aquí para trazabilidad. No uses mensajes externos.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="inbox-header">
                                 <h1 id="admin-inbox-title">Select a thread</h1>
                             </div>
@@ -305,6 +331,12 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
 </div>
 
 <?php echo $theme_layout_script;?>
+<script type="text/javascript">
+window.AdminInboxHelpConfig = {
+    userId: <?php echo (int)($_SESSION['id_usuario'] ?? 0); ?>,
+    role: <?php echo json_encode((string)($_SESSION['rol'] ?? '')); ?>
+};
+</script>
 <script src="js/app_inbox.js" type="text/javascript"></script>
 </body>
 </html>
