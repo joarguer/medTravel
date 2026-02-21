@@ -902,8 +902,10 @@
             var feeLocked = !!res.fee_locked || computedFeeLocked;
             setFeeGateState(feeLocked, res.fee_message || 'Unlock after Coordination Fee.');
             var canSendFreeMessage = (typeof res.can_send_free_message === 'boolean') ? res.can_send_free_message : !feeLocked;
-            setComposeGateState(canSendFreeMessage, res.free_message_notice || '');
             var isCareThread = String(currentThread.thread_type || '').toUpperCase() === 'CARE';
+            var effectiveCanSendFreeMessage = isCareThread ? true : canSendFreeMessage;
+            var composeNotice = isCareThread ? '' : (res.free_message_notice || '');
+            setComposeGateState(effectiveCanSendFreeMessage, composeNotice);
             var hasStructuredItemActions = !!res.has_structured_item_actions;
             setStructuredCareAlert(
                 isCareThread && hasStructuredItemActions,
@@ -928,7 +930,12 @@
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
-                setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                var isCareBlocked = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'CARE';
+                if (isCareBlocked) {
+                    setComposeGateState(true, '');
+                } else {
+                    setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                }
                 return;
             }
             toastr.error('Could not load messages');
@@ -978,7 +985,12 @@
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
-                setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                var isCareBlocked = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'CARE';
+                if (isCareBlocked) {
+                    setComposeGateState(true, '');
+                } else {
+                    setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                }
                 return;
             }
             toastr.error('Could not send message');

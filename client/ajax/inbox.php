@@ -391,13 +391,14 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
     $feeLocked = !empty($feeGate['fee_locked']);
     $feeRequired = (int)($feeGate['fee_required'] ?? 0);
     $feeStatus = (string)($feeGate['fee_status'] ?? 'pending');
+    $isCareThread = (strtoupper((string)($ctx['thread_type'] ?? '')) === 'CARE');
     $freeMessageState = client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate);
     $canSendFreeMessage = !empty($freeMessageState['can_send_free_message']);
     if ($action === 'send_message') {
         if ($feeLocked) {
             client_inbox_err('coordination_fee_required', 403, 'FEE_REQUIRED');
         }
-        if (!$canSendFreeMessage) {
+        if (!$isCareThread && !$canSendFreeMessage) {
             client_inbox_err('free_message_blocked', 403, 'FREE_MESSAGE_BLOCKED');
         }
     }
