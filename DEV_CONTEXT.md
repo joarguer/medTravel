@@ -7,6 +7,11 @@
 - `ls /mnt/data` -> `No such file or directory`
 - `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/htdocs/medtravel` (repo presente y legible)
 
+## Regla de documentación
+
+- Las decisiones y la arquitectura se actualizan **solo** en documentos canónicos. Los documentos derivados deben referenciar a los canónicos y no redefinir decisiones.
+
+
 ---
 
 ## A) Inventario rápido

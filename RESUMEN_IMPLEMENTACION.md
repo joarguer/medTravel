@@ -4,6 +4,14 @@
 **Estado:** ✅ COMPLETADO (Fase de Código)  
 **Pendiente:** Ejecución de SQL en servidor
 
+**Tipo:** Documento derivado / release summary
+
+### Canonical references
+
+- MODELO_NEGOCIO_ACTUALIZADO.md
+- NEXT_STEPS_SERVICES.md
+- DEV_CONTEXT.md
+
 ---
 
 ## 📦 ENTREGABLES COMPLETADOS
