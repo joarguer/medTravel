@@ -1,3 +1,8 @@
+# Ignore cache outputs for link-check
+.cache/*.json
+
+# Keep python helper scripts in .cache tracked
+!.cache/*.py
 .DS_Store
 **/.DS_Store
 img/surgeon/*_files/
