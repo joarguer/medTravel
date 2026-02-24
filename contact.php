@@ -1,4 +1,7 @@
 <?php
+$page_title = 'Contact MedTravel | Medical Travel Coordination';
+$page_description = 'Contact MedTravel for questions about medical tourism coordination, providers, and booking support in Colombia.';
+$page_canonical = 'https://medtravel.com.co/contact.php';
 include('inc/include.php'); 
 ?>
 <!DOCTYPE html>

@@ -1,9 +1,21 @@
 <?php
-include('inc/include.php'); ; 
+include_once(__DIR__ . '/admin/include/conexion.php');
 $busca_header = mysqli_query($conexion,"SELECT * FROM about_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 $rst_header = mysqli_fetch_array($busca_header);
 $busca_us = mysqli_query($conexion,"SELECT * FROM about_us WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 $rst_us = mysqli_fetch_array($busca_us);
+$about_title = trim((string)($rst_header['title'] ?? 'About MedTravel'));
+$page_title = ($about_title !== '' ? $about_title : 'About MedTravel') . ' | MedTravel';
+$about_description = trim((string)($rst_header['subtitle_2'] ?? ''));
+if ($about_description === '') {
+    $about_description = trim(strip_tags((string)($rst_us['paragrafo'] ?? '')));
+}
+if ($about_description === '') {
+    $about_description = 'Learn how MedTravel coordinates medical tourism services in Colombia with trusted providers.';
+}
+$page_description = mb_substr($about_description, 0, 160, 'UTF-8');
+$page_canonical = 'https://medtravel.com.co/about.php';
+include('inc/include.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">

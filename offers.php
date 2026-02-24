@@ -1,5 +1,5 @@
 <?php
-include('inc/include.php');
+include_once(__DIR__ . '/admin/include/conexion.php');
 
 if (!function_exists('provider_verification_level_label')) {
     function provider_verification_level_label($level)
@@ -39,13 +39,13 @@ if (!function_exists('provider_verification_public_badge')) {
 $busca_header = mysqli_query($conexion,"SELECT * FROM services_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 if(mysqli_num_rows($busca_header) > 0) {
     $rst_header = mysqli_fetch_array($busca_header);
-    $page_title = !empty($rst_header['title']) ? $rst_header['title'] : 'All Medical Services';
+    $offers_header_title = !empty($rst_header['title']) ? $rst_header['title'] : 'All Medical Services';
     $page_subtitle_1 = !empty($rst_header['subtitle_1']) ? $rst_header['subtitle_1'] : 'MEDICAL SERVICES';
     $page_subtitle_2 = !empty($rst_header['subtitle_2']) ? $rst_header['subtitle_2'] : 'Browse all available medical services from certified providers in Colombia';
     $bg_image = $rst_header['bg_image'];
 } else {
     // Valores por defecto si no existe configuración
-    $page_title = 'All Medical Services';
+    $offers_header_title = 'All Medical Services';
     $page_subtitle_1 = 'MEDICAL SERVICES';
     $page_subtitle_2 = 'Browse all available medical services from certified providers in Colombia';
     $bg_image = '';
@@ -53,7 +53,7 @@ if(mysqli_num_rows($busca_header) > 0) {
 
 // Obtener categoría del parámetro GET
 $category_id = isset($_GET['category']) ? (int)$_GET['category'] : 0;
-$category_name = $page_title;
+$category_name = $offers_header_title;
 $category_description = '';
 
 // Obtener información de la categoría si existe
@@ -120,6 +120,65 @@ if ($category_id > 0) {
 
 mysqli_stmt_execute($stmt);
 $offers_result = mysqli_stmt_get_result($stmt);
+
+$offers = [];
+if ($offers_result) {
+    while ($offer_row = mysqli_fetch_assoc($offers_result)) {
+        $offers[] = $offer_row;
+    }
+}
+
+$seo_base_title = trim(html_entity_decode((string)($category_id > 0 ? $category_name : $offers_header_title), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+if ($seo_base_title === '') {
+    $seo_base_title = 'Medical Services';
+}
+$page_title = $seo_base_title . ' | MedTravel';
+$seo_offers_description = trim(html_entity_decode((string)$category_description, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+if ($seo_offers_description === '') {
+    $seo_offers_description = trim((string)$page_subtitle_2);
+}
+$page_description = $seo_offers_description !== ''
+    ? $seo_offers_description
+    : 'Browse medical service offers in Colombia from certified providers coordinated by MedTravel.';
+$page_canonical = 'https://medtravel.com.co/offers.php';
+
+$offers_schema_items = [];
+$offers_position = 1;
+foreach ($offers as $offer_item) {
+    $offer_name = trim((string)($offer_item['title'] ?? ''));
+    $offer_id = (int)($offer_item['id'] ?? 0);
+    if ($offer_name === '' || $offer_id <= 0) {
+        continue;
+    }
+    $offer_object = [
+        '@type' => 'Service',
+        'name' => $offer_name,
+        'url' => 'https://medtravel.com.co/offer_detail.php?id=' . $offer_id,
+        'provider' => [
+            '@type' => 'Organization',
+            'name' => 'MedTravel',
+        ],
+    ];
+    $offer_description = trim(strip_tags((string)($offer_item['description'] ?? '')));
+    if ($offer_description !== '') {
+        $offer_object['description'] = $offer_description;
+    }
+    $offers_schema_items[] = [
+        '@type' => 'ListItem',
+        'position' => $offers_position++,
+        'item' => $offer_object,
+    ];
+}
+if (!empty($offers_schema_items)) {
+    $page_schema_jsonld = [[
+        '@context' => 'https://schema.org',
+        '@type' => 'ItemList',
+        'name' => $seo_base_title,
+        'itemListElement' => $offers_schema_items,
+    ]];
+}
+
+include('inc/include.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -367,9 +426,9 @@ $offers_result = mysqli_stmt_get_result($stmt);
                     </div>
                 </div>
             <?php endif; ?>
-            <?php if (mysqli_num_rows($offers_result) > 0): ?>
+            <?php if (count($offers) > 0): ?>
                 <div class="row g-4">
-                    <?php while ($offer = mysqli_fetch_assoc($offers_result)): ?>
+                    <?php foreach ($offers as $offer): ?>
                         <?php
                         $verificationStatus = trim((string)($offer['verification_status'] ?? ''));
                         $verificationLevel = trim((string)($offer['verification_level'] ?? ''));
@@ -482,7 +541,7 @@ $offers_result = mysqli_stmt_get_result($stmt);
                                 <?php endif; ?>
                             </div>
                         </div>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 </div>
             <?php else: ?>
                 <div class="no-offers">

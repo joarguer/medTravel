@@ -1,12 +1,12 @@
 <?php
-include('inc/include.php'); 
+include_once(__DIR__ . '/admin/include/conexion.php');
 
 // Obtener configuración del header
 $busca_header = mysqli_query($conexion, "SELECT * FROM services_page_header WHERE activo = '1' ORDER BY id ASC LIMIT 1");
 $header_data = mysqli_fetch_array($busca_header);
 
 // Valores por defecto si no hay datos en BD
-$page_title = isset($header_data['title']) ? $header_data['title'] : 'Our Services';
+$services_header_title = isset($header_data['title']) ? $header_data['title'] : 'Our Services';
 $subtitle = isset($header_data['subtitle']) ? $header_data['subtitle'] : 'Comprehensive Services';
 $main_title = isset($header_data['main_title']) ? $header_data['main_title'] : 'Complete Coordination & Management';
 $description = isset($header_data['description']) ? $header_data['description'] : 'At MedTravel we connect patients from the United States with certified medical providers in Colombia, offering complete coordination service from planning to post-procedure follow-up.';
@@ -26,6 +26,55 @@ if($res_catalog){
         $catalog[$row['service_type']][] = $row;
     }
 }
+
+$seo_source_title = trim((string)$services_header_title);
+$page_title = ($seo_source_title !== '' ? $seo_source_title : 'Our Services') . ' | MedTravel';
+$seo_description = trim((string)$description);
+if ($seo_description === '') {
+    $seo_description = trim((string)$subtitle);
+}
+$page_description = $seo_description !== ''
+    ? $seo_description
+    : 'Medical tourism services in Colombia. We connect international patients with trusted providers and coordinate their care.';
+$page_canonical = 'https://medtravel.com.co/services.php';
+
+$services_schema_items = [];
+$services_position = 1;
+foreach ($catalog as $items) {
+    foreach ($items as $svc) {
+        $service_name = trim((string)($svc['service_name'] ?? ''));
+        if ($service_name === '') {
+            continue;
+        }
+        $service_object = [
+            '@type' => 'Service',
+            'name' => $service_name,
+            'provider' => [
+                '@type' => 'Organization',
+                'name' => 'MedTravel',
+            ],
+        ];
+        $service_description = trim((string)($svc['short_description'] ?? ''));
+        if ($service_description !== '') {
+            $service_object['description'] = $service_description;
+        }
+        $services_schema_items[] = [
+            '@type' => 'ListItem',
+            'position' => $services_position++,
+            'item' => $service_object,
+        ];
+    }
+}
+if (!empty($services_schema_items)) {
+    $page_schema_jsonld = [[
+        '@context' => 'https://schema.org',
+        '@type' => 'ItemList',
+        'name' => 'MedTravel Services',
+        'itemListElement' => $services_schema_items,
+    ]];
+}
+
+include('inc/include.php'); 
 
 function format_price($amount, $currency){
     $symbol = ($currency === 'USD') ? '$' : ($currency === 'COP' ? '$' : '');

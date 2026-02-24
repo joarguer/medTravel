@@ -1,5 +1,5 @@
 <?php
-include(__DIR__ . "/../admin/include/conexion.php");
+include_once(__DIR__ . "/../admin/include/conexion.php");
 include_once(__DIR__ . '/constants.php');
 include_once(__DIR__ . '/booking_form.php');
 
@@ -36,11 +36,110 @@ function mt_valid_public_page(string $relativePath): bool {
     return true;
 }
 
+function mt_is_assoc_array(array $array): bool {
+    if ($array === []) {
+        return false;
+    }
+    return array_keys($array) !== range(0, count($array) - 1);
+}
+
+$page_title = $page_title ?? 'MedTravel - Tourism and Health';
+$page_description = $page_description ?? 'Medical tourism services in Colombia. We connect international patients with trusted providers and coordinate their care.';
+$page_robots = $page_robots ?? 'index,follow,max-image-preview:large';
+$request_uri = $_SERVER['REQUEST_URI'] ?? '/';
+$request_path = parse_url((string)$request_uri, PHP_URL_PATH);
+if (!is_string($request_path) || $request_path === '') {
+    $request_path = '/';
+}
+if ($request_path[0] !== '/') {
+    $request_path = '/' . $request_path;
+}
+$page_canonical = $page_canonical ?? ('https://medtravel.com.co' . $request_path);
+$page_og_image = $page_og_image ?? 'https://medtravel.com.co/img/site/logo_800_182.png';
+$page_lang = $page_lang ?? 'en';
+$page_schema_jsonld = $page_schema_jsonld ?? [];
+
+if (!preg_match('~^https?://~i', (string)$page_canonical)) {
+    $canonical_path = (string)$page_canonical;
+    if ($canonical_path === '' || $canonical_path[0] !== '/') {
+        $canonical_path = '/' . ltrim($canonical_path, '/');
+    }
+    $page_canonical = 'https://medtravel.com.co' . $canonical_path;
+}
+if (!preg_match('~^https?://~i', (string)$page_og_image)) {
+    $og_image_path = (string)$page_og_image;
+    if ($og_image_path === '' || $og_image_path[0] !== '/') {
+        $og_image_path = '/' . ltrim($og_image_path, '/');
+    }
+    $page_og_image = 'https://medtravel.com.co' . $og_image_path;
+}
+
+if (!is_array($page_schema_jsonld)) {
+    $page_schema_jsonld = [];
+} elseif (mt_is_assoc_array($page_schema_jsonld) && isset($page_schema_jsonld['@type'])) {
+    $page_schema_jsonld = [$page_schema_jsonld];
+}
+
+$organization_schema = [
+    '@context' => 'https://schema.org',
+    '@type' => 'Organization',
+    '@id' => 'https://medtravel.com.co/#organization',
+    'name' => 'MedTravel',
+    'url' => 'https://medtravel.com.co/',
+    'logo' => 'https://medtravel.com.co/img/site/logo_800_182.png',
+];
+
+$website_schema = [
+    '@context' => 'https://schema.org',
+    '@type' => 'WebSite',
+    '@id' => 'https://medtravel.com.co/#website',
+    'name' => 'MedTravel',
+    'url' => 'https://medtravel.com.co/',
+    'publisher' => [
+        '@id' => 'https://medtravel.com.co/#organization',
+    ],
+];
+
+$jsonld_objects = [$organization_schema, $website_schema];
+foreach ($page_schema_jsonld as $schema_item) {
+    if (is_array($schema_item) && !empty($schema_item)) {
+        $jsonld_objects[] = $schema_item;
+    }
+}
+
+$jsonld_scripts = '';
+foreach ($jsonld_objects as $jsonld_object) {
+    $encoded = json_encode($jsonld_object, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if ($encoded !== false) {
+        $jsonld_scripts .= "\n    <script type=\"application/ld+json\">{$encoded}</script>";
+    }
+}
+
+$meta_title = htmlspecialchars((string)$page_title, ENT_QUOTES, 'UTF-8');
+$meta_description = htmlspecialchars((string)$page_description, ENT_QUOTES, 'UTF-8');
+$meta_robots = htmlspecialchars((string)$page_robots, ENT_QUOTES, 'UTF-8');
+$meta_canonical = htmlspecialchars((string)$page_canonical, ENT_QUOTES, 'UTF-8');
+$meta_og_image = htmlspecialchars((string)$page_og_image, ENT_QUOTES, 'UTF-8');
+$meta_lang = htmlspecialchars((string)$page_lang, ENT_QUOTES, 'UTF-8');
+
 $head = '<meta charset="utf-8">
-    <title>MedTravel - Tourism and Health </title>
+    <title>' . $meta_title . '</title>
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <meta content="" name="keywords">
-    <meta content="" name="description">
+    <meta content="' . $meta_description . '" name="description">
+    <meta name="robots" content="' . $meta_robots . '">
+    <meta name="language" content="' . $meta_lang . '">
+    <link rel="canonical" href="' . $meta_canonical . '">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MedTravel">
+    <meta property="og:title" content="' . $meta_title . '">
+    <meta property="og:description" content="' . $meta_description . '">
+    <meta property="og:url" content="' . $meta_canonical . '">
+    <meta property="og:image" content="' . $meta_og_image . '">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="' . $meta_title . '">
+    <meta name="twitter:description" content="' . $meta_description . '">
+    <meta name="twitter:image" content="' . $meta_og_image . '">
 
     <!-- Google Web Fonts -->
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css" integrity="sha384-DyZ88mC6Up2uqS4h/KRgHuoeGwBcD4Ng9SiP4dIRy0EXTlnuz47vAwmeGwVChigm" crossorigin="anonymous"/>
@@ -62,7 +161,7 @@ $head = '<meta charset="utf-8">
     <link href="css/bootstrap.min.css" rel="stylesheet">
 
     <!-- Template Stylesheet -->
-    <link href="css/style.css" rel="stylesheet">';
+    <link href="css/style.css" rel="stylesheet">' . $jsonld_scripts;
 
 $logo = '<a href="index.php" class="navbar-brand p-0">
 <h1 class="m-0"><i class="fas fa-stethoscope me-3"></i><span class="text-warning">Med</span>Travel</h1>

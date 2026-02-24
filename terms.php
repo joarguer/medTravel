@@ -1,4 +1,7 @@
 <?php
+$page_title = 'Terms of Service & Medical Disclaimer | MedTravel';
+$page_description = 'Read MedTravel terms of service and medical disclaimer for platform use, provider relationships, and liability scope.';
+$page_canonical = 'https://medtravel.com.co/terms.php';
 include(__DIR__ . '/inc/include.php');
 $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
 ?>

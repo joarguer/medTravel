@@ -2,6 +2,9 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+$page_title = 'Medical Tourism in Colombia | MedTravel';
+$page_description = 'We connect patients from the United States with certified medical providers in Colombia and coordinate flights, accommodation, transportation, meals, and support.';
+$page_canonical = 'https://medtravel.com.co/';
 include('inc/include.php'); 
 require_once __DIR__ . '/inc/testimonials.php';
 $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");

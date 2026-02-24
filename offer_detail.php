@@ -1,5 +1,5 @@
 <?php
-include('inc/include.php');
+include_once(__DIR__ . '/admin/include/conexion.php');
 require_once __DIR__ . '/inc/auth_client.php';
 require_once __DIR__ . '/client/include/client_notifications.php';
 require_once __DIR__ . '/inc/fee_gate.php';
@@ -42,14 +42,14 @@ if (!function_exists('provider_verification_public_badge')) {
 $busca_header = mysqli_query($conexion,"SELECT * FROM offer_detail_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 if(mysqli_num_rows($busca_header) > 0) {
     $rst_header = mysqli_fetch_array($busca_header);
-    $page_title = $rst_header['title'];
-    $page_subtitle_1 = $rst_header['subtitle_1'];
-    $page_subtitle_2 = $rst_header['subtitle_2'];
+    $detail_header_title = $rst_header['title'];
+    $detail_header_subtitle_1 = $rst_header['subtitle_1'];
+    $detail_header_subtitle_2 = $rst_header['subtitle_2'];
     $bg_image = $rst_header['bg_image'];
 } else {
-    $page_title = 'Medical Service Details';
-    $page_subtitle_1 = 'OFFER DETAILS';
-    $page_subtitle_2 = 'Complete information about your medical service';
+    $detail_header_title = 'Medical Service Details';
+    $detail_header_subtitle_1 = 'OFFER DETAILS';
+    $detail_header_subtitle_2 = 'Complete information about your medical service';
     $bg_image = '';
 }
 
@@ -115,6 +115,44 @@ $offer = mysqli_fetch_assoc($result);
 $verificationStatus = trim((string)($offer['verification_status'] ?? ''));
 $verificationLevel = trim((string)($offer['verification_level'] ?? ''));
 [$verificationBadgeKind, $verificationBadgeText] = provider_verification_public_badge($verificationStatus, $verificationLevel);
+
+$offer_title = trim((string)($offer['title'] ?? ''));
+if ($offer_title === '') {
+    $offer_title = 'Medical Service Detail';
+}
+$page_title = $offer_title . ' | MedTravel';
+$offer_description = trim(strip_tags((string)($offer['description'] ?? '')));
+if ($offer_description === '') {
+    $offer_description = 'Complete information about this medical service coordinated by MedTravel in Colombia.';
+}
+$page_description = mb_substr($offer_description, 0, 160, 'UTF-8');
+$page_canonical = 'https://medtravel.com.co/offer_detail.php?id=' . (int)$offer_id;
+
+$service_schema = [
+    '@context' => 'https://schema.org',
+    '@type' => 'Service',
+    'name' => $offer_title,
+    'description' => $offer_description,
+    'url' => $page_canonical,
+    'areaServed' => 'Colombia',
+    'provider' => [
+        '@type' => 'Organization',
+        'name' => 'MedTravel',
+        'url' => 'https://medtravel.com.co/',
+    ],
+];
+$offer_price = isset($offer['price_from']) ? (float)$offer['price_from'] : 0;
+$offer_currency = trim((string)($offer['currency'] ?? ''));
+if ($offer_price > 0 && $offer_currency !== '') {
+    $service_schema['offers'] = [
+        '@type' => 'Offer',
+        'price' => (string)$offer_price,
+        'priceCurrency' => $offer_currency,
+    ];
+}
+$page_schema_jsonld = [$service_schema];
+
+include('inc/include.php');
 
 $hideProviderDirectContact = false;
 $feeGuardMessage = 'Unlock after Coordination Fee';
@@ -451,9 +489,9 @@ if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_s
     ?>">
         <div class="hero-content">
             <div class="container text-center">
-                <p class="hero-subtitle mb-2"><?php echo htmlspecialchars($page_subtitle_1); ?></p>
-                <h1 class="hero-title"><?php echo htmlspecialchars($page_title); ?></h1>
-                <p class="hero-subtitle mt-2"><?php echo htmlspecialchars($page_subtitle_2); ?></p>
+                <p class="hero-subtitle mb-2"><?php echo htmlspecialchars($detail_header_subtitle_1); ?></p>
+                <h1 class="hero-title"><?php echo htmlspecialchars($detail_header_title); ?></h1>
+                <p class="hero-subtitle mt-2"><?php echo htmlspecialchars($detail_header_subtitle_2); ?></p>
             </div>
         </div>
     </div>

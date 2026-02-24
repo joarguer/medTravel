@@ -1,5 +1,5 @@
 <?php
-include('inc/include.php');
+include_once(__DIR__ . '/admin/include/conexion.php');
 
 $slug = isset($_GET['slug']) ? trim($_GET['slug']) : '';
 $post = null;
@@ -16,24 +16,64 @@ if (!$post) {
     http_response_code(404);
 }
 
-// SEO overrides if post exists
-$head_override = $head;
 if ($post) {
-    $meta_title = htmlspecialchars($post['title'] . ' | MedTravel Blog', ENT_QUOTES, 'UTF-8');
+    $page_title = $post['title'] . ' | MedTravel Blog';
     $teaser = $post['excerpt'] ?: strip_tags($post['body']);
-    $teaser = substr($teaser, 0, 155);
-    $meta_desc = htmlspecialchars($teaser, ENT_QUOTES, 'UTF-8');
-    $head_override = str_replace(
-        ['<title>MedTravel - Tourism and Health </title>', '<meta content="" name="description">'],
-        ['<title>'.$meta_title.'</title>', '<meta content="'.$meta_desc.'" name="description">'],
-        $head
-    );
+    $teaser = mb_substr(trim((string)$teaser), 0, 155, 'UTF-8');
+    $page_description = $teaser !== '' ? $teaser : 'Article from the MedTravel blog.';
+    $page_canonical = 'https://medtravel.com.co/blog_post.php?slug=' . rawurlencode((string)$post['slug']);
+
+    $blog_post_schema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'BlogPosting',
+        'headline' => (string)$post['title'],
+        'url' => $page_canonical,
+        'description' => $page_description,
+        'author' => [
+            '@type' => 'Person',
+            'name' => trim((string)($post['author_name'] ?? 'MedTravel')),
+        ],
+        'publisher' => [
+            '@type' => 'Organization',
+            'name' => 'MedTravel',
+            'logo' => [
+                '@type' => 'ImageObject',
+                'url' => 'https://medtravel.com.co/img/site/logo_800_182.png',
+            ],
+        ],
+    ];
+    $cover_image = trim((string)($post['cover_image'] ?? ''));
+    if ($cover_image !== '') {
+        $cover_path = ltrim($cover_image, './');
+        if (strpos($cover_path, '../') === 0) {
+            $cover_path = substr($cover_path, 3);
+        }
+        if (!preg_match('~^https?://~i', $cover_path)) {
+            $cover_path = 'https://medtravel.com.co/' . ltrim($cover_path, '/');
+        }
+        $blog_post_schema['image'] = $cover_path;
+        $page_og_image = $cover_path;
+    }
+    if (!empty($post['published_on'])) {
+        $published_ts = strtotime((string)$post['published_on']);
+        if ($published_ts !== false) {
+            $blog_post_schema['datePublished'] = gmdate('c', $published_ts);
+        }
+    }
+    $page_schema_jsonld = [$blog_post_schema];
+} else {
+    $page_title = 'Blog Post Not Found | MedTravel';
+    $page_description = 'The requested blog post is not available.';
+    $page_robots = 'noindex,follow';
+    $page_canonical = 'https://medtravel.com.co/blog_post.php';
 }
+
+include('inc/include.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <?php echo $head_override; ?>
+        <?php echo $head; ?>
     </head>
     <body>
         <!-- Spinner Start -->

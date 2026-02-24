@@ -1,4 +1,7 @@
 <?php
+$page_title = 'Medical Travel Blog | MedTravel';
+$page_description = 'Discover updates, patient-oriented guidance, and medical travel stories from MedTravel.';
+$page_canonical = 'https://medtravel.com.co/blog.php';
 include('inc/include.php'); 
 
 // Fetch published blog posts

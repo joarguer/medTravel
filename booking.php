@@ -1,6 +1,9 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+$page_title = 'Online Booking | MedTravel';
+$page_description = 'Submit your medical travel request and receive a coordinated plan with trusted providers in Colombia.';
+$page_canonical = 'https://medtravel.com.co/booking.php';
 include('inc/include.php');
 // booking_form.php already included by include.php
 $booking_texts = get_booking_texts();

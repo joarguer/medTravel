@@ -1,21 +1,13 @@
 <?php
+$page_title = 'User Data Deletion Instructions | MedTravel';
+$page_description = 'Instructions for MedTravel users to request deletion of personal data stored in MedTravel systems.';
+$page_canonical = 'https://medtravel.com.co/data-deletion.php';
 include('inc/include.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <?php
-        // Override meta for this page
-        $head_dd = str_replace(
-            ['<title>MedTravel - Tourism and Health </title>', '<meta content="" name="description">'],
-            [
-                '<title>MedTravel | User Data Deletion Instructions</title>',
-                '<meta content="Instructions for MedTravel users to request deletion of their personal data." name="description">'
-            ],
-            $head
-        );
-        echo $head_dd;
-        ?>
+        <?php echo $head; ?>
     </head>
     <body>
         <!-- Spinner Start -->
