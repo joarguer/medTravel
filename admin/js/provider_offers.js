@@ -147,7 +147,29 @@ $(function(){
             is_active: $('#offer-active').is(':checked')?1:0
         };
         if(id) data.id = id;
-        api(data, function(err,d){ if(err) return alert(err); $('#offerModal').modal('hide'); listOffers(); });
+        var selectedFile = ($('#offer-file')[0] && $('#offer-file')[0].files) ? $('#offer-file')[0].files[0] : null;
+        api(data, function(err,d){
+            if(err) return alert(err);
+            var offerId = id || (d && d.id ? d.id : '');
+            if (!offerId) {
+                $('#offerModal').modal('hide');
+                listOffers();
+                return;
+            }
+            $('#offer-id').val(offerId);
+            if (!selectedFile) {
+                $('#offerModal').modal('hide');
+                listOffers();
+                return;
+            }
+            uploadForOffer(offerId, selectedFile, function(uploadErr){
+                listOffers();
+                if (uploadErr) return alert(uploadErr);
+                $('#offer-file').val('');
+                // Mantener modal abierto y mostrar pestaña de galería con la imagen recién subida
+                $('.nav-tabs a[href="#tab-gallery"]').tab('show');
+            });
+        });
     }
 
     function toggle(id){ api({tipo:'toggle',id:id}, function(err,d){ if(err) return alert(err); listOffers(); }); }
@@ -155,8 +177,54 @@ $(function(){
     function upload(){
         var id = $('#offer-id').val(); if(!id) return alert('Abra o cree la oferta primero');
         var f = $('#offer-file')[0].files[0]; if(!f) return alert('Seleccione archivo');
-        var fd = new FormData(); fd.append('tipo','upload_media'); fd.append('offer_id', id); fd.append('file', f);
-        $.ajax({ url:'ajax/provider_offers.php', type:'POST', data:fd, contentType:false, processData:false, dataType:'json', success:function(res){ if(!res.ok) return alert(res.error); renderSingleMedia(res.data); }, error:function(){ alert('Error'); }});
+        uploadForOffer(id, f, function(err){
+            if (err) return alert(err);
+            $('#offer-file').val('');
+            if (typeof toastr !== 'undefined') {
+                toastr.success('Imagen subida exitosamente', 'Éxito');
+            }
+        });
+    }
+
+    function refreshOfferMedia(offerId, cb){
+        $.getJSON('ajax/provider_offers.php?tipo=get&id='+offerId, function(res){
+            if (!res || !res.ok) return cb((res && res.error) ? res.error : 'UNKNOWN_ERROR');
+            var media = (res.data && res.data.media) ? res.data.media : [];
+            renderGalleryInModal(media);
+            renderGallery(media);
+            cb(null, media);
+        }).fail(function(){
+            cb('NETWORK');
+        });
+    }
+
+    function uploadForOffer(offerId, file, cb){
+        var fd = new FormData();
+        fd.append('tipo', 'upload_media');
+        fd.append('offer_id', offerId);
+        fd.append('file', file);
+        $.ajax({
+            url: 'ajax/provider_offers.php',
+            type: 'POST',
+            data: fd,
+            contentType: false,
+            processData: false,
+            dataType: 'json',
+            success: function(res){
+                if(!res || !res.ok) return cb((res && res.error) ? res.error : 'UNKNOWN_ERROR');
+                refreshOfferMedia(offerId, function(refreshErr){
+                    if (refreshErr) return cb(refreshErr);
+                    cb(null, res.data);
+                });
+            },
+            error: function(xhr){
+                var msg = 'NETWORK';
+                try {
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.error) msg = xhr.responseJSON.error;
+                } catch(e) { /* ignore */ }
+                cb(msg);
+            }
+        });
     }
 
     function loadGallery(offer_id){
@@ -188,32 +256,6 @@ $(function(){
             row.append(col);
         });
         cont.append(row);
-    }
-
-    function renderSingleMedia(m){
-        // Agregar a la galería del modal
-        var cont = $('#gallery-preview');
-        // Limpiar mensaje de "no hay imágenes"
-        cont.find('.alert').remove();
-        
-        var col = $('<div class="col-xs-6 col-sm-4 col-md-3" style="margin-bottom:15px;">');
-        var imgWrap = $('<div style="position:relative; border:2px solid #e9ecef; border-radius:8px; overflow:hidden; padding:5px; background:#fff;">');
-        imgWrap.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'border-radius':'4px', 'width':'100%', 'height':'150px', 'object-fit':'cover'}));
-        col.append(imgWrap);
-        cont.append(col);
-        
-        // También agregar a la galería principal
-        var contMain = $('#offer-gallery');
-        var row = $('<div class="row">');
-        var colMain = $('<div class="col-xs-3">');
-        colMain.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'margin-bottom':'10px'}));
-        row.append(colMain);
-        contMain.prepend(row);
-        
-        // Mensaje de éxito si toastr está disponible
-        if (typeof toastr !== 'undefined') {
-            toastr.success('Imagen subida exitosamente', 'Éxito');
-        }
     }
 
     $('#btn-new-offer').click(function(){ 

@@ -178,14 +178,12 @@ if ($tipo === 'toggle') {
 if ($tipo === 'upload_media') {
     $offer_id = isset($_REQUEST['offer_id']) ? (int)$_REQUEST['offer_id'] : 0;
     if (!$offer_id) json_error('INVALID_OFFER');
-    // check existence and ownership using offer id
-    $chk = mysqli_prepare($conexion, "SELECT id, provider_id FROM provider_service_offers WHERE id = ? LIMIT 1");
-    mysqli_stmt_bind_param($chk, 'i', $offer_id);
+    // check ownership
+    $chk = mysqli_prepare($conexion, "SELECT id FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1");
+    mysqli_stmt_bind_param($chk, 'ii', $offer_id, $provider_id);
     mysqli_stmt_execute($chk);
     $cres = mysqli_stmt_get_result($chk);
-    $offer = mysqli_fetch_assoc($cres);
-    if (!$offer) json_error('NOT_FOUND',404);
-    if ((int)$offer['provider_id'] !== $provider_id) json_error('FORBIDDEN',403);
+    if (!mysqli_fetch_assoc($cres)) json_error('FORBIDDEN',403);
 
     if (empty($_FILES) || !isset($_FILES['file'])) json_error('NO_FILE');
     $f = $_FILES['file'];
