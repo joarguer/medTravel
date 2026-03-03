@@ -1,7 +1,7 @@
 -- =============================================================
 -- MIGRATION: Commission settings + payment records
 -- Date      : 2026-03-03
--- Idempotent: yes (IF NOT EXISTS / SHOW COLUMNS guards)
+-- Idempotent: yes (IF NOT EXISTS / stored-procedure guards)
 -- Additive  : no destructive ALTER statements
 -- Schema    : provider_id references providers.id (medical provider entity)
 -- =============================================================
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS `commission_payments` (
                              'failed',
                              'refunded'
                            )               NOT NULL DEFAULT 'draft',
-  `stripe_session_id`      VARCHAR(255)    NOT NULL DEFAULT ''       COMMENT 'Stripe Checkout Session id',
+  `stripe_session_id`      VARCHAR(255)             DEFAULT NULL     COMMENT 'Stripe Checkout Session id (NULL = no session yet)',  -- nullable: allows multiple draft rows under UNIQUE constraint
   `stripe_payment_intent`  VARCHAR(255)    NOT NULL DEFAULT ''       COMMENT 'Stripe PaymentIntent id',
   `stripe_charge_id`       VARCHAR(255)    NOT NULL DEFAULT ''       COMMENT 'Stripe Charge id (for refunds)',
   `checkout_url`           TEXT            NOT NULL                  COMMENT 'Stripe hosted checkout URL',
@@ -85,11 +85,18 @@ CREATE TABLE IF NOT EXISTS `commission_payments` (
   `updated_at`             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`             INT UNSIGNED             DEFAULT NULL     COMMENT 'FK → usuarios.id (admin who created)',
   PRIMARY KEY (`id`),
-  KEY `idx_cp_request`  (`request_id`),
-  KEY `idx_cp_item`     (`item_id`),
-  KEY `idx_cp_provider` (`provider_id`),
-  KEY `idx_cp_status`   (`status`),
-  KEY `idx_cp_session`  (`stripe_session_id`(64)),
+  KEY `idx_cp_request`     (`request_id`),
+  KEY `idx_cp_item`        (`item_id`),
+  KEY `idx_cp_provider`    (`provider_id`),
+  KEY `idx_cp_status`      (`status`),
+  -- Composite covering index for the commission gate hot path:
+  -- WHERE item_id = ? AND status = 'paid'
+  KEY `idx_cp_item_status` (`item_id`, `status`),
+  -- Unique constraint: one Stripe Checkout Session id per payment row.
+  -- stripe_session_id is nullable so draft rows (NULL) never collide.
+  -- Prefix 191 chars keeps the key under the InnoDB 767-byte limit (utf8mb4
+  -- = 4 bytes/char × 191 = 764 bytes).
+  UNIQUE KEY `uq_cp_stripe_session` (`stripe_session_id`(191)),
   CONSTRAINT `fk_cp_provider`
     FOREIGN KEY (`provider_id`)
     REFERENCES `providers` (`id`)
@@ -106,5 +113,70 @@ CREATE TABLE IF NOT EXISTS `commission_payments` (
     ON DELETE SET NULL
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ── 3. Idempotent post-table ALTERs (for databases where the tables were  ──
+-- ──    already created by an earlier version of this migration)           ──
+-- Each stored procedure checks information_schema before altering and then
+-- self-destructs. No existing indexes are dropped or modified.
+
+-- 3a. Composite covering index: (item_id, status) — commission gate hot path
+DROP PROCEDURE IF EXISTS `_mt_add_idx_cp_item_status`;
+DELIMITER $$
+CREATE PROCEDURE `_mt_add_idx_cp_item_status`()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name   = 'commission_payments'
+      AND index_name   = 'idx_cp_item_status'
+  ) THEN
+    ALTER TABLE `commission_payments`
+      ADD INDEX `idx_cp_item_status` (`item_id`, `status`);
+  END IF;
+END$$
+DELIMITER ;
+CALL `_mt_add_idx_cp_item_status`();
+DROP PROCEDURE IF EXISTS `_mt_add_idx_cp_item_status`;
+
+-- 3b. Unique key: prevent duplicate Stripe Checkout Session ids
+--     NOTE: requires stripe_session_id to be nullable so draft rows (NULL)
+--     never conflict. If your column is NOT NULL DEFAULT '', run the
+--     companion ALTER below before adding the UNIQUE KEY:
+--       ALTER TABLE commission_payments MODIFY stripe_session_id VARCHAR(255) DEFAULT NULL;
+DROP PROCEDURE IF EXISTS `_mt_add_uq_cp_stripe_session`;
+DELIMITER $$
+CREATE PROCEDURE `_mt_add_uq_cp_stripe_session`()
+BEGIN
+  -- 3b-i. Make column nullable if it was created as NOT NULL DEFAULT ''
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema  = DATABASE()
+      AND table_name    = 'commission_payments'
+      AND column_name   = 'stripe_session_id'
+      AND is_nullable   = 'NO'
+  ) THEN
+    ALTER TABLE `commission_payments`
+      MODIFY `stripe_session_id` VARCHAR(255) DEFAULT NULL
+        COMMENT 'Stripe Checkout Session id (NULL = no session yet)';
+    -- Convert empty-string placeholders to NULL so UNIQUE is not violated
+    UPDATE `commission_payments`
+       SET `stripe_session_id` = NULL
+     WHERE `stripe_session_id` = '';
+  END IF;
+
+  -- 3b-ii. Add the UNIQUE KEY only if it does not already exist
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name   = 'commission_payments'
+      AND index_name   = 'uq_cp_stripe_session'
+  ) THEN
+    ALTER TABLE `commission_payments`
+      ADD UNIQUE KEY `uq_cp_stripe_session` (`stripe_session_id`(191));
+  END IF;
+END$$
+DELIMITER ;
+CALL `_mt_add_uq_cp_stripe_session`();
+DROP PROCEDURE IF EXISTS `_mt_add_uq_cp_stripe_session`;
 
 SELECT 'commission_tables_ready' AS status;
