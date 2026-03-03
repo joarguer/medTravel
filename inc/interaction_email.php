@@ -757,15 +757,17 @@ if (!function_exists('notify_new_message_to_client')) {
 
         // Subject + body framing: action-required vs. actor-message
         if ($isActionRequired) {
-            $subject       = "MedTravel \xe2\x80\x93 Action required on your case (Request #{$requestId})";
-            $preamble      = 'Your care team requires action on your case.';
-            $preheaderText = "Action required: please check your MedTravel portal for case #{$requestId}.";
+            $subject       = "Case #{$requestId}: your care team needs something from you";
+            $preamble      = 'Your care team has a request on your case.';
+            $preheaderText = "Your care team is waiting on an item for case #{$requestId} \xe2\x80\x94 log in to see what's needed.";
             $fromLine      = 'Your MedTravel Care Team';
         } else {
             $actorPhrasing = ($roleUpper === 'PROVIDER') ? 'your provider' : 'your coordinator';
-            $subject       = "MedTravel \xe2\x80\x93 A message from {$actorPhrasing} (Request #{$requestId})";
-            $preamble      = ucfirst($actorPhrasing) . ' has sent you a message on your case.';
-            $preheaderText = ucfirst($actorPhrasing) . " has an update on your case #{$requestId}.";
+            $subject       = ($roleUpper === 'PROVIDER')
+                ? "Update on case #{$requestId} from your provider"
+                : "Case #{$requestId}: message from your MedTravel coordinator";
+            $preamble      = ucfirst($actorPhrasing) . ' left you a message on your case.';
+            $preheaderText = ucfirst($actorPhrasing) . " left you a message on case #{$requestId}.";
             $fromLine      = htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8');
         }
 
@@ -782,15 +784,14 @@ if (!function_exists('notify_new_message_to_client')) {
                        . '&ldquo;' . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8') . '&rdquo;</p>'
                   )
                 : '')
-            . '<p>Open your portal to respond. Keeping all communication within MedTravel ensures your case is properly tracked and protected.</p>';
+            . '<p>Log in to read and reply \xe2\x80\x94 your conversation stays safe and on track within MedTravel.</p>';
 
         // Plain-text alternative
         $textBody = $preamble . "\n\n"
             . "Case: {$meta['title']}\n"
             . "From: {$fromLine}\n"
             . ($safeSnippet !== '' ? "\n" . ($isMapped ? $safeSnippet : '"' . $safeSnippet . '"') . "\n" : '')
-            . "\nOpen your portal to respond:\n{$ctaUrl}\n\n"
-            . "Keeping all communication within MedTravel ensures your case is properly tracked.";
+            . "\nLog in to reply:\n{$ctaUrl}";
 
         return send_interaction_email(
             $to,
@@ -800,7 +801,7 @@ if (!function_exists('notify_new_message_to_client')) {
             [
                 'preheader'   => $preheaderText,
                 'cta'         => ['text' => 'Open in MedTravel', 'url' => $ctaUrl],
-                'footer_note' => 'For your privacy and safety, please keep all communication within MedTravel.',
+                'footer_note' => 'Your conversation is private and secure within MedTravel.',
             ],
             $conexion
         );
@@ -842,7 +843,7 @@ if (!function_exists('notify_new_message_to_provider')) {
         // Actor-aware subject
         $roleUpper     = strtoupper(trim((string)$senderRole));
         $actorPhrasing = ($roleUpper === 'CLIENT') ? 'your patient' : 'the coordination team';
-        $subject = 'MedTravel – Message from ' . $actorPhrasing . ' on case #' . $requestId;
+        $subject = "Case #{$requestId}: " . ucfirst($actorPhrasing) . ' sent you a message';
 
         // Try to map the snippet to a human summary; fall back to sanitised preview
         $mapped      = interaction_email_map_token($snippet, 'provider');
@@ -861,14 +862,13 @@ if (!function_exists('notify_new_message_to_provider')) {
                        . '&ldquo;' . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8') . '&rdquo;</p>'
                   )
                 : '')
-            . '<p>Your prompt reply keeps this case on track. Please respond through your MedTravel portal — do not contact the patient directly.</p>';
+            . '<p>Log in to read and reply at your earliest convenience.</p>';
 
         $textBody = ucfirst($actorPhrasing) . " has sent a message on one of your active cases.\n\n"
             . "Case: {$meta['title']}\n"
             . "From: {$actorLabel}\n"
             . ($safeSnippet !== '' ? "\n" . ($isQuote ? $safeSnippet : "\"" . $safeSnippet . "\"") . "\n" : '')
-            . "\nReply through your MedTravel portal:\n{$ctaUrl}\n\n"
-            . "Please do not contact the patient directly.";
+            . "\nLog in to reply:\n{$ctaUrl}";
 
         return send_interaction_email(
             $to,
@@ -876,9 +876,9 @@ if (!function_exists('notify_new_message_to_provider')) {
             $contentHtml,
             $textBody,
             [
-                'preheader'    => ucfirst($actorPhrasing) . ' has an update on case #' . $requestId . ' — your response is needed.',
+                'preheader'    => ucfirst($actorPhrasing) . " left a message on case #{$requestId} \xe2\x80\x94 see what they said.",
                 'cta'          => ['text' => 'Open in MedTravel', 'url' => $ctaUrl],
-                'footer_note'  => 'All patient communication must remain within the MedTravel platform.',
+                'footer_note'  => 'Please reply through your portal so we can keep your case on track.',
                 'sender_label' => 'MedTravel Coordination Team',
             ],
             $conexion
@@ -930,7 +930,7 @@ if (!function_exists('notify_document_uploaded_to_provider')) {
             }
         }
 
-        $subject = 'MedTravel – New medical document received (Request #' . $requestId . ')';
+        $subject = 'New document ready for review \xe2\x80\x94 case #' . $requestId;
 
         $contentHtml =
             '<p>Your patient has uploaded a new medical document for review.</p>'
@@ -946,15 +946,14 @@ if (!function_exists('notify_document_uploaded_to_provider')) {
             .     '</p>'
             .   '</td></tr>'
             . '</table>'
-            . '<p>Log in to your MedTravel provider portal to view, download, and action this document. Do not request files through external channels.</p>';
+            . '<p>Log in to review, download and action the file.</p>';
 
         $textBody = "Your patient has uploaded a new medical document.\n\n"
             . "Case: {$meta['title']}\n"
             . "File: " . strip_tags($docFilename) . "\n"
             . "Type: " . strip_tags($docTypeLabel) . "\n"
             . ($uploadedDate !== '' ? "Uploaded: {$uploadedDate}\n" : '')
-            . "\nLog in to view and download the document:\n{$ctaUrl}\n\n"
-            . "Do not request files through external channels.";
+            . "\nLog in to review and download:\n{$ctaUrl}";
 
         return send_interaction_email(
             $to,
@@ -962,9 +961,9 @@ if (!function_exists('notify_document_uploaded_to_provider')) {
             $contentHtml,
             $textBody,
             [
-                'preheader'    => 'A patient uploaded a medical document on case #' . $requestId . '.',
+                'preheader'    => "Your patient uploaded a file on case #{$requestId} \xe2\x80\x94 it's in your portal.",
                 'cta'          => ['text' => 'Review document in MedTravel', 'url' => $ctaUrl],
-                'footer_note'  => 'All documents are stored securely within the MedTravel platform. Please do not request or share files outside the platform.',
+                'footer_note'  => 'Documents are stored and shared securely inside MedTravel.',
                 'sender_label' => 'MedTravel Coordination Team',
             ],
             $conexion
@@ -999,7 +998,7 @@ if (!function_exists('notify_coordination_summary_to_client')) {
         $safePending   = htmlspecialchars(trim((string)$pendingAction) ?: 'No action required', ENT_QUOTES, 'UTF-8');
         $ctaUrl        = _interaction_inbox_url('client', $requestId, 0, 'CARE');
 
-        $subject = 'MedTravel – Your case update (Request #' . $requestId . ')';
+        $subject = "Your MedTravel case #{$requestId} \xe2\x80\x94 here\xe2\x80\x99s what\xe2\x80\x99s new";
 
         // Status table — same structural pattern as booking content HTML
         $rowStyle    = 'font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#334155;';
@@ -1028,7 +1027,7 @@ if (!function_exists('notify_coordination_summary_to_client')) {
             .     '<td style="' . $valueStyle . ' border-bottom:none;">' . $unreadCount . '</td>'
             .   '</tr>'
             . '</table>'
-            . '<p>Log in to respond or upload any requested documents. Your coordinator is here to help — all within the platform.</p>';
+            . '<p>Log in to respond or upload any requested documents. Your coordinator is here if you have questions.</p>';
 
         $textBody = "Here is a quick update on your MedTravel case.\n\n"
             . "Case:             {$meta['title']}\n"
@@ -1036,7 +1035,7 @@ if (!function_exists('notify_coordination_summary_to_client')) {
             . "Pending action:   " . strip_tags($safePending) . "\n"
             . "Unread messages:  {$unreadCount}\n"
             . "\nLog in to respond or upload any requested documents:\n{$ctaUrl}\n\n"
-            . "Your coordinator is here to help — all within the platform.";
+            . "Your coordinator is here if you have questions.";
 
         return send_interaction_email(
             $to,
@@ -1044,7 +1043,7 @@ if (!function_exists('notify_coordination_summary_to_client')) {
             $contentHtml,
             $textBody,
             [
-                'preheader'   => 'Case #' . $requestId . ' — ' . strip_tags($safeStatus) . '. ' . $unreadCount . ' unread message' . ($unreadCount === 1 ? '' : 's') . '.',
+                'preheader'   => strip_tags($safeStatus) . " on case #{$requestId}" . ($unreadCount > 0 ? " \xe2\x80\x94 {$unreadCount} unread " . ($unreadCount === 1 ? 'message' : 'messages') : '') . '.',
                 'cta'         => ['text' => 'Open my case in MedTravel', 'url' => $ctaUrl],
                 'footer_note' => 'Questions? Reach your coordinator directly through your MedTravel portal.'
             ],

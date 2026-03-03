@@ -8,7 +8,7 @@ if (!function_exists('renderMedTravelEmail')) {
         $preheaderText = htmlspecialchars((string)$preheader, ENT_QUOTES, 'UTF-8');
         $footerNoteText = trim((string)$footerNote) !== ''
             ? htmlspecialchars((string)$footerNote, ENT_QUOTES, 'UTF-8')
-            : 'This is an automated message.';
+            : 'You received this because you have an active case with MedTravel.';
 
         $logoAbsoluteUrl = 'https://medtravel.com.co/img/site/logo.png';
         $hasLogo = is_file(__DIR__ . '/../img/site/logo.png');
