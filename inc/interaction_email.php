@@ -427,19 +427,19 @@ if (!function_exists('interaction_email_map_token')) {
                 'provider' => "You indicated unavailability for the patient's requested dates.",
             ],
             'REQUEST_MEDICAL_HISTORY' => [
-                'client'   => 'Your coordinator has requested your medical history. Please upload it through your portal.',
+                'client'   => 'Your care team has requested your medical history. Please upload it through your portal.',
                 'provider' => "A request for the patient's medical history was sent.",
             ],
             'REQUEST_LABS'            => [
-                'client'   => 'Your coordinator has requested your recent lab results. Please upload them through your portal.',
+                'client'   => 'Your care team has requested your recent lab results. Please upload them through your portal.',
                 'provider' => "A request for the patient's lab results was sent.",
             ],
             'REQUEST_IMAGING'         => [
-                'client'   => 'Your coordinator has requested imaging studies (X-ray, MRI, CT scan, etc.). Please upload them through your portal.',
+                'client'   => 'Your care team has requested imaging studies (X-ray, MRI, CT scan, etc.). Please upload them through your portal.',
                 'provider' => "A request for the patient's imaging studies was sent.",
             ],
             'REQUEST_PHOTOS'          => [
-                'client'   => 'Your coordinator has requested clinical photos. Please upload them through your portal.',
+                'client'   => 'Your care team has requested clinical photos. Please upload them through your portal.',
                 'provider' => "A request for the patient's clinical photos was sent.",
             ],
             'FINAL_APPROVED'          => [
@@ -462,7 +462,7 @@ if (!function_exists('interaction_email_map_token')) {
             if (!is_array($payload)) {
                 // JSON parse failed: generic human sentence
                 return $forClient
-                    ? 'Your coordinator has requested additional information. Please check your portal and upload any requested documents.'
+                    ? 'Your care team has requested additional information. Please check your portal and upload any requested documents.'
                     : 'An additional-information request was sent to the patient.';
             }
             $types = !empty($payload['required_types'])
@@ -470,7 +470,7 @@ if (!function_exists('interaction_email_map_token')) {
                 : '';
             $note  = trim((string)($payload['note'] ?? ''));
             if ($forClient) {
-                $msg = 'Your coordinator has requested additional information';
+                $msg = 'Your care team has requested additional information';
                 $msg .= $types !== '' ? ' (' . $types . ')' : '';
                 $msg .= $note !== '' ? ': ' . interaction_email_safe_snippet($note, 80) : '.';
                 return $msg . ' Please upload the requested documents through your portal.';
@@ -545,10 +545,81 @@ if (!function_exists('interaction_email_map_token')) {
     }
 }
 
+// ── Helper: resolve canonical token key (steps 1-5 of map_token, no lookup) ─
+if (!function_exists('interaction_email_resolve_lookup_key')) {
+    /**
+     * Normalise $body by the same pipeline as interaction_email_map_token() steps 1-5
+     * and return the resolved $lookupKey. Used for subject-framing decisions.
+     */
+    function interaction_email_resolve_lookup_key($body)
+    {
+        $text = preg_replace('/\s+/', ' ', trim((string)$body));
+        if ($text === '') { return ''; }
+        if (strlen($text) >= 2) {
+            $f = $text[0]; $l = $text[strlen($text) - 1];
+            if (($f === '"' && $l === '"') || ($f === "'" && $l === "'")) {
+                $text = substr($text, 1, -1);
+            }
+        }
+        $structPfx = ['[REQUEST_INFO]', '[PROPOSE_QUOTE]', '[PROPOSAL_RESPONSE]'];
+        $hasStructured = false;
+        foreach ($structPfx as $sp) {
+            if (strncmp($text, $sp, strlen($sp)) === 0) { $hasStructured = true; break; }
+        }
+        if (!$hasStructured) {
+            $text = trim(preg_replace('/^\[[A-Z_]{1,20}\]\s*/i', '', $text));
+        }
+        $canonicalKey = strtoupper(preg_replace('/[^A-Z0-9]+/i', '_', $text));
+        $canonicalKey = trim(preg_replace('/_+/', '_', $canonicalKey), '_');
+        $aliasMap = [
+            'DATES_AVAILABLE'         => 'DATES_AVAILABLE',
+            'REQUEST_AVAILABLE'       => 'DATES_AVAILABLE',
+            'AVAILABLE'               => 'DATES_AVAILABLE',
+            'DATES_NOT_AVAILABLE'     => 'DATES_NOT_AVAILABLE',
+            'NOT_AVAILABLE'           => 'DATES_NOT_AVAILABLE',
+            'REQUEST_MEDICAL_HISTORY' => 'REQUEST_MEDICAL_HISTORY',
+            'REQUEST_HISTORY'         => 'REQUEST_MEDICAL_HISTORY',
+            'HISTORY'                 => 'REQUEST_MEDICAL_HISTORY',
+            'REQUEST_LABS'            => 'REQUEST_LABS',
+            'LABS'                    => 'REQUEST_LABS',
+            'REQUEST_IMAGING'         => 'REQUEST_IMAGING',
+            'IMAGING'                 => 'REQUEST_IMAGING',
+            'REQUEST_PHOTOS'          => 'REQUEST_PHOTOS',
+            'PHOTOS'                  => 'REQUEST_PHOTOS',
+            'FINAL_APPROVED'          => 'FINAL_APPROVED',
+            'APPROVED'                => 'FINAL_APPROVED',
+            'ELIGIBLE'                => 'FINAL_APPROVED',
+            'FINAL_NOT_ELIGIBLE'      => 'FINAL_NOT_ELIGIBLE',
+            'NOT_ELIGIBLE'            => 'FINAL_NOT_ELIGIBLE',
+        ];
+        return $aliasMap[$canonicalKey] ?? $canonicalKey;
+    }
+}
+
 // ── 1. New message → Client ──────────────────────────────────────────────────
 if (!function_exists('notify_new_message_to_client')) {
     /**
      * Notify the client that a provider or coordinator has sent a new message.
+     *
+     * Subject framing (auto-detected from $snippet token):
+     *   REQUEST_* tokens ([REQUEST_INFO], REQUEST_PHOTOS, REQUEST_LABS, …)
+     *       → "MedTravel – Action required on your case (Request #N)"
+     *   DATES_AVAILABLE / actor messages
+     *       → "MedTravel – A message from your provider (Request #N)"
+     *   Free text / coordinator message
+     *       → "MedTravel – A message from your coordinator (Request #N)"
+     *
+     * @example  REQUEST_PHOTOS  (senderRole = PATIENTCARE)
+     *   subject : "MedTravel – Action required on your case (Request #42)"
+     *   body    : "Your care team has requested clinical photos. Please upload them through your portal."
+     *
+     * @example  DATES_AVAILABLE  (senderRole = PROVIDER)
+     *   subject : "MedTravel – A message from your provider (Request #42)"
+     *   body    : "Your provider confirmed availability for your requested dates."
+     *
+     * @example  Free text  (senderRole = ADMIN)
+     *   subject : "MedTravel – A message from your coordinator (Request #42)"
+     *   body    : sanitised snippet (≤140 chars), shown as italic quote block
      *
      * @param  object $conexion   Active MySQLi connection.
      * @param  int    $requestId  booking_requests.id
@@ -577,37 +648,53 @@ if (!function_exists('notify_new_message_to_client')) {
         $actorLabel  = interaction_email_actor_label($senderRole);
         $ctaUrl      = _interaction_inbox_url('client', $requestId, $itemId, $threadType);
 
-        // Actor-aware subject: provider vs coordinator
-        $roleUpper  = strtoupper(trim((string)$senderRole));
-        $actorPhrasing = ($roleUpper === 'PROVIDER') ? 'your provider' : 'your coordinator';
-        $subject = 'MedTravel – A message from ' . $actorPhrasing . ' (Request #' . $requestId . ')';
+        $roleUpper = strtoupper(trim((string)$senderRole));
 
-        // Try to map the snippet to a human summary; fall back to sanitised preview
+        // Detect REQUEST_* token type to choose action-oriented framing
+        $resolvedTokenKey = interaction_email_resolve_lookup_key($snippet);
+        $isActionRequired = (strncmp(ltrim((string)$snippet), '[REQUEST_INFO]', 14) === 0)
+            || (strncmp($resolvedTokenKey, 'REQUEST_', 8) === 0);
+
+        // Map the snippet to a human summary; fall back to sanitised preview
         $mapped      = interaction_email_map_token($snippet, 'client');
         $safeSnippet = $mapped !== '' ? $mapped : interaction_email_safe_snippet($snippet, 140);
-        $isQuote     = $mapped !== '';     // mapped text already is the summary — no quote block
+        $isMapped    = ($mapped !== '');   // true → plain block; false → italic quote block
+
+        // Subject + body framing: action-required vs. actor-message
+        if ($isActionRequired) {
+            $subject       = "MedTravel \xe2\x80\x93 Action required on your case (Request #{$requestId})";
+            $preamble      = 'Your care team requires action on your case.';
+            $preheaderText = "Action required: please check your MedTravel portal for case #{$requestId}.";
+            $fromLine      = 'Your MedTravel Care Team';
+        } else {
+            $actorPhrasing = ($roleUpper === 'PROVIDER') ? 'your provider' : 'your coordinator';
+            $subject       = "MedTravel \xe2\x80\x93 A message from {$actorPhrasing} (Request #{$requestId})";
+            $preamble      = ucfirst($actorPhrasing) . ' has sent you a message on your case.';
+            $preheaderText = ucfirst($actorPhrasing) . " has an update on your case #{$requestId}.";
+            $fromLine      = htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8');
+        }
 
         // HTML content (inner block passed to renderMedTravelEmail)
         $contentHtml =
-            '<p>' . htmlspecialchars(ucfirst($actorPhrasing), ENT_QUOTES, 'UTF-8') . ' has sent you a message on your case.</p>'
+            '<p>' . htmlspecialchars($preamble, ENT_QUOTES, 'UTF-8') . '</p>'
             . '<p style="margin:0 0 6px 0;"><strong>Case:</strong> ' . $safeTitle . '</p>'
-            . '<p style="margin:0 0 16px 0;"><strong>From:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8') . '</p>'
+            . '<p style="margin:0 0 16px 0;"><strong>From:</strong> ' . $fromLine . '</p>'
             . ($safeSnippet !== ''
-                ? ($isQuote
+                ? ($isMapped
                     ? '<p style="background:#f3f7fc; border-left:3px solid #0b4ea2; padding:10px 14px; margin:0 0 16px 0; color:#334155;">'
                        . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8') . '</p>'
                     : '<p style="background:#f3f7fc; border-left:3px solid #0b4ea2; padding:10px 14px; margin:0 0 16px 0; color:#334155; font-style:italic;">'
                        . '&ldquo;' . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8') . '&rdquo;</p>'
                   )
                 : '')
-            . '<p>Open your portal to read the full message and reply. Keeping all communication within MedTravel ensures your case is properly tracked and protected.</p>';
+            . '<p>Open your portal to respond. Keeping all communication within MedTravel ensures your case is properly tracked and protected.</p>';
 
         // Plain-text alternative
-        $textBody = ucfirst($actorPhrasing) . " has sent you a message on your case.\n\n"
+        $textBody = $preamble . "\n\n"
             . "Case: {$meta['title']}\n"
-            . "From: {$actorLabel}\n"
-            . ($safeSnippet !== '' ? "\n" . ($isQuote ? $safeSnippet : "\"" . $safeSnippet . "\"") . "\n" : '')
-            . "\nOpen your portal to read and reply:\n{$ctaUrl}\n\n"
+            . "From: {$fromLine}\n"
+            . ($safeSnippet !== '' ? "\n" . ($isMapped ? $safeSnippet : '"' . $safeSnippet . '"') . "\n" : '')
+            . "\nOpen your portal to respond:\n{$ctaUrl}\n\n"
             . "Keeping all communication within MedTravel ensures your case is properly tracked.";
 
         return send_interaction_email(
@@ -616,7 +703,7 @@ if (!function_exists('notify_new_message_to_client')) {
             $contentHtml,
             $textBody,
             [
-                'preheader'   => ucfirst($actorPhrasing) . ' has an update on your case #' . $requestId . '.',
+                'preheader'   => $preheaderText,
                 'cta'         => ['text' => 'Open in MedTravel', 'url' => $ctaUrl],
                 'footer_note' => 'For your privacy and safety, please keep all communication within MedTravel.',
             ],
