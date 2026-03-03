@@ -10,3 +10,11 @@ Stage 1 communication remains open, but sensitive provider contact details are g
 
 **Notes**
 Stripe integration scaffolding added for future payment processing.
+
+## Decision: Introduce configurable commission per provider
+
+**Rationale**
+Different providers may have different commercial agreements with MedTravel.
+
+**Outcome**
+Commission parameters are stored per provider and enforced through the Stage 2 commission gate.

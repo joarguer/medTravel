@@ -22,3 +22,21 @@ If provider commission is disabled:
 - `phase2_gate_enabled = 0`
 
 Then the gate is bypassed and Stage 1 operates normally.
+
+## Provider Commission Configuration
+
+MedTravel administrators configure the commission terms individually for each medical provider.
+
+**Commission parameters**
+- `commission_pct` (percentage fee charged by the platform)
+- `fixed_fee_cop` (optional flat fee)
+- `currency`
+- `payment_terms`
+- `stripe_account_id`
+- `is_active` (controls whether the Stage 2 commission gate is enforced)
+
+If `is_active = 0` the provider operates under Stage 1 rules with no commission unlock requirement.  
+If `is_active = 1` the system enforces the Stage 2 commission unlock.
+
+Stage 1 communication always remains open inside the platform.  
+Only sensitive provider contact details are gated until the commission payment is completed.
