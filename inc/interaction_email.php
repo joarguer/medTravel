@@ -359,59 +359,116 @@ if (!function_exists('interaction_email_map_token')) {
      */
     function interaction_email_map_token($body, $audience = 'client')
     {
-        $text = trim((string)$body);
+        // ── 1. Normalise: trim + collapse whitespace ─────────────────────────
+        $raw  = (string)$body;
+        $text = preg_replace('/\s+/', ' ', trim($raw));
         if ($text === '') {
             return '';
         }
-        $forClient = strtolower($audience) !== 'provider';
+        $forClient = strtolower((string)$audience) !== 'provider';
 
-        // ── Quick-reply keys (exact match) ──────────────────────────────────
+        // ── 2. Strip wrapping single/double quotes ───────────────────────────
+        if (strlen($text) >= 2) {
+            $first = $text[0]; $last = $text[strlen($text) - 1];
+            if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+                $text = substr($text, 1, -1);
+            }
+        }
+
+        // ── 3. Strip non-structured decorative tags [REPLY] [ACTION] [INFO] ─
+        // Structured tags ([REQUEST_INFO] etc.) are preserved for stage 7
+        static $structPfx = ['[REQUEST_INFO]', '[PROPOSE_QUOTE]', '[PROPOSAL_RESPONSE]'];
+        $hasStructured = false;
+        foreach ($structPfx as $sp) {
+            if (strncmp($text, $sp, strlen($sp)) === 0) { $hasStructured = true; break; }
+        }
+        if (!$hasStructured) {
+            $text = preg_replace('/^\[[A-Z_]{1,20}\]\s*/i', '', $text);
+        }
+        $text = trim($text);
+
+        // ── 4. Build uppercase canonical key (non-alnum-underscore → _) ─────
+        $canonicalKey = strtoupper(preg_replace('/[^A-Z0-9]+/i', '_', $text));
+        $canonicalKey = trim(preg_replace('/_+/', '_', $canonicalKey), '_');
+
+        // ── 5. Human-variant alias map → canonical key ───────────────────────
+        // Covers both canonical tokens and their UI display label equivalents
+        $aliasMap = [
+            'DATES_AVAILABLE'         => 'DATES_AVAILABLE',
+            'REQUEST_AVAILABLE'       => 'DATES_AVAILABLE',
+            'AVAILABLE'               => 'DATES_AVAILABLE',
+            'DATES_NOT_AVAILABLE'     => 'DATES_NOT_AVAILABLE',
+            'NOT_AVAILABLE'           => 'DATES_NOT_AVAILABLE',
+            'REQUEST_MEDICAL_HISTORY' => 'REQUEST_MEDICAL_HISTORY',
+            'REQUEST_HISTORY'         => 'REQUEST_MEDICAL_HISTORY',
+            'HISTORY'                 => 'REQUEST_MEDICAL_HISTORY',
+            'REQUEST_LABS'            => 'REQUEST_LABS',
+            'LABS'                    => 'REQUEST_LABS',
+            'REQUEST_IMAGING'         => 'REQUEST_IMAGING',
+            'IMAGING'                 => 'REQUEST_IMAGING',
+            'REQUEST_PHOTOS'          => 'REQUEST_PHOTOS',
+            'PHOTOS'                  => 'REQUEST_PHOTOS',
+            'FINAL_APPROVED'          => 'FINAL_APPROVED',
+            'APPROVED'                => 'FINAL_APPROVED',
+            'ELIGIBLE'                => 'FINAL_APPROVED',
+            'FINAL_NOT_ELIGIBLE'      => 'FINAL_NOT_ELIGIBLE',
+            'NOT_ELIGIBLE'            => 'FINAL_NOT_ELIGIBLE',
+        ];
+        $lookupKey = $aliasMap[$canonicalKey] ?? $canonicalKey;
+
+        // ── 6. Quick-reply table ─────────────────────────────────────────────
         $quickMap = [
             'DATES_AVAILABLE'         => [
                 'client'   => 'Your provider confirmed availability for your requested dates.',
-                'provider' => 'You confirmed availability for the patient\'s requested dates.',
+                'provider' => "You confirmed availability for the patient's requested dates.",
             ],
             'DATES_NOT_AVAILABLE'     => [
-                'client'   => 'Your provider is not available for the requested dates. Please check for alternatives.',
-                'provider' => 'You indicated unavailability for the patient\'s requested dates.',
+                'client'   => 'Your provider is not available for the requested dates. Please check your portal for alternatives.',
+                'provider' => "You indicated unavailability for the patient's requested dates.",
             ],
             'REQUEST_MEDICAL_HISTORY' => [
                 'client'   => 'Your coordinator has requested your medical history. Please upload it through your portal.',
-                'provider' => 'A request for the patient\'s medical history was sent.',
+                'provider' => "A request for the patient's medical history was sent.",
             ],
             'REQUEST_LABS'            => [
                 'client'   => 'Your coordinator has requested your recent lab results. Please upload them through your portal.',
-                'provider' => 'A request for the patient\'s lab results was sent.',
+                'provider' => "A request for the patient's lab results was sent.",
             ],
             'REQUEST_IMAGING'         => [
-                'client'   => 'Your coordinator has requested imaging studies (X-ray, MRI, etc.). Please upload them through your portal.',
-                'provider' => 'A request for the patient\'s imaging studies was sent.',
+                'client'   => 'Your coordinator has requested imaging studies (X-ray, MRI, CT scan, etc.). Please upload them through your portal.',
+                'provider' => "A request for the patient's imaging studies was sent.",
             ],
             'REQUEST_PHOTOS'          => [
                 'client'   => 'Your coordinator has requested clinical photos. Please upload them through your portal.',
-                'provider' => 'A request for the patient\'s clinical photos was sent.',
+                'provider' => "A request for the patient's clinical photos was sent.",
             ],
             'FINAL_APPROVED'          => [
-                'client'   => 'Great news — your provider has reviewed your case and confirmed approval. Your coordinator will follow up with next steps.',
+                'client'   => "Great news \xe2\x80\x94 your provider has reviewed your case and given approval. Your coordinator will follow up with the next steps shortly.",
                 'provider' => 'You approved this case. The coordination team will communicate next steps to the patient.',
             ],
             'FINAL_NOT_ELIGIBLE'      => [
-                'client'   => 'After reviewing your case, the provider has determined that this service is not the right fit at this time. Your coordinator will be in touch to explore other options.',
-                'provider' => 'You marked this case as not eligible.',
+                'client'   => 'After reviewing your case, the provider has determined that this service is not the right fit at this time. Your MedTravel coordinator will be in touch to explore other options.',
+                'provider' => 'You marked this case as not eligible. The coordination team has been notified.',
             ],
         ];
-        if (isset($quickMap[$text])) {
-            return $forClient ? $quickMap[$text]['client'] : $quickMap[$text]['provider'];
+        if (isset($quickMap[$lookupKey])) {
+            return $forClient ? $quickMap[$lookupKey]['client'] : $quickMap[$lookupKey]['provider'];
         }
 
-        // ── Structured prefixes → parse JSON payload ────────────────────────
-        if (strpos($text, '[REQUEST_INFO]') === 0) {
-            $json = trim(substr($text, strlen('[REQUEST_INFO]')));
-            $payload = $json !== '' ? @json_decode($json, true) : null;
-            $types = is_array($payload) && !empty($payload['required_types'])
-                ? implode(', ', array_map('ucfirst', $payload['required_types']))
+        // ── 7. Structured prefixes → parse JSON payload ────────────────────
+        if (strncmp($text, '[REQUEST_INFO]', 14) === 0) {
+            $json    = trim(substr($text, 14));
+            $payload = ($json !== '') ? @json_decode($json, true) : null;
+            if (!is_array($payload)) {
+                // JSON parse failed: generic human sentence
+                return $forClient
+                    ? 'Your coordinator has requested additional information. Please check your portal and upload any requested documents.'
+                    : 'An additional-information request was sent to the patient.';
+            }
+            $types = !empty($payload['required_types'])
+                ? implode(', ', array_map('ucfirst', (array)$payload['required_types']))
                 : '';
-            $note  = is_array($payload) ? trim((string)($payload['note'] ?? '')) : '';
+            $note  = trim((string)($payload['note'] ?? ''));
             if ($forClient) {
                 $msg = 'Your coordinator has requested additional information';
                 $msg .= $types !== '' ? ' (' . $types . ')' : '';
@@ -422,15 +479,20 @@ if (!function_exists('interaction_email_map_token')) {
                 . ($types !== '' ? ' for: ' . $types : '') . '.';
         }
 
-        if (strpos($text, '[PROPOSE_QUOTE]') === 0) {
-            $json = trim(substr($text, strlen('[PROPOSE_QUOTE]')));
-            $payload = $json !== '' ? @json_decode($json, true) : null;
-            $amount   = is_array($payload) ? trim((string)($payload['amount'] ?? '')) : '';
-            $currency = is_array($payload) ? strtoupper(trim((string)($payload['currency'] ?? 'USD'))) : 'USD';
-            $notes    = is_array($payload) ? trim((string)($payload['notes'] ?? '')) : '';
+        if (strncmp($text, '[PROPOSE_QUOTE]', 15) === 0) {
+            $json    = trim(substr($text, 15));
+            $payload = ($json !== '') ? @json_decode($json, true) : null;
+            if (!is_array($payload)) {
+                return $forClient
+                    ? 'Your provider has submitted an updated quote. Please review it and respond at your earliest convenience.'
+                    : 'A revised quote was proposed to the patient.';
+            }
+            $amount   = trim((string)($payload['amount']   ?? ''));
+            $currency = strtoupper(trim((string)($payload['currency'] ?? 'USD')));
+            $notes    = trim((string)($payload['notes']    ?? ''));
             $priceStr = $amount !== '' ? $amount . ' ' . $currency : '';
             if ($forClient) {
-                $msg = 'Your provider has submitted an updated quote';
+                $msg  = 'Your provider has submitted an updated quote';
                 $msg .= $priceStr !== '' ? ' of ' . $priceStr : '';
                 $msg .= '. Please review it and respond at your earliest convenience.';
                 return $msg;
@@ -440,22 +502,27 @@ if (!function_exists('interaction_email_map_token')) {
                 . ($notes !== '' ? ': ' . interaction_email_safe_snippet($notes, 80) : '') . '.';
         }
 
-        if (strpos($text, '[PROPOSAL_RESPONSE]') === 0) {
-            $json = trim(substr($text, strlen('[PROPOSAL_RESPONSE]')));
-            $payload = $json !== '' ? @json_decode($json, true) : null;
-            $action  = is_array($payload) ? strtoupper(trim((string)($payload['action_type'] ?? ''))) : '';
-            $pnotes  = is_array($payload) ? trim((string)($payload['notes'] ?? '')) : '';
+        if (strncmp($text, '[PROPOSAL_RESPONSE]', 19) === 0) {
+            $json    = trim(substr($text, 19));
+            $payload = ($json !== '') ? @json_decode($json, true) : null;
+            if (!is_array($payload)) {
+                return $forClient
+                    ? 'Your response has been received. Your coordinator will follow up shortly.'
+                    : 'A proposal response was received from the patient.';
+            }
+            $action  = strtoupper(trim((string)($payload['action_type'] ?? '')));
+            $pnotes  = trim((string)($payload['notes'] ?? ''));
             $responseMap = [
-                'ACCEPT_PROPOSAL'   => [
-                    'client'   => 'You accepted the provider\'s proposal. Your coordinator will follow up with the next steps.',
+                'ACCEPT_PROPOSAL'    => [
+                    'client'   => "You accepted the provider's proposal. Your coordinator will follow up with the next steps.",
                     'provider' => 'The patient accepted your proposal.',
                 ],
-                'REQUEST_CHANGES'   => [
-                    'client'   => 'You requested changes to the provider\'s proposal. Your coordinator has been notified.',
+                'REQUEST_CHANGES'    => [
+                    'client'   => "You requested changes to the provider's proposal. Your coordinator has been notified.",
                     'provider' => 'The patient requested changes to your proposal.',
                 ],
-                'REJECT_PROPOSAL'   => [
-                    'client'   => 'You declined the provider\'s proposal. Your coordinator will be in touch to explore alternatives.',
+                'REJECT_PROPOSAL'    => [
+                    'client'   => "You declined the provider's proposal. Your coordinator will be in touch to explore alternatives.",
                     'provider' => 'The patient declined your proposal.',
                 ],
                 'DOCS_NOT_AVAILABLE' => [
@@ -467,13 +534,14 @@ if (!function_exists('interaction_email_map_token')) {
                 $base = $forClient ? $responseMap[$action]['client'] : $responseMap[$action]['provider'];
                 return $base . ($pnotes !== '' ? ' Note: ' . interaction_email_safe_snippet($pnotes, 80) : '');
             }
+            // Unknown action_type — graceful generic
             return $forClient
                 ? 'Your response has been received. Your coordinator will follow up shortly.'
                 : 'A proposal response was received from the patient.';
         }
 
-        // ── Unknown / free-text — return empty so caller uses raw snippet ───
-        return '';
+        // ── 8. Free text — sanitise and return; NEVER expose raw tokens ────
+        return interaction_email_safe_snippet($text, 140);
     }
 }
 
