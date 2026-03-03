@@ -4,8 +4,11 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../inc/auth_client.php';
 require_client_auth_ajax();
 require_once __DIR__ . '/../../admin/include/conexion.php';
+require_once __DIR__ . '/../../admin/include/email_config.php';
 require_once __DIR__ . '/../include/client_notifications.php';
 require_once __DIR__ . '/../../inc/inbox_utils.php';
+require_once __DIR__ . '/../../inc/email_template.php';
+require_once __DIR__ . '/../../inc/interaction_email.php';
 require_once __DIR__ . '/../../inc/fee_gate.php';
 
 function client_inbox_err($message, $code = 400, $errorCode = '')
@@ -23,6 +26,63 @@ function client_inbox_ok($data = [])
 {
     echo json_encode(array_merge(['ok' => true], $data));
     exit;
+}
+
+function client_inbox_notify_message($conexion, $ctx, $message)
+{
+    if (!function_exists('send_interaction_email')) {
+        return;
+    }
+    $threadType = (string)($ctx['thread_type'] ?? '');
+    $requestId = (int)($ctx['request_id'] ?? 0);
+    $itemId = (int)($ctx['item_id'] ?? 0);
+    if ($requestId <= 0) {
+        return;
+    }
+
+    $meta = interaction_email_request_meta($conexion, $threadType, $requestId, $itemId);
+    $serviceTitle = trim((string)($meta['title'] ?? 'Request #' . $requestId));
+    $destination = trim((string)($meta['subtitle'] ?? ''));
+    $actorLabel = interaction_email_actor_label('CLIENT');
+    $snippet = interaction_email_safe_snippet($message, 120);
+    if ($snippet === '') {
+        $snippet = 'New message received.';
+    }
+
+    $subject = 'MedTravel update - ' . $actorLabel . ' message for Request #' . $requestId;
+    $contentHtml = '<p><strong>Actor:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8') . '</p>'
+        . '<p><strong>Request:</strong> #' . $requestId . '<br>'
+        . '<strong>Service:</strong> ' . htmlspecialchars($serviceTitle, ENT_QUOTES, 'UTF-8') . '</p>';
+    if ($destination !== '') {
+        $contentHtml .= '<p><strong>Destination:</strong> ' . htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') . '</p>';
+    }
+    $contentHtml .= '<p><strong>Message:</strong> ' . htmlspecialchars($snippet, ENT_QUOTES, 'UTF-8') . '</p>';
+
+    $ctaUrl = 'https://medtravel.com.co/admin/app_inbox.php?request_id=' . $requestId
+        . '&thread_type=' . urlencode((string)$meta['thread_type'])
+        . '&item_id=' . (int)$meta['item_id'];
+    $textBody = "Actor: {$actorLabel}\nRequest: #{$requestId}\nService: {$serviceTitle}";
+    if ($destination !== '') {
+        $textBody .= "\nDestination: {$destination}";
+    }
+    $textBody .= "\nMessage: {$snippet}\nInbox: {$ctaUrl}";
+
+    $adminEmail = interaction_email_resolve_patientcare_email($conexion);
+    $providerEmail = ($threadType === 'ITEM' && $itemId > 0)
+        ? interaction_email_fetch_provider_email($conexion, $itemId)
+        : '';
+
+    $metaSend = [
+        'preheader' => $snippet,
+        'cta' => ['text' => 'Open Inbox', 'url' => $ctaUrl],
+    ];
+
+    if (filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+        send_interaction_email($adminEmail, $subject, $contentHtml, $textBody, $metaSend, $conexion);
+    }
+    if (filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
+        send_interaction_email($providerEmail, $subject, $contentHtml, $textBody, $metaSend, $conexion);
+    }
 }
 
 function client_inbox_fee_gate_state($conexion, $bookingRequestId)
@@ -643,6 +703,15 @@ if ($action === 'list_messages') {
 }
 
 if ($action === 'send_message') {
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'CLIENT_SEND_MESSAGE_ENTER endpoint=client/ajax/inbox.php action=send_message'
+            . ' thread_id=' . (string)($ctx['thread_id'] ?? '')
+            . ' request_id=' . (int)($ctx['request_id'] ?? 0)
+            . ' item_id=' . (int)($ctx['item_id'] ?? 0)
+            . ' thread_type=' . (string)($ctx['thread_type'] ?? '')
+        );
+    }
     if (!inbox_table_exists($conexion, 'inbox_messages')) {
         client_inbox_err('inbox_messages_not_available', 409);
     }
@@ -676,6 +745,28 @@ if ($action === 'send_message') {
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
 
+    if (function_exists('mt_email_debug_log')) {
+        $emailSource = '';
+        $resolvedEmail = interaction_email_fetch_provider_email($conexion, $itemId, $emailSource);
+        mt_email_debug_log(
+            'CLIENT_NOTIFY_PROVIDER_START resolved_email=' . (string)$resolvedEmail
+            . ' source=' . (string)$emailSource
+        );
+        $notifyResult = notify_new_message_to_provider(
+            $conexion,
+            $requestId,
+            $itemId,
+            $threadType,
+            'CLIENT',
+            $message,
+            $resolvedEmail,
+            $emailSource
+        );
+        mt_email_debug_log('CLIENT_NOTIFY_PROVIDER_DONE result=' . json_encode($notifyResult));
+    } else {
+        notify_new_message_to_provider($conexion, $requestId, $itemId, $threadType, 'CLIENT', $message);
+    }
+
     client_inbox_ok([
         'thread_id' => $threadId,
         'thread_type' => $threadType,
@@ -692,6 +783,15 @@ if ($action === 'send_message') {
 }
 
 if ($action === 'send_quick_action') {
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'CLIENT_SEND_QUICK_ACTION_ENTER endpoint=client/ajax/inbox.php action=send_quick_action'
+            . ' thread_id=' . (string)($ctx['thread_id'] ?? '')
+            . ' request_id=' . (int)($ctx['request_id'] ?? 0)
+            . ' item_id=' . (int)($ctx['item_id'] ?? 0)
+            . ' thread_type=' . (string)($ctx['thread_type'] ?? '')
+        );
+    }
     if (!inbox_table_exists($conexion, 'inbox_messages')) {
         client_inbox_err('inbox_messages_not_available', 409);
     }
@@ -734,6 +834,28 @@ if ($action === 'send_quick_action') {
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
 
+    if (function_exists('mt_email_debug_log')) {
+        $emailSource = '';
+        $resolvedEmail = interaction_email_fetch_provider_email($conexion, $itemId, $emailSource);
+        mt_email_debug_log(
+            'CLIENT_NOTIFY_PROVIDER_START resolved_email=' . (string)$resolvedEmail
+            . ' source=' . (string)$emailSource
+        );
+        $notifyResult = notify_new_message_to_provider(
+            $conexion,
+            $requestId,
+            $itemId,
+            $threadType,
+            'CLIENT',
+            $message,
+            $resolvedEmail,
+            $emailSource
+        );
+        mt_email_debug_log('CLIENT_NOTIFY_PROVIDER_DONE result=' . json_encode($notifyResult));
+    } else {
+        notify_new_message_to_provider($conexion, $requestId, $itemId, $threadType, 'CLIENT', $message);
+    }
+
     client_inbox_ok([
         'thread_id' => $threadId,
         'thread_type' => $threadType,
@@ -750,6 +872,15 @@ if ($action === 'send_quick_action') {
 }
 
 if ($action === 'send_structured_action') {
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'CLIENT_SEND_STRUCTURED_ENTER endpoint=client/ajax/inbox.php action=send_structured_action'
+            . ' thread_id=' . (string)($ctx['thread_id'] ?? '')
+            . ' request_id=' . (int)($ctx['request_id'] ?? 0)
+            . ' item_id=' . (int)($ctx['item_id'] ?? 0)
+            . ' thread_type=' . (string)($ctx['thread_type'] ?? '')
+        );
+    }
     if (!inbox_table_exists($conexion, 'booking_request_items')) {
         client_inbox_err('booking_items_not_available', 409);
     }
@@ -854,6 +985,28 @@ if ($action === 'send_structured_action') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
+
+    if (function_exists('mt_email_debug_log')) {
+        $emailSource = '';
+        $resolvedEmail = interaction_email_fetch_provider_email($conexion, $itemId, $emailSource);
+        mt_email_debug_log(
+            'CLIENT_NOTIFY_PROVIDER_START resolved_email=' . (string)$resolvedEmail
+            . ' source=' . (string)$emailSource
+        );
+        $notifyResult = notify_new_message_to_provider(
+            $conexion,
+            $requestId,
+            $itemId,
+            $threadType,
+            'CLIENT',
+            $message,
+            $resolvedEmail,
+            $emailSource
+        );
+        mt_email_debug_log('CLIENT_NOTIFY_PROVIDER_DONE result=' . json_encode($notifyResult));
+    } else {
+        notify_new_message_to_provider($conexion, $requestId, $itemId, $threadType, 'CLIENT', $message);
+    }
 
     client_inbox_ok([
         'thread_id' => $threadId,

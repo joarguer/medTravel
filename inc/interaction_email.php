@@ -83,8 +83,11 @@ if (!function_exists('interaction_email_resolve_patientcare_email')) {
 }
 
 if (!function_exists('interaction_email_fetch_provider_email')) {
-    function interaction_email_fetch_provider_email($conexion, $itemId)
+    function interaction_email_fetch_provider_email($conexion, $itemId, &$source = null)
     {
+        if ($source !== null) {
+            $source = '';
+        }
         $itemId = (int)$itemId;
         if ($itemId <= 0) {
             return '';
@@ -95,7 +98,7 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
         $hasUsersDeleted = inbox_table_has_column($conexion, 'usuarios', 'is_deleted');
         $hasUsersActive = inbox_table_has_column($conexion, 'usuarios', 'activo');
 
-        $sql = "SELECT u.email
+        $sql = "SELECT u.email, bri.provider_id, bri.service_provider_id
                 FROM booking_request_items bri
                 INNER JOIN usuarios u ON (
                     (bri.provider_id IS NOT NULL AND bri.provider_id > 0 AND u.provider_id = bri.provider_id)
@@ -123,6 +126,17 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
         $row = $res ? mysqli_fetch_assoc($res) : null;
         mysqli_stmt_close($stmt);
         $email = trim((string)($row['email'] ?? ''));
+        if ($source !== null && $email !== '') {
+            $providerId = (int)($row['provider_id'] ?? 0);
+            $serviceProviderId = (int)($row['service_provider_id'] ?? 0);
+            if ($providerId > 0) {
+                $source = 'usuarios.provider_id via booking_request_items.provider_id';
+            } elseif ($serviceProviderId > 0) {
+                $source = 'usuarios.service_provider_id via booking_request_items.service_provider_id';
+            } else {
+                $source = 'usuarios.email';
+            }
+        }
         return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
     }
 }
@@ -725,12 +739,16 @@ if (!function_exists('notify_new_message_to_provider')) {
      * @param  string $snippet    Raw message body preview (will be sanitised).
      * @return array              Result from send_interaction_email().
      */
-    function notify_new_message_to_provider($conexion, $requestId, $itemId, $threadType, $senderRole, $snippet = '')
+    function notify_new_message_to_provider($conexion, $requestId, $itemId, $threadType, $senderRole, $snippet = '', $resolvedEmail = '', $emailSource = '')
     {
         $requestId  = (int)$requestId;
         $itemId     = (int)$itemId;
         $threadType = strtoupper(trim((string)$threadType));
-        $to         = interaction_email_fetch_provider_email($conexion, $itemId);
+        $to         = trim((string)$resolvedEmail);
+        $source     = (string)$emailSource;
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $to = interaction_email_fetch_provider_email($conexion, $itemId, $source);
+        }
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
             return ['success' => false, 'error' => 'provider_email_not_found'];
         }
