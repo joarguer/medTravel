@@ -343,6 +343,140 @@ if (!function_exists('_interaction_inbox_url')) {
     }
 }
 
+// ───────────────────────────────────────────────────────────────────────────── 
+// Structured-token → human-readable summary mapper
+// Converts inbox tokens (quick replies + structured prefixes) into safe,
+// clear sentences suitable for email bodies. Returns '' when unrecognised.
+// ─────────────────────────────────────────────────────────────────────────────
+if (!function_exists('interaction_email_map_token')) {
+    /**
+     * Convert a raw inbox message body (token or structured JSON) to a
+     * human-readable summary sentence safe for email.
+     *
+     * @param  string $body      Raw message body (may be a token, [PREFIX] JSON, or free text).
+     * @param  string $audience  'client' | 'provider'  — influences wording.
+     * @return string            Human text, or '' if body should be shown as-is.
+     */
+    function interaction_email_map_token($body, $audience = 'client')
+    {
+        $text = trim((string)$body);
+        if ($text === '') {
+            return '';
+        }
+        $forClient = strtolower($audience) !== 'provider';
+
+        // ── Quick-reply keys (exact match) ──────────────────────────────────
+        $quickMap = [
+            'DATES_AVAILABLE'         => [
+                'client'   => 'Your provider confirmed availability for your requested dates.',
+                'provider' => 'You confirmed availability for the patient\'s requested dates.',
+            ],
+            'DATES_NOT_AVAILABLE'     => [
+                'client'   => 'Your provider is not available for the requested dates. Please check for alternatives.',
+                'provider' => 'You indicated unavailability for the patient\'s requested dates.',
+            ],
+            'REQUEST_MEDICAL_HISTORY' => [
+                'client'   => 'Your coordinator has requested your medical history. Please upload it through your portal.',
+                'provider' => 'A request for the patient\'s medical history was sent.',
+            ],
+            'REQUEST_LABS'            => [
+                'client'   => 'Your coordinator has requested your recent lab results. Please upload them through your portal.',
+                'provider' => 'A request for the patient\'s lab results was sent.',
+            ],
+            'REQUEST_IMAGING'         => [
+                'client'   => 'Your coordinator has requested imaging studies (X-ray, MRI, etc.). Please upload them through your portal.',
+                'provider' => 'A request for the patient\'s imaging studies was sent.',
+            ],
+            'REQUEST_PHOTOS'          => [
+                'client'   => 'Your coordinator has requested clinical photos. Please upload them through your portal.',
+                'provider' => 'A request for the patient\'s clinical photos was sent.',
+            ],
+            'FINAL_APPROVED'          => [
+                'client'   => 'Great news — your provider has reviewed your case and confirmed approval. Your coordinator will follow up with next steps.',
+                'provider' => 'You approved this case. The coordination team will communicate next steps to the patient.',
+            ],
+            'FINAL_NOT_ELIGIBLE'      => [
+                'client'   => 'After reviewing your case, the provider has determined that this service is not the right fit at this time. Your coordinator will be in touch to explore other options.',
+                'provider' => 'You marked this case as not eligible.',
+            ],
+        ];
+        if (isset($quickMap[$text])) {
+            return $forClient ? $quickMap[$text]['client'] : $quickMap[$text]['provider'];
+        }
+
+        // ── Structured prefixes → parse JSON payload ────────────────────────
+        if (strpos($text, '[REQUEST_INFO]') === 0) {
+            $json = trim(substr($text, strlen('[REQUEST_INFO]')));
+            $payload = $json !== '' ? @json_decode($json, true) : null;
+            $types = is_array($payload) && !empty($payload['required_types'])
+                ? implode(', ', array_map('ucfirst', $payload['required_types']))
+                : '';
+            $note  = is_array($payload) ? trim((string)($payload['note'] ?? '')) : '';
+            if ($forClient) {
+                $msg = 'Your coordinator has requested additional information';
+                $msg .= $types !== '' ? ' (' . $types . ')' : '';
+                $msg .= $note !== '' ? ': ' . interaction_email_safe_snippet($note, 80) : '.';
+                return $msg . ' Please upload the requested documents through your portal.';
+            }
+            return 'An additional-information request was sent to the patient'
+                . ($types !== '' ? ' for: ' . $types : '') . '.';
+        }
+
+        if (strpos($text, '[PROPOSE_QUOTE]') === 0) {
+            $json = trim(substr($text, strlen('[PROPOSE_QUOTE]')));
+            $payload = $json !== '' ? @json_decode($json, true) : null;
+            $amount   = is_array($payload) ? trim((string)($payload['amount'] ?? '')) : '';
+            $currency = is_array($payload) ? strtoupper(trim((string)($payload['currency'] ?? 'USD'))) : 'USD';
+            $notes    = is_array($payload) ? trim((string)($payload['notes'] ?? '')) : '';
+            $priceStr = $amount !== '' ? $amount . ' ' . $currency : '';
+            if ($forClient) {
+                $msg = 'Your provider has submitted an updated quote';
+                $msg .= $priceStr !== '' ? ' of ' . $priceStr : '';
+                $msg .= '. Please review it and respond at your earliest convenience.';
+                return $msg;
+            }
+            return 'A quote adjustment of ' . ($priceStr ?: 'a revised amount')
+                . ' was proposed to the patient'
+                . ($notes !== '' ? ': ' . interaction_email_safe_snippet($notes, 80) : '') . '.';
+        }
+
+        if (strpos($text, '[PROPOSAL_RESPONSE]') === 0) {
+            $json = trim(substr($text, strlen('[PROPOSAL_RESPONSE]')));
+            $payload = $json !== '' ? @json_decode($json, true) : null;
+            $action  = is_array($payload) ? strtoupper(trim((string)($payload['action_type'] ?? ''))) : '';
+            $pnotes  = is_array($payload) ? trim((string)($payload['notes'] ?? '')) : '';
+            $responseMap = [
+                'ACCEPT_PROPOSAL'   => [
+                    'client'   => 'You accepted the provider\'s proposal. Your coordinator will follow up with the next steps.',
+                    'provider' => 'The patient accepted your proposal.',
+                ],
+                'REQUEST_CHANGES'   => [
+                    'client'   => 'You requested changes to the provider\'s proposal. Your coordinator has been notified.',
+                    'provider' => 'The patient requested changes to your proposal.',
+                ],
+                'REJECT_PROPOSAL'   => [
+                    'client'   => 'You declined the provider\'s proposal. Your coordinator will be in touch to explore alternatives.',
+                    'provider' => 'The patient declined your proposal.',
+                ],
+                'DOCS_NOT_AVAILABLE' => [
+                    'client'   => 'You indicated the requested documents are not available at this time. Your coordinator has been notified.',
+                    'provider' => 'The patient indicated the requested documents are not currently available.',
+                ],
+            ];
+            if (isset($responseMap[$action])) {
+                $base = $forClient ? $responseMap[$action]['client'] : $responseMap[$action]['provider'];
+                return $base . ($pnotes !== '' ? ' Note: ' . interaction_email_safe_snippet($pnotes, 80) : '');
+            }
+            return $forClient
+                ? 'Your response has been received. Your coordinator will follow up shortly.'
+                : 'A proposal response was received from the patient.';
+        }
+
+        // ── Unknown / free-text — return empty so caller uses raw snippet ───
+        return '';
+    }
+}
+
 // ── 1. New message → Client ──────────────────────────────────────────────────
 if (!function_exists('notify_new_message_to_client')) {
     /**
@@ -373,33 +507,40 @@ if (!function_exists('notify_new_message_to_client')) {
         $meta        = interaction_email_request_meta($conexion, $threadType, $requestId, $itemId);
         $safeTitle   = htmlspecialchars((string)$meta['title'], ENT_QUOTES, 'UTF-8');
         $actorLabel  = interaction_email_actor_label($senderRole);
-        $safeSnippet = interaction_email_safe_snippet($snippet, 120);
         $ctaUrl      = _interaction_inbox_url('client', $requestId, $itemId, $threadType);
 
-        // Subject — same dash style as booking: "MedTravel – … (Request #N)"
-        $subject = 'MedTravel – New message from your coordinator (Request #' . $requestId . ')';
+        // Actor-aware subject: provider vs coordinator
+        $roleUpper  = strtoupper(trim((string)$senderRole));
+        $actorPhrasing = ($roleUpper === 'PROVIDER') ? 'your provider' : 'your coordinator';
+        $subject = 'MedTravel – A message from ' . $actorPhrasing . ' (Request #' . $requestId . ')';
+
+        // Try to map the snippet to a human summary; fall back to sanitised preview
+        $mapped      = interaction_email_map_token($snippet, 'client');
+        $safeSnippet = $mapped !== '' ? $mapped : interaction_email_safe_snippet($snippet, 140);
+        $isQuote     = $mapped !== '';     // mapped text already is the summary — no quote block
 
         // HTML content (inner block passed to renderMedTravelEmail)
         $contentHtml =
-            '<p>You have received a new message regarding your case.</p>'
-            . '<p>'
-            .   '<strong>Case:</strong> ' . $safeTitle . '<br>'
-            .   '<strong>From:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8')
-            . '</p>'
+            '<p>' . htmlspecialchars(ucfirst($actorPhrasing), ENT_QUOTES, 'UTF-8') . ' has sent you a message on your case.</p>'
+            . '<p style="margin:0 0 6px 0;"><strong>Case:</strong> ' . $safeTitle . '</p>'
+            . '<p style="margin:0 0 16px 0;"><strong>From:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8') . '</p>'
             . ($safeSnippet !== ''
-                ? '<p style="background:#f3f7fc; border-left:3px solid #0b4ea2; padding:10px 14px; margin:0 0 16px 0; color:#334155;">'
-                  . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8')
-                  . '</p>'
+                ? ($isQuote
+                    ? '<p style="background:#f3f7fc; border-left:3px solid #0b4ea2; padding:10px 14px; margin:0 0 16px 0; color:#334155;">'
+                       . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8') . '</p>'
+                    : '<p style="background:#f3f7fc; border-left:3px solid #0b4ea2; padding:10px 14px; margin:0 0 16px 0; color:#334155; font-style:italic;">'
+                       . '&ldquo;' . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8') . '&rdquo;</p>'
+                  )
                 : '')
-            . '<p>Please log in to your portal to read and reply. All communication should remain within the MedTravel platform for your safety and record-keeping.</p>';
+            . '<p>Open your portal to read the full message and reply. Keeping all communication within MedTravel ensures your case is properly tracked and protected.</p>';
 
         // Plain-text alternative
-        $textBody = "You have received a new message regarding your case.\n\n"
+        $textBody = ucfirst($actorPhrasing) . " has sent you a message on your case.\n\n"
             . "Case: {$meta['title']}\n"
             . "From: {$actorLabel}\n"
-            . ($safeSnippet !== '' ? "\n\"{$safeSnippet}\"\n" : '')
-            . "\nLog in to read and reply:\n{$ctaUrl}\n\n"
-            . "All communication should remain within the MedTravel platform.";
+            . ($safeSnippet !== '' ? "\n" . ($isQuote ? $safeSnippet : "\"" . $safeSnippet . "\"") . "\n" : '')
+            . "\nOpen your portal to read and reply:\n{$ctaUrl}\n\n"
+            . "Keeping all communication within MedTravel ensures your case is properly tracked.";
 
         return send_interaction_email(
             $to,
@@ -407,9 +548,9 @@ if (!function_exists('notify_new_message_to_client')) {
             $contentHtml,
             $textBody,
             [
-                'preheader'   => $actorLabel . ' sent you a new message on your MedTravel case.',
+                'preheader'   => ucfirst($actorPhrasing) . ' has an update on your case #' . $requestId . '.',
                 'cta'         => ['text' => 'Open in MedTravel', 'url' => $ctaUrl],
-                'footer_note' => 'This is an automated message. Do not share personal contact details outside the platform.',
+                'footer_note' => 'For your privacy and safety, please keep all communication within MedTravel.',
             ],
             $conexion
         );
@@ -442,30 +583,38 @@ if (!function_exists('notify_new_message_to_provider')) {
         $meta        = interaction_email_request_meta($conexion, $threadType, $requestId, $itemId);
         $safeTitle   = htmlspecialchars((string)$meta['title'], ENT_QUOTES, 'UTF-8');
         $actorLabel  = interaction_email_actor_label($senderRole);
-        $safeSnippet = interaction_email_safe_snippet($snippet, 120);
         $ctaUrl      = _interaction_inbox_url('admin', $requestId, $itemId, $threadType);
 
-        $subject = 'MedTravel – New message on case #' . $requestId . ' – action required';
+        // Actor-aware subject
+        $roleUpper     = strtoupper(trim((string)$senderRole));
+        $actorPhrasing = ($roleUpper === 'CLIENT') ? 'your patient' : 'the coordination team';
+        $subject = 'MedTravel – Message from ' . $actorPhrasing . ' on case #' . $requestId;
+
+        // Try to map the snippet to a human summary; fall back to sanitised preview
+        $mapped      = interaction_email_map_token($snippet, 'provider');
+        $safeSnippet = $mapped !== '' ? $mapped : interaction_email_safe_snippet($snippet, 140);
+        $isQuote     = $mapped !== '';
 
         $contentHtml =
-            '<p>A new message has been sent on one of your active cases.</p>'
-            . '<p>'
-            .   '<strong>Case:</strong> ' . $safeTitle . '<br>'
-            .   '<strong>From:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8')
-            . '</p>'
+            '<p>' . htmlspecialchars(ucfirst($actorPhrasing), ENT_QUOTES, 'UTF-8') . ' has sent a message on one of your active cases.</p>'
+            . '<p style="margin:0 0 6px 0;"><strong>Case:</strong> ' . $safeTitle . '</p>'
+            . '<p style="margin:0 0 16px 0;"><strong>From:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8') . '</p>'
             . ($safeSnippet !== ''
-                ? '<p style="background:#f3f7fc; border-left:3px solid #0b4ea2; padding:10px 14px; margin:0 0 16px 0; color:#334155;">'
-                  . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8')
-                  . '</p>'
+                ? ($isQuote
+                    ? '<p style="background:#f3f7fc; border-left:3px solid #0b4ea2; padding:10px 14px; margin:0 0 16px 0; color:#334155;">'
+                       . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8') . '</p>'
+                    : '<p style="background:#f3f7fc; border-left:3px solid #0b4ea2; padding:10px 14px; margin:0 0 16px 0; color:#334155; font-style:italic;">'
+                       . '&ldquo;' . htmlspecialchars($safeSnippet, ENT_QUOTES, 'UTF-8') . '&rdquo;</p>'
+                  )
                 : '')
-            . '<p>Your timely response helps move the case forward. Please reply through your MedTravel provider portal. Do not contact the patient outside the platform.</p>';
+            . '<p>Your prompt reply keeps this case on track. Please respond through your MedTravel portal — do not contact the patient directly.</p>';
 
-        $textBody = "A new message has been sent on one of your active cases.\n\n"
+        $textBody = ucfirst($actorPhrasing) . " has sent a message on one of your active cases.\n\n"
             . "Case: {$meta['title']}\n"
             . "From: {$actorLabel}\n"
-            . ($safeSnippet !== '' ? "\n\"{$safeSnippet}\"\n" : '')
-            . "\nOpen your MedTravel inbox to reply:\n{$ctaUrl}\n\n"
-            . "Do not contact the patient outside the platform.";
+            . ($safeSnippet !== '' ? "\n" . ($isQuote ? $safeSnippet : "\"" . $safeSnippet . "\"") . "\n" : '')
+            . "\nReply through your MedTravel portal:\n{$ctaUrl}\n\n"
+            . "Please do not contact the patient directly.";
 
         return send_interaction_email(
             $to,
@@ -473,9 +622,9 @@ if (!function_exists('notify_new_message_to_provider')) {
             $contentHtml,
             $textBody,
             [
-                'preheader'   => 'A patient has sent a new message on case #' . $requestId . '.',
+                'preheader'   => ucfirst($actorPhrasing) . ' has an update on case #' . $requestId . ' — your response is needed.',
                 'cta'         => ['text' => 'Open in MedTravel', 'url' => $ctaUrl],
-                'footer_note' => 'This is an automated message. Do not contact patients outside the MedTravel platform.',
+                'footer_note' => 'All patient communication must remain within the MedTravel platform.',
             ],
             $conexion
         );
@@ -560,7 +709,7 @@ if (!function_exists('notify_document_uploaded_to_provider')) {
             [
                 'preheader'   => 'A patient uploaded a medical document on case #' . $requestId . '.',
                 'cta'         => ['text' => 'Review document in MedTravel', 'url' => $ctaUrl],
-                'footer_note' => 'All documents are securely stored in MedTravel. Never share files outside the platform.',
+                'footer_note' => 'All documents are stored securely within the MedTravel platform. Please do not request or share files outside the platform.',
             ],
             $conexion
         );
@@ -641,7 +790,7 @@ if (!function_exists('notify_coordination_summary_to_client')) {
             [
                 'preheader'   => 'Case #' . $requestId . ' — ' . strip_tags($safeStatus) . '. ' . $unreadCount . ' unread message' . ($unreadCount === 1 ? '' : 's') . '.',
                 'cta'         => ['text' => 'Open my case in MedTravel', 'url' => $ctaUrl],
-                'footer_note' => 'You received this summary because you have an active case on MedTravel.',
+                'footer_note' => 'Questions? Reach your coordinator directly through your MedTravel portal.'
             ],
             $conexion
         );
