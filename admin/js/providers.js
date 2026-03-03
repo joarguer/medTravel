@@ -34,7 +34,11 @@ $(document).ready(function(){
                 const verLink = '<a href="provider_verification.php" class="ml10">Gestionar</a>';
                 tbody += '<td><span class="'+st.cls+'">'+st.text+'</span>'+completion+' '+verLink+'</td>';
                 tbody += '<td>'+(p.is_active==1?'<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>':'<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>';
-                tbody += '<td><button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger soft-delete" title="Eliminar (Soft)"><i class="fa fa-trash"></i></button></td>';
+                tbody += '<td>'
+                       + '<button class="btn btn-sm btn-primary edit">Editar</button> '
+                       + '<a href="providers_edit.php?id='+p.id+'" class="btn btn-sm btn-default" title="Commission Settings"><i class="fa fa-percent"></i></a> '
+                       + '<button class="btn btn-sm btn-danger soft-delete" title="Eliminar (Soft)"><i class="fa fa-trash"></i></button>'
+                       + '</td>';
                 tbody += '</tr>';
             });
             $('#tbl-providers tbody').html(tbody);
