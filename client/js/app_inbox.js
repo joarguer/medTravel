@@ -640,7 +640,7 @@
         var $note = $('#client-inbox-compose-note');
         if ($note.length) {
             if (!freeMessageAllowed) {
-                $note.text(noticeMessage || 'Messaging will be available after the initial review. Please use the options above.');
+                $note.text(noticeMessage || 'Free-form messaging is locked right now. Please use the structured actions above.');
                 $note.show();
             } else {
                 $note.hide();
@@ -733,7 +733,9 @@
             }
             if (structuredReplyUpper.indexOf('DATES NOT AVAILABLE') !== -1 && isItemThread) {
                 messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-propose-new-dates">PROPOSE NEW DATES</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-propose-new-dates" title="Propose new dates">' +
+                        'PROPOSE NEW DATES' +
+                    '</button>' +
                     '</div>';
             }
         }
@@ -890,17 +892,11 @@
     });
 
     $('#client-inbox-messages').on('click', '.client-propose-new-dates', function () {
-        if (!currentThread) {
-            return;
-        }
-        var requestId = parseInt(currentThread.booking_id || 0, 10);
-        var itemId = parseInt(currentThread.item_id || 0, 10);
-        if (requestId <= 0 || itemId <= 0) {
-            toastr.warning('Open a service thread to continue');
-            return;
-        }
-        window.location.href = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) +
-            '&thread_type=ITEM&item_id=' + encodeURIComponent(String(itemId)) + '#client-inbox-fee-actions';
+        openProposeDatesModal();
+    });
+
+    $('#client-submit-propose-dates').on('click', function () {
+        submitProposeDates();
     });
 
     $('#client-inbox-messages').on('click', '.client-request-info-response', function () {
@@ -1021,7 +1017,7 @@
                 if (isCareBlocked) {
                     setComposeGateState(true, '');
                 } else {
-                    setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                    setComposeGateState(false, 'Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
                 }
                 return;
             }
@@ -1033,7 +1029,7 @@
         var text = $.trim($('#client-inbox-message').val() || '');
         if (!currentThread || !currentThread.thread_id) return;
         if (!freeMessageAllowed) {
-            toastr.warning('Messaging will be available after the initial review. Please use the options above.');
+            toastr.warning('Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
             return;
         }
         if (feeGateActive) {
@@ -1076,7 +1072,7 @@
                 if (isCareBlocked) {
                     setComposeGateState(true, '');
                 } else {
-                    setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                    setComposeGateState(false, 'Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
                 }
                 return;
             }
@@ -1153,6 +1149,107 @@
             loadThreads();
         }).fail(function () {
             toastr.error('Could not send proposal response');
+        });
+    }
+
+    function openProposeDatesModal() {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread before responding');
+            return;
+        }
+        var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM' &&
+            parseInt(currentThread.item_id || 0, 10) > 0;
+        if (!isItemThread) {
+            toastr.warning('Open a service thread to continue');
+            return;
+        }
+        var $modal = $('#clientProposeDatesModal');
+        if (!$modal.length) {
+            toastr.error('Date proposal form is unavailable');
+            return;
+        }
+        $('#client-proposed-date-from').val('');
+        $('#client-proposed-date-to').val('');
+        $('#client-proposed-notes').val('');
+        toastr.info('Opening date proposal...');
+        $modal.modal('show');
+    }
+
+    function submitProposeDates() {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread before responding');
+            return;
+        }
+        var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM' &&
+            parseInt(currentThread.item_id || 0, 10) > 0;
+        if (!isItemThread) {
+            toastr.warning('Open a service thread to continue');
+            return;
+        }
+        var dateFrom = $.trim($('#client-proposed-date-from').val() || '');
+        var dateTo = $.trim($('#client-proposed-date-to').val() || '');
+        var notes = $.trim($('#client-proposed-notes').val() || '');
+        if (!dateFrom && !dateTo && !notes) {
+            toastr.warning('Add at least a date or note');
+            return;
+        }
+        if (dateFrom && dateTo && dateFrom > dateTo) {
+            toastr.warning('Date range is invalid');
+            return;
+        }
+        if (notes.length > 500) {
+            toastr.warning('Notes are too long');
+            return;
+        }
+        var message = '[ACTION] PROPOSE_NEW_DATES';
+        if (dateFrom || dateTo) {
+            message += ' ' + (dateFrom || '-') + ' to ' + (dateTo || '-');
+        }
+        if (notes) {
+            message += ' | Notes: ' + notes;
+        }
+        if (message.length > 2000) {
+            toastr.warning('Notes are too long');
+            return;
+        }
+
+        var $btn = $('#client-submit-propose-dates');
+        var originalHtml = $btn.html();
+        $btn.prop('disabled', true).text('Sending...');
+
+        $.ajax({
+            url: '/client/ajax/inbox.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'send_message',
+                thread_id: currentThread.thread_id,
+                message: message
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'Could not send proposal');
+                return;
+            }
+            $('#clientProposeDatesModal').modal('hide');
+            toastr.success('Proposal sent');
+            loadMessages();
+            loadThreads();
+        }).fail(function (xhr) {
+            var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            if (res && res.code === 'FEE_REQUIRED') {
+                setFeeGateState(true, 'Unlock after Coordination Fee.');
+                setComposeGateState(true, '');
+                toastr.warning('Unlock after Coordination Fee');
+                return;
+            }
+            if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
+                setComposeGateState(false, 'Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
+                return;
+            }
+            toastr.error((res && res.message) ? res.message : 'Could not send proposal');
+        }).always(function () {
+            $btn.prop('disabled', false).html(originalHtml);
         });
     }
 

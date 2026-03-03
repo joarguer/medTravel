@@ -119,13 +119,48 @@ function client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate 
         $reason = 'initial_review';
     }
 
+    $notice = '';
+    if ($feeLocked) {
+        $notice = 'Free-form messaging is locked until the coordination fee is paid. Please use the structured actions above.';
+    } elseif (!$stageAllowsFreeMessage) {
+        $notice = 'Free-form messaging is locked until the initial review is complete. Please use the structured actions above.';
+    }
+
     return [
         'booking_status' => $status,
         'stage_allows_free_message' => $stageAllowsFreeMessage,
         'can_send_free_message' => $canSendFreeMessage,
         'blocked_reason' => $reason,
-        'notice' => $stageAllowsFreeMessage ? '' : 'Messaging will be available after the initial review. Please use the options above.',
+        'notice' => $notice,
     ];
+}
+
+function client_inbox_is_structured_message($message, $quickActions = [])
+{
+    $text = ltrim((string)$message);
+    if ($text === '') {
+        return false;
+    }
+    if (stripos($text, '[ACTION]') === 0) {
+        return true;
+    }
+    if (stripos($text, '[REPLY]') === 0) {
+        return true;
+    }
+    if (!empty($quickActions)) {
+        foreach ($quickActions as $actionText) {
+            if ($actionText === '') {
+                continue;
+            }
+            if (strcasecmp($text, $actionText) === 0) {
+                return true;
+            }
+            if (stripos($text, '[ACTION] ') === 0 && strcasecmp(trim(substr($text, 9)), $actionText) === 0) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 function client_inbox_resolve_context($conexion, $ownerScope, $threadType, $requestId, $itemId, $threadIdInput)
@@ -395,10 +430,18 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
     $freeMessageState = client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate);
     $canSendFreeMessage = !empty($freeMessageState['can_send_free_message']);
     if ($action === 'send_message') {
-        if ($feeLocked) {
+        $messageInput = trim((string)($_POST['message'] ?? ''));
+        $structuredAllowlist = [
+            'Please confirm availability for my dates.',
+            'My dates are flexible.',
+            'I have uploaded medical documents.',
+            "I don't have the requested documents yet."
+        ];
+        $isStructured = client_inbox_is_structured_message($messageInput, $structuredAllowlist);
+        if ($feeLocked && !$isStructured) {
             client_inbox_err('coordination_fee_required', 403, 'FEE_REQUIRED');
         }
-        if (!$isCareThread && !$canSendFreeMessage) {
+        if (!$isCareThread && !$canSendFreeMessage && !$isStructured) {
             client_inbox_err('free_message_blocked', 403, 'FREE_MESSAGE_BLOCKED');
         }
     }

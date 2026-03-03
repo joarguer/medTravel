@@ -244,7 +244,7 @@ if (isset($conexion) && $conexion) {
                                         <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..." <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>></textarea>
                                     </div>
                                     <button type="submit" class="btn btn-primary" id="client-inbox-send-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
-                                    <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Messaging will be available after the initial review. Please use the options above.</div>
+                                    <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Free-form messaging is locked right now. Please use the structured actions above.</div>
                                 </form>
                             </div>
                             <div class="inbox-content" id="client-inbox-empty">
@@ -256,6 +256,35 @@ if (isset($conexion) && $conexion) {
             </div>
         </div>
         <?php echo $footer; ?>
+    </div>
+</div>
+
+<div class="modal fade" id="clientProposeDatesModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">Propose new dates</h4>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="client-proposed-date-from">Date from (optional)</label>
+                    <input type="date" class="form-control" id="client-proposed-date-from">
+                </div>
+                <div class="form-group">
+                    <label for="client-proposed-date-to">Date to (optional)</label>
+                    <input type="date" class="form-control" id="client-proposed-date-to">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="client-proposed-notes">Notes (optional)</label>
+                    <textarea class="form-control" id="client-proposed-notes" rows="3" maxlength="500" placeholder="Any extra details about your availability"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="client-submit-propose-dates">Send proposal</button>
+            </div>
+        </div>
     </div>
 </div>
 
