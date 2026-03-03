@@ -3,6 +3,7 @@
 @ini_set('display_startup_errors', 0);
 header('Content-Type: application/json; charset=utf-8');
 include(__DIR__ . '/../include/conexion.php');
+require_once __DIR__ . '/../include/roles.php';
 $devlog = __DIR__ . '/../logs/dev.log';
 $req_dump = isset($_REQUEST) ? print_r($_REQUEST, true) : '[]';
 $cookie_dump = isset($_COOKIE) ? print_r($_COOKIE, true) : '[]';
@@ -26,7 +27,9 @@ set_exception_handler(function($e) use ($devlog) {
     exit();
 });
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
-if (!$provider_id) {
+$tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
+$is_admin = function_exists('is_role_admin_session') ? is_role_admin_session() : false;
+if (!$provider_id && !($is_admin && $tipo === 'delete_media')) {
     // debug log: provider_id missing in session
     $sid = session_id();
     $possible = [
@@ -45,7 +48,6 @@ if (!$provider_id) {
     echo json_encode(['ok' => false, 'error' => 'FORBIDDEN']);
     exit();
 }
-$tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
 
 function json_error($msg, $code = 400){ http_response_code($code); echo json_encode(['ok'=>false,'error'=>$msg]); exit(); }
 
@@ -72,6 +74,22 @@ function detect_mime_type($filepath){
         return mime_content_type($filepath);
     }
     return '';
+}
+
+function resolve_offer_media_file_path($stored_path){
+    $relative = ltrim(str_replace('\\', '/', (string)$stored_path), '/');
+    if ($relative === '') return '';
+    if (strpos($relative, 'img/offers/') !== 0) return '';
+    if (strpos($relative, '..') !== false) return '';
+    $base_dir = realpath(__DIR__ . '/../../img/offers');
+    if ($base_dir === false) return '';
+    $full = __DIR__ . '/../../' . $relative;
+    if (!file_exists($full)) return '';
+    $real_file = realpath($full);
+    if ($real_file === false) return '';
+    $base_prefix = rtrim($base_dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    if (strpos($real_file, $base_prefix) !== 0) return '';
+    return $real_file;
 }
 
 if ($tipo === 'list') {
@@ -216,6 +234,54 @@ if ($tipo === 'upload_media') {
     mysqli_stmt_execute($ins);
     $mid = mysqli_insert_id($conexion);
     echo json_encode(['ok'=>true,'data'=>['path'=>$rel,'id'=>$mid]]);
+    exit();
+}
+
+if ($tipo === 'delete_media') {
+    $media_id = isset($_REQUEST['image_id']) ? (int)$_REQUEST['image_id'] : 0;
+    if (!$media_id && isset($_REQUEST['offer_image_id'])) $media_id = (int)$_REQUEST['offer_image_id'];
+    if (!$media_id) json_error('INVALID_IMAGE');
+    $offer_id = isset($_REQUEST['offer_id']) ? (int)$_REQUEST['offer_id'] : 0;
+
+    $sel = mysqli_prepare(
+        $conexion,
+        "SELECT m.id,m.offer_id,m.path,o.provider_id
+         FROM offer_media m
+         INNER JOIN provider_service_offers o ON o.id = m.offer_id
+         WHERE m.id = ?
+         LIMIT 1"
+    );
+    mysqli_stmt_bind_param($sel, 'i', $media_id);
+    mysqli_stmt_execute($sel);
+    $sres = mysqli_stmt_get_result($sel);
+    $media = mysqli_fetch_assoc($sres);
+    if (!$media) json_error('NOT_FOUND',404);
+
+    if ($offer_id && (int)$media['offer_id'] !== $offer_id) json_error('INVALID_OFFER');
+    if (!$is_admin && (int)$media['provider_id'] !== $provider_id) json_error('FORBIDDEN',403);
+
+    $del = mysqli_prepare($conexion, "DELETE FROM offer_media WHERE id = ? LIMIT 1");
+    mysqli_stmt_bind_param($del, 'i', $media_id);
+    $ok = mysqli_stmt_execute($del);
+    if (!$ok) json_error('DB_ERR:'.mysqli_error($conexion));
+
+    $path = (string)$media['path'];
+    if ($path !== '') {
+        $cnt_stmt = mysqli_prepare($conexion, "SELECT COUNT(*) AS c FROM offer_media WHERE path = ?");
+        mysqli_stmt_bind_param($cnt_stmt, 's', $path);
+        mysqli_stmt_execute($cnt_stmt);
+        $cnt_res = mysqli_stmt_get_result($cnt_stmt);
+        $cnt_row = mysqli_fetch_assoc($cnt_res);
+        $in_use = $cnt_row ? (int)$cnt_row['c'] : 0;
+        if ($in_use === 0) {
+            $file_path = resolve_offer_media_file_path($path);
+            if ($file_path !== '' && is_file($file_path)) {
+                @unlink($file_path);
+            }
+        }
+    }
+
+    echo json_encode(['ok'=>true]);
     exit();
 }
 

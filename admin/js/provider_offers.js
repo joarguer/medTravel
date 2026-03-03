@@ -120,7 +120,7 @@ $(function(){
             $('#offer-price').val(d.price_from);
             $('#offer-currency').val(d.currency);
             $('#offer-active').prop('checked', d.is_active==1);
-            renderGalleryInModal(d.media||[]);
+            renderGalleryInModal(d.media||[], d.id);
             // Activar primera pestaña
             $('.nav-tabs a[href="#tab-general"]').tab('show');
             $('#offerModal').modal('show');
@@ -190,8 +190,8 @@ $(function(){
         $.getJSON('ajax/provider_offers.php?tipo=get&id='+offerId, function(res){
             if (!res || !res.ok) return cb((res && res.error) ? res.error : 'UNKNOWN_ERROR');
             var media = (res.data && res.data.media) ? res.data.media : [];
-            renderGalleryInModal(media);
-            renderGallery(media);
+            renderGalleryInModal(media, offerId);
+            renderGallery(media, offerId);
             cb(null, media);
         }).fail(function(){
             cb('NETWORK');
@@ -228,10 +228,10 @@ $(function(){
     }
 
     function loadGallery(offer_id){
-        $.getJSON('ajax/provider_offers.php?tipo=get&id='+offer_id, function(res){ if(!res.ok) return alert(res.error); renderGallery(res.data.media||[]); });
+        $.getJSON('ajax/provider_offers.php?tipo=get&id='+offer_id, function(res){ if(!res.ok) return alert(res.error); renderGallery(res.data.media||[], offer_id); });
     }
 
-    function renderGalleryInModal(list){
+    function renderGalleryInModal(list, offerId){
         var cont = $('#gallery-preview').empty();
         if(!list || list.length==0) { 
             cont.html('<div class="col-md-12"><div class="alert alert-info"><i class="fa fa-info-circle"></i> No hay imágenes subidas aún. Use el botón "Subir Imagen" para agregar fotos.</div></div>'); 
@@ -241,21 +241,52 @@ $(function(){
             var col = $('<div class="col-xs-6 col-sm-4 col-md-3" style="margin-bottom:15px;">');
             var imgWrap = $('<div style="position:relative; border:2px solid #e9ecef; border-radius:8px; overflow:hidden; padding:5px; background:#fff;">');
             imgWrap.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'border-radius':'4px', 'width':'100%', 'height':'150px', 'object-fit':'cover'}));
+            var deleteBtn = $('<button type="button" class="btn btn-xs btn-danger" style="position:absolute;top:8px;right:8px;z-index:3;"><i class="fa fa-trash"></i> Eliminar</button>');
+            deleteBtn.on('click', function(e){
+                e.preventDefault();
+                e.stopPropagation();
+                deleteMedia(m.id, offerId || $('#offer-id').val());
+            });
+            imgWrap.append(deleteBtn);
             col.append(imgWrap);
             cont.append(col);
         });
     }
     
-    function renderGallery(list){
+    function renderGallery(list, offerId){
         var cont = $('#offer-gallery').empty();
         if(!list || list.length==0) { cont.html('<p>No hay fotos</p>'); return; }
         var row = $('<div class="row">');
         $.each(list, function(i,m){
             var col = $('<div class="col-xs-3">');
-            col.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'margin-bottom':'10px'}));
+            var wrap = $('<div style="position:relative; margin-bottom:10px;">');
+            wrap.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'margin-bottom':'10px'}));
+            var deleteBtn = $('<button type="button" class="btn btn-xs btn-danger" style="position:absolute;top:6px;right:6px;z-index:3;"><i class="fa fa-trash"></i></button>');
+            deleteBtn.on('click', function(e){
+                e.preventDefault();
+                e.stopPropagation();
+                deleteMedia(m.id, offerId || $('#offer-id').val());
+            });
+            wrap.append(deleteBtn);
+            col.append(wrap);
             row.append(col);
         });
         cont.append(row);
+    }
+
+    function deleteMedia(mediaId, offerId){
+        if (!mediaId) return alert('INVALID_IMAGE');
+        if (!offerId) return alert('INVALID_OFFER');
+        if (!window.confirm('¿Desea eliminar esta imagen de la galería?')) return;
+        api({tipo:'delete_media', image_id: mediaId, offer_id: offerId}, function(err){
+            if (err) return alert(err);
+            refreshOfferMedia(offerId, function(refreshErr){
+                if (refreshErr) return alert(refreshErr);
+                if (typeof toastr !== 'undefined') {
+                    toastr.success('Imagen eliminada', 'Éxito');
+                }
+            });
+        });
     }
 
     $('#btn-new-offer').click(function(){ 
