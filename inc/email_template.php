@@ -1,8 +1,9 @@
 <?php
 
 if (!function_exists('renderMedTravelEmail')) {
-    function renderMedTravelEmail($title, $preheader, $contentHtml, $footerNote = null, $cta = null)
+    function renderMedTravelEmail($title, $preheader, $contentHtml, $footerNote = null, $cta = null, $senderLabel = 'MedTravel Patient Care')
     {
+        $senderLabel = trim((string)$senderLabel) !== '' ? (string)$senderLabel : 'MedTravel Patient Care';
         $titleText = htmlspecialchars((string)$title, ENT_QUOTES, 'UTF-8');
         $preheaderText = htmlspecialchars((string)$preheader, ENT_QUOTES, 'UTF-8');
         $footerNoteText = trim((string)$footerNote) !== ''
@@ -58,7 +59,7 @@ if (!function_exists('renderMedTravelEmail')) {
           ' . $ctaHtml . '
           <tr>
             <td style="padding:14px 32px 24px 32px; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:1.6; color:#64748b;">
-              <p style="margin:0 0 8px 0;"><strong>MedTravel Patient Care</strong></p>
+              <p style="margin:0 0 8px 0;"><strong>' . htmlspecialchars($senderLabel, ENT_QUOTES, 'UTF-8') . '</strong></p>
               <p style="margin:0 0 8px 0;"><a href="mailto:patientcare@medtravel.com.co" style="color:#0b4ea2; text-decoration:none;">patientcare@medtravel.com.co</a></p>
               <p style="margin:0;">' . $footerNoteText . '</p>
             </td>

@@ -33,6 +33,65 @@ if (!function_exists('mt_email_debug_tail')) {
     }
 }
 
+// ── Email dedupe helpers (in-file JSON cache, TTL 60 s) ───────────────────────
+if (!function_exists('_interaction_email_dedupe_file')) {
+    function _interaction_email_dedupe_file()
+    {
+        $dir = dirname(__DIR__) . '/storage/logs';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        return $dir . '/email_dedupe.json';
+    }
+}
+
+if (!function_exists('interaction_email_dedupe_check')) {
+    /**
+     * Returns true if $key was recorded within $ttl seconds.
+     * Non-blocking: silently returns false on any I/O or parse error.
+     */
+    function interaction_email_dedupe_check($key, $ttl = 60)
+    {
+        $file = _interaction_email_dedupe_file();
+        if (!is_file($file)) {
+            return false;
+        }
+        $raw = @file_get_contents($file);
+        if ($raw === false || $raw === '') {
+            return false;
+        }
+        $map = @json_decode($raw, true);
+        if (!is_array($map) || !isset($map[$key])) {
+            return false;
+        }
+        return (time() - (int)$map[$key]) < (int)$ttl;
+    }
+}
+
+if (!function_exists('interaction_email_dedupe_mark')) {
+    /**
+     * Record that $key was just sent. Prunes entries older than $pruneAge seconds.
+     * Non-blocking: silently ignores write errors.
+     */
+    function interaction_email_dedupe_mark($key, $pruneAge = 300)
+    {
+        $file = _interaction_email_dedupe_file();
+        $raw  = is_file($file) ? @file_get_contents($file) : '';
+        $map  = ($raw !== false && $raw !== '') ? @json_decode($raw, true) : [];
+        if (!is_array($map)) {
+            $map = [];
+        }
+        $now = time();
+        foreach ($map as $k => $ts) {
+            if ($now - (int)$ts >= $pruneAge) {
+                unset($map[$k]);
+            }
+        }
+        $map[$key] = $now;
+        @file_put_contents($file, json_encode($map, JSON_PRETTY_PRINT), LOCK_EX);
+    }
+}
+
 if (!function_exists('interaction_email_safe_snippet')) {
     function interaction_email_safe_snippet($text, $maxLen = 120)
     {
@@ -301,11 +360,28 @@ if (!function_exists('send_interaction_email')) {
             mt_email_debug_log('event=' . $event . ' error=sendEmail_unavailable');
             return ['success' => false, 'error' => 'sendEmail_unavailable'];
         }
-        $preheader = (string)($meta['preheader'] ?? $subject);
-        $cta = isset($meta['cta']) ? $meta['cta'] : null;
-        $footerNote = (string)($meta['footer_note'] ?? '');
-        $htmlBody = function_exists('renderMedTravelEmail')
-            ? renderMedTravelEmail($subject, $preheader, $contentHtml, $footerNote !== '' ? $footerNote : null, $cta)
+
+        // ── Lightweight dedupe (60 s TTL) ────────────────────────────────────
+        // Key covers recipient + subject (contains type+requestId) + content preview
+        $dedupeKey = sha1((string)$to . '||' . (string)$subject . '||' . substr((string)$textBody, 0, 200));
+        if (interaction_email_dedupe_check($dedupeKey, 60)) {
+            mt_email_debug_log('event=' . $event . ' DEDUPED key=' . $dedupeKey);
+            return ['success' => false, 'error' => 'deduped', 'deduped' => true];
+        }
+
+        $preheader   = (string)($meta['preheader'] ?? $subject);
+        $cta         = isset($meta['cta']) ? $meta['cta'] : null;
+        $footerNote  = (string)($meta['footer_note'] ?? '');
+        $senderLabel = trim((string)($meta['sender_label'] ?? ''));
+        $htmlBody    = function_exists('renderMedTravelEmail')
+            ? renderMedTravelEmail(
+                $subject,
+                $preheader,
+                $contentHtml,
+                $footerNote !== '' ? $footerNote : null,
+                $cta,
+                $senderLabel !== '' ? $senderLabel : 'MedTravel Patient Care'
+              )
             : $contentHtml;
 
         try {
@@ -313,6 +389,11 @@ if (!function_exists('send_interaction_email')) {
         } catch (Throwable $e) {
             mt_email_debug_log('event=' . $event . ' exception=' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
+        }
+
+        // Mark dedupe only on success so hard failures remain retryable
+        if (is_array($result) && !empty($result['success'])) {
+            interaction_email_dedupe_mark($dedupeKey);
         }
 
         mt_email_debug_log('event=' . $event . ' result=' . json_encode($result));
@@ -795,9 +876,10 @@ if (!function_exists('notify_new_message_to_provider')) {
             $contentHtml,
             $textBody,
             [
-                'preheader'   => ucfirst($actorPhrasing) . ' has an update on case #' . $requestId . ' — your response is needed.',
-                'cta'         => ['text' => 'Open in MedTravel', 'url' => $ctaUrl],
-                'footer_note' => 'All patient communication must remain within the MedTravel platform.',
+                'preheader'    => ucfirst($actorPhrasing) . ' has an update on case #' . $requestId . ' — your response is needed.',
+                'cta'          => ['text' => 'Open in MedTravel', 'url' => $ctaUrl],
+                'footer_note'  => 'All patient communication must remain within the MedTravel platform.',
+                'sender_label' => 'MedTravel Coordination Team',
             ],
             $conexion
         );
@@ -880,9 +962,10 @@ if (!function_exists('notify_document_uploaded_to_provider')) {
             $contentHtml,
             $textBody,
             [
-                'preheader'   => 'A patient uploaded a medical document on case #' . $requestId . '.',
-                'cta'         => ['text' => 'Review document in MedTravel', 'url' => $ctaUrl],
-                'footer_note' => 'All documents are stored securely within the MedTravel platform. Please do not request or share files outside the platform.',
+                'preheader'    => 'A patient uploaded a medical document on case #' . $requestId . '.',
+                'cta'          => ['text' => 'Review document in MedTravel', 'url' => $ctaUrl],
+                'footer_note'  => 'All documents are stored securely within the MedTravel platform. Please do not request or share files outside the platform.',
+                'sender_label' => 'MedTravel Coordination Team',
             ],
             $conexion
         );
