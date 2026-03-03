@@ -519,7 +519,7 @@ foreach ($files as $index => $file) {
     $columns[] = 'client_id';
     $placeholders[] = '?';
     $types .= 'i';
-    $params[] = $resolvedClientId;
+    $params[] = $clientUserId;
 
     if ($hasDocumentType) {
         $columns[] = 'document_type';

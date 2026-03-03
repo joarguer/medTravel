@@ -475,6 +475,97 @@ if ($action === 'list_messages') {
         }
     }
 
+    $documents = [];
+    $documentsError = '';
+    if (inbox_table_exists($conexion, 'client_documents')) {
+        $docHasRequestId = inbox_table_has_column($conexion, 'client_documents', 'booking_request_id');
+        $docHasItemId = inbox_table_has_column($conexion, 'client_documents', 'item_id');
+        if (!$docHasRequestId || !$docHasItemId) {
+            $documentsError = 'client_documents_scope_missing';
+        } else {
+            $clientId = 0;
+            $clientEmail = '';
+            if (inbox_table_exists($conexion, 'booking_requests') && $bookingRequestId > 0) {
+                $hasBrClientUserId = inbox_table_has_column($conexion, 'booking_requests', 'client_user_id');
+                $hasBrEmail = inbox_table_has_column($conexion, 'booking_requests', 'email');
+                $selectCols = $hasBrClientUserId ? 'client_user_id' : 'NULL AS client_user_id';
+                $selectCols .= $hasBrEmail ? ', email' : ", '' AS email";
+                $stmtClient = mysqli_prepare($conexion, "SELECT {$selectCols} FROM booking_requests WHERE id = ? LIMIT 1");
+                if ($stmtClient) {
+                    mysqli_stmt_bind_param($stmtClient, 'i', $bookingRequestId);
+                    if (mysqli_stmt_execute($stmtClient)) {
+                        $resClient = mysqli_stmt_get_result($stmtClient);
+                        $rowClient = $resClient ? mysqli_fetch_assoc($resClient) : null;
+                        if ($rowClient) {
+                            $clientId = (int)($rowClient['client_user_id'] ?? 0);
+                            $clientEmail = trim((string)($rowClient['email'] ?? ''));
+                        }
+                    }
+                    mysqli_stmt_close($stmtClient);
+                }
+            }
+            if ($clientId <= 0 && $clientEmail !== '' && inbox_table_exists($conexion, 'clientes') && inbox_table_has_column($conexion, 'clientes', 'email')) {
+                $hasClientesClientUserId = inbox_table_has_column($conexion, 'clientes', 'client_user_id');
+                $clientSelect = $hasClientesClientUserId ? 'client_user_id' : 'id';
+                $stmtLookup = mysqli_prepare($conexion, "SELECT {$clientSelect} AS client_user_id FROM clientes WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
+                if ($stmtLookup) {
+                    mysqli_stmt_bind_param($stmtLookup, 's', $clientEmail);
+                    if (mysqli_stmt_execute($stmtLookup)) {
+                        $resLookup = mysqli_stmt_get_result($stmtLookup);
+                        $rowLookup = $resLookup ? mysqli_fetch_assoc($resLookup) : null;
+                        if ($rowLookup) {
+                            $clientId = (int)($rowLookup['client_user_id'] ?? 0);
+                        }
+                    }
+                    mysqli_stmt_close($stmtLookup);
+                }
+            }
+
+            if ($clientId > 0) {
+                $selectCols = ['id', 'file_path', 'filename', 'original_filename', 'document_type', 'booking_request_id', 'item_id'];
+                if (inbox_table_has_column($conexion, 'client_documents', 'file_size')) {
+                    $selectCols[] = 'file_size';
+                }
+                if (inbox_table_has_column($conexion, 'client_documents', 'mime_type')) {
+                    $selectCols[] = 'mime_type';
+                }
+                if (inbox_table_has_column($conexion, 'client_documents', 'title')) {
+                    $selectCols[] = 'title';
+                }
+                if (inbox_table_has_column($conexion, 'client_documents', 'description')) {
+                    $selectCols[] = 'description';
+                }
+                $orderByColumn = inbox_table_has_column($conexion, 'client_documents', 'uploaded_at') ? 'uploaded_at' : 'id';
+                $docSql = "SELECT " . implode(', ', $selectCols) . " FROM client_documents WHERE client_id = ?";
+                $docTypes = 'i';
+                $docParams = [$clientId];
+                if (inbox_table_has_column($conexion, 'client_documents', 'shared_with_provider')) {
+                    $docSql .= " AND shared_with_provider = 1";
+                }
+                $docSql .= " AND booking_request_id = ?";
+                $docTypes .= 'i';
+                $docParams[] = $bookingRequestId;
+                if ((int)$ctx['item_id'] > 0) {
+                    $docSql .= " AND (item_id = ? OR item_id IS NULL)";
+                    $docTypes .= 'i';
+                    $docParams[] = (int)$ctx['item_id'];
+                }
+                $docSql .= " ORDER BY " . $orderByColumn . " DESC";
+                $stmtDocs = mysqli_prepare($conexion, $docSql);
+                if ($stmtDocs) {
+                    if (inbox_bind_stmt_params($stmtDocs, $docTypes, $docParams) && mysqli_stmt_execute($stmtDocs)) {
+                        $docRes = mysqli_stmt_get_result($stmtDocs);
+                        while ($docRes && ($docRow = mysqli_fetch_assoc($docRes))) {
+                            $docRow['download_url'] = '/admin/ajax/download_medical_document.php?doc_id=' . (int)($docRow['id'] ?? 0);
+                            $documents[] = $docRow;
+                        }
+                    }
+                    mysqli_stmt_close($stmtDocs);
+                }
+            }
+        }
+    }
+
     admin_inbox_ok([
         'thread_id' => $ctx['thread_id'],
         'thread_type' => $ctx['thread_type'],
@@ -485,6 +576,8 @@ if ($action === 'list_messages') {
         'can_send_free_message' => !empty($freeMessageState['can_send_free_message']),
         'free_message_blocked_reason' => (string)($freeMessageState['blocked_reason'] ?? ''),
         'free_message_notice' => (string)($freeMessageState['notice'] ?? ''),
+        'documents' => $documents,
+        'documents_error' => $documentsError,
         'messages' => $messages,
     ]);
 }

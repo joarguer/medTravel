@@ -4,6 +4,7 @@
     var preferredThread = null;
     var feeGateActive = false;
     var freeMessageAllowed = true;
+    var currentDocuments = [];
     var quickReplies = {
         DATES_AVAILABLE: 'Dates available',
         DATES_NOT_AVAILABLE: 'Dates not available',
@@ -69,6 +70,39 @@
         };
         var key = String(type || '').toLowerCase();
         return labels[key] || key || 'Other';
+    }
+
+    function renderThreadDocuments(docs) {
+        if (!docs || !docs.length) {
+            return '';
+        }
+        var html = '<div class="well well-sm" style="margin-bottom:10px;">' +
+            '<strong>Medical documents</strong>' +
+            '<ul style="margin:8px 0 0 18px;padding:0;">';
+        docs.forEach(function (doc) {
+            var docType = String(doc.document_type || '').replace(/_/g, ' ');
+            var title = String(doc.title || '').trim();
+            var description = String(doc.description || '').trim();
+            var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
+            var href = String(doc.download_url || '').trim();
+            if (!href && doc.id) {
+                href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
+            }
+            html += '<li style="margin-bottom:8px;">' +
+                '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(originalName) + '</a>';
+            if (docType) {
+                html += ' <span class="label label-default" style="margin-left:6px;">' + esc(docType) + '</span>';
+            }
+            if (title) {
+                html += '<div><strong>' + esc(title) + '</strong></div>';
+            }
+            if (description) {
+                html += '<div class="text-muted">' + esc(description) + '</div>';
+            }
+            html += '</li>';
+        });
+        html += '</ul></div>';
+        return html;
     }
 
     function formatCurrencyAmount(amount, currency) {
@@ -383,11 +417,12 @@
         var $box = $('#admin-inbox-messages');
         if (!$box.length) return;
         if (!messages || !messages.length) {
-            $box.html('<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
+            var docsHtml = renderThreadDocuments(currentDocuments);
+            $box.html(docsHtml + '<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
             return;
         }
 
-        var html = '';
+        var html = renderThreadDocuments(currentDocuments);
         messages.forEach(function (m) {
             var bodyHtml = formatAdminMessageBody(m.body || '');
             html += '<div class="well well-sm" style="margin-bottom:10px;">' +
@@ -611,6 +646,7 @@
             setFeeGateState(feeLocked);
             var canSendFreeMessage = (typeof res.can_send_free_message === 'boolean') ? res.can_send_free_message : !feeLocked;
             setComposeGateState(canSendFreeMessage, res.free_message_notice || '');
+            currentDocuments = $.isArray(res.documents) ? res.documents : [];
 
             var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM';
             var headingText = isItemThread ? cleanServiceTitle(currentThread.thread_title || '') : 'MedTravel Coordination';
