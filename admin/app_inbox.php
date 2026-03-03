@@ -140,6 +140,87 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         #admin-inbox-messages .admin-structured-note {
             margin-top: 8px;
         }
+        /* ── Medical Documents section ── */
+        #admin-inbox-messages .mt-docs-section {
+            border: 1px solid #d4e6f1;
+            border-radius: 4px;
+            background: #eaf4fb;
+            padding: 10px 12px;
+            margin-bottom: 14px;
+        }
+        #admin-inbox-messages .mt-docs-header {
+            font-size: 13px;
+            color: #2471a3;
+            margin-bottom: 8px;
+        }
+        #admin-inbox-messages .mt-docs-icon { margin-right: 3px; }
+        #admin-inbox-messages .mt-docs-empty {
+            margin: 4px 0 0;
+            font-style: italic;
+            font-size: 12px;
+        }
+        #admin-inbox-messages .mt-docs-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        #admin-inbox-messages .mt-doc-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: #fff;
+            border-radius: 3px;
+            padding: 5px 8px;
+        }
+        #admin-inbox-messages .mt-doc-type { flex: 0 0 auto; }
+        #admin-inbox-messages .mt-doc-name {
+            flex: 1 1 auto;
+            font-size: 12px;
+            min-width: 80px;
+            word-break: break-all;
+        }
+        #admin-inbox-messages .mt-doc-date {
+            flex: 0 0 auto;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        #admin-inbox-messages .mt-doc-download { flex: 0 0 auto; }
+        /* ── Section divider ── */
+        #admin-inbox-messages .mt-section-divider {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #95a5a6;
+            border-bottom: 1px solid #eef1f5;
+            padding-bottom: 4px;
+            margin-bottom: 10px;
+        }
+        /* ── Message bubbles ── */
+        #admin-inbox-messages .mt-msg {
+            margin-bottom: 8px;
+            border-radius: 4px;
+            padding: 8px 10px;
+        }
+        #admin-inbox-messages .mt-msg-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 5px;
+        }
+        #admin-inbox-messages .mt-msg-time { color: #95a5a6; }
+        /* Structured / system actions — neutral grey */
+        #admin-inbox-messages .mt-msg-system {
+            background: #f4f6f7;
+            border-left: 3px solid #aab7b8;
+        }
+        /* Human free-text messages — white with blue accent */
+        #admin-inbox-messages .mt-msg-human {
+            background: #fff;
+            border: 1px solid #e8ecf1;
+            border-left: 3px solid #5b9bd1;
+        }
         @media (max-width: 767px) {
             #admin-inbox-thread-list .mt-thread-row {
                 flex-direction: column;

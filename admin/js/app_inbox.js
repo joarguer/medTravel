@@ -73,36 +73,66 @@
     }
 
     function renderThreadDocuments(docs) {
-        if (!docs || !docs.length) {
-            return '';
+        var hasDocs = docs && docs.length > 0;
+        var countHtml = hasDocs
+            ? ' <span class="badge" style="background:#7f8c9d;">' + docs.length + '</span>'
+            : '';
+        var innerHtml;
+        if (!hasDocs) {
+            innerHtml = '<p class="mt-docs-empty text-muted">No medical documents uploaded yet.</p>';
+        } else {
+            var typeCls = { labs: 'label-info', imaging: 'label-primary', photos: 'label-success', medical_history: 'label-warning', other: 'label-default' };
+            innerHtml = '<div class="mt-docs-list">';
+            docs.forEach(function (doc) {
+                var typeKey = String(doc.document_type || 'other').toLowerCase();
+                var typeLabel = docTypeLabel(typeKey);
+                var cls = typeCls[typeKey] || 'label-default';
+                var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
+                var uploadedRaw = String(doc.uploaded_at || doc.created_at || '').trim();
+                var href = String(doc.download_url || '').trim();
+                if (!href && doc.id) {
+                    href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
+                }
+                var dateText = '';
+                if (uploadedRaw) {
+                    var d = new Date(uploadedRaw.replace(' ', 'T'));
+                    if (!isNaN(d.getTime())) {
+                        var dd = (d.getDate() < 10 ? '0' : '') + d.getDate();
+                        var mo = ((d.getMonth() + 1) < 10 ? '0' : '') + (d.getMonth() + 1);
+                        dateText = dd + '/' + mo + '/' + d.getFullYear();
+                    }
+                }
+                innerHtml +=
+                    '<div class="mt-doc-row">' +
+                        '<span class="label ' + cls + ' mt-doc-type">' + esc(typeLabel) + '</span>' +
+                        '<span class="mt-doc-name">' + esc(originalName) + '</span>' +
+                        (dateText ? '<small class="mt-doc-date text-muted"><i class="fa fa-clock-o" aria-hidden="true"></i> ' + esc(dateText) + '</small>' : '') +
+                        '<a class="btn btn-xs btn-default mt-doc-download" href="' + esc(href) + '" target="_blank" rel="noopener" title="Download ' + esc(originalName) + '">' +
+                            '<i class="fa fa-download" aria-hidden="true"></i> Download' +
+                        '</a>' +
+                    '</div>';
+            });
+            innerHtml += '</div>';
         }
-        var html = '<div class="well well-sm" style="margin-bottom:10px;">' +
-            '<strong>Medical documents</strong>' +
-            '<ul style="margin:8px 0 0 18px;padding:0;">';
-        docs.forEach(function (doc) {
-            var docType = String(doc.document_type || '').replace(/_/g, ' ');
-            var title = String(doc.title || '').trim();
-            var description = String(doc.description || '').trim();
-            var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
-            var href = String(doc.download_url || '').trim();
-            if (!href && doc.id) {
-                href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
-            }
-            html += '<li style="margin-bottom:8px;">' +
-                '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(originalName) + '</a>';
-            if (docType) {
-                html += ' <span class="label label-default" style="margin-left:6px;">' + esc(docType) + '</span>';
-            }
-            if (title) {
-                html += '<div><strong>' + esc(title) + '</strong></div>';
-            }
-            if (description) {
-                html += '<div class="text-muted">' + esc(description) + '</div>';
-            }
-            html += '</li>';
-        });
-        html += '</ul></div>';
-        return html;
+        return '<div class="mt-docs-section">' +
+            '<div class="mt-docs-header">' +
+                '<i class="fa fa-paperclip mt-docs-icon" aria-hidden="true"></i> ' +
+                '<strong>Medical Documents' + countHtml + '</strong>' +
+            '</div>' +
+            innerHtml +
+        '</div>';
+    }
+
+    function isSystemActionMessage(body) {
+        var text = String(body || '').trim();
+        if (text.indexOf('[REQUEST_INFO]') === 0) return true;
+        if (text.indexOf('[PROPOSE_QUOTE]') === 0) return true;
+        if (text.indexOf('[PROPOSAL_RESPONSE]') === 0) return true;
+        var keys = Object.keys(quickReplies);
+        for (var i = 0; i < keys.length; i++) {
+            if (text === keys[i] || text === quickReplies[keys[i]]) return true;
+        }
+        return false;
     }
 
     function formatCurrencyAmount(amount, currency) {
@@ -416,21 +446,25 @@
     function renderMessages(messages) {
         var $box = $('#admin-inbox-messages');
         if (!$box.length) return;
+        var docsHtml = renderThreadDocuments(currentDocuments);
+        var divider = '<div class="mt-section-divider">Messages</div>';
         if (!messages || !messages.length) {
-            var docsHtml = renderThreadDocuments(currentDocuments);
-            $box.html(docsHtml + '<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
+            $box.html(docsHtml + divider + '<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
             return;
         }
 
-        var html = renderThreadDocuments(currentDocuments);
+        var html = docsHtml + divider;
         messages.forEach(function (m) {
             var bodyHtml = formatAdminMessageBody(m.body || '');
-            html += '<div class="well well-sm" style="margin-bottom:10px;">' +
-                '<div><span class="label label-' + senderClass(m.sender) + '">' + esc(m.sender || 'system') + '</span>' +
-                (m.time ? '<small style="margin-left:8px;">' + esc(m.time) + '</small>' : '') +
+            var sysMsg = isSystemActionMessage(m.body || '');
+            var msgCls = sysMsg ? 'mt-msg-system' : 'mt-msg-human';
+            html += '<div class="mt-msg ' + msgCls + '">' +
+                '<div class="mt-msg-meta">' +
+                    '<span class="label label-' + senderClass(m.sender) + '">' + esc(m.sender || 'system') + '</span>' +
+                    (m.time ? '<small class="mt-msg-time">' + esc(m.time) + '</small>' : '') +
                 '</div>' +
-                '<div style="margin-top:6px;">' + bodyHtml + '</div>' +
-                '</div>';
+                '<div class="mt-msg-body">' + bodyHtml + '</div>' +
+            '</div>';
         });
         $box.html(html);
         $box.scrollTop($box[0].scrollHeight);
