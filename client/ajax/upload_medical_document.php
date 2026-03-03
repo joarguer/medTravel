@@ -4,7 +4,10 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../inc/auth_client.php';
 require_client_auth_ajax();
 require_once __DIR__ . '/../../admin/include/conexion.php';
+require_once __DIR__ . '/../../admin/include/email_config.php';
 require_once __DIR__ . '/../include/client_notifications.php';
+require_once __DIR__ . '/../../inc/email_template.php';
+require_once __DIR__ . '/../../inc/interaction_email.php';
 
 function client_doc_err($message, $code = 400)
 {
@@ -17,6 +20,80 @@ function client_doc_ok($data = [])
 {
     echo json_encode(array_merge(['ok' => true], $data));
     exit;
+}
+
+function client_doc_document_label($type)
+{
+    $map = [
+        'passport' => 'Passport',
+        'id_card' => 'ID card',
+        'medical_history' => 'Medical history',
+        'lab_results' => 'Lab results',
+        'prescription' => 'Prescription',
+        'invoice' => 'Invoice',
+        'contract' => 'Contract',
+        'consent_form' => 'Consent form',
+        'insurance' => 'Insurance',
+        'photos' => 'Photos',
+        'other' => 'Other'
+    ];
+    $key = strtolower(trim((string)$type));
+    return isset($map[$key]) ? $map[$key] : ($key !== '' ? $key : 'Other');
+}
+
+function client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $documentType)
+{
+    if (!function_exists('send_interaction_email')) {
+        return;
+    }
+    $threadType = strtoupper(trim((string)$threadType));
+    $bookingId = (int)$bookingId;
+    $itemId = (int)$itemId;
+    if ($bookingId <= 0) {
+        return;
+    }
+
+    $meta = interaction_email_request_meta($conexion, $threadType, $bookingId, $itemId);
+    $serviceTitle = trim((string)($meta['title'] ?? 'Request #' . $bookingId));
+    $destination = trim((string)($meta['subtitle'] ?? ''));
+    $docLabel = client_doc_document_label($documentType);
+    $actorLabel = interaction_email_actor_label('CLIENT');
+    $snippet = 'A medical document was uploaded: ' . $docLabel;
+
+    $subject = 'MedTravel update - ' . $actorLabel . ' uploaded a document for Request #' . $bookingId;
+    $contentHtml = '<p><strong>Actor:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8') . '</p>'
+        . '<p><strong>Request:</strong> #' . $bookingId . '<br>'
+        . '<strong>Service:</strong> ' . htmlspecialchars($serviceTitle, ENT_QUOTES, 'UTF-8') . '</p>';
+    if ($destination !== '') {
+        $contentHtml .= '<p><strong>Destination:</strong> ' . htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') . '</p>';
+    }
+    $contentHtml .= '<p><strong>Update:</strong> ' . htmlspecialchars($snippet, ENT_QUOTES, 'UTF-8') . '</p>';
+
+    $ctaUrl = 'https://medtravel.com.co/admin/app_inbox.php?request_id=' . $bookingId
+        . '&thread_type=' . urlencode((string)$meta['thread_type'])
+        . '&item_id=' . (int)$meta['item_id'];
+    $textBody = "Actor: {$actorLabel}\nRequest: #{$bookingId}\nService: {$serviceTitle}";
+    if ($destination !== '') {
+        $textBody .= "\nDestination: {$destination}";
+    }
+    $textBody .= "\nUpdate: {$snippet}\nInbox: {$ctaUrl}";
+
+    $adminEmail = interaction_email_resolve_patientcare_email($conexion);
+    $providerEmail = ($threadType === 'ITEM' && $itemId > 0)
+        ? interaction_email_fetch_provider_email($conexion, $itemId)
+        : '';
+
+    $metaSend = [
+        'preheader' => $snippet,
+        'cta' => ['text' => 'Open Inbox', 'url' => $ctaUrl],
+    ];
+
+    if (filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+        send_interaction_email($adminEmail, $subject, $contentHtml, $textBody, $metaSend, $conexion);
+    }
+    if (filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
+        send_interaction_email($providerEmail, $subject, $contentHtml, $textBody, $metaSend, $conexion);
+    }
 }
 
 function client_doc_normalize_upload_files($files)
@@ -643,6 +720,8 @@ foreach ($files as $index => $file) {
     $documentId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtInsert);
     $uploadedCount++;
+
+    client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $documentType);
 
     $successItem = [
         'index' => $index,
