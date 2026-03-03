@@ -2,16 +2,23 @@
 -- MIGRATION: Commission settings + payment records
 -- Date      : 2026-03-03
 -- Idempotent: yes (IF NOT EXISTS / SHOW COLUMNS guards)
+-- Additive  : no destructive ALTER statements
+-- Schema    : provider_id references providers.id (medical provider entity)
 -- =============================================================
 -- Tables:
 --   provider_commission_settings  – per-provider fee & payout config
 --   commission_payments           – one row per payment attempt/record
+-- External references (read-only / pre-existing tables, not modified):
+--   providers             – medical provider entity
+--   booking_requests      – parent booking
+--   booking_request_items – line item scoping
+--   usuarios              – admin / client users (updated_by, client_user_id, created_by)
 -- =============================================================
 
 SET @db := DATABASE();
 
 -- ── 1. provider_commission_settings ─────────────────────────────────────────
--- One row per service provider (booking_request_items.provider_id reference).
+-- One row per provider record (providers.id).
 -- commission_pct  : MedTravel platform fee as a percentage of the service price.
 -- fixed_fee_cop   : Optional flat COP fee charged on top of the %.
 -- payment_terms   : Free-text schedule, e.g. "30 days after procedure".
@@ -19,7 +26,7 @@ SET @db := DATABASE();
 -- is_active       : Soft-disabling a config without deleting it.
 CREATE TABLE IF NOT EXISTS `provider_commission_settings` (
   `id`                  INT UNSIGNED    NOT NULL AUTO_INCREMENT,
-  `provider_id`         INT UNSIGNED    NOT NULL                  COMMENT 'FK → usuarios.id (role=PROVIDER)',
+  `provider_id`         INT UNSIGNED    NOT NULL                  COMMENT 'FK → providers.id',
   `commission_pct`      DECIMAL(5,2)    NOT NULL DEFAULT  10.00   COMMENT 'Platform fee percentage (0-100)',
   `fixed_fee_cop`       DECIMAL(14,2)   NOT NULL DEFAULT   0.00   COMMENT 'Flat fee in COP (0 = none)',
   `currency`            CHAR(3)         NOT NULL DEFAULT 'COP'    COMMENT 'COP | USD | EUR',
@@ -31,7 +38,12 @@ CREATE TABLE IF NOT EXISTS `provider_commission_settings` (
   `updated_at`          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `updated_by`          INT UNSIGNED             DEFAULT NULL     COMMENT 'FK → usuarios.id (admin who last edited)',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_provider_commission` (`provider_id`)
+  UNIQUE KEY `uq_provider_commission` (`provider_id`),
+  CONSTRAINT `fk_pcs_provider`
+    FOREIGN KEY (`provider_id`)
+    REFERENCES `providers` (`id`)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── 2. commission_payments ───────────────────────────────────────────────────
@@ -47,7 +59,7 @@ CREATE TABLE IF NOT EXISTS `commission_payments` (
   `id`                     INT UNSIGNED    NOT NULL AUTO_INCREMENT,
   `request_id`             INT UNSIGNED    NOT NULL                  COMMENT 'FK → booking_requests.id',
   `item_id`                INT UNSIGNED             DEFAULT NULL      COMMENT 'FK → booking_request_items.id (null = whole request)',
-  `provider_id`            INT UNSIGNED    NOT NULL                  COMMENT 'FK → usuarios.id (role=PROVIDER)',
+  `provider_id`            INT UNSIGNED    NOT NULL                  COMMENT 'FK → providers.id',
   `client_user_id`         INT UNSIGNED             DEFAULT NULL      COMMENT 'FK → usuarios.id (role=CLIENT)',
   `amount`                 DECIMAL(14,2)   NOT NULL                  COMMENT 'Amount charged to client (platform fee)',
   `currency`               CHAR(3)         NOT NULL DEFAULT 'COP',
@@ -77,7 +89,22 @@ CREATE TABLE IF NOT EXISTS `commission_payments` (
   KEY `idx_cp_item`     (`item_id`),
   KEY `idx_cp_provider` (`provider_id`),
   KEY `idx_cp_status`   (`status`),
-  KEY `idx_cp_session`  (`stripe_session_id`(64))
+  KEY `idx_cp_session`  (`stripe_session_id`(64)),
+  CONSTRAINT `fk_cp_provider`
+    FOREIGN KEY (`provider_id`)
+    REFERENCES `providers` (`id`)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_cp_request`
+    FOREIGN KEY (`request_id`)
+    REFERENCES `booking_requests` (`id`)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_cp_item`
+    FOREIGN KEY (`item_id`)
+    REFERENCES `booking_request_items` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SELECT 'commission_tables_ready' AS status;
