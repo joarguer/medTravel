@@ -1,7 +1,10 @@
 <?php
 include '../include/conexion.php';
+require_once '../include/email_config.php';
 require_once '../include/roles.php';
 require_once '../../inc/inbox_utils.php';
+require_once '../../inc/email_template.php';
+require_once '../../inc/interaction_email.php';
 require_once '../../inc/fee_gate.php';
 
 require_login_ajax();
@@ -18,6 +21,56 @@ function admin_inbox_err($message, $status = 400)
     http_response_code($status);
     echo json_encode(['ok' => false, 'message' => $message]);
     exit;
+}
+
+function admin_inbox_notify_message($conexion, $ctx, $senderRole, $message)
+{
+    if (!function_exists('send_interaction_email')) {
+        return;
+    }
+    $requestId = (int)($ctx['request_id'] ?? 0);
+    if ($requestId <= 0) {
+        return;
+    }
+    $threadType = (string)($ctx['thread_type'] ?? '');
+    $itemId = (int)($ctx['item_id'] ?? 0);
+    $threadId = (string)($ctx['thread_id'] ?? '');
+    $clientEmail = interaction_email_fetch_client_email($conexion, $requestId);
+    if (!filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+        return;
+    }
+
+    $meta = interaction_email_request_meta($conexion, $threadType, $requestId, $itemId);
+    $serviceTitle = trim((string)($meta['title'] ?? 'Request #' . $requestId));
+    $destination = trim((string)($meta['subtitle'] ?? ''));
+    $actorLabel = interaction_email_actor_label($senderRole);
+    $snippet = interaction_email_safe_snippet($message, 120);
+    if ($snippet === '') {
+        $snippet = 'New message received.';
+    }
+
+    $subject = 'MedTravel update - ' . $actorLabel . ' message for Request #' . $requestId;
+    $contentHtml = '<p><strong>Actor:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8') . '</p>'
+        . '<p><strong>Request:</strong> #' . $requestId . '<br>'
+        . '<strong>Service:</strong> ' . htmlspecialchars($serviceTitle, ENT_QUOTES, 'UTF-8') . '</p>';
+    if ($destination !== '') {
+        $contentHtml .= '<p><strong>Destination:</strong> ' . htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') . '</p>';
+    }
+    $contentHtml .= '<p><strong>Message:</strong> ' . htmlspecialchars($snippet, ENT_QUOTES, 'UTF-8') . '</p>';
+
+    $ctaUrl = 'https://medtravel.com.co/client/app_inbox.php?thread_id=' . urlencode($threadId);
+    $textBody = "Actor: {$actorLabel}\nRequest: #{$requestId}\nService: {$serviceTitle}";
+    if ($destination !== '') {
+        $textBody .= "\nDestination: {$destination}";
+    }
+    $textBody .= "\nMessage: {$snippet}\nInbox: {$ctaUrl}";
+
+    $metaSend = [
+        'preheader' => $snippet,
+        'cta' => ['text' => 'Open Inbox', 'url' => $ctaUrl],
+    ];
+
+    send_interaction_email($clientEmail, $subject, $contentHtml, $textBody, $metaSend, $conexion);
 }
 
 function admin_inbox_status_label($status)
@@ -627,6 +680,14 @@ if ($action === 'list_messages') {
 }
 
 if ($action === 'send_message') {
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'ADMIN_SEND_MESSAGE_ENTER request_id=' . (int)($ctx['request_id'] ?? 0)
+            . ' item_id=' . (int)($ctx['item_id'] ?? 0)
+            . ' thread_type=' . (string)($ctx['thread_type'] ?? '')
+            . ' actor=' . strtoupper((string)($scope['reader_role'] ?? ''))
+        );
+    }
     if (!inbox_table_exists($conexion, 'inbox_messages')) {
         admin_inbox_err('inbox_messages_not_available', 409);
     }
@@ -686,6 +747,28 @@ if ($action === 'send_message') {
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
 
+    if (function_exists('mt_email_debug_log')) {
+        $emailSource = '';
+        $resolvedEmail = interaction_email_fetch_client_email($conexion, $requestId, $emailSource);
+        mt_email_debug_log(
+            'ADMIN_NOTIFY_CLIENT_START resolved_email=' . (string)$resolvedEmail
+            . ' source=' . (string)$emailSource
+        );
+        $notifyResult = notify_new_message_to_client(
+            $conexion,
+            $requestId,
+            $itemId,
+            $threadType,
+            $senderRole,
+            $message,
+            $resolvedEmail,
+            $emailSource
+        );
+        mt_email_debug_log('ADMIN_NOTIFY_CLIENT_DONE result=' . json_encode($notifyResult));
+    } else {
+        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message);
+    }
+
     admin_inbox_ok([
         'thread_id' => $threadId,
         'thread_type' => $threadType,
@@ -702,6 +785,14 @@ if ($action === 'send_message') {
 }
 
 if ($action === 'send_quick_reply') {
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'ADMIN_SEND_QUICK_REPLY_ENTER request_id=' . (int)($ctx['request_id'] ?? 0)
+            . ' item_id=' . (int)($ctx['item_id'] ?? 0)
+            . ' thread_type=' . (string)($ctx['thread_type'] ?? '')
+            . ' actor=' . strtoupper((string)($scope['reader_role'] ?? ''))
+        );
+    }
     if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
         admin_inbox_err('method_not_allowed', 405);
     }
@@ -816,6 +907,28 @@ if ($action === 'send_quick_reply') {
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
 
+    if (function_exists('mt_email_debug_log')) {
+        $emailSource = '';
+        $resolvedEmail = interaction_email_fetch_client_email($conexion, $requestId, $emailSource);
+        mt_email_debug_log(
+            'ADMIN_NOTIFY_CLIENT_START resolved_email=' . (string)$resolvedEmail
+            . ' source=' . (string)$emailSource
+        );
+        $notifyResult = notify_new_message_to_client(
+            $conexion,
+            $requestId,
+            $itemId,
+            $threadType,
+            $senderRole,
+            $message,
+            $resolvedEmail,
+            $emailSource
+        );
+        mt_email_debug_log('ADMIN_NOTIFY_CLIENT_DONE result=' . json_encode($notifyResult));
+    } else {
+        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message);
+    }
+
     admin_inbox_ok([
         'thread_id' => $threadId,
         'thread_type' => $threadType,
@@ -832,6 +945,14 @@ if ($action === 'send_quick_reply') {
 }
 
 if ($action === 'send_structured_action') {
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'ADMIN_SEND_STRUCTURED_ENTER request_id=' . (int)($ctx['request_id'] ?? 0)
+            . ' item_id=' . (int)($ctx['item_id'] ?? 0)
+            . ' thread_type=' . (string)($ctx['thread_type'] ?? '')
+            . ' actor=' . strtoupper((string)($scope['reader_role'] ?? ''))
+        );
+    }
     if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
         admin_inbox_err('method_not_allowed', 405);
     }
@@ -991,6 +1112,28 @@ if ($action === 'send_structured_action') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+
+    if (function_exists('mt_email_debug_log')) {
+        $emailSource = '';
+        $resolvedEmail = interaction_email_fetch_client_email($conexion, $requestId, $emailSource);
+        mt_email_debug_log(
+            'ADMIN_NOTIFY_CLIENT_START resolved_email=' . (string)$resolvedEmail
+            . ' source=' . (string)$emailSource
+        );
+        $notifyResult = notify_new_message_to_client(
+            $conexion,
+            $requestId,
+            $itemId,
+            $threadType,
+            $senderRole,
+            $message,
+            $resolvedEmail,
+            $emailSource
+        );
+        mt_email_debug_log('ADMIN_NOTIFY_CLIENT_DONE result=' . json_encode($notifyResult));
+    } else {
+        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message);
+    }
 
     admin_inbox_ok([
         'thread_id' => $threadId,

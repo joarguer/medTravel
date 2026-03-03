@@ -128,8 +128,11 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
 }
 
 if (!function_exists('interaction_email_fetch_client_email')) {
-    function interaction_email_fetch_client_email($conexion, $requestId)
+    function interaction_email_fetch_client_email($conexion, $requestId, &$source = null)
     {
+        if ($source !== null) {
+            $source = '';
+        }
         $requestId = (int)$requestId;
         if ($requestId <= 0 || !inbox_table_exists($conexion, 'booking_requests')) {
             return '';
@@ -155,6 +158,9 @@ if (!function_exists('interaction_email_fetch_client_email')) {
         }
         $email = trim((string)($row['email'] ?? ''));
         if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if ($source !== null) {
+                $source = 'booking_requests.email';
+            }
             return $email;
         }
         $clientUserId = (int)($row['client_user_id'] ?? 0);
@@ -178,6 +184,9 @@ if (!function_exists('interaction_email_fetch_client_email')) {
         $rowUser = $resUser ? mysqli_fetch_assoc($resUser) : null;
         mysqli_stmt_close($stmtUser);
         $email = trim((string)($rowUser['email'] ?? ''));
+        if ($source !== null && $email !== '') {
+            $source = 'usuarios.' . $userIdCol . ' via booking_requests.client_user_id';
+        }
         return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
     }
 }
@@ -347,12 +356,16 @@ if (!function_exists('notify_new_message_to_client')) {
      * @param  string $snippet    Raw message body preview (will be sanitised).
      * @return array              Result from send_interaction_email().
      */
-    function notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $snippet = '')
+    function notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $snippet = '', $resolvedEmail = '', $emailSource = '')
     {
         $requestId  = (int)$requestId;
         $itemId     = (int)$itemId;
         $threadType = strtoupper(trim((string)$threadType));
-        $to         = interaction_email_fetch_client_email($conexion, $requestId);
+        $to         = trim((string)$resolvedEmail);
+        $source     = (string)$emailSource;
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $to = interaction_email_fetch_client_email($conexion, $requestId, $source);
+        }
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
             return ['success' => false, 'error' => 'client_email_not_found'];
         }
