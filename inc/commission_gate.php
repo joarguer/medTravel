@@ -280,3 +280,55 @@ if (!function_exists('commission_gate_status')) {
         return $status;
     }
 }
+
+if (!function_exists('commission_gate_redact_sensitive')) {
+    /**
+     * Redact sensitive contact details (email, phone, URL, social handles) from a
+     * free-text string.  Provider name / title / specialty fields should NOT need
+     * this — those remain visible.  Apply only to description, notes, or any field
+     * that could contain contact information a client must not see before payment.
+     *
+     * Stage 1 free-form chat messages are NEVER passed through this function; the
+     * gate operates only on structured provider-detail fields in the items payload.
+     *
+     * @param  string $text  Raw text that may contain contact info.
+     * @return string        Text with sensitive patterns replaced by placeholders.
+     */
+    function commission_gate_redact_sensitive($text)
+    {
+        if (!is_string($text) || $text === '') {
+            return $text;
+        }
+
+        // Email addresses
+        $text = preg_replace(
+            '/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i',
+            '[email redacted]',
+            $text
+        );
+
+        // External URLs (http / https / bare www.)
+        $text = preg_replace(
+            '#(https?://|www\.)[^\s\]\[<>"\']{2,}#i',
+            '[link redacted]',
+            $text
+        );
+
+        // Phone numbers: country-code variants, dashes, dots, spaces, parens
+        // e.g. +57 300 123 4567 | (300) 123-4567 | 300.123.4567
+        $text = preg_replace(
+            '/(\+?\d[\d\s\-\.\(\)]{6,}\d)/',
+            '[phone redacted]',
+            $text
+        );
+
+        // Messenger / social platform handles preceded by platform name
+        $text = preg_replace(
+            '/(whatsapp|telegram|signal|instagram|facebook|twitter|tiktok)\s*[:@]?\s*\S+/i',
+            '[contact redacted]',
+            $text
+        );
+
+        return $text;
+    }
+}

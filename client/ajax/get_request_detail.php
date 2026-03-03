@@ -228,9 +228,11 @@ if (client_table_exists($conexion, 'booking_request_items')) {
                     $totalsByCurrency[$currency] += $price;
                 }
 
+                // Commission gate: enabled + unpaid → redact sensitive contact fields only.
+                // Provider name / title / specialty remain ALWAYS visible (Stage 1 negotiation
+                // must stay open). Free-form chat messages are never filtered here.
                 $commissionGate = commission_gate_status($conexion, $requestId, (int)$item['id']);
                 $providerLocked = !empty($commissionGate['enabled']) && empty($commissionGate['paid']);
-                $lockedLabel = 'Provider details available after commission payment.';
 
                 $payloadItem = [
                     'id' => (int)$item['id'],
@@ -245,18 +247,22 @@ if (client_table_exists($conexion, 'booking_request_items')) {
                     $payloadItem['item_type'] = 'medical_offer';
                     $payloadItem['item_type_label'] = 'Medical';
                     $payloadItem['name'] = (string)($item['medical_name'] ?? 'Medical service');
+                    // Name is always visible; strip any embedded contact details when unpaid.
+                    $rawProvider = (string)($item['medical_provider'] ?? 'Provider');
                     $payloadItem['provider'] = $providerLocked
-                        ? $lockedLabel
-                        : (string)($item['medical_provider'] ?? 'Provider');
+                        ? commission_gate_redact_sensitive($rawProvider)
+                        : $rawProvider;
                     $payloadItem['category'] = (string)($item['medical_category'] ?? 'Medical');
                     $itemsPayload['medical'][] = $payloadItem;
                 } else {
                     $payloadItem['item_type'] = 'complementary_service';
                     $payloadItem['item_type_label'] = 'Complementary';
                     $payloadItem['name'] = (string)($item['complementary_name'] ?? 'Complementary service');
+                    // Same policy: name stays, contact details redacted until paid.
+                    $rawProvider = (string)($item['complementary_provider'] ?? 'Service provider');
                     $payloadItem['provider'] = $providerLocked
-                        ? $lockedLabel
-                        : (string)($item['complementary_provider'] ?? 'Service provider');
+                        ? commission_gate_redact_sensitive($rawProvider)
+                        : $rawProvider;
                     $payloadItem['category'] = (string)($item['complementary_category'] ?? 'Complementary');
                     $itemsPayload['complementary'][] = $payloadItem;
                 }
