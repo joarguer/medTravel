@@ -9,12 +9,12 @@
  *  - Show a toast / inline notification on save
  *  - Render the header badge (Commission Active / No Commission Gate)
  *
- * Requires: jQuery (loaded by Metronic), PROVIDER_COMMISSION_ID global.
+ * Requires: jQuery (loaded by Metronic), PROVIDER_ID global.
  */
 (function ($) {
     'use strict';
 
-    var PROVIDER_ID = (typeof PROVIDER_COMMISSION_ID !== 'undefined') ? PROVIDER_COMMISSION_ID : 0;
+    var PROVIDER_ID = (typeof window.PROVIDER_ID !== 'undefined') ? window.PROVIDER_ID : 0;
     var ENDPOINT    = 'ajax/provider_commission_settings.php';
     var loaded      = false;
 

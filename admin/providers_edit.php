@@ -7,15 +7,13 @@
  */
 include('include/include.php');
 require_once 'include/roles.php';
+require_once __DIR__ . '/include/conexion.php';
 
-require_login();
-if (!user_can(PERM_BOOKING_MANAGE)) {
-    redirect_to_403();
-}
-
-$providerId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($providerId <= 0) {
-    header('Location: providers.php');
+$provider_id = intval($_GET['id'] ?? 0);
+if ($provider_id <= 0) {
+    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Proveedor inválido</title></head><body>';
+    echo '<p>Proveedor inválido. <a href="providers.php">Volver</a></p>';
+    echo '</body></html>';
     exit;
 }
 
@@ -29,7 +27,7 @@ if (isset($conexion) && $conexion) {
          WHERE id = ?
          LIMIT 1");
     if ($stmt) {
-        mysqli_stmt_bind_param($stmt, 'i', $providerId);
+        mysqli_stmt_bind_param($stmt, 'i', $provider_id);
         mysqli_stmt_execute($stmt);
         $res = mysqli_stmt_get_result($stmt);
         $provider = $res ? mysqli_fetch_assoc($res) : null;
@@ -37,13 +35,17 @@ if (isset($conexion) && $conexion) {
     }
 }
 if (!$provider) {
-    header('Location: providers.php');
+    echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Proveedor no encontrado</title></head><body>';
+    echo '<p>Provider not found. <a href="providers.php">Volver</a></p>';
+    echo '</body></html>';
     exit;
 }
 
 $provName    = htmlspecialchars($provider['name'] ?? '', ENT_QUOTES);
 $isVerified  = !empty($provider['is_verified']);
 $isActive    = !empty($provider['is_active']);
+$hasCommissionAjax = is_file(__DIR__ . '/ajax/provider_commission_settings.php');
+$hasCommissionJs = is_file(__DIR__ . '/js/provider_commission.js');
 
 // ── Commission gate badge (resolved via commission_settings AJAX on load) ──
 // The JS will inject the badge after fetching; this placeholder prevents flicker.
@@ -144,6 +146,13 @@ $isActive    = !empty($provider['is_active']);
 
                                 <!-- ── Tab 2: Commission Settings ── -->
                                 <div class="tab-pane" id="tab-commission">
+                                    <?php if (!$hasCommissionAjax || !$hasCommissionJs): ?>
+                                        <div class="note note-danger">
+                                            Commission assets missing. Ensure
+                                            <code>admin/ajax/provider_commission_settings.php</code> and
+                                            <code>admin/js/provider_commission.js</code> exist.
+                                        </div>
+                                    <?php endif; ?>
                                     <div class="portlet light">
                                         <div class="portlet-title">
                                             <div class="caption">
@@ -158,7 +167,7 @@ $isActive    = !empty($provider['is_active']);
                                             </div>
 
                                             <form id="form-commission" style="display:none; max-width:620px;">
-                                                <input type="hidden" id="cs-provider-id" name="provider_id" value="<?php echo $providerId; ?>" />
+                                                <input type="hidden" id="cs-provider-id" name="provider_id" value="<?php echo $provider_id; ?>" />
 
                                                 <!-- Commission Percentage -->
                                                 <div class="form-group">
@@ -263,9 +272,11 @@ $isActive    = !empty($provider['is_active']);
     <?php echo $theme_layout_script; ?>
 
     <script>
-        var PROVIDER_COMMISSION_ID = <?php echo $providerId; ?>;
+        const PROVIDER_ID = <?php echo $provider_id; ?>;
     </script>
-    <script src="js/provider_commission.js" type="text/javascript"></script>
+    <?php if ($hasCommissionJs): ?>
+        <script src="js/provider_commission.js" type="text/javascript"></script>
+    <?php endif; ?>
 </div>
 </body>
 </html>
