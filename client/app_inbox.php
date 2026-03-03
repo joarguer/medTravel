@@ -1,8 +1,12 @@
 <?php
 include __DIR__ . '/include/include.php';
 require_once __DIR__ . '/../inc/fee_gate.php';
+require_once __DIR__ . '/../inc/commission_gate.php';
 
 $clientFeeGateActive = false;
+$clientCommissionGateActive = false;
+$clientCommissionPaid = false;
+$clientCommissionMessage = '';
 if (isset($conexion) && $conexion) {
     $ownerScope = client_build_booking_owner_scope($conexion, 'br', (int)$clientUserId, client_get_session_email());
     $requestId = isset($_GET['request_id']) ? (int)$_GET['request_id'] : (isset($_GET['booking_id']) ? (int)$_GET['booking_id'] : 0);
@@ -40,6 +44,15 @@ if (isset($conexion) && $conexion) {
 
     if ($bookingIdForFee > 0) {
         $clientFeeGateActive = is_booking_fee_required($conexion, $bookingIdForFee);
+    }
+
+    if ($requestId > 0 && $itemId > 0) {
+        $commissionGate = commission_gate_status($conexion, $requestId, $itemId);
+        $clientCommissionGateActive = !empty($commissionGate['enabled']) && empty($commissionGate['paid']);
+        $clientCommissionPaid = !empty($commissionGate['paid']);
+        if ($clientCommissionGateActive) {
+            $clientCommissionMessage = 'Provider details and free messaging unlock after the commission payment is completed.';
+        }
     }
 }
 ?>
@@ -187,6 +200,10 @@ if (isset($conexion) && $conexion) {
                                 <strong>Coordination Fee required.</strong>
                                 Unlock after Coordination Fee.
                             </div>
+                            <div id="client-inbox-commission-alert" class="note note-info" style="<?php echo $clientCommissionGateActive ? '' : 'display:none;'; ?>">
+                                <strong>Commission payment required.</strong>
+                                <?php echo htmlspecialchars($clientCommissionMessage !== '' ? $clientCommissionMessage : 'Provider details and free messaging unlock after the commission payment is completed.', ENT_QUOTES, 'UTF-8'); ?>
+                            </div>
                             <div id="client-inbox-structured-alert" class="note note-info" style="display:none; margin-bottom:12px;">
                                 <strong>There are pending structured actions in a service thread.</strong>
                                 <a id="client-go-service-thread" class="btn btn-default btn-xs" style="margin-left:10px;" href="#">Go to Service Thread</a>
@@ -292,7 +309,10 @@ if (isset($conexion) && $conexion) {
 <script src="/client/js/notifications.js" type="text/javascript"></script>
 <script type="text/javascript">
 window.ClientInboxConfig = {
-    feeGateActive: <?php echo $clientFeeGateActive ? 'true' : 'false'; ?>
+    feeGateActive: <?php echo $clientFeeGateActive ? 'true' : 'false'; ?>,
+    commissionGateActive: <?php echo $clientCommissionGateActive ? 'true' : 'false'; ?>,
+    commissionPaid: <?php echo $clientCommissionPaid ? 'true' : 'false'; ?>,
+    commissionMessage: <?php echo json_encode($clientCommissionMessage); ?>
 };
 </script>
 <script src="/client/js/app_inbox.js" type="text/javascript"></script>

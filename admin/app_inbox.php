@@ -226,13 +226,14 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         }
         #adminDocViewerModal .mt-dv-preview-wrap iframe {
             width: 100%;
-            height: 520px;
+            height: 80vh;
+            max-height: 80vh;
             border: none;
             display: block;
         }
         #adminDocViewerModal .mt-dv-preview-wrap img {
             max-width: 100%;
-            max-height: 520px;
+            max-height: 80vh;
             display: block;
             margin: auto;
         }
@@ -258,10 +259,11 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                 min-height: 100vh;
             }
             #adminDocViewerModal .mt-dv-preview-wrap iframe {
-                height: 50vh;
+                height: 60vh;
+                max-height: 60vh;
             }
             #adminDocViewerModal .mt-dv-preview-wrap img {
-                max-height: 50vh;
+                max-height: 60vh;
             }
         }
         /* ── Message bubbles ── */
@@ -371,6 +373,10 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                     <strong>Coordination Fee required.</strong>
                                     Use quick replies while the fee is pending.
                                 </div>
+                                <div id="admin-inbox-commission-alert" class="note note-info" style="display:none;margin-top:12px;">
+                                    <strong>Commission status.</strong>
+                                    This request is pending commission payment.
+                                </div>
                                 <div id="admin-inbox-quick-replies" style="display:none;margin-top:12px;">
                                     <label>Quick replies</label>
                                     <div class="btn-group btn-group-xs" role="group" style="display:flex;flex-wrap:wrap;gap:6px;">
@@ -427,7 +433,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                 <div class="mt-dv-preview-wrap" id="adminDocViewerPreview">
                     <div class="mt-dv-no-preview">
                         <i class="fa fa-file-o" aria-hidden="true"></i>
-                        <span>Preview not available</span>
+                        <span>Preview not available.</span>
                     </div>
                 </div>
             </div>

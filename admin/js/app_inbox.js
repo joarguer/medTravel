@@ -3,6 +3,7 @@
     var currentThread = null;
     var preferredThread = null;
     var feeGateActive = false;
+    var commissionGateActive = false;
     var freeMessageAllowed = true;
     var currentDocuments = [];
     var quickReplies = {
@@ -72,6 +73,39 @@
         return labels[key] || key || 'Other';
     }
 
+    function extractFileExtension(value) {
+        var raw = String(value || '').trim();
+        if (!raw) return '';
+        var clean = raw.split('?')[0].split('#')[0];
+        var lastDot = clean.lastIndexOf('.');
+        if (lastDot === -1) return '';
+        return clean.slice(lastDot + 1).toLowerCase();
+    }
+
+    function isPdfMime(mime) {
+        var m = String(mime || '').toLowerCase();
+        return m === 'application/pdf' || m === 'application/x-pdf';
+    }
+
+    function isPreviewImageMime(mime) {
+        var m = String(mime || '').toLowerCase();
+        return m === 'image/jpeg' || m === 'image/jpg' || m === 'image/png' || m === 'image/webp';
+    }
+
+    function isPreviewImageExt(ext) {
+        return ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'webp';
+    }
+
+    function resolvePreviewType(meta) {
+        var mime = String(meta.mime || '').toLowerCase();
+        if (isPdfMime(mime)) return 'pdf';
+        if (isPreviewImageMime(mime)) return 'image';
+        var ext = extractFileExtension(meta.name || '') || extractFileExtension(meta.url || '');
+        if (ext === 'pdf') return 'pdf';
+        if (isPreviewImageExt(ext)) return 'image';
+        return '';
+    }
+
     function renderThreadDocuments(docs) {
         var hasDocs = docs && docs.length > 0;
         var countHtml = hasDocs
@@ -93,6 +127,7 @@
                 if (!href && doc.id) {
                     href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
                 }
+                var encodedHref = href ? encodeURIComponent(href) : '';
                 var dateText = '';
                 if (uploadedRaw) {
                     var d = new Date(uploadedRaw.replace(' ', 'T'));
@@ -109,8 +144,9 @@
                         (dateText ? '<small class="mt-doc-date text-muted"><i class="fa fa-clock-o" aria-hidden="true"></i> ' + esc(dateText) + '</small>' : '') +
                         '<button type="button" class="btn btn-xs btn-info mt-doc-view"' +
                             ' data-doc-id="' + esc(String(doc.id || '')) + '"' +
-                            ' title="View ' + esc(originalName) + '">' +
-                            '<i class="fa fa-eye" aria-hidden="true"></i> View' +
+                            ' data-url="' + esc(encodedHref) + '"' +
+                            ' title="Ver ' + esc(originalName) + '">' +
+                            '<i class="fa fa-eye" aria-hidden="true"></i> Ver' +
                         '</button>' +
                         '<a class="btn btn-xs btn-default mt-doc-download" href="' + esc(href) + '" target="_blank" rel="noopener" title="Download ' + esc(originalName) + '">' +
                             '<i class="fa fa-download" aria-hidden="true"></i> Download' +
@@ -635,6 +671,24 @@
         }
     }
 
+    function setCommissionGateState(enabled, paid) {
+        commissionGateActive = !!enabled;
+        var $alert = $('#admin-inbox-commission-alert');
+        if (!$alert.length) return;
+        if (!commissionGateActive) {
+            $alert.hide();
+            return;
+        }
+        if (paid) {
+            $alert.removeClass('note-warning').addClass('note-success');
+            $alert.html('<strong>Commission paid.</strong> Provider details are unlocked for the client.');
+        } else {
+            $alert.removeClass('note-success').addClass('note-warning');
+            $alert.html('<strong>Commission pending.</strong> Provider details remain locked for the client.');
+        }
+        $alert.show();
+    }
+
     function setComposeGateState(canSendFreeMessage, noticeMessage) {
         freeMessageAllowed = !!canSendFreeMessage;
         var composeBlocked = feeGateActive || !freeMessageAllowed;
@@ -739,6 +793,9 @@
 
             var feeLocked = !!res.fee_locked;
             setFeeGateState(feeLocked);
+            var commissionGateEnabled = parseInt(res.commission_gate_enabled || 0, 10) === 1;
+            var commissionPaid = parseInt(res.commission_paid || 0, 10) === 1;
+            setCommissionGateState(commissionGateEnabled, commissionPaid);
             var canSendFreeMessage = (typeof res.can_send_free_message === 'boolean') ? res.can_send_free_message : !feeLocked;
             setComposeGateState(canSendFreeMessage, res.free_message_notice || '');
             currentDocuments = $.isArray(res.documents) ? res.documents : [];
@@ -927,7 +984,7 @@
             $('#adminDocViewerPreview').html(
                 '<div class="mt-dv-no-preview">' +
                     '<i class="fa fa-file-o" aria-hidden="true"></i>' +
-                    '<span>Preview not available</span>' +
+                    '<span>Preview not available.</span>' +
                 '</div>'
             );
         });

@@ -6,6 +6,9 @@
     var selectedFiles = [];
     var currentDocuments = [];
     var feeGateActive = !!config.feeGateActive;
+    var commissionGateActive = !!config.commissionGateActive;
+    var commissionPaid = !!config.commissionPaid;
+    var commissionGateMessage = String(config.commissionMessage || '');
     var freeMessageAllowed = true;
     var quickActions = {
         REQUEST_AVAILABILITY: 'Please confirm availability for my dates.',
@@ -624,9 +627,25 @@
         }
     }
 
+    function setCommissionGateState(enabled, paid, message) {
+        commissionGateActive = !!enabled && !paid;
+        commissionPaid = !!paid;
+        commissionGateMessage = String(message || commissionGateMessage || '');
+        var $alert = $('#client-inbox-commission-alert');
+        if ($alert.length) {
+            if (commissionGateActive) {
+                var text = commissionGateMessage || 'Provider details and free messaging unlock after the commission payment is completed.';
+                $alert.html('<strong>Commission payment required.</strong> ' + esc(text));
+                $alert.show();
+            } else {
+                $alert.hide();
+            }
+        }
+    }
+
     function setComposeGateState(canSendFreeMessage, noticeMessage) {
         freeMessageAllowed = !!canSendFreeMessage;
-        var composeBlocked = feeGateActive || !freeMessageAllowed;
+        var composeBlocked = feeGateActive || commissionGateActive || !freeMessageAllowed;
 
         var $msg = $('#client-inbox-message');
         var $send = $('#client-inbox-send-btn');
@@ -639,7 +658,10 @@
 
         var $note = $('#client-inbox-compose-note');
         if ($note.length) {
-            if (!freeMessageAllowed) {
+            if (commissionGateActive) {
+                $note.text(commissionGateMessage || 'Free-form messaging is locked until the commission payment is completed. Please use the structured actions above.');
+                $note.show();
+            } else if (!freeMessageAllowed) {
                 $note.text(noticeMessage || 'Free-form messaging is locked right now. Please use the structured actions above.');
                 $note.show();
             } else {
@@ -984,6 +1006,9 @@
             var computedFeeLocked = (feeRequired && feeStatus !== 'paid');
             var feeLocked = !!res.fee_locked || computedFeeLocked;
             setFeeGateState(feeLocked, res.fee_message || 'Unlock after Coordination Fee.');
+            var commissionGateEnabled = parseInt(res.commission_gate_enabled || 0, 10) === 1;
+            var commissionPaidFlag = parseInt(res.commission_paid || 0, 10) === 1;
+            setCommissionGateState(commissionGateEnabled, commissionPaidFlag, res.commission_message || '');
             var canSendFreeMessage = (typeof res.can_send_free_message === 'boolean') ? res.can_send_free_message : !feeLocked;
             var isCareThread = String(currentThread.thread_type || '').toUpperCase() === 'CARE';
             var effectiveCanSendFreeMessage = isCareThread ? true : canSendFreeMessage;
@@ -1032,6 +1057,10 @@
             toastr.warning('Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
             return;
         }
+        if (commissionGateActive) {
+            toastr.warning('Commission payment required');
+            return;
+        }
         if (feeGateActive) {
             toastr.warning('Unlock after Coordination Fee');
             return;
@@ -1065,6 +1094,12 @@
                 setFeeGateState(true, 'Unlock after Coordination Fee.');
                 setComposeGateState(true, '');
                 toastr.warning('Unlock after Coordination Fee');
+                return;
+            }
+            if (res && res.code === 'COMMISSION_REQUIRED') {
+                setCommissionGateState(true, false, res.message || 'Provider details and free messaging unlock after the commission payment is completed.');
+                setComposeGateState(true, '');
+                toastr.warning('Commission payment required');
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {

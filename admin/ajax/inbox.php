@@ -6,6 +6,7 @@ require_once '../../inc/inbox_utils.php';
 require_once '../../inc/email_template.php';
 require_once '../../inc/interaction_email.php';
 require_once '../../inc/fee_gate.php';
+require_once '../../inc/commission_gate.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -663,6 +664,10 @@ if ($action === 'list_messages') {
         }
     }
 
+    $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
+    $commissionGateEnabled = !empty($commissionGate['enabled']);
+    $commissionPaid = !empty($commissionGate['paid']);
+
     admin_inbox_ok([
         'thread_id' => $ctx['thread_id'],
         'thread_type' => $ctx['thread_type'],
@@ -670,6 +675,9 @@ if ($action === 'list_messages') {
         'booking_request_id' => (int)$ctx['request_id'],
         'item_id' => (int)$ctx['item_id'],
         'fee_locked' => $feeLocked ? 1 : 0,
+        'commission_gate_enabled' => $commissionGateEnabled ? 1 : 0,
+        'commission_paid' => $commissionPaid ? 1 : 0,
+        'commission_status' => $commissionGateEnabled ? ($commissionPaid ? 'paid' : 'unpaid') : 'disabled',
         'can_send_free_message' => !empty($freeMessageState['can_send_free_message']),
         'free_message_blocked_reason' => (string)($freeMessageState['blocked_reason'] ?? ''),
         'free_message_notice' => (string)($freeMessageState['notice'] ?? ''),

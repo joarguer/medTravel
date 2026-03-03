@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../inc/auth_client.php';
 require_client_auth_ajax();
 require_once __DIR__ . '/../../admin/include/conexion.php';
 require_once __DIR__ . '/../include/client_notifications.php';
+require_once __DIR__ . '/../../inc/commission_gate.php';
 
 function client_json_error($message, $code = 400)
 {
@@ -227,26 +228,35 @@ if (client_table_exists($conexion, 'booking_request_items')) {
                     $totalsByCurrency[$currency] += $price;
                 }
 
+                $commissionGate = commission_gate_status($conexion, $requestId, (int)$item['id']);
+                $providerLocked = !empty($commissionGate['enabled']) && empty($commissionGate['paid']);
+                $lockedLabel = 'Provider details available after commission payment.';
+
                 $payloadItem = [
                     'id' => (int)$item['id'],
                     'item_status' => client_status_label($item['item_status'] ?? ''),
                     'price' => $price,
                     'currency' => $currency,
                     'price_display' => $price > 0 ? ($currency . ' $' . number_format($price, 2)) : 'On request',
+                    'provider_locked' => $providerLocked ? 1 : 0,
                 ];
 
                 if ($itemType === 'medical_offer') {
                     $payloadItem['item_type'] = 'medical_offer';
                     $payloadItem['item_type_label'] = 'Medical';
                     $payloadItem['name'] = (string)($item['medical_name'] ?? 'Medical service');
-                    $payloadItem['provider'] = (string)($item['medical_provider'] ?? 'Provider');
+                    $payloadItem['provider'] = $providerLocked
+                        ? $lockedLabel
+                        : (string)($item['medical_provider'] ?? 'Provider');
                     $payloadItem['category'] = (string)($item['medical_category'] ?? 'Medical');
                     $itemsPayload['medical'][] = $payloadItem;
                 } else {
                     $payloadItem['item_type'] = 'complementary_service';
                     $payloadItem['item_type_label'] = 'Complementary';
                     $payloadItem['name'] = (string)($item['complementary_name'] ?? 'Complementary service');
-                    $payloadItem['provider'] = (string)($item['complementary_provider'] ?? 'Service provider');
+                    $payloadItem['provider'] = $providerLocked
+                        ? $lockedLabel
+                        : (string)($item['complementary_provider'] ?? 'Service provider');
                     $payloadItem['category'] = (string)($item['complementary_category'] ?? 'Complementary');
                     $itemsPayload['complementary'][] = $payloadItem;
                 }
