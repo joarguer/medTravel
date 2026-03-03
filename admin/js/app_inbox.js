@@ -457,6 +457,10 @@
         if (!href && doc.id) {
             href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
         }
+        var previewUrl = href;
+        if (doc.id) {
+            previewUrl = '/admin/ajax/preview_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
+        }
         // Header
         $('#adminDocViewerName').text(originalName);
         $('#adminDocViewerType').text(typeLabel);
@@ -484,9 +488,9 @@
         // Preview
         var $preview = $('#adminDocViewerPreview');
         if (mimeType.indexOf('image/') === 0) {
-            $preview.html('<img src="' + esc(href) + '" alt="' + esc(originalName) + '">');
+            $preview.html('<img src="' + esc(previewUrl) + '" alt="' + esc(originalName) + '">');
         } else if (mimeType === 'application/pdf') {
-            $preview.html('<iframe src="' + esc(href) + '" title="' + esc(originalName) + '"></iframe>');
+            $preview.html('<iframe src="' + esc(previewUrl) + '" title="' + esc(originalName) + '"></iframe>');
         } else {
             $preview.html(
                 '<div class="mt-dv-no-preview">' +
