@@ -241,6 +241,9 @@ if (!function_exists('send_interaction_email')) {
         if (!function_exists('sendEmail')) {
             return ['success' => false, 'error' => 'sendEmail_unavailable'];
         }
+        error_log('[EMAIL DEBUG] send_interaction_email called');
+        error_log('[EMAIL DEBUG] recipient: ' . $to);
+        error_log('[EMAIL DEBUG] subject: ' . $subject);
         $preheader = (string)($meta['preheader'] ?? $subject);
         $cta = isset($meta['cta']) ? $meta['cta'] : null;
         $footerNote = (string)($meta['footer_note'] ?? '');
@@ -255,6 +258,7 @@ if (!function_exists('send_interaction_email')) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
 
+        error_log('[EMAIL DEBUG] mail result: ' . json_encode($result));
         if (is_array($result) && empty($result['success'])) {
             error_log('interaction_email_send_failed to=' . $to . ' err=' . ($result['error'] ?? 'unknown'));
         }
