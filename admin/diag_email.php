@@ -8,9 +8,18 @@ require_once __DIR__ . '/../inc/interaction_email.php';
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 
-if (!is_role_admin_session()) {
+$debug = isset($_GET['debug']) && $_GET['debug'] === '1';
+$isAdmin = is_role_admin_session()
+    || user_can(PERM_SETTINGS_MANAGE)
+    || user_can(PERM_USERS_MANAGE);
+
+if (!$isAdmin) {
     http_response_code(403);
-    echo json_encode(['ok' => false, 'error' => 'FORBIDDEN']);
+    $payload = ['ok' => false, 'error' => 'FORBIDDEN'];
+    if ($debug && is_role_admin_session()) {
+        $payload['debug'] = 'role_denied';
+    }
+    echo json_encode($payload);
     exit;
 }
 
