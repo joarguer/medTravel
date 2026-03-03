@@ -125,7 +125,6 @@ $meta_lang = htmlspecialchars((string)$page_lang, ENT_QUOTES, 'UTF-8');
 $head = '<meta charset="utf-8">
     <title>' . $meta_title . '</title>
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <meta content="" name="keywords">
     <meta content="' . $meta_description . '" name="description">
     <meta name="robots" content="' . $meta_robots . '">
     <meta name="language" content="' . $meta_lang . '">
