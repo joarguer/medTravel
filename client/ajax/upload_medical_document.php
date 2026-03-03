@@ -406,6 +406,7 @@ $hasTitle = client_table_has_column($conexion, 'client_documents', 'title');
 $hasDescription = client_table_has_column($conexion, 'client_documents', 'description');
 $hasSharedWithProvider = client_table_has_column($conexion, 'client_documents', 'shared_with_provider');
 $hasUploadedBy = client_table_has_column($conexion, 'client_documents', 'uploaded_by');
+$hasClientUserId = client_table_has_column($conexion, 'client_documents', 'client_user_id');
 
 $results = [];
 $uploadedCount = 0;
@@ -519,13 +520,20 @@ foreach ($files as $index => $file) {
     $columns[] = 'client_id';
     $placeholders[] = '?';
     $types .= 'i';
-    $params[] = $clientUserId;
+    $params[] = $resolvedClientId;
 
     if ($hasDocumentType) {
         $columns[] = 'document_type';
         $placeholders[] = '?';
         $types .= 's';
         $params[] = $documentType;
+    }
+
+    if ($hasClientUserId) {
+        $columns[] = 'client_user_id';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = $clientUserId;
     }
 
     $columns[] = 'file_path';

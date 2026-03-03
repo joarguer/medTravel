@@ -493,6 +493,11 @@ if ($action === 'list_messages') {
         $docHasRequestId = client_table_has_column($conexion, 'client_documents', 'booking_request_id');
         $docHasItemId = client_table_has_column($conexion, 'client_documents', 'item_id');
         if ($docHasRequestId && $docHasItemId) {
+            $docHasClientUserId = client_table_has_column($conexion, 'client_documents', 'client_user_id');
+            $clientesHasClientUserId = client_table_has_column($conexion, 'clientes', 'client_user_id');
+            $clientesHasUserId = client_table_has_column($conexion, 'clientes', 'user_id');
+            $clientesMapCol = $clientesHasClientUserId ? 'client_user_id' : ($clientesHasUserId ? 'user_id' : '');
+
             $selectCols = ['id', 'file_path', 'filename', 'original_filename', 'document_type', 'booking_request_id', 'item_id'];
             if (client_table_has_column($conexion, 'client_documents', 'file_size')) {
                 $selectCols[] = 'file_size';
@@ -508,14 +513,51 @@ if ($action === 'list_messages') {
             }
             $orderByColumn = client_table_has_column($conexion, 'client_documents', 'uploaded_at') ? 'uploaded_at' : 'id';
 
-            $docSql = "SELECT " . implode(', ', $selectCols) . "
-                       FROM client_documents
-                       WHERE client_id = ? AND booking_request_id = ?";
-            $docTypes = 'ii';
-            $docParams = [$clientUserId, (int)$ctx['request_id']];
+            $docSql = "SELECT " . implode(', ', $selectCols) . " FROM client_documents cd";
+            $docTypes = '';
+            $docParams = [];
+
+            if ($docHasClientUserId) {
+                $docSql .= " WHERE (cd.client_user_id = ?";
+                $docTypes .= 'i';
+                $docParams[] = $clientUserId;
+                if ($clientesMapCol !== '') {
+                    $docSql .= " OR (cd.client_user_id IS NULL AND EXISTS (SELECT 1 FROM clientes c WHERE c.id = cd.client_id AND c." . $clientesMapCol . " = ?))";
+                    $docTypes .= 'i';
+                    $docParams[] = $clientUserId;
+                }
+                $docSql .= ")";
+            } else {
+                $clientIdForDocs = 0;
+                if ($clientesMapCol !== '') {
+                    $stmtClient = mysqli_prepare($conexion, "SELECT id FROM clientes WHERE " . $clientesMapCol . " = ? ORDER BY id DESC LIMIT 1");
+                    if ($stmtClient) {
+                        mysqli_stmt_bind_param($stmtClient, 'i', $clientUserId);
+                        if (mysqli_stmt_execute($stmtClient)) {
+                            $resClient = mysqli_stmt_get_result($stmtClient);
+                            $rowClient = $resClient ? mysqli_fetch_assoc($resClient) : null;
+                            if ($rowClient) {
+                                $clientIdForDocs = (int)($rowClient['id'] ?? 0);
+                            }
+                        }
+                        mysqli_stmt_close($stmtClient);
+                    }
+                }
+                if ($clientIdForDocs > 0) {
+                    $docSql .= " WHERE cd.client_id = ?";
+                    $docTypes .= 'i';
+                    $docParams[] = $clientIdForDocs;
+                } else {
+                    $docSql .= " WHERE 1=0";
+                }
+            }
+
+            $docSql .= " AND cd.booking_request_id = ?";
+            $docTypes .= 'i';
+            $docParams[] = (int)$ctx['request_id'];
 
             if (strtoupper((string)($ctx['thread_type'] ?? 'CARE')) === 'ITEM' && (int)($ctx['item_id'] ?? 0) > 0) {
-                $docSql .= " AND (item_id = ? OR item_id IS NULL)";
+                $docSql .= " AND (cd.item_id = ? OR cd.item_id IS NULL)";
                 $docTypes .= 'i';
                 $docParams[] = (int)$ctx['item_id'];
             }

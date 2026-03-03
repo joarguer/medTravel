@@ -483,7 +483,8 @@ if ($action === 'list_messages') {
         if (!$docHasRequestId || !$docHasItemId) {
             $documentsError = 'client_documents_scope_missing';
         } else {
-            $clientId = 0;
+            $clientUserId = 0;
+            $clientesId = 0;
             $clientEmail = '';
             if (inbox_table_exists($conexion, 'booking_requests') && $bookingRequestId > 0) {
                 $hasBrClientUserId = inbox_table_has_column($conexion, 'booking_requests', 'client_user_id');
@@ -497,31 +498,57 @@ if ($action === 'list_messages') {
                         $resClient = mysqli_stmt_get_result($stmtClient);
                         $rowClient = $resClient ? mysqli_fetch_assoc($resClient) : null;
                         if ($rowClient) {
-                            $clientId = (int)($rowClient['client_user_id'] ?? 0);
+                            $clientUserId = (int)($rowClient['client_user_id'] ?? 0);
                             $clientEmail = trim((string)($rowClient['email'] ?? ''));
                         }
                     }
                     mysqli_stmt_close($stmtClient);
                 }
             }
-            if ($clientId <= 0 && $clientEmail !== '' && inbox_table_exists($conexion, 'clientes') && inbox_table_has_column($conexion, 'clientes', 'email')) {
+            if ($clientUserId <= 0 && $clientEmail !== '' && inbox_table_exists($conexion, 'clientes') && inbox_table_has_column($conexion, 'clientes', 'email')) {
                 $hasClientesClientUserId = inbox_table_has_column($conexion, 'clientes', 'client_user_id');
-                $clientSelect = $hasClientesClientUserId ? 'client_user_id' : 'id';
-                $stmtLookup = mysqli_prepare($conexion, "SELECT {$clientSelect} AS client_user_id FROM clientes WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
+                $hasClientesUserId = inbox_table_has_column($conexion, 'clientes', 'user_id');
+                $clientSelect = $hasClientesClientUserId ? 'client_user_id' : ($hasClientesUserId ? 'user_id' : 'id');
+                $stmtLookup = mysqli_prepare($conexion, "SELECT {$clientSelect} AS client_user_id, id AS clientes_id FROM clientes WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
                 if ($stmtLookup) {
                     mysqli_stmt_bind_param($stmtLookup, 's', $clientEmail);
                     if (mysqli_stmt_execute($stmtLookup)) {
                         $resLookup = mysqli_stmt_get_result($stmtLookup);
                         $rowLookup = $resLookup ? mysqli_fetch_assoc($resLookup) : null;
                         if ($rowLookup) {
-                            $clientId = (int)($rowLookup['client_user_id'] ?? 0);
+                            $clientUserId = (int)($rowLookup['client_user_id'] ?? 0);
+                            $clientesId = (int)($rowLookup['clientes_id'] ?? 0);
                         }
                     }
                     mysqli_stmt_close($stmtLookup);
                 }
             }
 
-            if ($clientId > 0) {
+            $docHasClientUserId = inbox_table_has_column($conexion, 'client_documents', 'client_user_id');
+            $clientesHasClientUserId = inbox_table_has_column($conexion, 'clientes', 'client_user_id');
+            $clientesHasUserId = inbox_table_has_column($conexion, 'clientes', 'user_id');
+            $clientesMapCol = $clientesHasClientUserId ? 'client_user_id' : ($clientesHasUserId ? 'user_id' : '');
+
+            if ($docHasClientUserId && $clientUserId <= 0 && $clientesMapCol !== '' && $bookingRequestId > 0) {
+                // Try to resolve client user id via clientes mapping if booking_requests doesn't have it.
+                $stmtResolve = mysqli_prepare($conexion, "SELECT {$clientesMapCol} AS client_user_id, id AS clientes_id FROM clientes WHERE id = ? LIMIT 1");
+                if ($stmtResolve) {
+                    mysqli_stmt_bind_param($stmtResolve, 'i', $clientesId);
+                    if (mysqli_stmt_execute($stmtResolve)) {
+                        $resResolve = mysqli_stmt_get_result($stmtResolve);
+                        $rowResolve = $resResolve ? mysqli_fetch_assoc($resResolve) : null;
+                        if ($rowResolve) {
+                            $clientUserId = (int)($rowResolve['client_user_id'] ?? 0);
+                            if ($clientesId <= 0) {
+                                $clientesId = (int)($rowResolve['clientes_id'] ?? 0);
+                            }
+                        }
+                    }
+                    mysqli_stmt_close($stmtResolve);
+                }
+            }
+
+            if (($docHasClientUserId && $clientUserId > 0) || (!$docHasClientUserId && $clientesId > 0)) {
                 $selectCols = ['id', 'file_path', 'filename', 'original_filename', 'document_type', 'booking_request_id', 'item_id'];
                 if (inbox_table_has_column($conexion, 'client_documents', 'file_size')) {
                     $selectCols[] = 'file_size';
@@ -536,9 +563,26 @@ if ($action === 'list_messages') {
                     $selectCols[] = 'description';
                 }
                 $orderByColumn = inbox_table_has_column($conexion, 'client_documents', 'uploaded_at') ? 'uploaded_at' : 'id';
-                $docSql = "SELECT " . implode(', ', $selectCols) . " FROM client_documents WHERE client_id = ?";
-                $docTypes = 'i';
-                $docParams = [$clientId];
+                $docSql = "SELECT " . implode(', ', $selectCols) . " FROM client_documents cd";
+                $docTypes = '';
+                $docParams = [];
+
+                if ($docHasClientUserId && $clientUserId > 0) {
+                    $docSql .= " WHERE (cd.client_user_id = ?";
+                    $docTypes .= 'i';
+                    $docParams[] = $clientUserId;
+                    if ($clientesMapCol !== '') {
+                        $docSql .= " OR (cd.client_user_id IS NULL AND EXISTS (SELECT 1 FROM clientes c WHERE c.id = cd.client_id AND c." . $clientesMapCol . " = ?))";
+                        $docTypes .= 'i';
+                        $docParams[] = $clientUserId;
+                    }
+                    $docSql .= ")";
+                } else {
+                    $docSql .= " WHERE cd.client_id = ?";
+                    $docTypes .= 'i';
+                    $docParams[] = $clientesId;
+                }
+
                 if (inbox_table_has_column($conexion, 'client_documents', 'shared_with_provider')) {
                     $docSql .= " AND shared_with_provider = 1";
                 }
