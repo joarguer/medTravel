@@ -177,8 +177,9 @@ function sendEmail($to, $subject, $body, $account_type = 'patientcare', $options
         $mail->addCustomHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
         $mail->addCustomHeader('X-Auto-Response-Suppress', 'All');
         $mail->addCustomHeader('Auto-Submitted', 'auto-generated');
+        $mail->addCustomHeader('Precedence', 'transactional');
 
-        $messageId = '<' . str_replace('.', '', uniqid('', true)) . '.' . time() . '@medtravel.com.co>';
+        $messageId = '<' . uniqid() . '.' . time() . '@medtravel.com.co>';
         $mail->MessageID = $messageId;
 
         if (isset($options['from_email']) || isset($options['from_name'])) {
@@ -191,6 +192,16 @@ function sendEmail($to, $subject, $body, $account_type = 'patientcare', $options
         if (isset($options['reply_to']) && trim((string)$options['reply_to']) !== '') {
             $mail->clearReplyTos();
             $mail->addReplyTo((string)$options['reply_to'], isset($options['from_name']) ? (string)$options['from_name'] : $mail->FromName);
+        }
+
+        $returnPath = '';
+        if (isset($options['return_path']) && trim((string)$options['return_path']) !== '') {
+            $returnPath = trim((string)$options['return_path']);
+        } elseif ($account_type === 'patientcare') {
+            $returnPath = 'patientcare@medtravel.com.co';
+        }
+        if ($returnPath !== '') {
+            $mail->Sender = $returnPath;
         }
         
         // Destinatario principal

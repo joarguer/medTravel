@@ -5,7 +5,11 @@ if (!function_exists('renderMedTravelEmail')) {
     {
         $senderLabel = trim((string)$senderLabel) !== '' ? (string)$senderLabel : 'MedTravel Patient Care';
         $titleText = htmlspecialchars((string)$title, ENT_QUOTES, 'UTF-8');
-        $preheaderText = htmlspecialchars((string)$preheader, ENT_QUOTES, 'UTF-8');
+        $preheaderRaw = trim((string)$preheader);
+        if ($preheaderRaw === '') {
+            $preheaderRaw = 'You have a new update regarding your MedTravel case.';
+        }
+        $preheaderText = htmlspecialchars($preheaderRaw, ENT_QUOTES, 'UTF-8');
         $footerNoteText = trim((string)$footerNote) !== ''
             ? htmlspecialchars((string)$footerNote, ENT_QUOTES, 'UTF-8')
             : 'You received this because you have an active case with MedTravel.';
@@ -34,7 +38,7 @@ if (!function_exists('renderMedTravelEmail')) {
   <title>' . $titleText . '</title>
 </head>
 <body style="margin:0; padding:0; background:#f3f7fc;">
-  <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">' . $preheaderText . '</div>
+  <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;">' . $preheaderText . '</span>
   <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background:#f3f7fc; margin:0; padding:24px 0;">
     <tr>
       <td align="center">
