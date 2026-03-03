@@ -49,34 +49,43 @@ SET @usuarios_id_col := IF(
 
 -- Abort if mapping columns are missing.
 SELECT @source_col AS source_col, @usuarios_id_col AS usuarios_id_col;
+SET @valid_mapping := (@source_col <> '' AND @usuarios_id_col <> '');
 
 -- Count candidates (rows that look legacy and have a valid mapping).
-SET @count_sql := CONCAT(
-  'SELECT COUNT(*) AS candidates ',
-  'FROM client_documents cd ',
-  'JOIN clientes c ON c.id = cd.client_id ',
-  'JOIN usuarios u ON u.', @usuarios_id_col, ' = c.', @source_col, ' ',
-  'WHERE c.', @source_col, ' IS NOT NULL ',
-  'AND c.', @source_col, ' > 0 ',
-  'AND cd.client_id <> c.', @source_col, ' ',
-  'AND NOT EXISTS (SELECT 1 FROM usuarios u2 WHERE u2.', @usuarios_id_col, ' = cd.client_id)'
+SET @count_sql := IF(
+  @valid_mapping,
+  CONCAT(
+    'SELECT COUNT(*) AS candidates ',
+    'FROM client_documents cd ',
+    'JOIN clientes c ON c.id = cd.client_id ',
+    'JOIN usuarios u ON u.', @usuarios_id_col, ' = c.', @source_col, ' ',
+    'WHERE c.', @source_col, ' IS NOT NULL ',
+    'AND c.', @source_col, ' > 0 ',
+    'AND cd.client_id <> c.', @source_col, ' ',
+    'AND NOT EXISTS (SELECT 1 FROM usuarios u2 WHERE u2.', @usuarios_id_col, ' = cd.client_id)'
+  ),
+  "SELECT 'missing_mapping_columns' AS error"
 );
 PREPARE stmt_count FROM @count_sql;
 EXECUTE stmt_count;
 DEALLOCATE PREPARE stmt_count;
 
 -- Sample rows for verification.
-SET @sample_sql := CONCAT(
-  'SELECT cd.id AS doc_id, cd.client_id AS old_client_id, c.id AS clientes_id, ',
-  'c.', @source_col, ' AS new_client_user_id ',
-  'FROM client_documents cd ',
-  'JOIN clientes c ON c.id = cd.client_id ',
-  'JOIN usuarios u ON u.', @usuarios_id_col, ' = c.', @source_col, ' ',
-  'WHERE c.', @source_col, ' IS NOT NULL ',
-  'AND c.', @source_col, ' > 0 ',
-  'AND cd.client_id <> c.', @source_col, ' ',
-  'AND NOT EXISTS (SELECT 1 FROM usuarios u2 WHERE u2.', @usuarios_id_col, ' = cd.client_id) ',
-  'LIMIT 20'
+SET @sample_sql := IF(
+  @valid_mapping,
+  CONCAT(
+    'SELECT cd.id AS doc_id, cd.client_id AS old_client_id, c.id AS clientes_id, ',
+    'c.', @source_col, ' AS new_client_user_id ',
+    'FROM client_documents cd ',
+    'JOIN clientes c ON c.id = cd.client_id ',
+    'JOIN usuarios u ON u.', @usuarios_id_col, ' = c.', @source_col, ' ',
+    'WHERE c.', @source_col, ' IS NOT NULL ',
+    'AND c.', @source_col, ' > 0 ',
+    'AND cd.client_id <> c.', @source_col, ' ',
+    'AND NOT EXISTS (SELECT 1 FROM usuarios u2 WHERE u2.', @usuarios_id_col, ' = cd.client_id) ',
+    'LIMIT 20'
+  ),
+  "SELECT 'missing_mapping_columns' AS error"
 );
 PREPARE stmt_sample FROM @sample_sql;
 EXECUTE stmt_sample;
@@ -85,15 +94,19 @@ DEALLOCATE PREPARE stmt_sample;
 -- Apply update (run inside a transaction).
 START TRANSACTION;
 
-SET @update_sql := CONCAT(
-  'UPDATE client_documents cd ',
-  'JOIN clientes c ON c.id = cd.client_id ',
-  'JOIN usuarios u ON u.', @usuarios_id_col, ' = c.', @source_col, ' ',
-  'SET cd.client_id = c.', @source_col, ' ',
-  'WHERE c.', @source_col, ' IS NOT NULL ',
-  'AND c.', @source_col, ' > 0 ',
-  'AND cd.client_id <> c.', @source_col, ' ',
-  'AND NOT EXISTS (SELECT 1 FROM usuarios u2 WHERE u2.', @usuarios_id_col, ' = cd.client_id)'
+SET @update_sql := IF(
+  @valid_mapping,
+  CONCAT(
+    'UPDATE client_documents cd ',
+    'JOIN clientes c ON c.id = cd.client_id ',
+    'JOIN usuarios u ON u.', @usuarios_id_col, ' = c.', @source_col, ' ',
+    'SET cd.client_id = c.', @source_col, ' ',
+    'WHERE c.', @source_col, ' IS NOT NULL ',
+    'AND c.', @source_col, ' > 0 ',
+    'AND cd.client_id <> c.', @source_col, ' ',
+    'AND NOT EXISTS (SELECT 1 FROM usuarios u2 WHERE u2.', @usuarios_id_col, ' = cd.client_id)'
+  ),
+  "SELECT 'missing_mapping_columns' AS error"
 );
 PREPARE stmt_update FROM @update_sql;
 EXECUTE stmt_update;
