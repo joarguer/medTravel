@@ -197,6 +197,73 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             padding-bottom: 4px;
             margin-bottom: 10px;
         }
+        /* ── Doc Viewer Modal ── */
+        #adminDocViewerModal .mt-dv-type-badge {
+            font-size: 12px;
+            vertical-align: middle;
+            margin-left: 6px;
+        }
+        #adminDocViewerModal .mt-dv-filename {
+            word-break: break-all;
+            font-weight: 600;
+            color: #2f353b;
+        }
+        #adminDocViewerModal .mt-dv-meta {
+            font-size: 11px;
+            color: #7f8c9d;
+            margin-top: 3px;
+        }
+        #adminDocViewerModal .mt-dv-preview-wrap {
+            background: #f4f6f7;
+            border: 1px solid #dfe6ee;
+            border-radius: 4px;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 0;
+        }
+        #adminDocViewerModal .mt-dv-preview-wrap iframe {
+            width: 100%;
+            height: 520px;
+            border: none;
+            display: block;
+        }
+        #adminDocViewerModal .mt-dv-preview-wrap img {
+            max-width: 100%;
+            max-height: 520px;
+            display: block;
+            margin: auto;
+        }
+        #adminDocViewerModal .mt-dv-no-preview {
+            text-align: center;
+            padding: 40px 20px;
+            color: #7f8c9d;
+        }
+        #adminDocViewerModal .mt-dv-no-preview .fa {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 10px;
+            color: #bdc3c7;
+        }
+        /* Responsive: full-screen on mobile */
+        @media (max-width: 767px) {
+            #adminDocViewerModal .modal-dialog {
+                margin: 0;
+                width: 100%;
+            }
+            #adminDocViewerModal .modal-content {
+                border-radius: 0;
+                min-height: 100vh;
+            }
+            #adminDocViewerModal .mt-dv-preview-wrap iframe {
+                height: 50vh;
+            }
+            #adminDocViewerModal .mt-dv-preview-wrap img {
+                max-height: 50vh;
+            }
+        }
         /* ── Message bubbles ── */
         #admin-inbox-messages .mt-msg {
             margin-bottom: 8px;
@@ -342,6 +409,33 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             </div>
         </div>
         <?php echo $footer;?>
+    </div>
+</div>
+
+<div class="modal fade" id="adminDocViewerModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">
+                    <span id="adminDocViewerName" class="mt-dv-filename">Document</span>
+                    <span id="adminDocViewerType" class="label label-info mt-dv-type-badge"></span>
+                </h4>
+                <p id="adminDocViewerMeta" class="mt-dv-meta" style="margin:0;"></p>
+            </div>
+            <div class="modal-body" style="padding:12px;">
+                <div class="mt-dv-preview-wrap" id="adminDocViewerPreview">
+                    <div class="mt-dv-no-preview">
+                        <i class="fa fa-file-o" aria-hidden="true"></i>
+                        <span>Preview not available</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-times" aria-hidden="true"></i> Close</button>
+                <a id="adminDocViewerDownload" href="#" target="_blank" rel="noopener" class="btn btn-primary"><i class="fa fa-download" aria-hidden="true"></i> Download</a>
+            </div>
+        </div>
     </div>
 </div>
 

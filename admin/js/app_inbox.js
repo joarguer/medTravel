@@ -107,6 +107,11 @@
                         '<span class="label ' + cls + ' mt-doc-type">' + esc(typeLabel) + '</span>' +
                         '<span class="mt-doc-name">' + esc(originalName) + '</span>' +
                         (dateText ? '<small class="mt-doc-date text-muted"><i class="fa fa-clock-o" aria-hidden="true"></i> ' + esc(dateText) + '</small>' : '') +
+                        '<button type="button" class="btn btn-xs btn-info mt-doc-view"' +
+                            ' data-doc-id="' + esc(String(doc.id || '')) + '"' +
+                            ' title="View ' + esc(originalName) + '">' +
+                            '<i class="fa fa-eye" aria-hidden="true"></i> View' +
+                        '</button>' +
                         '<a class="btn btn-xs btn-default mt-doc-download" href="' + esc(href) + '" target="_blank" rel="noopener" title="Download ' + esc(originalName) + '">' +
                             '<i class="fa fa-download" aria-hidden="true"></i> Download' +
                         '</a>' +
@@ -441,6 +446,58 @@
         if (changed) {
             loadMessages();
         }
+    }
+
+    function openDocViewer(doc) {
+        var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
+        var typeKey = String(doc.document_type || 'other').toLowerCase();
+        var typeLabel = docTypeLabel(typeKey);
+        var mimeType = String(doc.mime_type || '').toLowerCase().trim();
+        var href = String(doc.download_url || '').trim();
+        if (!href && doc.id) {
+            href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
+        }
+        // Header
+        $('#adminDocViewerName').text(originalName);
+        $('#adminDocViewerType').text(typeLabel);
+        var typeCls = { labs: 'label-info', imaging: 'label-primary', photos: 'label-success', medical_history: 'label-warning', other: 'label-default' };
+        $('#adminDocViewerType').attr('class', 'label ' + (typeCls[typeKey] || 'label-default') + ' mt-dv-type-badge');
+        // Meta: size + date
+        var metaParts = [];
+        var uploadedRaw = String(doc.uploaded_at || doc.created_at || '').trim();
+        if (uploadedRaw) {
+            var d = new Date(uploadedRaw.replace(' ', 'T'));
+            if (!isNaN(d.getTime())) {
+                var dd = (d.getDate() < 10 ? '0' : '') + d.getDate();
+                var mo = ((d.getMonth() + 1) < 10 ? '0' : '') + (d.getMonth() + 1);
+                metaParts.push('Uploaded: ' + dd + '/' + mo + '/' + d.getFullYear());
+            }
+        }
+        if (doc.file_size > 0) {
+            var kb = (doc.file_size / 1024).toFixed(1);
+            metaParts.push(kb + ' KB');
+        }
+        if (mimeType) { metaParts.push(mimeType); }
+        $('#adminDocViewerMeta').text(metaParts.join(' · '));
+        // Download button
+        $('#adminDocViewerDownload').attr('href', href);
+        // Preview
+        var $preview = $('#adminDocViewerPreview');
+        if (mimeType.indexOf('image/') === 0) {
+            $preview.html('<img src="' + esc(href) + '" alt="' + esc(originalName) + '">');
+        } else if (mimeType === 'application/pdf') {
+            $preview.html('<iframe src="' + esc(href) + '" title="' + esc(originalName) + '"></iframe>');
+        } else {
+            $preview.html(
+                '<div class="mt-dv-no-preview">' +
+                    '<i class="fa fa-file-o" aria-hidden="true"></i>' +
+                    '<div>Preview not available for this file type.</div>' +
+                    '<div style="margin-top:8px;"><a href="' + esc(href) + '" target="_blank" rel="noopener" class="btn btn-default btn-sm">' +
+                        '<i class="fa fa-download" aria-hidden="true"></i> Download to view</a></div>' +
+                '</div>'
+            );
+        }
+        $('#adminDocViewerModal').modal('show');
     }
 
     function renderMessages(messages) {
@@ -844,6 +901,31 @@
 
         $('#admin-inbox-refresh').on('click', function () {
             loadThreads();
+        });
+
+        // Doc viewer: open modal when View button is clicked
+        $('#admin-inbox-messages').on('click', '.mt-doc-view', function () {
+            var docId = String($(this).data('doc-id') || '');
+            var doc = null;
+            for (var i = 0; i < currentDocuments.length; i++) {
+                if (String(currentDocuments[i].id || '') === docId) {
+                    doc = currentDocuments[i];
+                    break;
+                }
+            }
+            if (doc) {
+                openDocViewer(doc);
+            }
+        });
+
+        // Clean up preview iframe/img on modal close to stop loading
+        $('#adminDocViewerModal').on('hidden.bs.modal', function () {
+            $('#adminDocViewerPreview').html(
+                '<div class="mt-dv-no-preview">' +
+                    '<i class="fa fa-file-o" aria-hidden="true"></i>' +
+                    '<span>Preview not available</span>' +
+                '</div>'
+            );
         });
 
         $('#admin-inbox-thread-list').on('click', '.admin-thread-link', function () {
