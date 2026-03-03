@@ -19,18 +19,14 @@
     var loaded      = false;
 
     // ── Badge ─────────────────────────────────────────────────────────────────
-    function renderBadge(isActive) {
+    function renderBadge(settings) {
         var $badge = $('#commission-badge');
-        if (parseInt(isActive, 10) === 1) {
-            $badge
-                .text('Commission Active')
-                .removeClass('label-default label-warning')
-                .addClass('label-success');
+        if (parseInt(settings.is_active, 10) === 1) {
+            $badge.text('Commission Active');
+            $badge.attr('class', 'badge badge-success');
         } else {
-            $badge
-                .text('No Commission Gate')
-                .removeClass('label-success label-warning')
-                .addClass('label-default');
+            $badge.text('No Commission Gate');
+            $badge.attr('class', 'badge badge-secondary');
         }
     }
 
@@ -48,7 +44,7 @@
             $('#cs-meta').show();
         }
 
-        renderBadge(settings.is_active);
+        renderBadge(settings);
     }
 
     // ── Load settings (lazy, runs once when tab is first shown) ──────────────
@@ -66,12 +62,16 @@
             dataType: 'json'
         })
         .done(function (res) {
-            if (res && res.ok && res.settings) {
-                populateForm(res.settings);
-                $('#form-commission').fadeIn(160);
-            } else {
-                showInlineError('Could not load commission settings: ' + (res.message || 'unknown error'));
+            if (!res || !res.ok || !res.settings) {
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('Failed to load commission settings');
+                }
+                showInlineError('Could not load commission settings: ' + (res && res.message ? res.message : 'unknown error'));
+                return;
             }
+            populateForm(res.settings);
+            $('#commission-loading').hide();
+            $('#form-commission').show();
         })
         .fail(function (xhr) {
             showInlineError('Request failed (' + xhr.status + '). Check network or session.');
@@ -118,7 +118,7 @@
             if (res && res.ok) {
                 showToast('Commission settings saved successfully.', 'success');
                 $msg.html('<span class="text-success"><i class="fa fa-check"></i> Saved</span>').show();
-                renderBadge($('#cs-is-active').is(':checked') ? 1 : 0);
+                renderBadge({ is_active: $('#cs-is-active').is(':checked') ? 1 : 0 });
                 $('#cs-updated-at').text('just now');
                 $('#cs-meta').show();
             } else {
