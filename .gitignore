@@ -15,3 +15,5 @@ img/surgeon/*Instagram*
 # Logs
 admin/logs/*.log
 .vscode/sftp.json
+# Ignore workspace settings to avoid committing local interpreter path
+.vscode/settings.json
