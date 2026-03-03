@@ -288,7 +288,7 @@
         toastr.info('Uploading ' + String(uploadType || 'document').toUpperCase() + '...');
 
         var formData = new FormData();
-        formData.append('client_doc_files[]', file);
+        formData.append('client_doc_files', file);
         formData.append('meta_json', JSON.stringify([{
             doc_type: normalizedType,
             title: '',
