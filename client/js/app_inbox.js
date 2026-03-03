@@ -158,6 +158,36 @@
         $status.html('<div class="alert alert-' + alertLevel + ' small" role="alert" style="margin-bottom:0;">' + esc(text) + '</div>');
     }
 
+    function mapStructuredUploadType(uploadType) {
+        var key = String(uploadType || '').toLowerCase();
+        if (key === 'history') return 'medical_history';
+        if (key === 'labs') return 'lab_results';
+        if (key === 'photos') return 'photos';
+        if (key === 'imaging') return 'other';
+        return 'other';
+    }
+
+    function openStructuredFilePicker(uploadType) {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.pdf,.jpg,.jpeg,.png';
+        input.style.position = 'fixed';
+        input.style.left = '-9999px';
+        input.style.top = '0';
+        document.body.appendChild(input);
+        input.addEventListener('change', function () {
+            var file = (input.files && input.files.length) ? input.files[0] : null;
+            if (input.parentNode) {
+                input.parentNode.removeChild(input);
+            }
+            if (!file) {
+                return;
+            }
+            uploadStructuredDocument(uploadType, file);
+        }, { once: true });
+        input.click();
+    }
+
     function resolveResultOriginalName(item) {
         if (!item) return '';
         return String(
@@ -232,6 +262,71 @@
         } else {
             setUploadStatusAlert('danger', 'Upload failed. Please try again.');
         }
+    }
+
+    function uploadStructuredDocument(uploadType, file) {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread before uploading');
+            return;
+        }
+        if (!file) {
+            toastr.warning('Choose a file to upload');
+            return;
+        }
+
+        var normalizedType = mapStructuredUploadType(uploadType);
+        var requestIdFromThread = parseInt(currentThread.booking_id || 0, 10);
+        var urlParams = new URLSearchParams(window.location.search || '');
+        var requestIdFromUrl = parseInt(urlParams.get('request_id') || '0', 10);
+        var safeRequestId = requestIdFromThread > 0 ? requestIdFromThread : requestIdFromUrl;
+        if (safeRequestId <= 0) {
+            toastr.error('Could not determine request id for upload');
+            return;
+        }
+
+        setUploadStatusAlert('info', 'Uploading document...');
+        toastr.info('Uploading ' + String(uploadType || 'document').toUpperCase() + '...');
+
+        var formData = new FormData();
+        formData.append('client_doc_files[]', file);
+        formData.append('meta_json', JSON.stringify([{
+            doc_type: normalizedType,
+            title: '',
+            description: '',
+            original_name: String(file.name || '')
+        }]));
+        formData.append('document_type', normalizedType);
+        formData.append('title', '');
+        formData.append('description', '');
+        formData.append('booking_request_id', safeRequestId);
+        formData.append('request_id', safeRequestId);
+        formData.append('item_id', currentThread.item_id || 0);
+        formData.append('thread_type', currentThread.thread_type || 'CARE');
+
+        $.ajax({
+            url: '/client/ajax/upload_medical_document.php',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json'
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
+                renderUploadStatusFromResponse(res || null, errorMessage);
+                toastr.error(errorMessage);
+                return;
+            }
+            renderUploadStatusFromResponse(res || null, 'Upload failed. Please try again.');
+            toastr.success('Document uploaded');
+            loadMessages();
+            loadThreads();
+        }).fail(function (xhr) {
+            var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
+            renderUploadStatusFromResponse(res || null, errorMessage);
+            toastr.error(errorMessage);
+        });
     }
 
     function threadMatchesPreference(thread, preferred) {
@@ -778,14 +873,6 @@
         target.trigger('click');
     });
 
-    $('#client-inbox-messages').on('click', '.client-structured-upload', function () {
-        var feeActions = $('#client-inbox-fee-actions');
-        if (!feeActions.length) {
-            return;
-        }
-        $('html, body').animate({ scrollTop: feeActions.offset().top - 20 }, 200);
-    });
-
     $('#client-inbox-messages').on('click', '.client-date-action', function () {
         var action = ($(this).data('action') || '').toString();
         if (!action) {
@@ -1212,6 +1299,28 @@
     }
 
     $(function () {
+        document.addEventListener('click', function (event) {
+            var target = event && event.target ? event.target : null;
+            if (!target || !target.closest) {
+                return;
+            }
+            var btn = target.closest('.client-structured-upload');
+            if (!btn) {
+                return;
+            }
+            var messagesBox = document.getElementById('client-inbox-messages');
+            if (!messagesBox || !messagesBox.contains(btn)) {
+                return;
+            }
+            event.preventDefault();
+            var uploadType = (btn.getAttribute('data-upload-type') || '').toLowerCase();
+            if (!uploadType) {
+                toastr.error('Invalid upload type');
+                return;
+            }
+            openStructuredFilePicker(uploadType);
+        });
+
         setStructuredCareAlert(false, 0, 0);
         if (feeGateActive) {
             setFeeGateState(true, 'Unlock after Coordination Fee.');
