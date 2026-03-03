@@ -20,24 +20,32 @@
 
     // ── Badge ─────────────────────────────────────────────────────────────────
     function renderBadge(settings) {
-        var $badge = $('#commission-badge');
+        var badge = document.getElementById('commission-badge');
+        if (!badge) return;
         if (parseInt(settings.is_active, 10) === 1) {
-            $badge.text('Commission Active');
-            $badge.attr('class', 'badge badge-success');
+            badge.className = 'badge badge-success';
+            badge.innerText = 'Commission Active';
         } else {
-            $badge.text('No Commission Gate');
-            $badge.attr('class', 'badge badge-secondary');
+            badge.className = 'badge badge-secondary';
+            badge.innerText = 'No Commission Gate';
         }
     }
 
     // ── Populate form ─────────────────────────────────────────────────────────
     function populateForm(settings) {
-        $('#cs-commission-pct').val(parseFloat(settings.commission_pct || 10).toFixed(2));
-        $('#cs-fixed-fee').val(parseFloat(settings.fixed_fee_cop || 0).toFixed(0));
-        $('#cs-currency').val(settings.currency || 'COP');
-        $('#cs-payment-terms').val(settings.payment_terms || '');
-        $('#cs-stripe-account').val(settings.stripe_account_id || '');
-        $('#cs-is-active').prop('checked', parseInt(settings.is_active, 10) === 1);
+        var pct = document.querySelector('[name="commission_pct"]');
+        var fixed = document.querySelector('[name="fixed_fee_cop"]');
+        var currency = document.querySelector('[name="currency"]');
+        var terms = document.querySelector('[name="payment_terms"]');
+        var stripe = document.querySelector('[name="stripe_account_id"]');
+        var active = document.querySelector('[name="is_active"]');
+
+        if (pct) pct.value = parseFloat(settings.commission_pct || 10).toFixed(2);
+        if (fixed) fixed.value = parseFloat(settings.fixed_fee_cop || 0).toFixed(0);
+        if (currency) currency.value = settings.currency || 'COP';
+        if (terms) terms.value = settings.payment_terms || '';
+        if (stripe) stripe.value = settings.stripe_account_id || '';
+        if (active) active.checked = parseInt(settings.is_active, 10) === 1;
 
         if (settings.updated_at) {
             $('#cs-updated-at').text(settings.updated_at);
@@ -47,38 +55,42 @@
         renderBadge(settings);
     }
 
-    // ── Load settings (lazy, runs once when tab is first shown) ──────────────
-    function loadSettings() {
+    // ── Load settings (runs on DOM ready) ────────────────────────────────────
+    function loadCommissionSettings() {
         if (loaded) { return; }
         loaded = true;
 
-        $('#commission-loading').show();
-        $('#form-commission').hide();
+        var spinner = document.getElementById('commission-loading');
+        var form = document.getElementById('commission-form') || document.getElementById('form-commission');
+        if (spinner) spinner.style.display = 'block';
+        if (form) form.style.display = 'none';
 
-        $.ajax({
-            url: ENDPOINT,
-            method: 'GET',
-            data: { action: 'get_settings', provider_id: PROVIDER_ID },
-            dataType: 'json'
-        })
-        .done(function (res) {
-            if (!res || !res.ok || !res.settings) {
-                if (typeof toastr !== 'undefined') {
-                    toastr.error('Failed to load commission settings');
+        var url = '/admin/ajax/provider_commission_settings.php?action=get_settings&provider_id=' + encodeURIComponent(String(PROVIDER_ID));
+        fetch(url, { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                if (!res || !res.ok || !res.settings) {
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error('Failed to load commission settings');
+                    }
+                    showInlineError('Could not load commission settings: ' + (res && res.message ? res.message : 'unknown error'));
+                    return;
                 }
-                showInlineError('Could not load commission settings: ' + (res && res.message ? res.message : 'unknown error'));
-                return;
-            }
-            populateForm(res.settings);
-            $('#commission-loading').hide();
-            $('#form-commission').show();
-        })
-        .fail(function (xhr) {
-            showInlineError('Request failed (' + xhr.status + '). Check network or session.');
-        })
-        .always(function () {
-            $('#commission-loading').hide();
-        });
+                populateForm(res.settings);
+                renderBadge(res.settings);
+                if (spinner) spinner.style.display = 'none';
+                if (form) form.style.display = 'block';
+            })
+            .catch(function (err) {
+                console.error(err);
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('Error loading commission settings');
+                }
+                showInlineError('Request failed. Check network or session.');
+            })
+            .finally(function () {
+                if (spinner) spinner.style.display = 'none';
+            });
     }
 
     // ── Save settings ─────────────────────────────────────────────────────────
@@ -169,16 +181,12 @@
     $(document).ready(function () {
         if (!PROVIDER_ID) { return; }
 
-        // Lazy-load when the Commission tab is activated
-        $('a[href="#tab-commission"]').on('shown.bs.tab', function () {
-            loadSettings();
-        });
-
-        // If the URL already has #tab-commission (e.g. direct link), load straight away
-        if (window.location.hash === '#tab-commission') {
-            $('a[href="#tab-commission"]').tab('show');
-            loadSettings();
+        // Load immediately on DOM ready
+        if (!window.PROVIDER_ID) {
+            console.error('PROVIDER_ID not defined');
+            return;
         }
+        loadCommissionSettings();
 
         // Form submit
         $('#form-commission').on('submit', saveSettings);
