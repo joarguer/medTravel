@@ -166,6 +166,32 @@ function getMailer($account_type = 'patientcare', $conexion = null) {
 function sendEmail($to, $subject, $body, $account_type = 'patientcare', $options = array(), $conexion = null) {
     try {
         $mail = getMailer($account_type, $conexion);
+
+        /*
+         * Deliverability headers (Gmail/Postmaster-friendly):
+         * - List-Unsubscribe / One-Click improves spam scores for transactional mail.
+         * - Auto-Submitted + X-Auto-Response-Suppress reduce auto-replies and loops.
+         * - Custom Message-ID on the sending domain improves alignment.
+         */
+        $mail->addCustomHeader('List-Unsubscribe', 'mailto:patientcare@medtravel.com.co');
+        $mail->addCustomHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
+        $mail->addCustomHeader('X-Auto-Response-Suppress', 'All');
+        $mail->addCustomHeader('Auto-Submitted', 'auto-generated');
+
+        $messageId = '<' . str_replace('.', '', uniqid('', true)) . '.' . time() . '@medtravel.com.co>';
+        $mail->MessageID = $messageId;
+
+        if (isset($options['from_email']) || isset($options['from_name'])) {
+            $fromEmail = isset($options['from_email']) ? (string)$options['from_email'] : (string)$mail->From;
+            $fromName = isset($options['from_name']) ? (string)$options['from_name'] : (string)$mail->FromName;
+            if ($fromEmail !== '') {
+                $mail->setFrom($fromEmail, $fromName);
+            }
+        }
+        if (isset($options['reply_to']) && trim((string)$options['reply_to']) !== '') {
+            $mail->clearReplyTos();
+            $mail->addReplyTo((string)$options['reply_to'], isset($options['from_name']) ? (string)$options['from_name'] : $mail->FromName);
+        }
         
         // Destinatario principal
         $mail->addAddress($to);

@@ -361,6 +361,14 @@ if (!function_exists('send_interaction_email')) {
             return ['success' => false, 'error' => 'sendEmail_unavailable'];
         }
 
+        $textBody = trim((string)$textBody);
+        if ($textBody === '') {
+            $textBody = trim(html_entity_decode(strip_tags((string)$contentHtml), ENT_QUOTES, 'UTF-8'));
+        }
+        if ($textBody === '') {
+            $textBody = (string)$subject;
+        }
+
         // ── Lightweight dedupe (60 s TTL) ────────────────────────────────────
         // Key covers recipient + subject (contains type+requestId) + content preview
         $dedupeKey = sha1((string)$to . '||' . (string)$subject . '||' . substr((string)$textBody, 0, 200));
@@ -385,7 +393,19 @@ if (!function_exists('send_interaction_email')) {
             : $contentHtml;
 
         try {
-            $result = sendEmail($to, $subject, $htmlBody, 'patientcare', ['alt_body' => $textBody], $conexion);
+            $result = sendEmail(
+                $to,
+                $subject,
+                $htmlBody,
+                'patientcare',
+                [
+                    'alt_body' => $textBody,
+                    'from_email' => 'patientcare@medtravel.com.co',
+                    'from_name' => 'MedTravel Patient Care',
+                    'reply_to' => 'patientcare@medtravel.com.co',
+                ],
+                $conexion
+            );
         } catch (Throwable $e) {
             mt_email_debug_log('event=' . $event . ' exception=' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
