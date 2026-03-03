@@ -1,6 +1,38 @@
 <?php
 require_once __DIR__ . '/inbox_utils.php';
 
+if (!function_exists('mt_email_debug_log')) {
+    function mt_email_debug_log($line)
+    {
+        $baseDir = dirname(__DIR__) . '/storage/logs';
+        if (!is_dir($baseDir)) {
+            mkdir($baseDir, 0775, true);
+        }
+        $file = $baseDir . '/email_debug.log';
+        $line = date('c') . ' ' . trim((string)$line) . PHP_EOL;
+        file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
+    }
+}
+
+if (!function_exists('mt_email_debug_tail')) {
+    function mt_email_debug_tail($lines = 50)
+    {
+        $lines = (int)$lines;
+        if ($lines <= 0) {
+            $lines = 50;
+        }
+        $file = dirname(__DIR__) . '/storage/logs/email_debug.log';
+        if (!is_file($file)) {
+            return [];
+        }
+        $contents = file($file, FILE_IGNORE_NEW_LINES);
+        if ($contents === false) {
+            return [];
+        }
+        return array_slice($contents, -$lines);
+    }
+}
+
 if (!function_exists('interaction_email_safe_snippet')) {
     function interaction_email_safe_snippet($text, $maxLen = 120)
     {
@@ -238,12 +270,14 @@ if (!function_exists('interaction_email_request_meta')) {
 if (!function_exists('send_interaction_email')) {
     function send_interaction_email($to, $subject, $contentHtml, $textBody, $meta = [], $conexion = null)
     {
+        $event = strtoupper(trim((string)($meta['event'] ?? $meta['event_type'] ?? 'interaction')));
+        mt_email_debug_log('CALLED event=' . $event);
+        mt_email_debug_log('event=' . $event . ' recipient=' . (string)$to);
+        mt_email_debug_log('event=' . $event . ' subject=' . (string)$subject);
         if (!function_exists('sendEmail')) {
+            mt_email_debug_log('event=' . $event . ' error=sendEmail_unavailable');
             return ['success' => false, 'error' => 'sendEmail_unavailable'];
         }
-        error_log('[EMAIL DEBUG] send_interaction_email called');
-        error_log('[EMAIL DEBUG] recipient: ' . $to);
-        error_log('[EMAIL DEBUG] subject: ' . $subject);
         $preheader = (string)($meta['preheader'] ?? $subject);
         $cta = isset($meta['cta']) ? $meta['cta'] : null;
         $footerNote = (string)($meta['footer_note'] ?? '');
@@ -254,13 +288,13 @@ if (!function_exists('send_interaction_email')) {
         try {
             $result = sendEmail($to, $subject, $htmlBody, 'patientcare', ['alt_body' => $textBody], $conexion);
         } catch (Throwable $e) {
-            error_log('interaction_email_send_failed to=' . $to . ' err=' . $e->getMessage());
+            mt_email_debug_log('event=' . $event . ' exception=' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
         }
 
-        error_log('[EMAIL DEBUG] mail result: ' . json_encode($result));
+        mt_email_debug_log('event=' . $event . ' result=' . json_encode($result));
         if (is_array($result) && empty($result['success'])) {
-            error_log('interaction_email_send_failed to=' . $to . ' err=' . ($result['error'] ?? 'unknown'));
+            mt_email_debug_log('event=' . $event . ' send_failed=' . ($result['error'] ?? 'unknown'));
         }
         return $result;
     }
