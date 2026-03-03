@@ -112,7 +112,7 @@ $hasCommissionJs = is_file(__DIR__ . '/js/provider_commission.js');
                         <div class="tabbable-line">
                             <ul class="nav nav-tabs">
                                 <li class="active"><a href="#tab-info" data-toggle="tab"><i class="fa fa-info-circle"></i> Información</a></li>
-                                <li><a href="#tab-commission" data-toggle="tab" id="tab-commission-link"><i class="fa fa-percent"></i> Commission Settings</a></li>
+                                <li><a href="#tab-commission" data-toggle="tab" id="tab-commission-link"><i class="fa fa-usd"></i> Commission Settings</a></li>
                             </ul>
                             <div class="tab-content">
 
@@ -156,7 +156,7 @@ $hasCommissionJs = is_file(__DIR__ . '/js/provider_commission.js');
                                     <div class="portlet light">
                                         <div class="portlet-title">
                                             <div class="caption">
-                                                <i class="fa fa-percent theme-font"></i>
+                                                <i class="fa fa-usd theme-font"></i>
                                                 <span class="caption-subject font-dark bold uppercase">Commission Settings</span>
                                             </div>
                                         </div>
@@ -272,7 +272,7 @@ $hasCommissionJs = is_file(__DIR__ . '/js/provider_commission.js');
     <?php echo $theme_layout_script; ?>
 
     <script>
-        const PROVIDER_ID = <?php echo $provider_id; ?>;
+        window.PROVIDER_ID = <?php echo $provider_id; ?>;
     </script>
     <?php if ($hasCommissionJs): ?>
         <script src="js/provider_commission.js" type="text/javascript"></script>

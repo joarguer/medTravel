@@ -14,7 +14,9 @@
 (function ($) {
     'use strict';
 
-    var PROVIDER_ID = (typeof window.PROVIDER_ID !== 'undefined') ? window.PROVIDER_ID : 0;
+    var PROVIDER_ID = (typeof window !== 'undefined' && typeof window.PROVIDER_ID !== 'undefined')
+        ? window.PROVIDER_ID
+        : (typeof PROVIDER_ID !== 'undefined' ? PROVIDER_ID : 0);
     var ENDPOINT    = 'ajax/provider_commission_settings.php';
     var loaded      = false;
 
