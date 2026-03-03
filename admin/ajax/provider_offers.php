@@ -116,9 +116,6 @@ if ($tipo === 'create' || $tipo === 'update') {
     foreach ($allowed as $k) {
         if (isset($_REQUEST[$k])) $data[$k] = $_REQUEST[$k];
     }
-    // validation minimal
-    $service_id = isset($data['service_id']) ? (int)$data['service_id'] : 0;
-    if (!$service_id) json_error('INVALID_SERVICE');
     $title = isset($data['title']) ? substr(trim($data['title']),0,200) : null;
     $description = isset($data['description']) ? trim($data['description']) : null;
     $price_from = isset($data['price_from']) ? (float)$data['price_from'] : null;
@@ -126,6 +123,13 @@ if ($tipo === 'create' || $tipo === 'update') {
     $is_active = isset($data['is_active']) ? (int)$data['is_active'] : 0;
 
     if ($tipo === 'create') {
+        $service_id = isset($data['service_id']) ? (int)$data['service_id'] : 0;
+        if (!$service_id) json_error('INVALID_SERVICE');
+        $svc = mysqli_prepare($conexion, "SELECT id FROM service_catalog WHERE id = ? LIMIT 1");
+        mysqli_stmt_bind_param($svc, 'i', $service_id);
+        mysqli_stmt_execute($svc);
+        $svc_res = mysqli_stmt_get_result($svc);
+        if (!mysqli_fetch_assoc($svc_res)) json_error('INVALID_SERVICE');
         $sql = "INSERT INTO provider_service_offers (provider_id,service_id,title,description,price_from,currency,is_active) VALUES (?,?,?,?,?,?,?)";
         $stmt = mysqli_prepare($conexion, $sql);
         mysqli_stmt_bind_param($stmt, 'iissdsi', $provider_id, $service_id, $title, $description, $price_from, $currency, $is_active);
@@ -137,15 +141,16 @@ if ($tipo === 'create' || $tipo === 'update') {
     } else {
         $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
         if (!$id) json_error('INVALID_ID');
-        // ensure belongs to provider
-        $chk = mysqli_prepare($conexion, "SELECT id FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1");
-        mysqli_stmt_bind_param($chk, 'ii', $id, $provider_id);
+        $chk = mysqli_prepare($conexion, "SELECT id, provider_id FROM provider_service_offers WHERE id = ? LIMIT 1");
+        mysqli_stmt_bind_param($chk, 'i', $id);
         mysqli_stmt_execute($chk);
         $chkres = mysqli_stmt_get_result($chk);
-        if (!mysqli_fetch_assoc($chkres)) json_error('FORBIDDEN',403);
-        $sql = "UPDATE provider_service_offers SET service_id=?,title=?,description=?,price_from=?,currency=?,is_active=? WHERE id = ?";
+        $offer = mysqli_fetch_assoc($chkres);
+        if (!$offer) json_error('NOT_FOUND',404);
+        if ((int)$offer['provider_id'] !== $provider_id) json_error('FORBIDDEN',403);
+        $sql = "UPDATE provider_service_offers SET title=?,description=?,price_from=?,currency=?,is_active=? WHERE id = ?";
         $stmt = mysqli_prepare($conexion, $sql);
-        mysqli_stmt_bind_param($stmt, 'issdsii', $service_id, $title, $description, $price_from, $currency, $is_active, $id);
+        mysqli_stmt_bind_param($stmt, 'ssdsii', $title, $description, $price_from, $currency, $is_active, $id);
         $ok = mysqli_stmt_execute($stmt);
         if (!$ok) json_error('DB_ERR:'.mysqli_error($conexion));
         echo json_encode(['ok'=>true]);
@@ -173,12 +178,14 @@ if ($tipo === 'toggle') {
 if ($tipo === 'upload_media') {
     $offer_id = isset($_REQUEST['offer_id']) ? (int)$_REQUEST['offer_id'] : 0;
     if (!$offer_id) json_error('INVALID_OFFER');
-    // check ownership
-    $chk = mysqli_prepare($conexion, "SELECT id FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1");
-    mysqli_stmt_bind_param($chk, 'ii', $offer_id, $provider_id);
+    // check existence and ownership using offer id
+    $chk = mysqli_prepare($conexion, "SELECT id, provider_id FROM provider_service_offers WHERE id = ? LIMIT 1");
+    mysqli_stmt_bind_param($chk, 'i', $offer_id);
     mysqli_stmt_execute($chk);
     $cres = mysqli_stmt_get_result($chk);
-    if (!mysqli_fetch_assoc($cres)) json_error('FORBIDDEN',403);
+    $offer = mysqli_fetch_assoc($cres);
+    if (!$offer) json_error('NOT_FOUND',404);
+    if ((int)$offer['provider_id'] !== $provider_id) json_error('FORBIDDEN',403);
 
     if (empty($_FILES) || !isset($_FILES['file'])) json_error('NO_FILE');
     $f = $_FILES['file'];
