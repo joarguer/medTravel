@@ -200,6 +200,11 @@ if (isset($conexion) && $conexion) {
             flex-shrink: 0;
         }
         #client-inbox-messages .mt-bubble-body { line-height: 1.5; }
+        #client-inbox-messages .mt-bubble-status {
+            margin-top: 4px;
+            font-size: 10px;
+            opacity: .7;
+        }
         /* Own (client) messages — right, teal-blue */
         #client-inbox-messages .mt-msg-row--own .mt-msg-bubble {
             background: #1a73e8;
@@ -213,6 +218,25 @@ if (isset($conexion) && $conexion) {
             color: #2c3e50;
             border-radius: 16px 16px 16px 4px;
             border: 1px solid #e0e4ea;
+        }
+        #client-inbox-messages .mt-msg-row--grouped {
+            margin-bottom: 2px;
+        }
+        #client-inbox-messages .mt-msg-row--system {
+            justify-content: center;
+        }
+        #client-inbox-messages .mt-msg-row--system .mt-msg-bubble {
+            max-width: 100%;
+            background: #f4f6f7;
+            border: 1px solid #d5dce4;
+            border-radius: 8px;
+            color: #2c3e50;
+        }
+        #client-typing-indicator {
+            font-size: 12px;
+            color: #7f8c9d;
+            margin-top: 6px;
+            display: none;
         }
     </style>
 </head>
@@ -316,6 +340,7 @@ if (isset($conexion) && $conexion) {
                                         <label for="client-inbox-message">Write a message</label>
                                         <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..." <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>></textarea>
                                     </div>
+                                    <div id="client-typing-indicator">Support is typing…</div>
                                     <button type="submit" class="btn btn-primary" id="client-inbox-send-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
                                     <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Free-form messaging is locked right now. Please use the structured actions above.</div>
                                 </form>
@@ -365,6 +390,7 @@ if (isset($conexion) && $conexion) {
 <script src="/client/js/notifications.js" type="text/javascript"></script>
 <script type="text/javascript">
 window.ClientInboxConfig = {
+    userId: <?php echo (int)($clientUserId ?? 0); ?>,
     feeGateActive: <?php echo $clientFeeGateActive ? 'true' : 'false'; ?>,
     commissionGateActive: <?php echo $clientCommissionGateActive ? 'true' : 'false'; ?>,
     commissionPaid: <?php echo $clientCommissionPaid ? 'true' : 'false'; ?>,

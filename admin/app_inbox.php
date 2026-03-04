@@ -308,6 +308,11 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             flex-shrink: 0;
         }
         #admin-inbox-messages .mt-bubble-body { line-height: 1.5; }
+        #admin-inbox-messages .mt-bubble-status {
+            margin-top: 4px;
+            font-size: 10px;
+            opacity: .7;
+        }
         /* Structured / system actions — neutral grey (full width) */
         #admin-inbox-messages .mt-msg-system {
             background: #f4f6f7;
@@ -328,6 +333,18 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             color: #2c3e50;
             border-radius: 16px 16px 16px 4px;
             border: 1px solid #e0e4ea;
+        }
+        #admin-inbox-messages .mt-msg-row--grouped {
+            margin-bottom: 2px;
+        }
+        #admin-inbox-messages .mt-msg-row--system {
+            justify-content: center;
+        }
+        #admin-typing-indicator {
+            font-size: 12px;
+            color: #7f8c9d;
+            margin-top: 6px;
+            display: none;
         }
         @media (max-width: 767px) {
             #admin-inbox-thread-list .mt-thread-row {
@@ -441,6 +458,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                         <label for="admin-inbox-message">Write a message</label>
                                         <textarea class="form-control" id="admin-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..."></textarea>
                                     </div>
+                                    <div id="admin-typing-indicator">Patient is typing…</div>
                                     <button type="submit" class="btn btn-primary"><i class="fa fa-paper-plane"></i> Send</button>
                                     <div id="admin-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Messaging will be available after the initial review. Please use the options above.</div>
                                 </form>

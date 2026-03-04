@@ -14,6 +14,13 @@
     };
     var recentSentMessageIds = {};
     var RECENT_SENT_TTL_MS = 30000;
+    var messageStatusById = {};
+    var MESSAGE_STATUS_TTL_MS = 60000;
+    var typingState = {
+        lastEmitAt: 0,
+        stopTimer: null,
+        remoteTimer: null
+    };
     var currentThread = null;
     var preferredThread = null;
     var autoSelectItemRequestId = 0;
@@ -71,14 +78,26 @@
     function buildClientMsgHtml(m, bodyHtml) {
         var own = isOwnClientMessage(m.sender || '');
         var rowCls = own ? 'mt-msg-row--own' : 'mt-msg-row--other';
+        var role = normalizeRole(m.sender || '');
+        if (role === 'system') {
+            rowCls = 'mt-msg-row--system';
+        }
         var displayName = getClientDisplayName(m, own);
-        return '<div class="mt-msg-row ' + rowCls + '">' +
+        var statusText = getMessageStatusText(m, own);
+        var headHtml = m._showHeader !== false
+            ? ('<div class="mt-bubble-head">' +
+                '<span class="mt-bubble-name">' + esc(displayName) + '</span>' +
+                (m.time ? '<span class="mt-bubble-time">' + esc(m.time) + '</span>' : '') +
+              '</div>')
+            : '';
+        var statusHtml = statusText ? '<div class="mt-bubble-status">' + esc(statusText) + '</div>' : '';
+        var groupedCls = m._grouped ? ' mt-msg-row--grouped' : '';
+        var tempAttr = m._tempId ? ' data-temp-id="' + esc(m._tempId) + '"' : '';
+        return '<div class="mt-msg-row ' + rowCls + groupedCls + '"' + tempAttr + '>' +
             '<div class="mt-msg-bubble">' +
-                '<div class="mt-bubble-head">' +
-                    '<span class="mt-bubble-name">' + esc(displayName) + '</span>' +
-                    (m.time ? '<span class="mt-bubble-time">' + esc(m.time) + '</span>' : '') +
-                '</div>' +
+                headHtml +
                 '<div class="mt-bubble-body">' + bodyHtml + '</div>' +
+                statusHtml +
             '</div>' +
         '</div>';
     }
@@ -96,6 +115,99 @@
         if (window.MT_DEBUG_REALTIME === true) {
             console.log(message);
         }
+    }
+
+    function setMessageStatus(messageId, statusText) {
+        var id = parseInt(messageId || 0, 10);
+        if (!isFinite(id) || id <= 0) return;
+        messageStatusById[id] = {
+            text: String(statusText || ''),
+            ts: Date.now()
+        };
+        setTimeout(function () {
+            delete messageStatusById[id];
+        }, MESSAGE_STATUS_TTL_MS);
+    }
+
+    function markSentFromResponse(res) {
+        if (!res) return;
+        var sentId = res && res.message ? res.message.id : 0;
+        if (!sentId && res && res.message_id) {
+            sentId = res.message_id;
+        }
+        if (!sentId) {
+            sentId = extractMaxMessageId(res.messages || []);
+        }
+        if (sentId) {
+            setMessageStatus(sentId, 'Sent');
+        }
+    }
+
+    function getMessageStatusText(m, own) {
+        if (!own) return '';
+        if (m && m._status) return String(m._status);
+        var id = parseInt(m.id || 0, 10);
+        if (!isFinite(id) || id <= 0) return '';
+        var entry = messageStatusById[id];
+        if (!entry) return '';
+        if (entry.text === '') return '';
+        if ((Date.now() - entry.ts) > MESSAGE_STATUS_TTL_MS) {
+            delete messageStatusById[id];
+            return '';
+        }
+        return entry.text;
+    }
+
+    function parseMessageTime(value) {
+        var raw = String(value || '').trim();
+        if (!raw) return 0;
+        var d = new Date(raw.replace(' ', 'T'));
+        if (isNaN(d.getTime())) {
+            return 0;
+        }
+        return d.getTime();
+    }
+
+    function shouldGroupMessages(prevMsg, msg) {
+        if (!prevMsg || !msg) return false;
+        if (normalizeRole(prevMsg.sender || '') === 'system') return false;
+        if (normalizeRole(msg.sender || '') === 'system') return false;
+        if (normalizeRole(prevMsg.sender || '') !== normalizeRole(msg.sender || '')) return false;
+        var prevTime = parseMessageTime(prevMsg.time);
+        var currTime = parseMessageTime(msg.time);
+        if (!prevTime || !currTime) return false;
+        return Math.abs(currTime - prevTime) <= 120000;
+    }
+
+    function annotateGrouping(messages, previousMeta) {
+        var prevMsg = previousMeta && previousMeta.msg ? previousMeta.msg : null;
+        messages.forEach(function (m) {
+            var grouped = shouldGroupMessages(prevMsg, m);
+            m._grouped = grouped;
+            m._showHeader = !grouped;
+            prevMsg = m;
+        });
+        return {
+            msg: messages.length ? messages[messages.length - 1] : prevMsg
+        };
+    }
+
+    function rememberLastRenderedMeta(threadId, lastMsg) {
+        if (!threadId) return;
+        if (!lastMsg) {
+            realtimeState.lastRenderedMeta = null;
+            return;
+        }
+        realtimeState.lastRenderedMeta = {
+            threadId: threadId,
+            msg: lastMsg
+        };
+    }
+
+    function getLastRenderedMeta(threadId) {
+        if (!realtimeState.lastRenderedMeta) return null;
+        if (realtimeState.lastRenderedMeta.threadId !== threadId) return null;
+        return realtimeState.lastRenderedMeta;
     }
 
     function trackRecentSentMessage(messageId) {
@@ -149,6 +261,23 @@
                 return;
             }
             loadThreads();
+        });
+
+        realtimeState.socket.on('typing', function (payload) {
+            var threadId = payload && payload.thread_id ? String(payload.thread_id) : '';
+            if (!currentThread || String(currentThread.thread_id || '') !== threadId) {
+                return;
+            }
+            var role = String(payload.role || '').toLowerCase();
+            if (!role || role === 'client') {
+                return;
+            }
+            var state = String(payload.state || '').toLowerCase();
+            if (state === 'stop') {
+                hideTypingIndicator();
+                return;
+            }
+            showTypingIndicator(typingLabelForRole(role));
         });
 
         realtimeState.socket.on('connect_error', function () {
@@ -761,6 +890,7 @@
             return;
         }
 
+        annotateGrouping(messages, null);
         var html = renderThreadDocuments();
         messages.forEach(function (m) {
             var bodyHtml = formatMessageBody(m.body || '');
@@ -771,6 +901,7 @@
         $box.scrollTop($box[0].scrollHeight);
         if (currentThread && currentThread.thread_id) {
             rememberLastMessageId(String(currentThread.thread_id), messages);
+            rememberLastRenderedMeta(String(currentThread.thread_id), messages[messages.length - 1]);
         }
     }
 
@@ -783,18 +914,24 @@
         var appended = false;
         var floorId = parseInt(minId || 0, 10);
         var nearBottom = shouldAutoScroll($box[0]);
+        var lastMeta = getLastRenderedMeta(threadId);
+        var filtered = [];
         messages.forEach(function (m) {
             var msgId = parseInt(m.id || 0, 10);
             if (isFinite(msgId) && floorId > 0 && msgId <= floorId) {
                 return;
             }
+            filtered.push(m);
+        });
+        if (!filtered.length) {
+            return;
+        }
+        annotateGrouping(filtered, lastMeta);
+        filtered.forEach(function (m) {
             var bodyHtml = formatMessageBody(m.body || '');
             html += buildClientMsgHtml(m, bodyHtml);
             appended = true;
         });
-        if (!appended) {
-            return;
-        }
         $box.find('p.text-muted').filter(function () {
             return String($(this).text() || '').indexOf('No messages in this thread yet.') !== -1;
         }).remove();
@@ -804,6 +941,7 @@
         }
         if (threadId) {
             rememberLastMessageId(threadId, messages);
+            rememberLastRenderedMeta(threadId, filtered[filtered.length - 1]);
         }
     }
 
@@ -834,6 +972,89 @@
             }
             appendMessages(newMessages, lastId);
         });
+    }
+
+    function addPendingMessage(text) {
+        if (!currentThread || !currentThread.thread_id) return '';
+        var tempId = 'temp-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+        var msg = {
+            id: tempId,
+            _tempId: tempId,
+            _status: 'Sending…',
+            sender: 'client',
+            body: text,
+            time: new Date().toISOString()
+        };
+        appendMessages([msg], 0);
+        return tempId;
+    }
+
+    function removePendingMessage(tempId) {
+        if (!tempId) return;
+        $('#client-inbox-messages').find('[data-temp-id="' + tempId + '"]').remove();
+    }
+
+    function updatePendingStatus(tempId, statusText) {
+        if (!tempId) return;
+        var $row = $('#client-inbox-messages').find('[data-temp-id="' + tempId + '"]');
+        if (!$row.length) return;
+        var $status = $row.find('.mt-bubble-status');
+        if (!$status.length) {
+            $row.find('.mt-msg-bubble').append('<div class="mt-bubble-status"></div>');
+            $status = $row.find('.mt-bubble-status');
+        }
+        $status.text(statusText || '');
+    }
+
+    function emitTyping(state) {
+        if (!currentThread || !currentThread.thread_id) return;
+        if (!realtimeCanEmit(String(currentThread.thread_id))) return;
+        realtimeState.socket.emit('typing', {
+            thread_id: String(currentThread.thread_id),
+            role: 'CLIENT',
+            user_id: parseInt(config.userId || 0, 10) || 0,
+            state: state,
+            ts: Date.now()
+        });
+    }
+
+    function handleLocalTyping() {
+        var now = Date.now();
+        if (now - typingState.lastEmitAt >= 2000) {
+            emitTyping('start');
+            typingState.lastEmitAt = now;
+        }
+        if (typingState.stopTimer) {
+            clearTimeout(typingState.stopTimer);
+        }
+        typingState.stopTimer = setTimeout(function () {
+            emitTyping('stop');
+        }, 1500);
+    }
+
+    function showTypingIndicator(label) {
+        var $el = $('#client-typing-indicator');
+        if (!$el.length) return;
+        $el.text(label).show();
+        if (typingState.remoteTimer) {
+            clearTimeout(typingState.remoteTimer);
+        }
+        typingState.remoteTimer = setTimeout(function () {
+            $el.hide();
+        }, 2000);
+    }
+
+    function hideTypingIndicator() {
+        var $el = $('#client-typing-indicator');
+        if (!$el.length) return;
+        $el.hide();
+    }
+
+    function typingLabelForRole(role) {
+        var r = String(role || '').toLowerCase();
+        if (r === 'provider') return 'Provider is typing…';
+        if (r === 'admin' || r === 'patientcare') return 'Support is typing…';
+        return 'Support is typing…';
     }
 
     function realtimeCanEmit(threadId) {
@@ -1255,6 +1476,7 @@
         if (!currentThread || !currentThread.thread_id) return;
 
         realtimeJoinThread(currentThread.thread_id);
+        hideTypingIndicator();
 
         $('#client-inbox-title').text('Loading...');
         $('#client-inbox-empty').hide();
@@ -1342,6 +1564,9 @@
             return;
         }
 
+        var pendingId = addPendingMessage(text);
+        emitTyping('stop');
+
         $.ajax({
             url: '/client/ajax/inbox.php',
             method: 'POST',
@@ -1354,8 +1579,20 @@
         }).done(function (res) {
             if (!res || res.ok !== true) {
                 toastr.error((res && res.message) ? res.message : 'Could not send message');
+                updatePendingStatus(pendingId, 'Failed');
                 return;
             }
+            var sentId = res && res.message ? res.message.id : 0;
+            if (!sentId && res && res.message_id) {
+                sentId = res.message_id;
+            }
+            if (!sentId) {
+                sentId = extractMaxMessageId(res.messages || []);
+            }
+            if (sentId) {
+                setMessageStatus(sentId, 'Sent');
+            }
+            removePendingMessage(pendingId);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
             $('#client-inbox-message').val('');
             toastr.success('Message sent');
@@ -1363,6 +1600,7 @@
             loadThreads();
         }).fail(function (xhr) {
             var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            updatePendingStatus(pendingId, 'Failed');
             if (res && res.code === 'FEE_REQUIRED') {
                 setFeeGateState(true, 'Unlock after Coordination Fee.');
                 setComposeGateState(true, '');
@@ -1413,6 +1651,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not send quick action');
                 return;
             }
+            markSentFromResponse(res);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
             toastr.success('Quick action sent');
             loadMessages();
@@ -1453,6 +1692,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not send proposal response');
                 return;
             }
+            markSentFromResponse(res);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
             toastr.success('Response sent');
             loadMessages();
@@ -1541,6 +1781,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not send proposal');
                 return;
             }
+            markSentFromResponse(res);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
             $('#clientProposeDatesModal').modal('hide');
             toastr.success('Proposal sent');
@@ -1590,6 +1831,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not update dates');
                 return;
             }
+            markSentFromResponse(res);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
             toastr.success('Response sent');
             loadMessages();
@@ -1623,6 +1865,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not update final decision');
                 return;
             }
+            markSentFromResponse(res);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
             toastr.success('Response sent');
             loadMessages();
@@ -1786,6 +2029,12 @@
         $('#client-inbox-send-form').on('submit', function (e) {
             e.preventDefault();
             sendMessage();
+        });
+        $('#client-inbox-message').on('input', function () {
+            handleLocalTyping();
+        });
+        $('#client-inbox-message').on('blur', function () {
+            emitTyping('stop');
         });
 
         $('#client-inbox-fee-actions').on('click', '.client-quick-action', function () {
