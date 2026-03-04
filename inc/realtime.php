@@ -46,6 +46,29 @@ if (!function_exists('mt_realtime_make_token')) {
     }
 }
 
+if (!function_exists('mt_realtime_make_admin_token')) {
+    function mt_realtime_make_admin_token($userId, $role = 'ADMIN')
+    {
+        $secret = defined('MT_REALTIME_HMAC_SECRET') ? MT_REALTIME_HMAC_SECRET : '';
+        if ($secret === '') {
+            return '';
+        }
+        $userId = (int)$userId;
+        if ($userId <= 0) {
+            return '';
+        }
+        $role = strtoupper(trim((string)$role));
+        if ($role !== 'ADMIN') {
+            return '';
+        }
+        $exp = time() + 600;
+        $payload = $userId . '|' . $role . '|' . $exp;
+        $b64 = rtrim(strtr(base64_encode($payload), '+/', '-_'), '=');
+        $sig = hash_hmac('sha256', $payload, $secret);
+        return $b64 . '.' . $sig;
+    }
+}
+
 function mt_realtime_emit_inbox_message($payload)
 {
     if (!is_array($payload)) {

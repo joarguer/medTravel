@@ -384,7 +384,7 @@ $theme_layout_script =  '<!-- BEGIN THEME LAYOUT SCRIPTS -->
                             adminTokenUrl: ' . json_encode($realtime_admin_token_url) . '
                         };
                         </script>
-                        <script src="' . htmlspecialchars(rtrim((string)$realtime_base_url, '/'), ENT_QUOTES, 'UTF-8') . '/realtime/socket.io/socket.io.js" type="text/javascript"></script>
+                        <script src="https://medtravel.com.co/realtime/socket.io/socket.io.js" type="text/javascript"></script>
                         <script src="js/header_notifications.js" type="text/javascript"></script>';
 
 // Scripts base para las vistas (se usan en la mayoría de páginas admin)

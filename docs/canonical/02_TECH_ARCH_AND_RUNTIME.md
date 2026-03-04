@@ -113,3 +113,38 @@ Allow MedTravel to control monetization terms per provider while preserving free
 **Files responsible for UI rendering**
 - Admin portal: `admin/js/app_inbox.js`, `admin/app_inbox.php`
 - Client portal: `client/js/app_inbox.js`, `client/app_inbox.php`
+
+### Realtime Notifications Architecture
+
+**Rooms**
+- Thread rooms: `thread_<thread_id>`
+- Admin global room: `admins`
+
+**Socket events**
+
+Client → Server
+- `join_room`
+- `join_admin`
+- `client_message_committed`
+
+Server → Client
+- `message.created`
+- `admin.unread_changed`
+- `auth_error`
+
+**Realtime header flow**
+1. Patient sends message.
+2. Server rebroadcasts `message.created`.
+3. Server emits `admin.unread_changed` to room `admins`.
+4. `admin/js/header_notifications.js` receives event.
+5. It calls:
+   - `adminReloadNotificationsDebounced()`
+   - fallback `adminReloadNotificationsNow()`
+   - fallback `adminReloadNotifications()`
+6. Endpoint `/admin/ajax/get_notifications.php` returns `unread_count`.
+7. `.admin-notif-badge` is updated.
+
+**Resilience**
+- Polling fallback every 60s.
+- Manual refresh available.
+- Optional debug: `window.MT_DEBUG_NOTIF === true`.

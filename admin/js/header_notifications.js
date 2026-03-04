@@ -144,6 +144,7 @@
     function fetchAdminToken(callback) {
         var cfg = realtimeConfig();
         if (!cfg.adminTokenUrl) {
+            notifDebug('adminTokenUrl missing');
             callback('');
             return;
         }
@@ -156,8 +157,10 @@
                 callback(res.token);
                 return;
             }
+            notifDebug('token fetch failed');
             callback('');
         }).fail(function () {
+            notifDebug('token fetch error');
             callback('');
         });
     }
@@ -171,6 +174,7 @@
         }
         realtimeState.joining = true;
         var joinTimeout = setTimeout(function () {
+            notifDebug('join_admin timeout');
             realtimeState.joining = false;
         }, 3000);
         fetchAdminToken(function (token) {
@@ -184,9 +188,10 @@
                 realtimeState.joining = false;
                 if (ack && ack.ok && ack.joined) {
                     realtimeState.joined = true;
-                    notifDebug('joined admin room ' + (ack.room || ''));
+                    notifDebug('join_admin ok ' + (ack.room || ''));
                 } else {
                     realtimeState.joined = false;
+                    notifDebug('join_admin denied');
                 }
             });
         });
@@ -212,12 +217,31 @@
         });
 
         realtimeState.socket.on('admin.unread_changed', function () {
+            if (window.MT_DEBUG_NOTIF === true) {
+                console.log('[notif] admin.unread_changed');
+            }
+
             if (typeof window.adminReloadNotificationsDebounced === 'function') {
+                if (window.MT_DEBUG_NOTIF === true) {
+                    console.log('[notif] refresh realtime (debounced)');
+                }
                 window.adminReloadNotificationsDebounced();
-            } else if (typeof window.adminReloadNotifications === 'function') {
+                return;
+            }
+
+            if (typeof window.adminReloadNotificationsNow === 'function') {
+                if (window.MT_DEBUG_NOTIF === true) {
+                    console.log('[notif] refresh realtime (now)');
+                }
+                window.adminReloadNotificationsNow();
+                return;
+            }
+
+            if (typeof window.adminReloadNotifications === 'function') {
+                if (window.MT_DEBUG_NOTIF === true) {
+                    console.log('[notif] refresh realtime (direct)');
+                }
                 window.adminReloadNotifications();
-            } else {
-                loadNotifications();
             }
         });
 

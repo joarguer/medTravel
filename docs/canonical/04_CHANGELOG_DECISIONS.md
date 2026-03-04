@@ -30,3 +30,14 @@ Commission parameters are stored per provider and enforced through the Stage 2 c
 - Message status (sending/sent/failed)
 - Consecutive message grouping (2-minute window)
 - Admin header unread badge for inbox updates
+
+## 2026-03 — Realtime Admin Header Notifications
+
+Implementación de actualización realtime del badge de notificaciones en el header admin usando Socket.IO.
+
+Cambios principales:
+- evento `admin.unread_changed`
+- room global `admins`
+- listener en `admin/js/header_notifications.js`
+- refresh mediante `adminReloadNotificationsDebounced()`
+- fallback polling cada 60s
