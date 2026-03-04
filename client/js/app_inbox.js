@@ -12,6 +12,8 @@
         joining: false,
         lastMessageIdByThread: {}
     };
+    var recentSentMessageIds = {};
+    var RECENT_SENT_TTL_MS = 30000;
     var currentThread = null;
     var preferredThread = null;
     var autoSelectItemRequestId = 0;
@@ -90,6 +92,34 @@
         return !!(realtimeConfig.baseUrl && realtimeConfig.socketPath && typeof window.io === 'function');
     }
 
+    function realtimeDebug(message) {
+        if (window.MT_DEBUG_REALTIME === true) {
+            console.log(message);
+        }
+    }
+
+    function trackRecentSentMessage(messageId) {
+        var id = parseInt(messageId || 0, 10);
+        if (!isFinite(id) || id <= 0) return;
+        recentSentMessageIds[id] = Date.now();
+        setTimeout(function () {
+            delete recentSentMessageIds[id];
+        }, RECENT_SENT_TTL_MS);
+    }
+
+    function shouldDedupeMessage(messageId) {
+        var id = parseInt(messageId || 0, 10);
+        if (!isFinite(id) || id <= 0) return false;
+        var ts = recentSentMessageIds[id];
+        if (!ts) return false;
+        if ((Date.now() - ts) > RECENT_SENT_TTL_MS) {
+            delete recentSentMessageIds[id];
+            return false;
+        }
+        delete recentSentMessageIds[id];
+        return true;
+    }
+
     function initRealtime() {
         if (!realtimeEnabled() || realtimeState.socket) {
             return;
@@ -107,7 +137,12 @@
 
         realtimeState.socket.on('message.created', function (payload) {
             var threadId = payload && payload.thread_id ? String(payload.thread_id) : '';
+            var messageId = payload && payload.message_id ? parseInt(payload.message_id || 0, 10) : 0;
             if (!threadId) return;
+            if (messageId && shouldDedupeMessage(messageId)) {
+                realtimeDebug('[realtime] dedupe message.created id=' + messageId + ' thread=' + threadId);
+                return;
+            }
             if (currentThread && String(currentThread.thread_id || '') === threadId) {
                 var sinceId = realtimeState.lastMessageIdByThread[threadId] || 0;
                 fetchNewMessages(threadId, sinceId);
@@ -820,6 +855,7 @@
         if (!isFinite(msgId) || msgId <= 0) {
             return;
         }
+        trackRecentSentMessage(msgId);
         var senderRole = String(defaultRole || 'CLIENT').toUpperCase();
         if (msg && msg.sender) {
             senderRole = String(msg.sender || senderRole).toUpperCase();
