@@ -27,6 +27,8 @@ if (is_file($envPath)) {
     }
 }
 
+require_once __DIR__ . '/../../inc/realtime.php';
+
 /**
  * Detectar entorno
  */
