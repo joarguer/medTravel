@@ -11,7 +11,13 @@
     function renderSummary(totalCount, unreadCount, pendingCount) {
         var $badge = $('.admin-notif-badge');
         var $summary = $('#admin-notification-summary');
-        $badge.text(String(totalCount));
+        var badgeCount = unreadCount > 0 ? unreadCount : totalCount;
+        $badge.text(badgeCount > 0 ? String(badgeCount) : '');
+        if (badgeCount > 0) {
+            $badge.show();
+        } else {
+            $badge.hide();
+        }
         if ($summary.length) {
             if (totalCount > 0) {
                 var parts = [];
