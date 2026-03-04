@@ -26,3 +26,7 @@ Commission parameters are stored per provider and enforced through the Stage 2 c
 - Realtime dedupe fix
 - Improved scroll behavior
 - UI modernization for messaging
+- Typing indicator via realtime events
+- Message status (sending/sent/failed)
+- Consecutive message grouping (2-minute window)
+- Admin header unread badge for inbox updates
