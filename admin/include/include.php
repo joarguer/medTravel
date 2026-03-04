@@ -3,6 +3,7 @@ require_once __DIR__ . '/session_security.php';
 medtravel_session_start();
 include("valida_session.php");
 include_once("conexion.php");
+require_once __DIR__ . '/../../inc/realtime.php';
 $nombre_usuario = isset($_SESSION["nombre_usuario"]) ? $_SESSION["nombre_usuario"] : '';
 //separator
 $nombre_usuario_parts = explode(" ", $nombre_usuario ?: '');
@@ -362,6 +363,10 @@ $theme_layout_style =  '<!-- BEGIN THEME LAYOUT STYLES -->
                         <link rel="shortcut icon" href="favicon.ico" />
                         <link href="../assets/global/plugins/bootstrap-toastr/toastr.min.css" rel="stylesheet" type="text/css" />';   
 
+$realtime_base_url = defined('MT_REALTIME_BASE_URL') ? MT_REALTIME_BASE_URL : '';
+$realtime_socket_path = defined('MT_REALTIME_SOCKET_PATH') ? MT_REALTIME_SOCKET_PATH : '';
+$realtime_admin_token_url = '/admin/ajax/realtime_admin_token.php';
+
 $theme_layout_script =  '<!-- BEGIN THEME LAYOUT SCRIPTS -->
                         <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
                         <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
@@ -372,6 +377,14 @@ $theme_layout_script =  '<!-- BEGIN THEME LAYOUT SCRIPTS -->
                         <script src="../assets/pages/scripts/ui-toastr.min.js" type="text/javascript"></script>
                         <!-- END THEME LAYOUT SCRIPTS -->
                         <script src="js/global_scripts.js" type="text/javascript"></script>
+                        <script type="text/javascript">
+                        window.MT_REALTIME = {
+                            baseUrl: ' . json_encode($realtime_base_url) . ',
+                            socketPath: ' . json_encode($realtime_socket_path) . ',
+                            adminTokenUrl: ' . json_encode($realtime_admin_token_url) . '
+                        };
+                        </script>
+                        <script src="' . htmlspecialchars(rtrim((string)$realtime_base_url, '/'), ENT_QUOTES, 'UTF-8') . '/realtime/socket.io/socket.io.js" type="text/javascript"></script>
                         <script src="js/header_notifications.js" type="text/javascript"></script>';
 
 // Scripts base para las vistas (se usan en la mayoría de páginas admin)

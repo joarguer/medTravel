@@ -1,4 +1,10 @@
 (function () {
+    var realtimeState = {
+        socket: null,
+        joining: false,
+        joined: false
+    };
+
     function esc(str) {
         return String(str || '')
             .replace(/&/g, '&amp;')
@@ -6,6 +12,21 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function notifDebug(message) {
+        if (window.MT_DEBUG_NOTIF === true) {
+            console.log('[notif]', message);
+        }
+    }
+
+    function realtimeConfig() {
+        return window.MT_REALTIME || {};
+    }
+
+    function realtimeEnabled() {
+        var cfg = realtimeConfig();
+        return !!(cfg.baseUrl && cfg.socketPath && typeof window.io === 'function');
     }
 
     function renderSummary(totalCount, unreadCount, pendingCount) {
@@ -110,6 +131,91 @@
         });
     }
 
+    function fetchAdminToken(callback) {
+        var cfg = realtimeConfig();
+        if (!cfg.adminTokenUrl) {
+            callback('');
+            return;
+        }
+        $.ajax({
+            url: cfg.adminTokenUrl,
+            method: 'POST',
+            dataType: 'json'
+        }).done(function (res) {
+            if (res && res.ok === true && res.token) {
+                callback(res.token);
+                return;
+            }
+            callback('');
+        }).fail(function () {
+            callback('');
+        });
+    }
+
+    function joinAdminRoom() {
+        if (!realtimeEnabled() || !realtimeState.socket || !realtimeState.socket.connected) {
+            return;
+        }
+        if (realtimeState.joining) {
+            return;
+        }
+        realtimeState.joining = true;
+        var joinTimeout = setTimeout(function () {
+            realtimeState.joining = false;
+        }, 3000);
+        fetchAdminToken(function (token) {
+            if (!token) {
+                clearTimeout(joinTimeout);
+                realtimeState.joining = false;
+                return;
+            }
+            realtimeState.socket.emit('join_admin', { token: token }, function (ack) {
+                clearTimeout(joinTimeout);
+                realtimeState.joining = false;
+                if (ack && ack.ok && ack.joined) {
+                    realtimeState.joined = true;
+                    notifDebug('joined admin room ' + (ack.room || ''));
+                } else {
+                    realtimeState.joined = false;
+                }
+            });
+        });
+    }
+
+    function initRealtime() {
+        if (!realtimeEnabled() || realtimeState.socket) {
+            return;
+        }
+        var cfg = realtimeConfig();
+        realtimeState.socket = window.io(String(cfg.baseUrl || ''), {
+            path: String(cfg.socketPath || ''),
+            transports: ['websocket', 'polling']
+        });
+
+        realtimeState.socket.on('connect', function () {
+            notifDebug('socket connected');
+            joinAdminRoom();
+        });
+
+        realtimeState.socket.on('disconnect', function () {
+            realtimeState.joined = false;
+        });
+
+        realtimeState.socket.on('admin.unread_changed', function () {
+            if (typeof window.adminReloadNotificationsDebounced === 'function') {
+                window.adminReloadNotificationsDebounced();
+            } else if (typeof window.adminReloadNotifications === 'function') {
+                window.adminReloadNotifications();
+            } else {
+                loadNotifications();
+            }
+        });
+
+        realtimeState.socket.on('auth_error', function () {
+            notifDebug('auth_error');
+        });
+    }
+
     function createDebouncedRefresh(fn, waitMs) {
         var timer = null;
         var lastRun = 0;
@@ -141,5 +247,6 @@
         window.adminReloadNotificationsDebounced = createDebouncedRefresh(loadNotifications, 1500);
         loadNotifications();
         setInterval(loadNotifications, 60000);
+        initRealtime();
     });
 })();
