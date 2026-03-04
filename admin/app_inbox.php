@@ -266,29 +266,68 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                 max-height: 60vh;
             }
         }
-        /* ── Message bubbles ── */
-        #admin-inbox-messages .mt-msg {
-            margin-bottom: 8px;
-            border-radius: 4px;
-            padding: 8px 10px;
-        }
-        #admin-inbox-messages .mt-msg-meta {
+        /* ── Chat bubble rows ── */
+        #admin-inbox-messages {
             display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 5px;
+            flex-direction: column;
+            gap: 4px;
         }
-        #admin-inbox-messages .mt-msg-time { color: #95a5a6; }
-        /* Structured / system actions — neutral grey */
+        #admin-inbox-messages .mt-msg-row {
+            display: flex;
+            width: 100%;
+            margin-bottom: 6px;
+        }
+        #admin-inbox-messages .mt-msg-row--own  { justify-content: flex-end; }
+        #admin-inbox-messages .mt-msg-row--other { justify-content: flex-start; }
+        #admin-inbox-messages .mt-msg {
+            max-width: 70%;
+            min-width: 80px;
+            padding: 10px 12px;
+            border-radius: 16px;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            box-shadow: 0 1px 3px rgba(0,0,0,.07);
+        }
+        #admin-inbox-messages .mt-bubble-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        #admin-inbox-messages .mt-bubble-name {
+            font-size: 11px;
+            font-weight: 600;
+            opacity: .8;
+            white-space: nowrap;
+        }
+        #admin-inbox-messages .mt-bubble-time {
+            font-size: 10px;
+            opacity: .55;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        #admin-inbox-messages .mt-bubble-body { line-height: 1.5; }
+        /* Structured / system actions — neutral grey (full width) */
         #admin-inbox-messages .mt-msg-system {
             background: #f4f6f7;
-            border-left: 3px solid #aab7b8;
+            border: 1px solid #d5dce4;
+            max-width: 100%;
+            border-radius: 8px;
         }
-        /* Human free-text messages — white with blue accent */
-        #admin-inbox-messages .mt-msg-human {
-            background: #fff;
-            border: 1px solid #e8ecf1;
-            border-left: 3px solid #5b9bd1;
+        /* Own messages — right-aligned teal-blue */
+        #admin-inbox-messages .mt-msg-row--own .mt-msg-human {
+            background: #1a73e8;
+            color: #fff;
+            border-radius: 16px 16px 4px 16px;
+        }
+        #admin-inbox-messages .mt-msg-row--own .mt-msg-human .mt-bubble-time { opacity: .7; }
+        /* Other messages — left-aligned light grey */
+        #admin-inbox-messages .mt-msg-row--other .mt-msg-human {
+            background: #f0f2f5;
+            color: #2c3e50;
+            border-radius: 16px 16px 16px 4px;
+            border: 1px solid #e0e4ea;
         }
         @media (max-width: 767px) {
             #admin-inbox-thread-list .mt-thread-row {
@@ -515,9 +554,13 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
 <script type="text/javascript">
 window.AdminInboxHelpConfig = {
     userId: <?php echo (int)($_SESSION['id_usuario'] ?? 0); ?>,
-    role: <?php echo json_encode((string)($_SESSION['rol'] ?? '')); ?>
+    role: <?php echo json_encode((string)($_SESSION['rol'] ?? '')); ?>,
+    realtimeBaseUrl: <?php echo json_encode(MT_REALTIME_BASE_URL); ?>,
+    realtimeSocketPath: <?php echo json_encode(MT_REALTIME_SOCKET_PATH); ?>,
+    realtimeTokenUrl: "/admin/ajax/realtime_token.php"
 };
 </script>
+<script src="<?php echo htmlspecialchars(rtrim((string)MT_REALTIME_BASE_URL, '/'), ENT_QUOTES, 'UTF-8'); ?>/realtime/socket.io/socket.io.js"></script>
 <script src="js/app_inbox.js" type="text/javascript"></script>
 </body>
 </html>

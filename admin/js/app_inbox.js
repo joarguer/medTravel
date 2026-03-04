@@ -1,5 +1,19 @@
 (function () {
     var helpConfig = window.AdminInboxHelpConfig || {};
+    var realtimeConfig = {
+        baseUrl: String(helpConfig.realtimeBaseUrl || '').trim(),
+        socketPath: String(helpConfig.realtimeSocketPath || '').trim(),
+        tokenUrl: String(helpConfig.realtimeTokenUrl || 'ajax/realtime_token.php').trim()
+    };
+    var realtimeState = {
+        socket: null,
+        pendingThreadId: '',
+        lastThreadId: '',
+        joining: false,
+        lastMessageIdByThread: {}
+    };
+    var recentSentMessageIds = {};
+    var RECENT_SENT_TTL_MS = 30000;
     var currentThread = null;
     var preferredThread = null;
     var feeGateActive = false;
@@ -32,6 +46,174 @@
         if (s === 'client') return 'info';
         if (s === 'admin' || s === 'patientcare') return 'warning';
         return 'default';
+    }
+
+    function normalizeRole(sender) {
+        return String(sender || 'system').toLowerCase().trim();
+    }
+
+    function isOwnAdminMessage(sender) {
+        var s = normalizeRole(sender);
+        if (!s || s === 'system') return false;
+        var myRole = String(helpConfig.role || '').toLowerCase().trim();
+        if (!myRole) return false;
+        return s === myRole;
+    }
+
+    function getAdminDisplayName(m, own) {
+        if (own) return 'Me';
+        // Use API name field if present (future-proof)
+        var apiName = String(m.sender_name || m.user_name || m.display_name || '').trim();
+        if (apiName) return apiName;
+        var s = normalizeRole(m.sender || '');
+        if (s === 'client') return 'Patient';
+        if (s === 'provider') return 'Provider';
+        if (s === 'system') return 'System';
+        return 'Support';
+    }
+
+    function buildAdminMsgHtml(m, bodyHtml, sysMsg) {
+        var own = isOwnAdminMessage(m.sender || '');
+        var rowCls = sysMsg ? 'mt-msg-row--other' : (own ? 'mt-msg-row--own' : 'mt-msg-row--other');
+        var msgCls = sysMsg ? 'mt-msg-system' : 'mt-msg-human';
+        var displayName = sysMsg ? 'System' : getAdminDisplayName(m, own);
+        return '<div class="mt-msg-row ' + rowCls + '">' +
+            '<div class="mt-msg ' + msgCls + '">' +
+                '<div class="mt-bubble-head">' +
+                    '<span class="mt-bubble-name">' + esc(displayName) + '</span>' +
+                    (m.time ? '<span class="mt-bubble-time">' + esc(m.time) + '</span>' : '') +
+                '</div>' +
+                '<div class="mt-bubble-body">' + bodyHtml + '</div>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function shouldAutoScroll(el) {
+        if (!el) return true;
+        return (el.scrollHeight - el.scrollTop - el.clientHeight) <= 120;
+    }
+
+    function realtimeEnabled() {
+        return !!(realtimeConfig.baseUrl && realtimeConfig.socketPath && typeof window.io === 'function');
+    }
+
+    function realtimeDebug() {
+        return !!window.MT_DEBUG_REALTIME;
+    }
+
+    function trackRecentSentMessage(messageId) {
+        var id = parseInt(messageId || 0, 10);
+        if (!isFinite(id) || id <= 0) return;
+        recentSentMessageIds[id] = Date.now();
+        setTimeout(function () {
+            delete recentSentMessageIds[id];
+        }, RECENT_SENT_TTL_MS);
+    }
+
+    function shouldDedupeMessage(messageId) {
+        var id = parseInt(messageId || 0, 10);
+        if (!isFinite(id) || id <= 0) return false;
+        var ts = recentSentMessageIds[id];
+        if (!ts) return false;
+        if ((Date.now() - ts) > RECENT_SENT_TTL_MS) {
+            delete recentSentMessageIds[id];
+            return false;
+        }
+        delete recentSentMessageIds[id];
+        return true;
+    }
+
+    function initRealtime() {
+        if (!realtimeEnabled() || realtimeState.socket) {
+            return;
+        }
+        realtimeState.socket = window.io(realtimeConfig.baseUrl, {
+            path: realtimeConfig.socketPath,
+            transports: ['websocket', 'polling']
+        });
+
+        realtimeState.socket.on('connect', function () {
+            if (realtimeState.pendingThreadId) {
+                realtimeJoinThread(realtimeState.pendingThreadId);
+            }
+        });
+
+        realtimeState.socket.on('message.created', function (payload) {
+            var threadId = payload && payload.thread_id ? String(payload.thread_id) : '';
+            var messageId = payload && payload.message_id ? parseInt(payload.message_id || 0, 10) : 0;
+            if (!threadId) return;
+            if (messageId && shouldDedupeMessage(messageId)) {
+                if (realtimeDebug()) {
+                    console.log('[realtime] dedupe message.created id=' + messageId + ' thread=' + threadId);
+                }
+                return;
+            }
+            if (currentThread && String(currentThread.thread_id || '') === threadId) {
+                var sinceId = realtimeState.lastMessageIdByThread[threadId] || 0;
+                fetchNewMessages(threadId, sinceId);
+                return;
+            }
+            loadThreads();
+        });
+
+        realtimeState.socket.on('connect_error', function () {
+            // noop: fallback to polling/manual refresh
+        });
+
+        realtimeState.socket.on('auth_error', function () {
+            // noop: server rejected token; user can refresh/join again
+        });
+    }
+
+    function realtimeJoinThread(threadId) {
+        var thread = String(threadId || '').trim();
+        if (!thread || !realtimeEnabled()) {
+            return;
+        }
+        initRealtime();
+        if (!realtimeState.socket) {
+            return;
+        }
+        realtimeState.pendingThreadId = thread;
+        if (!realtimeState.socket.connected || realtimeState.joining) {
+            return;
+        }
+        realtimeState.joining = true;
+        $.ajax({
+            url: realtimeConfig.tokenUrl,
+            method: 'POST',
+            dataType: 'json',
+            data: { thread_id: thread }
+        }).done(function (res) {
+            if (!res || res.ok !== true || !res.token) {
+                return;
+            }
+            realtimeState.lastThreadId = thread;
+            realtimeState.socket.emit('join_room', {
+                thread_id: thread,
+                token: res.token
+            });
+        }).always(function () {
+            realtimeState.joining = false;
+        });
+    }
+
+    function extractMaxMessageId(messages) {
+        var maxId = 0;
+        if (!messages || !messages.length) return maxId;
+        messages.forEach(function (m) {
+            var id = parseInt(m.id || 0, 10);
+            if (isFinite(id) && id > maxId) {
+                maxId = id;
+            }
+        });
+        return maxId;
+    }
+
+    function rememberLastMessageId(threadId, messages) {
+        var id = extractMaxMessageId(messages);
+        if (!threadId || !id) return;
+        realtimeState.lastMessageIdByThread[threadId] = id;
     }
 
     function parseStructuredJson(prefix, text) {
@@ -554,17 +736,109 @@
         messages.forEach(function (m) {
             var bodyHtml = formatAdminMessageBody(m.body || '');
             var sysMsg = isSystemActionMessage(m.body || '');
-            var msgCls = sysMsg ? 'mt-msg-system' : 'mt-msg-human';
-            html += '<div class="mt-msg ' + msgCls + '">' +
-                '<div class="mt-msg-meta">' +
-                    '<span class="label label-' + senderClass(m.sender) + '">' + esc(m.sender || 'system') + '</span>' +
-                    (m.time ? '<small class="mt-msg-time">' + esc(m.time) + '</small>' : '') +
-                '</div>' +
-                '<div class="mt-msg-body">' + bodyHtml + '</div>' +
-            '</div>';
+            html += buildAdminMsgHtml(m, bodyHtml, sysMsg);
         });
         $box.html(html);
         $box.scrollTop($box[0].scrollHeight);
+        if (currentThread && currentThread.thread_id) {
+            rememberLastMessageId(String(currentThread.thread_id), messages);
+        }
+    }
+
+    function appendMessages(messages, minId) {
+        var $box = $('#admin-inbox-messages');
+        if (!$box.length) return;
+        if (!messages || !messages.length) return;
+        var threadId = currentThread && currentThread.thread_id ? String(currentThread.thread_id) : '';
+        var html = '';
+        var appended = false;
+        var floorId = parseInt(minId || 0, 10);
+        var nearBottom = shouldAutoScroll($box[0]);
+        messages.forEach(function (m) {
+            var msgId = parseInt(m.id || 0, 10);
+            if (isFinite(msgId) && floorId > 0 && msgId <= floorId) {
+                return;
+            }
+            var bodyHtml = formatAdminMessageBody(m.body || '');
+            var sysMsg = isSystemActionMessage(m.body || '');
+            html += buildAdminMsgHtml(m, bodyHtml, sysMsg);
+            appended = true;
+        });
+        if (!appended) {
+            return;
+        }
+        $box.find('p.text-muted').filter(function () {
+            return String($(this).text() || '').indexOf('No messages in this thread yet.') !== -1;
+        }).remove();
+        $box.append(html);
+        if (nearBottom) {
+            $box.scrollTop($box[0].scrollHeight);
+        }
+        if (threadId) {
+            rememberLastMessageId(threadId, messages);
+        }
+    }
+
+    function fetchNewMessages(threadId, sinceId) {
+        var thread = String(threadId || '').trim();
+        var lastId = parseInt(sinceId || 0, 10);
+        if (!thread) return;
+        if (!lastId || lastId <= 0) {
+            loadMessages();
+            return;
+        }
+        $.ajax({
+            url: 'ajax/inbox.php',
+            method: 'GET',
+            dataType: 'json',
+            data: {
+                action: 'list_messages',
+                thread_id: thread,
+                since_id: lastId
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                return;
+            }
+            var newMessages = $.isArray(res.messages) ? res.messages : [];
+            if (!newMessages.length) {
+                return;
+            }
+            appendMessages(newMessages, lastId);
+        });
+    }
+
+    function realtimeCanEmit(threadId) {
+        return !!(
+            realtimeEnabled() &&
+            realtimeState.socket &&
+            realtimeState.socket.connected &&
+            realtimeState.lastThreadId === threadId
+        );
+    }
+
+    function realtimeEmitCommitted(threadId, res, defaultRole) {
+        var thread = String(threadId || '').trim();
+        if (!thread || !realtimeCanEmit(thread)) {
+            return;
+        }
+        var msg = res && res.message ? res.message : null;
+        var msgId = msg ? parseInt(msg.id || 0, 10) : 0;
+        if (!isFinite(msgId) || msgId <= 0) {
+            return;
+        }
+        trackRecentSentMessage(msgId);
+        var senderRole = String(defaultRole || 'ADMIN').toUpperCase();
+        if (msg && msg.sender) {
+            senderRole = String(msg.sender || senderRole).toUpperCase();
+        }
+        var createdAt = msg && msg.time ? String(msg.time) : new Date().toISOString();
+        realtimeState.socket.emit('client_message_committed', {
+            thread_id: thread,
+            message_id: msgId,
+            sender_role: senderRole,
+            created_at: createdAt
+        });
     }
 
     function inboxHelpStorageKey() {
@@ -773,6 +1047,8 @@
     function loadMessages() {
         if (!currentThread || !currentThread.thread_id) return;
 
+        realtimeJoinThread(currentThread.thread_id);
+
         $('#admin-inbox-title').text('Loading...');
         $('#admin-inbox-empty').hide();
         $('#admin-inbox-content').show();
@@ -860,6 +1136,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not send message');
                 return;
             }
+            realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
             $('#admin-inbox-message').val('');
             toastr.success('Message sent');
             loadMessages();
@@ -903,6 +1180,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not send quick reply');
                 return;
             }
+            realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
             toastr.success('Quick reply sent');
             loadMessages();
             loadThreads();
@@ -936,6 +1214,7 @@
                 toastr.error((res && res.message) ? res.message : 'Could not send structured action');
                 return;
             }
+            realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
             toastr.success('Structured action sent');
             loadMessages();
             loadThreads();
@@ -1087,6 +1366,7 @@
 
         bindInboxHelpPanel();
 
+        initRealtime();
         loadThreads();
     });
 })();

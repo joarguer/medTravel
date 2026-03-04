@@ -18,3 +18,11 @@ Different providers may have different commercial agreements with MedTravel.
 
 **Outcome**
 Commission parameters are stored per provider and enforced through the Stage 2 commission gate.
+
+## Inbox UX Improvements
+
+- Chat bubble layout
+- Sender display names
+- Realtime dedupe fix
+- Improved scroll behavior
+- UI modernization for messaging

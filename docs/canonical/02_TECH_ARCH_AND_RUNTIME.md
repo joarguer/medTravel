@@ -43,3 +43,49 @@ Control access to sensitive provider contact details until commission payment is
 
 **Purpose**
 Allow MedTravel to control monetization terms per provider while preserving free negotiation in Stage 1.
+
+### Inbox UI Architecture – Chat Bubble System
+
+**Chat layout standard**
+- Own messages aligned RIGHT.
+- Received messages aligned LEFT.
+- Maximum bubble width ~70%.
+- Auto-wrap long content.
+- Header inside bubble: DisplayName + Timestamp.
+
+**Display name logic**
+- Own message → "Me".
+- Client portal other side: admin/patientcare → "Support"; provider → "Provider".
+- Admin portal other side: client → "Patient" or "Client".
+- If sender name exists in message payload → use it.
+
+**Message classification**
+- sender_role normalization: client, admin, provider, patientcare, system.
+
+**DOM structure**
+```html
+<div class="mt-msg-row mt-msg-row--own|other">
+  <div class="mt-msg-bubble">
+      <div class="mt-bubble-head">
+          <span class="mt-bubble-name">Me</span>
+          <span class="mt-bubble-time">timestamp</span>
+      </div>
+      <div class="mt-bubble-body">
+          message content
+      </div>
+  </div>
+</div>
+```
+
+**Scroll behavior**
+- Auto-scroll only when user is near bottom.
+- Do not jump scroll when user is reading history.
+
+**Realtime deduplication**
+- Prevent duplicate rendering when sender receives their own socket broadcast.
+- Track recent message_id values.
+- Ignore socket message.created events if already rendered.
+
+**Files responsible for UI rendering**
+- Admin portal: `admin/js/app_inbox.js`, `admin/app_inbox.php`
+- Client portal: `client/js/app_inbox.js`, `client/app_inbox.php`

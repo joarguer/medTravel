@@ -158,6 +158,62 @@ if (isset($conexion) && $conexion) {
                 flex-wrap: wrap;
             }
         }
+        /* ── Chat bubble rows ── */
+        #client-inbox-messages {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        #client-inbox-messages .mt-msg-row {
+            display: flex;
+            width: 100%;
+            margin-bottom: 6px;
+        }
+        #client-inbox-messages .mt-msg-row--own  { justify-content: flex-end; }
+        #client-inbox-messages .mt-msg-row--other { justify-content: flex-start; }
+        #client-inbox-messages .mt-msg-bubble {
+            max-width: 70%;
+            min-width: 80px;
+            padding: 10px 12px;
+            border-radius: 16px;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            box-shadow: 0 1px 3px rgba(0,0,0,.07);
+        }
+        #client-inbox-messages .mt-bubble-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        #client-inbox-messages .mt-bubble-name {
+            font-size: 11px;
+            font-weight: 600;
+            opacity: .8;
+            white-space: nowrap;
+        }
+        #client-inbox-messages .mt-bubble-time {
+            font-size: 10px;
+            opacity: .55;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        #client-inbox-messages .mt-bubble-body { line-height: 1.5; }
+        /* Own (client) messages — right, teal-blue */
+        #client-inbox-messages .mt-msg-row--own .mt-msg-bubble {
+            background: #1a73e8;
+            color: #fff;
+            border-radius: 16px 16px 4px 16px;
+        }
+        #client-inbox-messages .mt-msg-row--own .mt-bubble-time { opacity: .7; }
+        /* Other messages — left, light grey */
+        #client-inbox-messages .mt-msg-row--other .mt-msg-bubble {
+            background: #f0f2f5;
+            color: #2c3e50;
+            border-radius: 16px 16px 16px 4px;
+            border: 1px solid #e0e4ea;
+        }
     </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -312,9 +368,13 @@ window.ClientInboxConfig = {
     feeGateActive: <?php echo $clientFeeGateActive ? 'true' : 'false'; ?>,
     commissionGateActive: <?php echo $clientCommissionGateActive ? 'true' : 'false'; ?>,
     commissionPaid: <?php echo $clientCommissionPaid ? 'true' : 'false'; ?>,
-    commissionMessage: <?php echo json_encode($clientCommissionMessage); ?>
+    commissionMessage: <?php echo json_encode($clientCommissionMessage); ?>,
+    realtimeBaseUrl: <?php echo json_encode(MT_REALTIME_BASE_URL); ?>,
+    realtimeSocketPath: <?php echo json_encode(MT_REALTIME_SOCKET_PATH); ?>,
+    realtimeTokenUrl: "/client/ajax/realtime_token.php"
 };
 </script>
+<script src="<?php echo htmlspecialchars(rtrim((string)MT_REALTIME_BASE_URL, '/'), ENT_QUOTES, 'UTF-8'); ?>/realtime/socket.io/socket.io.js"></script>
 <script src="/client/js/app_inbox.js" type="text/javascript"></script>
 </body>
 </html>
