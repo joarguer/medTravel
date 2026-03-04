@@ -30,14 +30,20 @@
     }
 
     function renderSummary(totalCount, unreadCount, pendingCount) {
-        var $badge = $('.admin-notif-badge');
+        var badge = document.querySelector('.admin-notif-badge');
         var $summary = $('#admin-notification-summary');
-        var badgeCount = unreadCount > 0 ? unreadCount : totalCount;
-        $badge.text(badgeCount > 0 ? String(badgeCount) : '');
-        if (badgeCount > 0) {
-            $badge.show();
-        } else {
-            $badge.hide();
+        var unread = parseInt(unreadCount || 0, 10);
+        if (!isFinite(unread) || unread < 0) {
+            unread = 0;
+        }
+        if (badge) {
+            if (unread > 0) {
+                badge.textContent = String(unread);
+                badge.style.display = 'inline-block';
+            } else {
+                badge.textContent = '';
+                badge.style.display = 'none';
+            }
         }
         if ($summary.length) {
             if (totalCount > 0) {
@@ -112,23 +118,27 @@
     }
 
     function loadNotifications() {
-        if (!$('#admin-notification-list').length) {
+        if (!document.querySelector('#admin-notification-list')) {
             return;
         }
-        $.ajax({
-            url: '/admin/ajax/get_notifications.php',
-            method: 'GET',
-            dataType: 'json'
-        }).done(function (res) {
-            if (!res || res.ok !== true) {
-                return;
-            }
-            var unreadCount = parseInt(res.unread_count || 0, 10);
-            var pendingCount = parseInt(res.pending_services_count || 0, 10);
-            var totalCount = parseInt(res.count || (unreadCount + pendingCount), 10);
-            renderSummary(totalCount, unreadCount, pendingCount);
-            renderItems(res.items || [], res.pending_services || []);
-        });
+        notifDebug('fetch start');
+        fetch('/admin/ajax/get_notifications.php', { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                notifDebug('response ' + JSON.stringify(data || {}));
+                if (!data || data.ok !== true) {
+                    return;
+                }
+                var unreadCount = parseInt(data.unread_count || 0, 10);
+                var pendingCount = parseInt(data.pending_services_count || 0, 10);
+                var totalCount = parseInt(data.count || (unreadCount + pendingCount), 10);
+                notifDebug('unread_count ' + unreadCount);
+                renderSummary(totalCount, unreadCount, pendingCount);
+                renderItems(data.items || [], data.pending_services || []);
+            })
+            .catch(function () {
+                // noop: keep fallback polling next tick
+            });
     }
 
     function fetchAdminToken(callback) {
@@ -245,6 +255,9 @@
     $(function () {
         window.adminReloadNotifications = loadNotifications;
         window.adminReloadNotificationsDebounced = createDebouncedRefresh(loadNotifications, 1500);
+        window.adminReloadNotificationsNow = function () {
+            loadNotifications();
+        };
         loadNotifications();
         setInterval(loadNotifications, 60000);
         initRealtime();
