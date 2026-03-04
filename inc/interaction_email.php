@@ -264,6 +264,184 @@ if (!function_exists('interaction_email_fetch_client_email')) {
     }
 }
 
+if (!function_exists('interaction_email_thread_id')) {
+    function interaction_email_thread_id($threadType, $requestId, $itemId = 0)
+    {
+        if (function_exists('inbox_thread_id')) {
+            return inbox_thread_id($threadType, $requestId, $itemId);
+        }
+        $threadType = strtoupper(trim((string)$threadType));
+        if ($threadType === 'ITEM') {
+            return 'ITEM:' . (int)$itemId;
+        }
+        return 'CARE:' . (int)$requestId;
+    }
+}
+
+if (!function_exists('interaction_email_fetch_client_recipient_id')) {
+    function interaction_email_fetch_client_recipient_id($conexion, $requestId)
+    {
+        $requestId = (int)$requestId;
+        if ($requestId <= 0 || !inbox_table_exists($conexion, 'booking_requests')) {
+            return 0;
+        }
+        if (!inbox_table_has_column($conexion, 'booking_requests', 'client_user_id')) {
+            return 0;
+        }
+        $stmt = mysqli_prepare($conexion, "SELECT client_user_id FROM booking_requests WHERE id = ? LIMIT 1");
+        if (!$stmt) {
+            return 0;
+        }
+        mysqli_stmt_bind_param($stmt, 'i', $requestId);
+        if (!mysqli_stmt_execute($stmt)) {
+            mysqli_stmt_close($stmt);
+            return 0;
+        }
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        mysqli_stmt_close($stmt);
+        return (int)($row['client_user_id'] ?? 0);
+    }
+}
+
+if (!function_exists('interaction_email_fetch_provider_recipient_id')) {
+    function interaction_email_fetch_provider_recipient_id($conexion, $itemId)
+    {
+        $itemId = (int)$itemId;
+        if ($itemId <= 0 || !inbox_table_exists($conexion, 'booking_request_items')) {
+            return 0;
+        }
+        $select = [];
+        if (inbox_table_has_column($conexion, 'booking_request_items', 'provider_id')) {
+            $select[] = 'provider_id';
+        }
+        if (inbox_table_has_column($conexion, 'booking_request_items', 'service_provider_id')) {
+            $select[] = 'service_provider_id';
+        }
+        if (empty($select)) {
+            return 0;
+        }
+        $stmt = mysqli_prepare($conexion, "SELECT " . implode(', ', $select) . " FROM booking_request_items WHERE id = ? LIMIT 1");
+        if (!$stmt) {
+            return 0;
+        }
+        mysqli_stmt_bind_param($stmt, 'i', $itemId);
+        if (!mysqli_stmt_execute($stmt)) {
+            mysqli_stmt_close($stmt);
+            return 0;
+        }
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        mysqli_stmt_close($stmt);
+        if (!$row) {
+            return 0;
+        }
+        $providerId = (int)($row['provider_id'] ?? 0);
+        if ($providerId > 0) {
+            return $providerId;
+        }
+        $serviceProviderId = (int)($row['service_provider_id'] ?? 0);
+        if ($serviceProviderId > 0) {
+            return $serviceProviderId;
+        }
+        return 0;
+    }
+}
+
+if (!function_exists('interaction_email_log')) {
+    function interaction_email_log($message)
+    {
+        $text = 'INTERACTION_EMAIL ' . trim((string)$message);
+        if (function_exists('mt_email_debug_log')) {
+            mt_email_debug_log($text);
+            return;
+        }
+        error_log($text);
+    }
+}
+
+if (!function_exists('inbox_email_throttle_ensure_table')) {
+    function inbox_email_throttle_ensure_table($conexion)
+    {
+        if (!$conexion) {
+            return false;
+        }
+        if (!inbox_table_exists($conexion, 'inbox_email_throttle')) {
+            $sql = "CREATE TABLE IF NOT EXISTS inbox_email_throttle (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        thread_id VARCHAR(64) NOT NULL,
+                        recipient_role VARCHAR(32) NOT NULL,
+                        recipient_id INT NOT NULL,
+                        last_sent_at DATETIME NOT NULL,
+                        UNIQUE KEY uniq_thread_recipient (thread_id, recipient_role, recipient_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+            @mysqli_query($conexion, $sql);
+        }
+        return inbox_table_exists($conexion, 'inbox_email_throttle');
+    }
+}
+
+if (!function_exists('inbox_email_throttle_should_send')) {
+    function inbox_email_throttle_should_send($conexion, $threadId, $recipientRole, $recipientId, $windowSeconds = 900)
+    {
+        $threadId = trim((string)$threadId);
+        $recipientRole = strtoupper(trim((string)$recipientRole));
+        $recipientId = (int)$recipientId;
+        $windowSeconds = (int)$windowSeconds;
+        if ($threadId === '' || $recipientRole === '' || $recipientId <= 0) {
+            return true;
+        }
+        if (!$conexion || !inbox_email_throttle_ensure_table($conexion)) {
+            return true;
+        }
+
+        $stmt = mysqli_prepare(
+            $conexion,
+            "SELECT last_sent_at FROM inbox_email_throttle WHERE thread_id = ? AND recipient_role = ? AND recipient_id = ? LIMIT 1"
+        );
+        if (!$stmt) {
+            return true;
+        }
+        mysqli_stmt_bind_param($stmt, 'ssi', $threadId, $recipientRole, $recipientId);
+        if (!mysqli_stmt_execute($stmt)) {
+            mysqli_stmt_close($stmt);
+            return true;
+        }
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        mysqli_stmt_close($stmt);
+
+        $now = time();
+        if ($row && !empty($row['last_sent_at'])) {
+            $lastSent = strtotime((string)$row['last_sent_at']);
+            if ($lastSent !== false && ($now - $lastSent) < $windowSeconds) {
+                return false;
+            }
+            $stmtUp = mysqli_prepare(
+                $conexion,
+                "UPDATE inbox_email_throttle SET last_sent_at = NOW() WHERE thread_id = ? AND recipient_role = ? AND recipient_id = ?"
+            );
+            if ($stmtUp) {
+                mysqli_stmt_bind_param($stmtUp, 'ssi', $threadId, $recipientRole, $recipientId);
+                @mysqli_stmt_execute($stmtUp);
+                mysqli_stmt_close($stmtUp);
+            }
+            return true;
+        }
+
+        $stmtIns = mysqli_prepare(
+            $conexion,
+            "INSERT INTO inbox_email_throttle (thread_id, recipient_role, recipient_id, last_sent_at) VALUES (?, ?, ?, NOW())"
+        );
+        if ($stmtIns) {
+            mysqli_stmt_bind_param($stmtIns, 'ssi', $threadId, $recipientRole, $recipientId);
+            @mysqli_stmt_execute($stmtIns);
+            mysqli_stmt_close($stmtIns);
+        }
+        return true;
+    }
+}
+
 if (!function_exists('interaction_email_request_meta')) {
     function interaction_email_request_meta($conexion, $threadType, $requestId, $itemId = 0)
     {
@@ -758,6 +936,13 @@ if (!function_exists('notify_new_message_to_client')) {
             return ['success' => false, 'error' => 'client_email_not_found'];
         }
 
+        $threadId = interaction_email_thread_id($threadType, $requestId, $itemId);
+        $recipientId = interaction_email_fetch_client_recipient_id($conexion, $requestId);
+        if (!inbox_email_throttle_should_send($conexion, $threadId, 'CLIENT', $recipientId, 900)) {
+            interaction_email_log('skip_email_throttle role=CLIENT thread_id=' . $threadId . ' recipient_id=' . (int)$recipientId);
+            return ['success' => true, 'skipped' => true, 'reason' => 'throttled'];
+        }
+
         $meta        = interaction_email_request_meta($conexion, $threadType, $requestId, $itemId);
         $safeTitle   = htmlspecialchars((string)$meta['title'], ENT_QUOTES, 'UTF-8');
         $actorLabel  = interaction_email_actor_label($senderRole);
@@ -853,6 +1038,13 @@ if (!function_exists('notify_new_message_to_provider')) {
         }
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
             return ['success' => false, 'error' => 'provider_email_not_found'];
+        }
+
+        $threadId = interaction_email_thread_id($threadType, $requestId, $itemId);
+        $recipientId = interaction_email_fetch_provider_recipient_id($conexion, $itemId);
+        if (!inbox_email_throttle_should_send($conexion, $threadId, 'PROVIDER', $recipientId, 900)) {
+            interaction_email_log('skip_email_throttle role=PROVIDER thread_id=' . $threadId . ' recipient_id=' . (int)$recipientId);
+            return ['success' => true, 'skipped' => true, 'reason' => 'throttled'];
         }
 
         $meta        = interaction_email_request_meta($conexion, $threadType, $requestId, $itemId);

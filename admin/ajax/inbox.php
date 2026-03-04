@@ -349,6 +349,10 @@ function admin_inbox_decode_payload($raw)
     return $decoded;
 }
 
+if (defined('INBOX_BOOTSTRAP_ONLY') && INBOX_BOOTSTRAP_ONLY) {
+    return;
+}
+
 if (!isset($conexion) || !$conexion) {
     admin_inbox_err('db_not_available', 500);
 }
@@ -492,11 +496,20 @@ if ($action === 'list_messages') {
         : false;
     $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
     $messages = [];
+    $sinceId = (int)($_GET['since_id'] ?? $_POST['since_id'] ?? 0);
     if (inbox_table_exists($conexion, 'inbox_messages')) {
-        $stmt = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? ORDER BY id ASC");
+        if ($sinceId > 0) {
+            $stmt = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? AND id > ? ORDER BY id ASC");
+        } else {
+            $stmt = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? ORDER BY id ASC");
+        }
         if ($stmt) {
             $threadId = (string)$ctx['thread_id'];
-            mysqli_stmt_bind_param($stmt, 's', $threadId);
+            if ($sinceId > 0) {
+                mysqli_stmt_bind_param($stmt, 'si', $threadId, $sinceId);
+            } else {
+                mysqli_stmt_bind_param($stmt, 's', $threadId);
+            }
             if (mysqli_stmt_execute($stmt)) {
                 $res = mysqli_stmt_get_result($stmt);
                 while ($res && ($row = mysqli_fetch_assoc($res))) {
@@ -514,7 +527,7 @@ if ($action === 'list_messages') {
         }
     }
 
-    if (empty($messages) && trim((string)($ctx['additional_notes'] ?? '')) !== '') {
+    if ($sinceId <= 0 && empty($messages) && trim((string)($ctx['additional_notes'] ?? '')) !== '') {
         $legacy = inbox_parse_legacy_messages((string)$ctx['additional_notes']);
         $legacy = inbox_filter_legacy_messages($legacy, (string)$ctx['thread_type'], (int)$ctx['item_id']);
         foreach ($legacy as $idx => $m) {
@@ -674,6 +687,7 @@ if ($action === 'list_messages') {
         'request_id' => (int)$ctx['request_id'],
         'booking_request_id' => (int)$ctx['request_id'],
         'item_id' => (int)$ctx['item_id'],
+        'since_id' => $sinceId,
         'fee_locked' => $feeLocked ? 1 : 0,
         'commission_gate_enabled' => $commissionGateEnabled ? 1 : 0,
         'commission_paid' => $commissionPaid ? 1 : 0,
@@ -754,6 +768,7 @@ if ($action === 'send_message') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
         $emailSource = '';
@@ -787,7 +802,7 @@ if ($action === 'send_message') {
             'id' => $messageId,
             'sender' => inbox_sender_to_ui($senderRole),
             'body' => $message,
-            'time' => date('Y-m-d H:i:s'),
+            'time' => $createdAt,
         ],
     ]);
 }
@@ -914,6 +929,7 @@ if ($action === 'send_quick_reply') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
         $emailSource = '';
@@ -947,7 +963,7 @@ if ($action === 'send_quick_reply') {
             'id' => $messageId,
             'sender' => inbox_sender_to_ui($senderRole),
             'body' => $message,
-            'time' => date('Y-m-d H:i:s'),
+            'time' => $createdAt,
         ],
     ]);
 }
@@ -1120,6 +1136,7 @@ if ($action === 'send_structured_action') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
         $emailSource = '';
@@ -1154,7 +1171,7 @@ if ($action === 'send_structured_action') {
             'id' => $messageId,
             'sender' => inbox_sender_to_ui($senderRole),
             'body' => $message,
-            'time' => date('Y-m-d H:i:s'),
+            'time' => $createdAt,
         ],
     ]);
 }

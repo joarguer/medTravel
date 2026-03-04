@@ -345,6 +345,10 @@ function client_inbox_resolve_context($conexion, $ownerScope, $threadType, $requ
     ];
 }
 
+if (defined('INBOX_BOOTSTRAP_ONLY') && INBOX_BOOTSTRAP_ONLY) {
+    return;
+}
+
 $clientUserId = get_client_user_id();
 if (!isset($conexion) || !$conexion) {
     client_inbox_err('db_not_available', 500);
@@ -517,11 +521,20 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
 
 if ($action === 'list_messages') {
     $messages = [];
+    $sinceId = (int)($_GET['since_id'] ?? $_POST['since_id'] ?? 0);
     if (inbox_table_exists($conexion, 'inbox_messages')) {
-        $stmt = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? ORDER BY id ASC");
+        if ($sinceId > 0) {
+            $stmt = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? AND id > ? ORDER BY id ASC");
+        } else {
+            $stmt = mysqli_prepare($conexion, "SELECT id, sender_role, sender_user_id, body, created_at FROM inbox_messages WHERE thread_id = ? ORDER BY id ASC");
+        }
         if ($stmt) {
             $threadId = (string)$ctx['thread_id'];
-            mysqli_stmt_bind_param($stmt, 's', $threadId);
+            if ($sinceId > 0) {
+                mysqli_stmt_bind_param($stmt, 'si', $threadId, $sinceId);
+            } else {
+                mysqli_stmt_bind_param($stmt, 's', $threadId);
+            }
             if (mysqli_stmt_execute($stmt)) {
                 $res = mysqli_stmt_get_result($stmt);
                 while ($res && ($row = mysqli_fetch_assoc($res))) {
@@ -539,7 +552,7 @@ if ($action === 'list_messages') {
         }
     }
 
-    if (empty($messages) && trim((string)($ctx['additional_notes'] ?? '')) !== '') {
+    if ($sinceId <= 0 && empty($messages) && trim((string)($ctx['additional_notes'] ?? '')) !== '') {
         $legacy = inbox_parse_legacy_messages((string)$ctx['additional_notes']);
         $legacy = inbox_filter_legacy_messages($legacy, (string)$ctx['thread_type'], (int)$ctx['item_id']);
         foreach ($legacy as $idx => $m) {
@@ -696,6 +709,7 @@ if ($action === 'list_messages') {
         'request_id' => (int)$ctx['request_id'],
         'booking_id' => (int)$ctx['request_id'],
         'item_id' => (int)$ctx['item_id'],
+        'since_id' => $sinceId,
         'has_structured_item_actions' => $hasStructuredItemActions,
         'structured_item_id' => $structuredItemId,
         'fee_required' => $feeRequired,
@@ -757,6 +771,7 @@ if ($action === 'send_message') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
         $emailSource = '';
@@ -790,7 +805,7 @@ if ($action === 'send_message') {
             'id' => $messageId,
             'sender' => 'client',
             'body' => $message,
-            'time' => date('Y-m-d H:i:s'),
+            'time' => $createdAt,
         ],
     ]);
 }
@@ -846,6 +861,7 @@ if ($action === 'send_quick_action') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
         $emailSource = '';
@@ -879,7 +895,7 @@ if ($action === 'send_quick_action') {
             'id' => $messageId,
             'sender' => 'client',
             'body' => $message,
-            'time' => date('Y-m-d H:i:s'),
+            'time' => $createdAt,
         ],
     ]);
 }
@@ -998,6 +1014,7 @@ if ($action === 'send_structured_action') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
+    $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
         $emailSource = '';
@@ -1032,7 +1049,7 @@ if ($action === 'send_structured_action') {
             'id' => $messageId,
             'sender' => 'client',
             'body' => $message,
-            'time' => date('Y-m-d H:i:s'),
+            'time' => $createdAt,
         ],
     ]);
 }
@@ -1120,6 +1137,7 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
+    $createdAt = date('Y-m-d H:i:s');
 
     client_inbox_ok([
         'thread_id' => $threadId,
@@ -1131,7 +1149,7 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
             'id' => $messageId,
             'sender' => 'client',
             'body' => $message,
-            'time' => date('Y-m-d H:i:s'),
+            'time' => $createdAt,
         ],
     ]);
 }
@@ -1238,6 +1256,7 @@ if ($action === 'final_accept_and_pay' || $action === 'final_decline') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
+    $createdAt = date('Y-m-d H:i:s');
 
     client_inbox_ok([
         'thread_id' => $threadId,
@@ -1250,7 +1269,7 @@ if ($action === 'final_accept_and_pay' || $action === 'final_decline') {
             'id' => $messageId,
             'sender' => 'client',
             'body' => $message,
-            'time' => date('Y-m-d H:i:s'),
+            'time' => $createdAt,
         ],
     ]);
 }
