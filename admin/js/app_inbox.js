@@ -271,7 +271,15 @@
                 var nearBottom = shouldAutoScroll($('#admin-inbox-messages')[0]);
                 var sinceId = realtimeState.lastMessageIdByThread[threadId] || 0;
                 fetchNewMessages(threadId, sinceId, nearBottom);
+                if (!nearBottom && typeof window.adminReloadNotificationsDebounced === 'function') {
+                    window.adminReloadNotificationsDebounced();
+                }
                 return;
+            }
+            if (typeof window.adminReloadNotificationsDebounced === 'function') {
+                window.adminReloadNotificationsDebounced();
+            } else if (typeof window.adminReloadNotifications === 'function') {
+                window.adminReloadNotifications();
             }
             loadThreads();
         });
@@ -1293,6 +1301,11 @@
         }).done(function (res) {
             if (!res || res.ok !== true) return;
             refreshHeaderNotifications();
+            if (typeof window.adminReloadNotificationsDebounced === 'function') {
+                window.adminReloadNotificationsDebounced();
+            } else if (typeof window.adminReloadNotifications === 'function') {
+                window.adminReloadNotifications();
+            }
             loadThreads();
         });
     }

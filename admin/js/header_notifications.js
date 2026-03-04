@@ -110,8 +110,35 @@
         });
     }
 
+    function createDebouncedRefresh(fn, waitMs) {
+        var timer = null;
+        var lastRun = 0;
+        var wait = parseInt(waitMs || 1500, 10);
+        if (!isFinite(wait) || wait < 250) {
+            wait = 1500;
+        }
+        return function () {
+            var now = Date.now();
+            var elapsed = now - lastRun;
+            if (elapsed >= wait) {
+                lastRun = now;
+                fn();
+                return;
+            }
+            if (timer) {
+                return;
+            }
+            timer = setTimeout(function () {
+                timer = null;
+                lastRun = Date.now();
+                fn();
+            }, wait - elapsed);
+        };
+    }
+
     $(function () {
         window.adminReloadNotifications = loadNotifications;
+        window.adminReloadNotificationsDebounced = createDebouncedRefresh(loadNotifications, 1500);
         loadNotifications();
         setInterval(loadNotifications, 60000);
     });
