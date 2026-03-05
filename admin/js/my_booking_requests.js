@@ -1,7 +1,6 @@
 (function () {
     var table = null;
     var activeDetailItemId = 0;
-    var activeDetailRequestId = 0;
 
     $(document).ready(function () {
         initTable();
@@ -186,43 +185,6 @@
             $('#provider_propose_modal').modal('show');
         });
 
-        $('#my_booking_detail_modal').on('click', '#btn-commission-create', function () {
-            if (!activeDetailItemId || !activeDetailRequestId) {
-                return;
-            }
-            createCommissionPayment(activeDetailRequestId, activeDetailItemId);
-        });
-
-        $('#my_booking_detail_modal').on('click', '#btn-commission-mark-paid', function () {
-            if (!activeDetailItemId || !activeDetailRequestId) {
-                return;
-            }
-            if (!confirm('¿Marcar este pago como PAID?')) {
-                return;
-            }
-            markCommissionPaymentPaid(activeDetailRequestId, activeDetailItemId);
-        });
-
-        $('#my_booking_detail_modal').on('click', '#btn-commission-delete', function () {
-            var paymentId = parseInt($(this).data('payment-id') || 0, 10);
-            if (paymentId <= 0) {
-                return;
-            }
-            if (!confirm('¿Eliminar este registro de pago?')) {
-                return;
-            }
-            deleteCommissionPayment(paymentId);
-        });
-
-        $('#my_booking_detail_modal').on('click', '.btn-commission-copy-link', function () {
-            var url = ($(this).data('url') || '').toString();
-            if (!url) {
-                return;
-            }
-            copyToClipboard(url);
-            toastr.success('Link copiado');
-        });
-
     }
 
     function loadRows() {
@@ -262,7 +224,6 @@
                 var d = response.data || {};
                 var itemsHistory = response.items_history || [];
                 activeDetailItemId = itemId;
-                activeDetailRequestId = parseInt(d.booking_request_id || 0, 10) || 0;
                 var statusNow = (d.item_status || '').toString();
                 var canShowLegacyActions = (statusNow === 'pending_provider');
 
@@ -324,7 +285,6 @@
                         '<div class="col-md-12">' +
                             '<h5>Conversación</h5>' +
                             modalActionsHtml +
-                            '<div id="commission-payment-block" class="alert alert-info" style="margin-bottom:10px;">Loading commission payment...</div>' +
                             '<a class="btn btn-default btn-xs" href="app_inbox.php?thread_id=ITEM:' + itemId + '" style="margin-bottom:10px;">Open Inbox</a>' +
                             '<div id="provider-conversation-log" style="max-height:260px; overflow:auto; border:1px solid #e5e5e5; padding:10px; background:#fafafa;">Cargando mensajes...</div>' +
                         '</div>' +
@@ -354,7 +314,6 @@
                 $('#my_booking_detail_content').html(html);
                 $('#my_booking_detail_modal').modal('show');
                 loadMessages(itemId);
-                loadCommissionPaymentStatus(activeDetailRequestId, itemId);
             },
             error: function () {
                 toastr.error('Error de conexión al cargar detalle');
@@ -418,180 +377,6 @@
                 $('#provider-conversation-log').html('<p>Error de conexión al cargar conversación.</p>');
             }
         });
-    }
-
-    function loadCommissionPaymentStatus(requestId, itemId) {
-        var $block = $('#commission-payment-block');
-        if (!$block.length) {
-            return;
-        }
-        $block.removeClass('alert-danger').addClass('alert-info').html('Loading commission payment...');
-        $.ajax({
-            url: 'ajax/commission_payments.php',
-            method: 'GET',
-            dataType: 'json',
-            data: {
-                action: 'get_status',
-                request_id: requestId,
-                item_id: itemId
-            },
-            success: function (response) {
-                if (!response || !response.ok) {
-                    if (response && typeof response.message === 'string' && response.message.indexOf('forbidden') === 0) {
-                        $block.hide();
-                        return;
-                    }
-                    $block.removeClass('alert-info').addClass('alert-danger').html('No se pudo cargar la comisión.');
-                    return;
-                }
-                $block.removeClass('alert-danger').addClass('alert-info').html(renderCommissionPaymentBlock(response));
-            },
-            error: function (xhr) {
-                if (xhr && xhr.status === 403) {
-                    $block.hide();
-                    return;
-                }
-                $block.removeClass('alert-info').addClass('alert-danger').html('Error de conexión al cargar comisión.');
-            }
-        });
-    }
-
-    function renderCommissionPaymentBlock(data) {
-        var gateEnabled = parseInt(data.gate_enabled || 0, 10) === 1;
-        var status = (data.payment_status || 'NONE').toString().toUpperCase();
-        var payment = data.payment || {};
-        var checkoutUrl = (payment.checkout_url || '').toString().trim();
-        var paidAt = (payment.paid_at || '').toString();
-        var amount = (payment.amount !== undefined && payment.amount !== null) ? payment.amount : data.amount_preview;
-        var currency = (payment.currency || data.amount_currency || '').toString().toUpperCase();
-
-        var html = '' +
-            '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">' +
-                '<strong>Commission Payment (Phase 2)</strong>' +
-                '<span class="label label-' + (gateEnabled ? 'success' : 'default') + '">Gate ' + (gateEnabled ? 'ON' : 'OFF') + '</span>' +
-            '</div>' +
-            '<div style="margin-top:6px;">' +
-                '<div><strong>Payment status:</strong> ' + escapeHtml(status) + '</div>';
-
-        if (amount !== undefined && amount !== null && amount !== '') {
-            html += '<div><strong>Amount:</strong> ' + escapeHtml(String(amount)) + (currency ? ' ' + escapeHtml(currency) : '') + '</div>';
-        }
-
-        if (status === 'PENDING' && checkoutUrl) {
-            html += '<div style="margin-top:6px;"><strong>Checkout:</strong> ' +
-                '<span style="word-break:break-all;">' + escapeHtml(checkoutUrl) + '</span> ' +
-                '<button type="button" class="btn btn-default btn-xs btn-commission-copy-link" data-url="' + escapeHtml(checkoutUrl) + '">Copy Link</button>' +
-                '</div>';
-        }
-        if (status === 'PAID' && paidAt) {
-            html += '<div style="margin-top:6px;"><strong>Paid at:</strong> ' + escapeHtml(paidAt) + '</div>';
-        }
-        if (status === 'NONE') {
-            html += '<div style="margin-top:6px;">No payment record.</div>';
-        }
-
-        html += '</div>';
-
-        var actions = '';
-        if (gateEnabled && status === 'NONE') {
-            actions += '<button type="button" id="btn-commission-create" class="btn btn-primary btn-xs">Create payment link</button> ';
-        }
-        if (gateEnabled && status === 'PENDING') {
-            actions += '<button type="button" id="btn-commission-mark-paid" class="btn btn-success btn-xs">Mark as paid</button> ';
-        }
-        if (status === 'PENDING' || status === 'PAID') {
-            actions += '<button type="button" id="btn-commission-delete" class="btn btn-danger btn-xs" data-payment-id="' + escapeHtml(payment.id || '') + '">Delete payment record</button>';
-        }
-
-        if (actions) {
-            html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' + actions + '</div>';
-        }
-
-        return html;
-    }
-
-    function createCommissionPayment(requestId, itemId) {
-        $.ajax({
-            url: 'ajax/commission_payments.php',
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'create_payment',
-                request_id: requestId,
-                item_id: itemId
-            },
-            success: function (response) {
-                if (!response || !response.ok) {
-                    toastr.error((response && response.message) ? response.message : 'No se pudo crear el pago');
-                    return;
-                }
-                toastr.success('Pago creado');
-                loadCommissionPaymentStatus(requestId, itemId);
-            },
-            error: function () {
-                toastr.error('Error de conexión al crear pago');
-            }
-        });
-    }
-
-    function markCommissionPaymentPaid(requestId, itemId) {
-        $.ajax({
-            url: 'ajax/commission_payments.php',
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'mark_paid',
-                request_id: requestId,
-                item_id: itemId
-            },
-            success: function (response) {
-                if (!response || !response.ok) {
-                    toastr.error((response && response.message) ? response.message : 'No se pudo marcar como pagado');
-                    return;
-                }
-                toastr.success('Pago marcado como PAID');
-                loadCommissionPaymentStatus(requestId, itemId);
-            },
-            error: function () {
-                toastr.error('Error de conexión al marcar pago');
-            }
-        });
-    }
-
-    function deleteCommissionPayment(paymentId) {
-        $.ajax({
-            url: 'ajax/commission_payments.php',
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'delete_payment',
-                payment_id: paymentId
-            },
-            success: function (response) {
-                if (!response || !response.ok) {
-                    toastr.error((response && response.message) ? response.message : 'No se pudo eliminar el pago');
-                    return;
-                }
-                toastr.success('Pago eliminado');
-                if (activeDetailRequestId && activeDetailItemId) {
-                    loadCommissionPaymentStatus(activeDetailRequestId, activeDetailItemId);
-                }
-            },
-            error: function () {
-                toastr.error('Error de conexión al eliminar pago');
-            }
-        });
-    }
-
-    function copyToClipboard(text) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text);
-            return;
-        }
-        var $tmp = $('<textarea>');
-        $tmp.val(text).appendTo('body').select();
-        document.execCommand('copy');
-        $tmp.remove();
     }
 
     function renderConversation(messages) {

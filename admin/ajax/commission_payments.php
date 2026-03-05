@@ -13,7 +13,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 if (!is_role_admin_session()) {
     http_response_code(403);
-    echo json_encode(['ok' => false, 'message' => 'forbidden']);
+    echo json_encode(['ok' => false, 'message' => 'forbidden_admin_only']);
     exit;
 }
 
@@ -237,6 +237,13 @@ if (!cp_table_ready($conexion, 'commission_payments')) {
 
 $action = isset($_POST['action']) ? trim($_POST['action'])
         : (isset($_GET['action']) ? trim($_GET['action']) : '');
+$action = strtolower($action);
+
+if ($action === 'create_link') {
+    $action = 'create_payment';
+} elseif ($action === 'delete') {
+    $action = 'delete_payment';
+}
 
 switch ($action) {
     case 'get_status': {

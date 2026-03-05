@@ -6,8 +6,7 @@ Alias al backlog / pasos de ejecución canónico.
 
 ## Provider Commission Backlog
 
-- DONE: Admin commission payment management in my_booking_requests modal
-- DONE: Commission modal visible solo para admin/coordinador (prestador oculto)
+- DONE: Commission payments managed in booking_requests admin modal (admin-only)
 - Admin UI for provider commission configuration
 - Stripe checkout integration for commission payments
 - Stripe webhook handling for payment confirmation

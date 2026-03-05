@@ -126,6 +126,7 @@ function renderBookingDetail(response) {
     var complementaryItems = Array.isArray(itemsPayload.complementary) ? itemsPayload.complementary : [];
     var hasStructuredItems = (medicalItems.length + complementaryItems.length) > 0;
     var selectedOffersLegacy = parseSelectedOffersLegacy(legacy.selected_offers, booking.selected_offers);
+    var commissionItems = buildCommissionItemsList(medicalItems, complementaryItems);
 
     var html = `
         <div class="row">
@@ -174,6 +175,9 @@ function renderBookingDetail(response) {
                 </button>
             `;
         }
+        if (commissionItems.length) {
+            html += buildCommissionSection(commissionItems);
+        }
     } else {
         html += `
             <hr>
@@ -199,6 +203,8 @@ function renderBookingDetail(response) {
             authorizeItems(bookingId);
         }
     });
+
+    initCommissionSection(booking.id, commissionItems);
 }
 
 function renderStructuredItemsTable(items, emptyMessage) {
@@ -264,6 +270,270 @@ function buildTotalsHtml(totals) {
     });
     html += '</ul>';
     return html;
+}
+
+function isAdminSession() {
+    if (window.MT_REALTIME && typeof window.MT_REALTIME.isAdmin !== 'undefined') {
+        return !!window.MT_REALTIME.isAdmin;
+    }
+    return false;
+}
+
+function buildCommissionItemsList(medicalItems, complementaryItems) {
+    var items = [];
+    (medicalItems || []).forEach(function(item) {
+        items.push({
+            id: item.id,
+            label: 'Medical: ' + (item.name || ('Item #' + item.id)) + ' — ' + (item.provider || 'Provider')
+        });
+    });
+    (complementaryItems || []).forEach(function(item) {
+        items.push({
+            id: item.id,
+            label: 'Complementary: ' + (item.name || ('Item #' + item.id)) + ' — ' + (item.provider || 'Provider')
+        });
+    });
+    return items;
+}
+
+function buildCommissionSection(items) {
+    if (!isAdminSession() || !items || !items.length) {
+        return '';
+    }
+    var options = items.map(function(item) {
+        return '<option value="' + escapeHtml(item.id) + '">' + escapeHtml(item.label) + '</option>';
+    }).join('');
+
+    return `
+        <hr>
+        <div id="commission-payment-admin" class="alert alert-info">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;">
+                <strong>Commission Payment (Phase 2)</strong>
+                <select id="commission-item-select" class="form-control input-sm" style="max-width:320px;">
+                    ${options}
+                </select>
+            </div>
+            <div id="commission-payment-content" style="margin-top:8px;">Loading...</div>
+        </div>
+    `;
+}
+
+function initCommissionSection(requestId, items) {
+    if (!isAdminSession() || !items || !items.length) {
+        return;
+    }
+    var $select = $('#commission-item-select');
+    if (!$select.length) {
+        return;
+    }
+    var firstItemId = parseInt($select.val() || 0, 10);
+    if (requestId > 0 && firstItemId > 0) {
+        loadCommissionPaymentStatus(requestId, firstItemId);
+    }
+
+    $('#booking_detail_content').off('change', '#commission-item-select').on('change', '#commission-item-select', function() {
+        var itemId = parseInt($(this).val() || 0, 10);
+        if (requestId > 0 && itemId > 0) {
+            loadCommissionPaymentStatus(requestId, itemId);
+        }
+    });
+
+    $('#booking_detail_content').off('click', '#btn-commission-create').on('click', '#btn-commission-create', function() {
+        var itemId = parseInt($('#commission-item-select').val() || 0, 10);
+        if (requestId > 0 && itemId > 0) {
+            createCommissionPayment(requestId, itemId);
+        }
+    });
+
+    $('#booking_detail_content').off('click', '#btn-commission-mark-paid').on('click', '#btn-commission-mark-paid', function() {
+        var itemId = parseInt($('#commission-item-select').val() || 0, 10);
+        if (requestId > 0 && itemId > 0) {
+            if (!confirm('¿Marcar este pago como PAID?')) {
+                return;
+            }
+            markCommissionPaymentPaid(requestId, itemId);
+        }
+    });
+
+    $('#booking_detail_content').off('click', '#btn-commission-delete').on('click', '#btn-commission-delete', function() {
+        var paymentId = parseInt($(this).data('payment-id') || 0, 10);
+        if (paymentId <= 0) {
+            return;
+        }
+        if (!confirm('¿Eliminar este registro de pago?')) {
+            return;
+        }
+        deleteCommissionPayment(paymentId, requestId);
+    });
+
+    $('#booking_detail_content').off('click', '.btn-commission-copy-link').on('click', '.btn-commission-copy-link', function() {
+        var url = ($(this).data('url') || '').toString();
+        if (!url) {
+            return;
+        }
+        copyToClipboard(url);
+        toastr.success('Link copiado');
+    });
+}
+
+function loadCommissionPaymentStatus(requestId, itemId) {
+    var $content = $('#commission-payment-content');
+    if (!$content.length) {
+        return;
+    }
+    $content.html('Loading...');
+    $.ajax({
+        url: 'ajax/commission_payments.php',
+        method: 'GET',
+        dataType: 'json',
+        data: {
+            action: 'get_status',
+            request_id: requestId,
+            item_id: itemId
+        },
+        success: function(response) {
+            if (!response || !response.ok) {
+                $content.html('No se pudo cargar la comisión.');
+                return;
+            }
+            $content.html(renderCommissionPaymentBlock(response));
+        },
+        error: function() {
+            $content.html('Error de conexión al cargar comisión.');
+        }
+    });
+}
+
+function renderCommissionPaymentBlock(data) {
+    var gateEnabled = parseInt(data.gate_enabled || 0, 10) === 1;
+    var status = (data.payment_status || 'NONE').toString().toUpperCase();
+    var payment = data.payment || {};
+    var checkoutUrl = (payment.checkout_url || '').toString().trim();
+    var paidAt = (payment.paid_at || '').toString();
+    var amount = (payment.amount !== undefined && payment.amount !== null) ? payment.amount : data.amount_preview;
+    var currency = (payment.currency || data.amount_currency || '').toString().toUpperCase();
+
+    var html = '' +
+        '<div><strong>Gate status:</strong> ' + (gateEnabled ? 'ON' : 'OFF') + '</div>' +
+        '<div><strong>Payment status:</strong> ' + escapeHtml(status) + '</div>';
+
+    if (amount !== undefined && amount !== null && amount !== '') {
+        html += '<div><strong>Amount:</strong> ' + escapeHtml(String(amount)) + (currency ? ' ' + escapeHtml(currency) : '') + '</div>';
+    }
+
+    if (status === 'PENDING') {
+        if (checkoutUrl) {
+            html += '<div style="margin-top:6px;"><strong>Checkout:</strong> ' +
+                '<span style="word-break:break-all;">' + escapeHtml(checkoutUrl) + '</span> ' +
+                '<button type="button" class="btn btn-default btn-xs btn-commission-copy-link" data-url="' + escapeHtml(checkoutUrl) + '">Copy Link</button>' +
+                '</div>';
+        } else {
+            html += '<div style="margin-top:6px;"><strong>Checkout:</strong> manual</div>';
+        }
+    }
+    if (status === 'PAID' && paidAt) {
+        html += '<div style="margin-top:6px;"><strong>Paid at:</strong> ' + escapeHtml(paidAt) + '</div>';
+    }
+
+    var actions = '';
+    if (gateEnabled && status === 'NONE') {
+        actions += '<button type="button" id="btn-commission-create" class="btn btn-primary btn-xs">Create payment link</button> ';
+    }
+    if (gateEnabled && status === 'PENDING') {
+        actions += '<button type="button" id="btn-commission-mark-paid" class="btn btn-success btn-xs">Mark as paid</button> ';
+    }
+    if (status === 'PENDING' || status === 'PAID') {
+        actions += '<button type="button" id="btn-commission-delete" class="btn btn-danger btn-xs" data-payment-id="' + escapeHtml(payment.id || '') + '">Delete payment record</button>';
+    }
+    if (actions) {
+        html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' + actions + '</div>';
+    }
+    return html;
+}
+
+function createCommissionPayment(requestId, itemId) {
+    $.ajax({
+        url: 'ajax/commission_payments.php',
+        method: 'POST',
+        dataType: 'json',
+        data: {
+            action: 'create_link',
+            request_id: requestId,
+            item_id: itemId
+        },
+        success: function(response) {
+            if (!response || !response.ok) {
+                toastr.error((response && response.message) ? response.message : 'No se pudo crear el pago');
+                return;
+            }
+            toastr.success('Pago creado');
+            loadCommissionPaymentStatus(requestId, itemId);
+        },
+        error: function() {
+            toastr.error('Error de conexión al crear pago');
+        }
+    });
+}
+
+function markCommissionPaymentPaid(requestId, itemId) {
+    $.ajax({
+        url: 'ajax/commission_payments.php',
+        method: 'POST',
+        dataType: 'json',
+        data: {
+            action: 'mark_paid',
+            request_id: requestId,
+            item_id: itemId
+        },
+        success: function(response) {
+            if (!response || !response.ok) {
+                toastr.error((response && response.message) ? response.message : 'No se pudo marcar como pagado');
+                return;
+            }
+            toastr.success('Pago marcado como PAID');
+            loadCommissionPaymentStatus(requestId, itemId);
+        },
+        error: function() {
+            toastr.error('Error de conexión al marcar pago');
+        }
+    });
+}
+
+function deleteCommissionPayment(paymentId, requestId) {
+    $.ajax({
+        url: 'ajax/commission_payments.php',
+        method: 'POST',
+        dataType: 'json',
+        data: {
+            action: 'delete',
+            payment_id: paymentId
+        },
+        success: function(response) {
+            if (!response || !response.ok) {
+                toastr.error((response && response.message) ? response.message : 'No se pudo eliminar el pago');
+                return;
+            }
+            toastr.success('Pago eliminado');
+            var itemId = parseInt($('#commission-item-select').val() || 0, 10);
+            if (requestId > 0 && itemId > 0) {
+                loadCommissionPaymentStatus(requestId, itemId);
+            }
+        },
+        error: function() {
+            toastr.error('Error de conexión al eliminar pago');
+        }
+    });
+}
+
+function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text);
+        return;
+    }
+    var $tmp = $('<textarea>');
+    $tmp.val(text).appendTo('body').select();
+    document.execCommand('copy');
+    $tmp.remove();
 }
 
 function parseSelectedOffersLegacy(preParsedList, rawSelectedOffers) {

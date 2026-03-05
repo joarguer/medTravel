@@ -42,10 +42,10 @@ Cambios principales:
 - refresh mediante `adminReloadNotificationsDebounced()`
 - fallback polling cada 60s
 
-## 2026-03 — Admin commission payment management in my_booking_requests modal
+## 2026-03 — Admin commission payment management in booking_requests modal
 
-- Gestión de pagos de comisión (Phase 2) centralizada en el modal de detalle
+- Gestión de pagos de comisión (Phase 2) centralizada en el modal de detalle de `admin/booking_requests.php`
 - Estado del pago y acciones admin (crear, marcar pagado, eliminar)
-- Inbox admin queda solo para mensajería (sin UI de pagos)
-- Bloque de comisión visible solo para roles admin/coordinador (prestador oculto)
+- `admin/my_booking_requests.php` (prestador) no renderiza ni llama commission_payments
+- Endpoint `admin/ajax/commission_payments.php` permanece admin-only
 - realtime_admin_token admin-only con mensaje `forbidden_admin_only`
