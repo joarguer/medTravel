@@ -29,6 +29,27 @@ function client_inbox_ok($data = [])
     exit;
 }
 
+function client_inbox_compose_locked($reason, $ctx, $clientUserId)
+{
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'CLIENT_BLOCK_SEND_MESSAGE reason=' . (string)$reason
+            . ' thread_id=' . (string)($ctx['thread_id'] ?? '')
+            . ' user_id=' . (int)$clientUserId
+            . ' request_id=' . (int)($ctx['request_id'] ?? 0)
+            . ' item_id=' . (int)($ctx['item_id'] ?? 0)
+        );
+    }
+    http_response_code(403);
+    echo json_encode([
+        'ok' => false,
+        'success' => false,
+        'error' => 'compose_locked',
+        'reason' => (string)$reason,
+    ]);
+    exit;
+}
+
 function client_inbox_notify_message($conexion, $ctx, $message)
 {
     if (!function_exists('send_interaction_email')) {
@@ -498,6 +519,26 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
     $isCareThread = (strtoupper((string)($ctx['thread_type'] ?? '')) === 'CARE');
     $freeMessageState = client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate);
     $canSendFreeMessage = !empty($freeMessageState['can_send_free_message']);
+    if (!$feeLocked && !$isCareThread) {
+        if ($commissionGateEnabled) {
+            if (!$commissionPaid) {
+                $canSendFreeMessage = false;
+                $freeMessageState['can_send_free_message'] = false;
+                $freeMessageState['blocked_reason'] = 'commission';
+                $freeMessageState['notice'] = 'Messaging is locked until the commission is paid. Please contact MedTravel if you need help.';
+            } else {
+                $canSendFreeMessage = true;
+                $freeMessageState['can_send_free_message'] = true;
+                $freeMessageState['blocked_reason'] = '';
+                $freeMessageState['notice'] = '';
+            }
+        } else {
+            $canSendFreeMessage = true;
+            $freeMessageState['can_send_free_message'] = true;
+            $freeMessageState['blocked_reason'] = '';
+            $freeMessageState['notice'] = '';
+        }
+    }
     if ($action === 'send_message') {
         $messageInput = trim((string)($_POST['message'] ?? ''));
         $structuredAllowlist = [
@@ -507,14 +548,14 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
             "I don't have the requested documents yet."
         ];
         $isStructured = client_inbox_is_structured_message($messageInput, $structuredAllowlist);
-        if ($feeLocked && !$isStructured) {
-            client_inbox_err('coordination_fee_required', 403, 'FEE_REQUIRED');
-        }
         if ($commissionLocked && !$isStructured) {
-            client_inbox_err('commission_required', 403, 'COMMISSION_REQUIRED');
+            client_inbox_compose_locked('commission', $ctx, $clientUserId);
+        }
+        if ($feeLocked && !$isStructured) {
+            client_inbox_compose_locked('fee', $ctx, $clientUserId);
         }
         if (!$isCareThread && !$canSendFreeMessage && !$isStructured) {
-            client_inbox_err('free_message_blocked', 403, 'FREE_MESSAGE_BLOCKED');
+            client_inbox_compose_locked('review', $ctx, $clientUserId);
         }
     }
 }

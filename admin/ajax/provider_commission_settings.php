@@ -67,6 +67,36 @@ $action = isset($_POST['action']) ? trim($_POST['action'])
         : (isset($_GET['action'])  ? trim($_GET['action'])  : '');
 
 switch ($action) {
+    // ── diag_tables (debug only) ─────────────────────────────────────────
+    case 'diag_tables': {
+        if (!defined('MT_DEBUG') || MT_DEBUG !== true) {
+            pcs_err('diag_not_enabled', 403);
+        }
+        $dbName = '';
+        $resDb = mysqli_query($conexion, 'SELECT DATABASE() AS db');
+        if ($resDb) {
+            $rowDb = mysqli_fetch_assoc($resDb);
+            $dbName = (string)($rowDb['db'] ?? '');
+        }
+        $exists = function ($table) use ($conexion) {
+            $stmt = mysqli_prepare($conexion, "SHOW TABLES LIKE ?");
+            if (!$stmt) {
+                return false;
+            }
+            mysqli_stmt_bind_param($stmt, 's', $table);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $ok = ($res && mysqli_num_rows($res) > 0);
+            mysqli_stmt_close($stmt);
+            return $ok;
+        };
+        pcs_ok([
+            'provider_commission_settings' => $exists('provider_commission_settings'),
+            'commission_payments' => $exists('commission_payments'),
+            'db' => $dbName,
+        ]);
+        break;
+    }
 
     // ── get_settings ──────────────────────────────────────────────────────
     case 'get_settings': {

@@ -9,7 +9,11 @@ if (!function_exists('mt_email_debug_log')) {
             mkdir($baseDir, 0775, true);
         }
         $file = $baseDir . '/email_debug.log';
-        $line = date('c') . ' ' . trim((string)$line) . PHP_EOL;
+        // TEMP DEBUG: include logger metadata on each line
+        $line = 'LOGFILE_PATH=' . $file
+            . ' LOGGER_FILE=' . __FILE__
+            . ' LOGGER_CWD=' . getcwd()
+            . ' ' . date('c') . ' ' . trim((string)$line) . PHP_EOL;
         file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
     }
 }
@@ -196,7 +200,56 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
                 $source = 'usuarios.email';
             }
         }
-        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $email;
+        }
+
+        $providerId = (int)($row['provider_id'] ?? 0);
+        if ($providerId > 0 && inbox_table_exists($conexion, 'providers') && inbox_table_has_column($conexion, 'providers', 'email')) {
+            $stmtProv = mysqli_prepare($conexion, "SELECT email FROM providers WHERE id = ? LIMIT 1");
+            if ($stmtProv) {
+                mysqli_stmt_bind_param($stmtProv, 'i', $providerId);
+                if (mysqli_stmt_execute($stmtProv)) {
+                    $resProv = mysqli_stmt_get_result($stmtProv);
+                    $rowProv = $resProv ? mysqli_fetch_assoc($resProv) : null;
+                    $provEmail = trim((string)($rowProv['email'] ?? ''));
+                    if (filter_var($provEmail, FILTER_VALIDATE_EMAIL)) {
+                        if ($source !== null) {
+                            $source = 'providers.email via booking_request_items.provider_id';
+                        }
+                        mysqli_stmt_close($stmtProv);
+                        return $provEmail;
+                    }
+                }
+                mysqli_stmt_close($stmtProv);
+            }
+        }
+
+        $serviceProviderId = (int)($row['service_provider_id'] ?? 0);
+        if ($serviceProviderId > 0
+            && inbox_table_exists($conexion, 'service_providers')
+            && inbox_table_has_column($conexion, 'service_providers', 'contact_email')
+        ) {
+            $stmtSp = mysqli_prepare($conexion, "SELECT contact_email FROM service_providers WHERE id = ? LIMIT 1");
+            if ($stmtSp) {
+                mysqli_stmt_bind_param($stmtSp, 'i', $serviceProviderId);
+                if (mysqli_stmt_execute($stmtSp)) {
+                    $resSp = mysqli_stmt_get_result($stmtSp);
+                    $rowSp = $resSp ? mysqli_fetch_assoc($resSp) : null;
+                    $spEmail = trim((string)($rowSp['contact_email'] ?? ''));
+                    if (filter_var($spEmail, FILTER_VALIDATE_EMAIL)) {
+                        if ($source !== null) {
+                            $source = 'service_providers.contact_email via booking_request_items.service_provider_id';
+                        }
+                        mysqli_stmt_close($stmtSp);
+                        return $spEmail;
+                    }
+                }
+                mysqli_stmt_close($stmtSp);
+            }
+        }
+
+        return '';
     }
 }
 
@@ -285,10 +338,14 @@ if (!function_exists('interaction_email_fetch_client_recipient_id')) {
         if ($requestId <= 0 || !inbox_table_exists($conexion, 'booking_requests')) {
             return 0;
         }
-        if (!inbox_table_has_column($conexion, 'booking_requests', 'client_user_id')) {
+        $hasClientUserId = inbox_table_has_column($conexion, 'booking_requests', 'client_user_id');
+        $hasEmail = inbox_table_has_column($conexion, 'booking_requests', 'email');
+        if (!$hasClientUserId && !$hasEmail) {
             return 0;
         }
-        $stmt = mysqli_prepare($conexion, "SELECT client_user_id FROM booking_requests WHERE id = ? LIMIT 1");
+        $select = $hasClientUserId ? 'client_user_id' : '0 AS client_user_id';
+        $select .= $hasEmail ? ', email' : ", '' AS email";
+        $stmt = mysqli_prepare($conexion, "SELECT {$select} FROM booking_requests WHERE id = ? LIMIT 1");
         if (!$stmt) {
             return 0;
         }
@@ -300,7 +357,39 @@ if (!function_exists('interaction_email_fetch_client_recipient_id')) {
         $res = mysqli_stmt_get_result($stmt);
         $row = $res ? mysqli_fetch_assoc($res) : null;
         mysqli_stmt_close($stmt);
-        return (int)($row['client_user_id'] ?? 0);
+        $clientUserId = (int)($row['client_user_id'] ?? 0);
+        if ($clientUserId > 0) {
+            return $clientUserId;
+        }
+        $clientEmail = strtolower(trim((string)($row['email'] ?? '')));
+        if ($clientEmail === '' || !filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+            return 0;
+        }
+        if (!inbox_table_exists($conexion, 'clientes') || !inbox_table_has_column($conexion, 'clientes', 'email')) {
+            return 0;
+        }
+        $hasClientesClientUserId = inbox_table_has_column($conexion, 'clientes', 'client_user_id');
+        $hasClientesUserId = inbox_table_has_column($conexion, 'clientes', 'user_id');
+        $clientSelect = $hasClientesClientUserId ? 'client_user_id' : ($hasClientesUserId ? 'user_id' : 'id');
+        if ($clientSelect === '') {
+            return 0;
+        }
+        $stmtLookup = mysqli_prepare(
+            $conexion,
+            "SELECT {$clientSelect} AS client_user_id FROM clientes WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1"
+        );
+        if (!$stmtLookup) {
+            return 0;
+        }
+        mysqli_stmt_bind_param($stmtLookup, 's', $clientEmail);
+        if (!mysqli_stmt_execute($stmtLookup)) {
+            mysqli_stmt_close($stmtLookup);
+            return 0;
+        }
+        $resLookup = mysqli_stmt_get_result($stmtLookup);
+        $rowLookup = $resLookup ? mysqli_fetch_assoc($resLookup) : null;
+        mysqli_stmt_close($stmtLookup);
+        return (int)($rowLookup['client_user_id'] ?? 0);
     }
 }
 
@@ -437,6 +526,75 @@ if (!function_exists('inbox_email_throttle_should_send')) {
             mysqli_stmt_bind_param($stmtIns, 'ssi', $threadId, $recipientRole, $recipientId);
             @mysqli_stmt_execute($stmtIns);
             mysqli_stmt_close($stmtIns);
+        }
+        return true;
+    }
+}
+
+if (!function_exists('interaction_email_pseudo_recipient_id')) {
+    /**
+     * Deterministic numeric id derived from an email, used only for throttle/unread fallback.
+     */
+    function interaction_email_pseudo_recipient_id($email)
+    {
+        $email = strtolower(trim((string)$email));
+        if ($email === '') {
+            return 0;
+        }
+        $hash = crc32($email);
+        $unsigned = (int)sprintf('%u', $hash);
+        return $unsigned > 0 ? $unsigned : 0;
+    }
+}
+
+if (!function_exists('inbox_email_should_notify_unread')) {
+    /**
+     * Return true when this new message should trigger an email because the recipient
+     * previously had no unread messages in the thread. Returns false when unread
+     * already existed. Returns null when the read state cannot be determined.
+     */
+    function inbox_email_should_notify_unread($conexion, $threadId, $recipientRole, $recipientId, $newMessageId, $maxBeforeInsert = null)
+    {
+        $threadId = trim((string)$threadId);
+        $recipientRole = strtoupper(trim((string)$recipientRole));
+        $recipientId = (int)$recipientId;
+        $newMessageId = (int)$newMessageId;
+        $maxBeforeInsert = ($maxBeforeInsert === null) ? null : (int)$maxBeforeInsert;
+        if ($threadId === '' || $recipientRole === '' || $recipientId <= 0 || $newMessageId <= 0) {
+            return null;
+        }
+        if ($maxBeforeInsert === null || $maxBeforeInsert < 0) {
+            return null;
+        }
+        if (!$conexion || !inbox_table_exists($conexion, 'inbox_thread_reads') || !inbox_table_exists($conexion, 'inbox_messages')) {
+            return null;
+        }
+
+        $lastReadId = 0;
+        $stmtRead = mysqli_prepare(
+            $conexion,
+            "SELECT COALESCE(last_read_message_id, 0) AS last_read_message_id
+             FROM inbox_thread_reads
+             WHERE thread_id = ? AND reader_role = ? AND reader_user_id = ? LIMIT 1"
+        );
+        if (!$stmtRead) {
+            return null;
+        }
+        mysqli_stmt_bind_param($stmtRead, 'ssi', $threadId, $recipientRole, $recipientId);
+        if (mysqli_stmt_execute($stmtRead)) {
+            $resRead = mysqli_stmt_get_result($stmtRead);
+            $rowRead = $resRead ? mysqli_fetch_assoc($resRead) : null;
+            $lastReadId = (int)($rowRead['last_read_message_id'] ?? 0);
+        }
+        mysqli_stmt_close($stmtRead);
+        $decision = ($lastReadId < $maxBeforeInsert) ? 'already_unread' : 'notify';
+        mt_email_debug_log(
+            'tag=EMAIL_GUARD lastReadId=' . (int)$lastReadId
+            . ' maxBefore=' . (int)$maxBeforeInsert
+            . ' decision=' . $decision
+        );
+        if ($lastReadId < $maxBeforeInsert) {
+            return false;
         }
         return true;
     }
@@ -922,7 +1080,7 @@ if (!function_exists('notify_new_message_to_client')) {
      * @param  string $snippet    Raw message body preview (will be sanitised).
      * @return array              Result from send_interaction_email().
      */
-    function notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $snippet = '', $resolvedEmail = '', $emailSource = '')
+    function notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $snippet = '', $resolvedEmail = '', $emailSource = '', $messageId = 0, $maxBeforeInsert = null)
     {
         $requestId  = (int)$requestId;
         $itemId     = (int)$itemId;
@@ -938,9 +1096,64 @@ if (!function_exists('notify_new_message_to_client')) {
 
         $threadId = interaction_email_thread_id($threadType, $requestId, $itemId);
         $recipientId = interaction_email_fetch_client_recipient_id($conexion, $requestId);
-        if (!inbox_email_throttle_should_send($conexion, $threadId, 'CLIENT', $recipientId, 900)) {
-            interaction_email_log('skip_email_throttle role=CLIENT thread_id=' . $threadId . ' recipient_id=' . (int)$recipientId);
-            return ['success' => true, 'skipped' => true, 'reason' => 'throttled'];
+        $throttleRecipientId = $recipientId;
+        if ($recipientId > 0) {
+            $shouldNotify = inbox_email_should_notify_unread($conexion, $threadId, 'CLIENT', $recipientId, $messageId, $maxBeforeInsert);
+            $debugShould = ($shouldNotify === null) ? 'null' : ($shouldNotify ? 'true' : 'false');
+            mt_email_debug_log(
+                'tag=EMAIL_GUARD thread_id=' . $threadId
+                . ' recipient_id=' . (int)$recipientId
+                . ' throttle_recipient_id=' . (int)$throttleRecipientId
+                . ' message_id=' . (int)$messageId
+                . ' should_notify=' . $debugShould
+            );
+            if ($shouldNotify === false) {
+                interaction_email_log('skip_email_unread role=CLIENT thread_id=' . $threadId . ' recipient_id=' . (int)$recipientId);
+                mt_email_debug_log(
+                    'tag=EMAIL_GUARD result=skipped reason=already_unread thread_id=' . $threadId
+                    . ' recipient_id=' . (int)$recipientId
+                    . ' message_id=' . (int)$messageId
+                );
+                return ['success' => true, 'skipped' => true, 'reason' => 'already_unread'];
+            }
+            if ($shouldNotify === null) {
+                if (!inbox_email_throttle_should_send($conexion, $threadId, 'CLIENT', $recipientId, 900)) {
+                    interaction_email_log('skip_email_throttle role=CLIENT thread_id=' . $threadId . ' recipient_id=' . (int)$recipientId);
+                    mt_email_debug_log(
+                        'tag=EMAIL_GUARD result=skipped reason=throttled thread_id=' . $threadId
+                        . ' recipient_id=' . (int)$recipientId
+                        . ' message_id=' . (int)$messageId
+                    );
+                    return ['success' => true, 'skipped' => true, 'reason' => 'throttled'];
+                }
+            }
+        } else {
+            if (filter_var($to, FILTER_VALIDATE_EMAIL)) {
+                $throttleRecipientId = interaction_email_pseudo_recipient_id($to);
+                if ($throttleRecipientId > 0) {
+                    interaction_email_log(
+                        'recipient_id_fallback role=CLIENT thread_id=' . $threadId
+                        . ' email_hash=' . sha1(strtolower(trim((string)$to)))
+                        . ' pseudo_id=' . (int)$throttleRecipientId
+                    );
+                }
+            }
+            mt_email_debug_log(
+                'tag=EMAIL_GUARD thread_id=' . $threadId
+                . ' recipient_id=' . (int)$recipientId
+                . ' throttle_recipient_id=' . (int)$throttleRecipientId
+                . ' message_id=' . (int)$messageId
+                . ' should_notify=null'
+            );
+            if (!inbox_email_throttle_should_send($conexion, $threadId, 'CLIENT', $throttleRecipientId, 900)) {
+                interaction_email_log('skip_email_throttle role=CLIENT thread_id=' . $threadId . ' recipient_id=' . (int)$throttleRecipientId);
+                mt_email_debug_log(
+                    'tag=EMAIL_GUARD result=skipped reason=throttled thread_id=' . $threadId
+                    . ' recipient_id=' . (int)$throttleRecipientId
+                    . ' message_id=' . (int)$messageId
+                );
+                return ['success' => true, 'skipped' => true, 'reason' => 'throttled'];
+            }
         }
 
         $meta        = interaction_email_request_meta($conexion, $threadType, $requestId, $itemId);
@@ -949,6 +1162,13 @@ if (!function_exists('notify_new_message_to_client')) {
         $ctaUrl      = _interaction_inbox_url('client', $requestId, $itemId, $threadType);
 
         $roleUpper = strtoupper(trim((string)$senderRole));
+        $phaseLimited = false;
+        if ($roleUpper === 'PROVIDER' && function_exists('commission_gate_status') && $requestId > 0 && $itemId > 0) {
+            $gate = commission_gate_status($conexion, $requestId, $itemId);
+            if (!empty($gate['enabled']) && empty($gate['paid'])) {
+                $phaseLimited = true;
+            }
+        }
 
         // Detect REQUEST_* token type to choose action-oriented framing
         $resolvedTokenKey = interaction_email_resolve_lookup_key($snippet);
@@ -975,10 +1195,21 @@ if (!function_exists('notify_new_message_to_client')) {
             $preheaderText = ucfirst($actorPhrasing) . " left you a message on case #{$requestId}.";
             $fromLine      = htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8');
         }
+        if ($phaseLimited) {
+            $subject = 'Limited communication: ' . $subject;
+            $preheaderText = 'Limited communication — ' . $preheaderText;
+        }
+        $phaseNoticeHtml = $phaseLimited
+            ? '<p style="margin:0 0 12px 0; color:#a16207;"><strong>Limited communication:</strong> Your provider can only send structured updates until payment is completed.</p>'
+            : '';
+        $phaseNoticeText = $phaseLimited
+            ? "Limited communication: Your provider can only send structured updates until payment is completed.\n\n"
+            : '';
 
         // HTML content (inner block passed to renderMedTravelEmail)
         $contentHtml =
             '<p>' . htmlspecialchars($preamble, ENT_QUOTES, 'UTF-8') . '</p>'
+            . $phaseNoticeHtml
             . '<p style="margin:0 0 6px 0;"><strong>Case:</strong> ' . $safeTitle . '</p>'
             . '<p style="margin:0 0 16px 0;"><strong>From:</strong> ' . $fromLine . '</p>'
             . ($safeSnippet !== ''
@@ -993,10 +1224,17 @@ if (!function_exists('notify_new_message_to_client')) {
 
         // Plain-text alternative
         $textBody = $preamble . "\n\n"
+            . $phaseNoticeText
             . "Case: {$meta['title']}\n"
             . "From: {$fromLine}\n"
             . ($safeSnippet !== '' ? "\n" . ($isMapped ? $safeSnippet : '"' . $safeSnippet . '"') . "\n" : '')
             . "\nLog in to reply:\n{$ctaUrl}";
+
+        mt_email_debug_log(
+            'tag=EMAIL_GUARD result=sent thread_id=' . $threadId
+            . ' recipient_id=' . (int)$throttleRecipientId
+            . ' message_id=' . (int)$messageId
+        );
 
         return send_interaction_email(
             $to,

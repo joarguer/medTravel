@@ -31,6 +31,7 @@
     var commissionPaid = !!config.commissionPaid;
     var commissionGateMessage = String(config.commissionMessage || '');
     var freeMessageAllowed = true;
+    var lastComposeNotice = '';
     var quickActions = {
         REQUEST_AVAILABILITY: 'Please confirm availability for my dates.',
         DATES_FLEXIBLE: 'My dates are flexible.',
@@ -1033,6 +1034,9 @@
     }
 
     function showTypingIndicator(label) {
+        if (feeGateActive || commissionGateActive || !freeMessageAllowed) {
+            return;
+        }
         var $el = $('#client-typing-indicator');
         if (!$el.length) return;
         $el.text(label).show();
@@ -1137,14 +1141,27 @@
     function setComposeGateState(canSendFreeMessage, noticeMessage) {
         freeMessageAllowed = !!canSendFreeMessage;
         var composeBlocked = feeGateActive || commissionGateActive || !freeMessageAllowed;
+        if (typeof noticeMessage === 'string' && noticeMessage !== '') {
+            lastComposeNotice = noticeMessage;
+        }
 
         var $msg = $('#client-inbox-message');
         var $send = $('#client-inbox-send-btn');
+        var $composerGroup = $('#client-inbox-send-form .form-group');
+        var $typing = $('#client-typing-indicator');
         if ($msg.length) {
             $msg.prop('disabled', composeBlocked);
         }
         if ($send.length) {
             $send.prop('disabled', composeBlocked);
+        }
+        if (composeBlocked) {
+            if ($composerGroup.length) $composerGroup.hide();
+            if ($send.length) $send.hide();
+            if ($typing.length) $typing.hide();
+        } else {
+            if ($composerGroup.length) $composerGroup.show();
+            if ($send.length) $send.show();
         }
 
         var $note = $('#client-inbox-compose-note');
@@ -1153,7 +1170,7 @@
                 $note.text(commissionGateMessage || 'Free-form messaging is locked until the commission payment is completed. Please use the structured actions above.');
                 $note.show();
             } else if (!freeMessageAllowed) {
-                $note.text(noticeMessage || 'Free-form messaging is locked right now. Please use the structured actions above.');
+                $note.text(noticeMessage || lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
                 $note.show();
             } else {
                 $note.hide();
@@ -1536,7 +1553,7 @@
                 if (isCareBlocked) {
                     setComposeGateState(true, '');
                 } else {
-                    setComposeGateState(false, 'Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
+                    setComposeGateState(false, lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
                 }
                 return;
             }
@@ -1548,7 +1565,7 @@
         var text = $.trim($('#client-inbox-message').val() || '');
         if (!currentThread || !currentThread.thread_id) return;
         if (!freeMessageAllowed) {
-            toastr.warning('Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
+            toastr.warning(lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
             return;
         }
         if (commissionGateActive) {
@@ -1618,7 +1635,7 @@
                 if (isCareBlocked) {
                     setComposeGateState(true, '');
                 } else {
-                    setComposeGateState(false, 'Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
+                    setComposeGateState(false, lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
                 }
                 return;
             }
@@ -1796,7 +1813,7 @@
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
-                setComposeGateState(false, 'Free-form messaging is locked until the initial review is complete. Please use the structured actions above.');
+                setComposeGateState(false, lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
                 return;
             }
             toastr.error((res && res.message) ? res.message : 'Could not send proposal');
