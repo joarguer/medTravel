@@ -437,12 +437,20 @@
             },
             success: function (response) {
                 if (!response || !response.ok) {
+                    if (response && typeof response.message === 'string' && response.message.indexOf('forbidden') === 0) {
+                        $block.hide();
+                        return;
+                    }
                     $block.removeClass('alert-info').addClass('alert-danger').html('No se pudo cargar la comisión.');
                     return;
                 }
                 $block.removeClass('alert-danger').addClass('alert-info').html(renderCommissionPaymentBlock(response));
             },
-            error: function () {
+            error: function (xhr) {
+                if (xhr && xhr.status === 403) {
+                    $block.hide();
+                    return;
+                }
                 $block.removeClass('alert-info').addClass('alert-danger').html('Error de conexión al cargar comisión.');
             }
         });

@@ -8,7 +8,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 if (!is_role_admin_session()) {
     http_response_code(403);
-    echo json_encode(['ok' => false, 'message' => 'forbidden']);
+    echo json_encode(['ok' => false, 'message' => 'forbidden_admin_only']);
     exit;
 }
 

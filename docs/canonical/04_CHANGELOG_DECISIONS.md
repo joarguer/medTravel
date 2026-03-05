@@ -47,3 +47,5 @@ Cambios principales:
 - Gestión de pagos de comisión (Phase 2) centralizada en el modal de detalle
 - Estado del pago y acciones admin (crear, marcar pagado, eliminar)
 - Inbox admin queda solo para mensajería (sin UI de pagos)
+- Bloque de comisión visible solo para roles admin/coordinador (prestador oculto)
+- realtime_admin_token admin-only con mensaje `forbidden_admin_only`
