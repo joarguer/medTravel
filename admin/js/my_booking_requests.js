@@ -1,7 +1,6 @@
 (function () {
     var table = null;
     var activeDetailItemId = 0;
-    var activeDetailFeeLocked = false;
 
     $(document).ready(function () {
         initTable();
@@ -149,45 +148,6 @@
             });
         });
 
-        $('#my_booking_detail_modal').on('click', '#btn-provider-send-message', function () {
-            if (!activeDetailItemId) {
-                return;
-            }
-            if (activeDetailFeeLocked) {
-                toastr.warning('Messaging is locked… Use quick replies.');
-                return;
-            }
-            var text = ($('#provider-message-text').val() || '').trim();
-            if (!text) {
-                toastr.warning('Escribe un mensaje antes de enviar');
-                return;
-            }
-            sendProviderMessage(activeDetailItemId, text);
-        });
-
-        $('#my_booking_detail_modal').on('click', '.btn-provider-quick-reply', function () {
-            if (!activeDetailItemId) {
-                return;
-            }
-            var replyKey = ($(this).data('reply') || '').toString();
-            if (!replyKey) {
-                return;
-            }
-            sendProviderQuickReply(activeDetailItemId, replyKey);
-        });
-
-        $('#my_booking_detail_modal').on('click', '.btn-provider-final-decision', function () {
-            if (!activeDetailItemId) {
-                return;
-            }
-            var decisionKey = ($(this).data('decision') || '').toString();
-            if (!decisionKey) {
-                return;
-            }
-            var reasonKey = ($('#provider-final-reason').val() || '').toString();
-            sendProviderFinalDecision(activeDetailItemId, decisionKey, reasonKey);
-        });
-
         $('#my_booking_detail_modal').on('click', '#btn-modal-provider-confirm', function () {
             if (!activeDetailItemId) {
                 return;
@@ -225,22 +185,6 @@
             $('#provider_propose_modal').modal('show');
         });
 
-        $('#my_booking_detail_modal').on('click', '#btn-provider-propose-dates', function () {
-            if (!activeDetailItemId) {
-                return;
-            }
-            var dateFrom = ($('#provider-propose-date-from').val() || '').trim();
-            var dateTo = ($('#provider-propose-date-to').val() || '').trim();
-            if (!dateFrom || !dateTo) {
-                toastr.warning('Selecciona ambas fechas');
-                return;
-            }
-            if (dateFrom > dateTo) {
-                toastr.warning('El rango de fechas no es valido');
-                return;
-            }
-            sendProviderProposedDates(activeDetailItemId, dateFrom, dateTo);
-        });
     }
 
     function loadRows() {
@@ -280,51 +224,8 @@
                 var d = response.data || {};
                 var itemsHistory = response.items_history || [];
                 activeDetailItemId = itemId;
-                var feeRequiredNow = parseInt(d.fee_required || 0, 10) === 1;
-                var feeStatusNow = (d.fee_status || '').toString().toLowerCase();
-                var computedFeeLocked = (feeRequiredNow && feeStatusNow !== 'paid');
-                activeDetailFeeLocked = !!d.fee_locked || computedFeeLocked;
-                var messageDisabledAttr = activeDetailFeeLocked ? 'disabled' : '';
                 var statusNow = (d.item_status || '').toString();
                 var canShowLegacyActions = (statusNow === 'pending_provider');
-                var canShowFinalApproved = statusNow !== 'provider_confirmed';
-                var quickRepliesHtml = '';
-                if (activeDetailFeeLocked) {
-                    var finalButtonsHtml = '';
-                    if (canShowFinalApproved) {
-                        finalButtonsHtml += '<button type="button" class="btn btn-default btn-xs btn-provider-final-decision" data-decision="FINAL_APPROVED">FINAL APPROVED</button>';
-                    }
-                    finalButtonsHtml += '<button type="button" class="btn btn-default btn-xs btn-provider-final-decision" data-decision="FINAL_NOT_ELIGIBLE">NOT ELIGIBLE</button>';
-
-                    quickRepliesHtml = '' +
-                        '<div class="alert alert-warning" style="margin-bottom:10px;">' +
-                        'Messaging is locked until the coordination fee is paid. Use quick replies.</div>' +
-                        '<div class="btn-group btn-group-xs" id="provider-quick-replies" role="group" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                        '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="DATES_AVAILABLE">Dates available</button>' +
-                        '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="DATES_NOT_AVAILABLE">Dates not available</button>' +
-                        '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="REQUEST_MEDICAL_HISTORY">REQUEST HISTORY</button>' +
-                        '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="REQUEST_LABS">REQUEST LABS</button>' +
-                        '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="REQUEST_IMAGING">REQUEST IMAGING</button>' +
-                        '<button type="button" class="btn btn-default btn-xs btn-provider-quick-reply" data-reply="REQUEST_PHOTOS">REQUEST PHOTOS</button>' +
-                        '</div>' +
-                        '<div class="form-inline" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">' +
-                        '<label style="margin:0;">Propose dates</label>' +
-                        '<input type="date" class="form-control input-sm" id="provider-propose-date-from">' +
-                        '<input type="date" class="form-control input-sm" id="provider-propose-date-to">' +
-                        '<button type="button" class="btn btn-default btn-xs" id="btn-provider-propose-dates">PROPOSE DATES</button>' +
-                        '</div>' +
-                        '<div class="form-inline" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;">' +
-                        '<label style="margin:0;">Final decision</label>' +
-                        finalButtonsHtml +
-                        '<select class="form-control input-sm" id="provider-final-reason">' +
-                        '<option value="">Reason (optional)</option>' +
-                        '<option value="NOT_A_FIT">Not a fit</option>' +
-                        '<option value="INSUFFICIENT_INFO">Insufficient info</option>' +
-                        '<option value="OUT_OF_SCOPE">Out of scope</option>' +
-                        '<option value="NOT_AVAILABLE">Not available</option>' +
-                        '</select>' +
-                        '</div>';
-                }
 
                     var modalActionsHtml = '';
                     if (canShowLegacyActions) {
@@ -384,13 +285,8 @@
                         '<div class="col-md-12">' +
                             '<h5>Conversación</h5>' +
                             modalActionsHtml +
-                            quickRepliesHtml +
+                            '<a class="btn btn-default btn-xs" href="app_inbox.php?thread_id=ITEM:' + itemId + '" style="margin-bottom:10px;">Open Inbox</a>' +
                             '<div id="provider-conversation-log" style="max-height:260px; overflow:auto; border:1px solid #e5e5e5; padding:10px; background:#fafafa;">Cargando mensajes...</div>' +
-                            '<div class="form-group" style="margin-top:12px;">' +
-                                '<label for="provider-message-text">Enviar mensaje al cliente</label>' +
-                                '<textarea id="provider-message-text" class="form-control" rows="3" maxlength="2000" placeholder="Escribe tu mensaje..." ' + messageDisabledAttr + '></textarea>' +
-                            '</div>' +
-                            '<button type="button" id="btn-provider-send-message" class="btn btn-primary btn-sm" ' + messageDisabledAttr + '><i class="fa fa-paper-plane"></i> Send message</button>' +
                         '</div>' +
                     '</div>' +
                     '<hr>' +
@@ -507,117 +403,6 @@
         });
         $log.html(html);
         $log.scrollTop($log[0].scrollHeight);
-    }
-
-    function sendProviderMessage(itemId, text) {
-        $.ajax({
-            url: 'ajax/my_booking_requests.php',
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'send_message',
-                item_id: itemId,
-                message: text
-            },
-            success: function (response) {
-                if (!response || !response.ok) {
-                    if (response && response.code === 'FEE_REQUIRED') {
-                        toastr.warning('Messaging is locked… Use quick replies.');
-                        return;
-                    }
-                    toastr.error((response && response.message) ? response.message : 'No se pudo enviar mensaje');
-                    return;
-                }
-                $('#provider-message-text').val('');
-                toastr.success('Mensaje enviado');
-                loadMessages(itemId);
-            },
-            error: function (xhr) {
-                if (xhr && xhr.status === 403 && xhr.responseJSON && xhr.responseJSON.code === 'FEE_REQUIRED') {
-                    toastr.warning('Messaging is locked… Use quick replies.');
-                    return;
-                }
-                toastr.error('Error de conexión al enviar mensaje');
-            }
-        });
-    }
-
-    function sendProviderQuickReply(itemId, replyKey) {
-        $.ajax({
-            url: 'ajax/my_booking_requests.php',
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'send_quick_reply',
-                item_id: itemId,
-                reply_key: replyKey
-            },
-            success: function (response) {
-                if (!response || !response.ok) {
-                    toastr.error((response && response.message) ? response.message : 'No se pudo enviar respuesta');
-                    return;
-                }
-                toastr.success('Respuesta enviada');
-                loadMessages(itemId);
-            },
-            error: function () {
-                toastr.error('Error de conexión al enviar respuesta');
-            }
-        });
-    }
-
-    function sendProviderFinalDecision(itemId, decisionKey, reasonKey) {
-        $.ajax({
-            url: 'ajax/my_booking_requests.php',
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'send_final_decision',
-                item_id: itemId,
-                decision_key: decisionKey,
-                reason_key: reasonKey
-            },
-            success: function (response) {
-                if (!response || !response.ok) {
-                    toastr.error((response && response.message) ? response.message : 'No se pudo enviar la decision');
-                    return;
-                }
-                toastr.success('Decision enviada');
-                loadMessages(itemId);
-                loadRows();
-            },
-            error: function () {
-                toastr.error('Error de conexión al enviar la decision');
-            }
-        });
-    }
-
-    function sendProviderProposedDates(itemId, dateFrom, dateTo) {
-        $.ajax({
-            url: 'ajax/my_booking_requests.php',
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                action: 'propose_dates',
-                item_id: itemId,
-                date_from: dateFrom,
-                date_to: dateTo
-            },
-            success: function (response) {
-                if (!response || !response.ok) {
-                    toastr.error((response && response.message) ? response.message : 'No se pudo enviar la propuesta');
-                    return;
-                }
-                $('#provider-propose-date-from').val('');
-                $('#provider-propose-date-to').val('');
-                toastr.success('Fechas propuestas');
-                loadMessages(itemId);
-                loadRows();
-            },
-            error: function () {
-                toastr.error('Error de conexión al proponer fechas');
-            }
-        });
     }
 
     function sendProviderAction(action, payload, onSuccess) {

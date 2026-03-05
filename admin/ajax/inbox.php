@@ -494,7 +494,29 @@ if ($action === 'list_messages') {
     $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
         ? is_booking_fee_required($conexion, $bookingRequestId)
         : false;
+    $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
+    $commissionGateEnabled = !empty($commissionGate['enabled']);
+    $commissionPaid = !empty($commissionGate['paid']);
     $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
+    $isProviderItemThread = empty($scope['is_admin'])
+        && strtoupper((string)($scope['reader_role'] ?? '')) === 'PROVIDER'
+        && strtoupper((string)($ctx['thread_type'] ?? '')) === 'ITEM'
+        && (int)($ctx['item_id'] ?? 0) > 0;
+    if ($isProviderItemThread) {
+        $commissionLocked = $commissionGateEnabled && !$commissionPaid;
+        $freeMessageState['can_send_free_message'] = (!$feeLocked && !$commissionLocked);
+        $freeMessageState['stage_allows_free_message'] = true;
+        if ($feeLocked) {
+            $freeMessageState['blocked_reason'] = 'fee_locked';
+            $freeMessageState['notice'] = '';
+        } elseif ($commissionLocked) {
+            $freeMessageState['blocked_reason'] = 'commission';
+            $freeMessageState['notice'] = 'Messaging is locked until the commission is paid. Please contact MedTravel if you need help.';
+        } else {
+            $freeMessageState['blocked_reason'] = '';
+            $freeMessageState['notice'] = '';
+        }
+    }
     $messages = [];
     $sinceId = (int)($_GET['since_id'] ?? $_POST['since_id'] ?? 0);
     if (inbox_table_exists($conexion, 'inbox_messages')) {
@@ -516,6 +538,8 @@ if ($action === 'list_messages') {
                     $messages[] = [
                         'id' => (int)($row['id'] ?? 0),
                         'sender' => inbox_sender_to_ui($row['sender_role'] ?? ''),
+                        'sender_user_id' => (int)($row['sender_user_id'] ?? 0),
+                        'actor_user_id' => (int)($row['sender_user_id'] ?? 0),
                         'body' => (string)($row['body'] ?? ''),
                         'time' => (string)($row['created_at'] ?? ''),
                         'thread_type' => (string)$ctx['thread_type'],
@@ -534,6 +558,8 @@ if ($action === 'list_messages') {
             $messages[] = [
                 'id' => 'legacy-' . ($idx + 1),
                 'sender' => (string)($m['sender'] ?? 'system'),
+                'sender_user_id' => 0,
+                'actor_user_id' => 0,
                 'body' => (string)($m['body'] ?? ''),
                 'time' => (string)($m['time'] ?? ''),
                 'thread_type' => (string)$ctx['thread_type'],
@@ -677,10 +703,6 @@ if ($action === 'list_messages') {
         }
     }
 
-    $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
-    $commissionGateEnabled = !empty($commissionGate['enabled']);
-    $commissionPaid = !empty($commissionGate['paid']);
-
     admin_inbox_ok([
         'thread_id' => $ctx['thread_id'],
         'thread_type' => $ctx['thread_type'],
@@ -717,8 +739,41 @@ if ($action === 'send_message') {
     $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
         ? is_booking_fee_required($conexion, $bookingRequestId)
         : false;
+    $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
+    $commissionGateEnabled = !empty($commissionGate['enabled']);
+    $commissionPaid = !empty($commissionGate['paid']);
     $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
+    $isProviderItemThread = empty($scope['is_admin'])
+        && strtoupper((string)($scope['reader_role'] ?? '')) === 'PROVIDER'
+        && strtoupper((string)($ctx['thread_type'] ?? '')) === 'ITEM'
+        && (int)($ctx['item_id'] ?? 0) > 0;
+    if ($isProviderItemThread) {
+        $commissionLocked = $commissionGateEnabled && !$commissionPaid;
+        $freeMessageState['can_send_free_message'] = (!$feeLocked && !$commissionLocked);
+        $freeMessageState['blocked_reason'] = $feeLocked ? 'fee_locked' : ($commissionLocked ? 'commission' : '');
+        $freeMessageState['notice'] = $commissionLocked
+            ? 'Messaging is locked until the commission is paid. Please contact MedTravel if you need help.'
+            : '';
+    }
     $canSendFreeMessage = !empty($freeMessageState['can_send_free_message']);
+    if (empty($scope['is_admin']) && strtoupper((string)($scope['reader_role'] ?? '')) === 'PROVIDER' && $commissionGateEnabled && !$commissionPaid) {
+        if (function_exists('mt_email_debug_log')) {
+            mt_email_debug_log(
+                'PROVIDER_BLOCK_SEND_MESSAGE reason=commission'
+                . ' thread_id=' . (string)($ctx['thread_id'] ?? '')
+                . ' provider_user_id=' . (int)($scope['user_id'] ?? 0)
+                . ' request_id=' . (int)($ctx['request_id'] ?? 0)
+                . ' item_id=' . (int)($ctx['item_id'] ?? 0)
+            );
+        }
+        http_response_code(403);
+        echo json_encode([
+            'success' => false,
+            'error' => 'compose_locked',
+            'reason' => 'commission',
+        ]);
+        exit;
+    }
     if ($feeLocked) {
         http_response_code(403);
         echo json_encode([
@@ -734,6 +789,8 @@ if ($action === 'send_message') {
             'ok' => false,
             'code' => 'FREE_MESSAGE_BLOCKED',
             'error' => 'Messaging is temporarily limited. Please use the options above.',
+            'reason' => (string)($freeMessageState['blocked_reason'] ?? ''),
+            'notice' => (string)($freeMessageState['notice'] ?? ''),
         ]);
         exit;
     }
@@ -745,6 +802,21 @@ if ($action === 'send_message') {
         admin_inbox_err('message_too_long', 422);
     }
 
+    $threadId = (string)$ctx['thread_id'];
+    $threadType = (string)$ctx['thread_type'];
+    $requestId = (int)$ctx['request_id'];
+    $itemId = (int)$ctx['item_id'];
+    $maxBeforeInsert = null;
+    $stmtMax = mysqli_prepare($conexion, "SELECT COALESCE(MAX(id), 0) AS max_id FROM inbox_messages WHERE thread_id = ?");
+    if ($stmtMax) {
+        mysqli_stmt_bind_param($stmtMax, 's', $threadId);
+        if (mysqli_stmt_execute($stmtMax)) {
+            $resMax = mysqli_stmt_get_result($stmtMax);
+            $rowMax = $resMax ? mysqli_fetch_assoc($resMax) : null;
+            $maxBeforeInsert = (int)($rowMax['max_id'] ?? 0);
+        }
+        mysqli_stmt_close($stmtMax);
+    }
     $senderRole = (string)$scope['reader_role'];
     $senderUserId = (int)$scope['user_id'];
     $stmt = mysqli_prepare(
@@ -756,10 +828,6 @@ if ($action === 'send_message') {
     if (!$stmt) {
         admin_inbox_err('prepare_failed', 500);
     }
-    $threadId = (string)$ctx['thread_id'];
-    $threadType = (string)$ctx['thread_type'];
-    $requestId = (int)$ctx['request_id'];
-    $itemId = (int)$ctx['item_id'];
     mysqli_stmt_bind_param($stmt, 'ssiisis', $threadId, $threadType, $requestId, $itemId, $senderRole, $senderUserId, $message);
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
@@ -777,6 +845,15 @@ if ($action === 'send_message') {
             'ADMIN_NOTIFY_CLIENT_START resolved_email=' . (string)$resolvedEmail
             . ' source=' . (string)$emailSource
         );
+        mt_email_debug_log(
+            'TAG=PROVE_MD5 interaction_email_md5=' . md5_file(__DIR__ . '/../../inc/interaction_email.php')
+            . ' interaction_email_path=' . realpath(__DIR__ . '/../../inc/interaction_email.php')
+        );
+        mt_email_debug_log('TAG=PROVE_HIT reached_before_notify action=' . $action . ' msg_id=' . (int)$messageId);
+        file_put_contents(__DIR__ . '/../../storage/logs/email_debug.log',
+            date('c') . ' ADMIN_BEFORE_NOTIFY file=' . __FILE__ . ' msg_id=' . $messageId . ' ctx_thread_id=' . $ctx['thread_id'] . "\n",
+            FILE_APPEND
+        );
         $notifyResult = notify_new_message_to_client(
             $conexion,
             $requestId,
@@ -785,11 +862,22 @@ if ($action === 'send_message') {
             $senderRole,
             $message,
             $resolvedEmail,
-            $emailSource
+            $emailSource,
+            $messageId,
+            $maxBeforeInsert
         );
         mt_email_debug_log('ADMIN_NOTIFY_CLIENT_DONE result=' . json_encode($notifyResult));
     } else {
-        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message);
+        mt_email_debug_log(
+            'TAG=PROVE_MD5 interaction_email_md5=' . md5_file(__DIR__ . '/../../inc/interaction_email.php')
+            . ' interaction_email_path=' . realpath(__DIR__ . '/../../inc/interaction_email.php')
+        );
+        mt_email_debug_log('TAG=PROVE_HIT reached_before_notify action=' . $action . ' msg_id=' . (int)$messageId);
+        file_put_contents(__DIR__ . '/../../storage/logs/email_debug.log',
+            date('c') . ' ADMIN_BEFORE_NOTIFY file=' . __FILE__ . ' msg_id=' . $messageId . ' ctx_thread_id=' . $ctx['thread_id'] . "\n",
+            FILE_APPEND
+        );
+        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message, '', '', $messageId, $maxBeforeInsert);
     }
 
     admin_inbox_ok([
@@ -909,6 +997,17 @@ if ($action === 'send_quick_reply') {
     $threadType = (string)$ctx['thread_type'];
     $requestId = (int)$ctx['request_id'];
     $itemId = (int)$ctx['item_id'];
+    $maxBeforeInsert = null;
+    $stmtMax = mysqli_prepare($conexion, "SELECT COALESCE(MAX(id), 0) AS max_id FROM inbox_messages WHERE thread_id = ?");
+    if ($stmtMax) {
+        mysqli_stmt_bind_param($stmtMax, 's', $threadId);
+        if (mysqli_stmt_execute($stmtMax)) {
+            $resMax = mysqli_stmt_get_result($stmtMax);
+            $rowMax = $resMax ? mysqli_fetch_assoc($resMax) : null;
+            $maxBeforeInsert = (int)($rowMax['max_id'] ?? 0);
+        }
+        mysqli_stmt_close($stmtMax);
+    }
     $senderRole = (string)$scope['reader_role'];
     $senderUserId = (int)$scope['user_id'];
 
@@ -938,6 +1037,15 @@ if ($action === 'send_quick_reply') {
             'ADMIN_NOTIFY_CLIENT_START resolved_email=' . (string)$resolvedEmail
             . ' source=' . (string)$emailSource
         );
+        mt_email_debug_log(
+            'TAG=PROVE_MD5 interaction_email_md5=' . md5_file(__DIR__ . '/../../inc/interaction_email.php')
+            . ' interaction_email_path=' . realpath(__DIR__ . '/../../inc/interaction_email.php')
+        );
+        mt_email_debug_log('TAG=PROVE_HIT reached_before_notify action=' . $action . ' msg_id=' . (int)$messageId);
+        file_put_contents(__DIR__ . '/../../storage/logs/email_debug.log',
+            date('c') . ' ADMIN_BEFORE_NOTIFY file=' . __FILE__ . ' msg_id=' . $messageId . ' ctx_thread_id=' . $ctx['thread_id'] . "\n",
+            FILE_APPEND
+        );
         $notifyResult = notify_new_message_to_client(
             $conexion,
             $requestId,
@@ -946,11 +1054,22 @@ if ($action === 'send_quick_reply') {
             $senderRole,
             $message,
             $resolvedEmail,
-            $emailSource
+            $emailSource,
+            $messageId,
+            $maxBeforeInsert
         );
         mt_email_debug_log('ADMIN_NOTIFY_CLIENT_DONE result=' . json_encode($notifyResult));
     } else {
-        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message);
+        mt_email_debug_log(
+            'TAG=PROVE_MD5 interaction_email_md5=' . md5_file(__DIR__ . '/../../inc/interaction_email.php')
+            . ' interaction_email_path=' . realpath(__DIR__ . '/../../inc/interaction_email.php')
+        );
+        mt_email_debug_log('TAG=PROVE_HIT reached_before_notify action=' . $action . ' msg_id=' . (int)$messageId);
+        file_put_contents(__DIR__ . '/../../storage/logs/email_debug.log',
+            date('c') . ' ADMIN_BEFORE_NOTIFY file=' . __FILE__ . ' msg_id=' . $messageId . ' ctx_thread_id=' . $ctx['thread_id'] . "\n",
+            FILE_APPEND
+        );
+        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message, '', '', $messageId, $maxBeforeInsert);
     }
 
     admin_inbox_ok([
@@ -994,18 +1113,35 @@ if ($action === 'send_structured_action') {
     }
 
     $actionType = strtoupper(trim((string)($_POST['action_type'] ?? '')));
-    $allowedActionTypes = ['REQUEST_ADDITIONAL_INFO', 'PROPOSE_QUOTE_ADJUSTMENT'];
+    $allowedActionTypes = [
+        'PROPOSE_NEW_DATES',
+        'REQUEST_LABS',
+        'REQUEST_IMAGING',
+        'REQUEST_PHOTOS',
+        'REQUEST_HISTORY',
+        'REQUEST_ADDITIONAL_INFO',
+        'PROPOSE_QUOTE_ADJUSTMENT',
+        'FINAL_APPROVED',
+        'NOT_ELIGIBLE',
+        'DATES_AVAILABLE',
+        'DATES_NOT_AVAILABLE',
+    ];
     if (!in_array($actionType, $allowedActionTypes, true)) {
-        admin_inbox_err('invalid_action_type', 422);
-    }
-
-    $payload = admin_inbox_decode_payload((string)($_POST['payload_json'] ?? ''));
-    if ($payload === null) {
-        admin_inbox_err('invalid_payload_json', 422);
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'invalid_action_type']);
+        exit;
     }
 
     $messagePrefix = '';
     $structuredPayload = [];
+    $message = '';
+    if ($actionType === 'REQUEST_ADDITIONAL_INFO' || $actionType === 'PROPOSE_QUOTE_ADJUSTMENT') {
+        $payload = admin_inbox_decode_payload((string)($_POST['payload_json'] ?? ''));
+        if ($payload === null) {
+            admin_inbox_err('invalid_payload_json', 422);
+        }
+    }
+
     if ($actionType === 'REQUEST_ADDITIONAL_INFO') {
         $allowedTypes = ['labs', 'imaging', 'photos', 'medical_history', 'other'];
         $requiredTypes = [];
@@ -1020,9 +1156,9 @@ if ($action === 'send_structured_action') {
         if (empty($requiredTypes)) {
             admin_inbox_err('required_types_missing', 422);
         }
-        $note = trim((string)($payload['note'] ?? ''));
-        if (mb_strlen($note) > 500) {
-            admin_inbox_err('note_too_long', 422);
+        $note = trim(strip_tags((string)($payload['note'] ?? '')));
+        if (mb_strlen($note) > 300) {
+            $note = function_exists('mb_substr') ? mb_substr($note, 0, 300) : substr($note, 0, 300);
         }
 
         $messagePrefix = '[REQUEST_INFO] ';
@@ -1031,7 +1167,7 @@ if ($action === 'send_structured_action') {
             'required_types' => $requiredTypes,
             'note' => $note,
         ];
-    } else {
+    } elseif ($actionType === 'PROPOSE_QUOTE_ADJUSTMENT') {
         $amountRaw = trim((string)($payload['amount'] ?? ''));
         $amount = is_numeric($amountRaw) ? (float)$amountRaw : 0;
         if ($amount <= 0) {
@@ -1044,9 +1180,9 @@ if ($action === 'send_structured_action') {
         if (mb_strlen($currency) > 10) {
             admin_inbox_err('invalid_currency', 422);
         }
-        $notes = trim((string)($payload['notes'] ?? ''));
-        if (mb_strlen($notes) > 500) {
-            admin_inbox_err('notes_too_long', 422);
+        $notes = trim(strip_tags((string)($payload['notes'] ?? '')));
+        if (mb_strlen($notes) > 300) {
+            $notes = function_exists('mb_substr') ? mb_substr($notes, 0, 300) : substr($notes, 0, 300);
         }
 
         $messagePrefix = '[PROPOSE_QUOTE] ';
@@ -1056,13 +1192,31 @@ if ($action === 'send_structured_action') {
             'currency' => $currency,
             'notes' => $notes,
         ];
+    } else {
+        if ($actionType === 'PROPOSE_NEW_DATES') {
+            $message = '[ACTION] PROPOSE_NEW_DATES';
+        } else {
+            $replyMap = [
+                'REQUEST_LABS' => 'REQUEST LABS',
+                'REQUEST_IMAGING' => 'REQUEST IMAGING',
+                'REQUEST_PHOTOS' => 'REQUEST PHOTOS',
+                'REQUEST_HISTORY' => 'REQUEST HISTORY',
+                'DATES_AVAILABLE' => 'DATES AVAILABLE',
+                'DATES_NOT_AVAILABLE' => 'DATES NOT AVAILABLE',
+                'FINAL_APPROVED' => 'FINAL_APPROVED',
+                'NOT_ELIGIBLE' => 'NOT_ELIGIBLE',
+            ];
+            $message = '[REPLY] ' . ($replyMap[$actionType] ?? $actionType);
+        }
     }
 
-    $jsonPayload = json_encode($structuredPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($jsonPayload === false) {
-        admin_inbox_err('payload_encode_failed', 500);
+    if ($message === '') {
+        $jsonPayload = json_encode($structuredPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($jsonPayload === false) {
+            admin_inbox_err('payload_encode_failed', 500);
+        }
+        $message = $messagePrefix . $jsonPayload;
     }
-    $message = $messagePrefix . $jsonPayload;
     if (mb_strlen($message) > 2000) {
         admin_inbox_err('message_too_long', 422);
     }
@@ -1116,6 +1270,17 @@ if ($action === 'send_structured_action') {
     $threadType = (string)$ctx['thread_type'];
     $requestId = (int)$ctx['request_id'];
     $itemId = (int)$ctx['item_id'];
+    $maxBeforeInsert = null;
+    $stmtMax = mysqli_prepare($conexion, "SELECT COALESCE(MAX(id), 0) AS max_id FROM inbox_messages WHERE thread_id = ?");
+    if ($stmtMax) {
+        mysqli_stmt_bind_param($stmtMax, 's', $threadId);
+        if (mysqli_stmt_execute($stmtMax)) {
+            $resMax = mysqli_stmt_get_result($stmtMax);
+            $rowMax = $resMax ? mysqli_fetch_assoc($resMax) : null;
+            $maxBeforeInsert = (int)($rowMax['max_id'] ?? 0);
+        }
+        mysqli_stmt_close($stmtMax);
+    }
     $senderRole = (string)$scope['reader_role'];
     $senderUserId = (int)$scope['user_id'];
 
@@ -1145,6 +1310,15 @@ if ($action === 'send_structured_action') {
             'ADMIN_NOTIFY_CLIENT_START resolved_email=' . (string)$resolvedEmail
             . ' source=' . (string)$emailSource
         );
+        mt_email_debug_log(
+            'TAG=PROVE_MD5 interaction_email_md5=' . md5_file(__DIR__ . '/../../inc/interaction_email.php')
+            . ' interaction_email_path=' . realpath(__DIR__ . '/../../inc/interaction_email.php')
+        );
+        mt_email_debug_log('TAG=PROVE_HIT reached_before_notify action=' . $action . ' msg_id=' . (int)$messageId);
+        file_put_contents(__DIR__ . '/../../storage/logs/email_debug.log',
+            date('c') . ' ADMIN_BEFORE_NOTIFY file=' . __FILE__ . ' msg_id=' . $messageId . ' ctx_thread_id=' . $ctx['thread_id'] . "\n",
+            FILE_APPEND
+        );
         $notifyResult = notify_new_message_to_client(
             $conexion,
             $requestId,
@@ -1153,11 +1327,22 @@ if ($action === 'send_structured_action') {
             $senderRole,
             $message,
             $resolvedEmail,
-            $emailSource
+            $emailSource,
+            $messageId,
+            $maxBeforeInsert
         );
         mt_email_debug_log('ADMIN_NOTIFY_CLIENT_DONE result=' . json_encode($notifyResult));
     } else {
-        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message);
+        mt_email_debug_log(
+            'TAG=PROVE_MD5 interaction_email_md5=' . md5_file(__DIR__ . '/../../inc/interaction_email.php')
+            . ' interaction_email_path=' . realpath(__DIR__ . '/../../inc/interaction_email.php')
+        );
+        mt_email_debug_log('TAG=PROVE_HIT reached_before_notify action=' . $action . ' msg_id=' . (int)$messageId);
+        file_put_contents(__DIR__ . '/../../storage/logs/email_debug.log',
+            date('c') . ' ADMIN_BEFORE_NOTIFY file=' . __FILE__ . ' msg_id=' . $messageId . ' ctx_thread_id=' . $ctx['thread_id'] . "\n",
+            FILE_APPEND
+        );
+        notify_new_message_to_client($conexion, $requestId, $itemId, $threadType, $senderRole, $message, '', '', $messageId, $maxBeforeInsert);
     }
 
     admin_inbox_ok([

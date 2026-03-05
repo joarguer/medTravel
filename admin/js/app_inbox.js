@@ -26,6 +26,7 @@
     var feeGateActive = false;
     var commissionGateActive = false;
     var freeMessageAllowed = true;
+    var lastComposeNotice = '';
     var currentDocuments = [];
     var quickReplies = {
         DATES_AVAILABLE: 'Dates available',
@@ -59,6 +60,33 @@
         return String(sender || 'system').toLowerCase().trim();
     }
 
+    function getCurrentUserId() {
+        var direct = parseInt(helpConfig.userId || 0, 10);
+        if (isFinite(direct) && direct > 0) return direct;
+        var session = window.MT_SESSION || window.mtSession || {};
+        var fallback = parseInt(session.user_id || session.id_usuario || session.id || 0, 10);
+        return (isFinite(fallback) && fallback > 0) ? fallback : 0;
+    }
+
+    function getMessageActorId(m) {
+        if (!m || typeof m !== 'object') return 0;
+        var raw = m.actor_user_id;
+        if (raw === undefined || raw === null || raw === '') raw = m.sender_user_id;
+        if (raw === undefined || raw === null || raw === '') raw = m.sender_id;
+        if (raw === undefined || raw === null || raw === '') raw = m.user_id;
+        var id = parseInt(raw || 0, 10);
+        return (isFinite(id) && id > 0) ? id : 0;
+    }
+
+    function isOwnMessage(m) {
+        var myId = getCurrentUserId();
+        var actorId = getMessageActorId(m);
+        if (myId > 0 && actorId > 0) {
+            return myId === actorId;
+        }
+        return isOwnAdminMessage(m && m.sender ? m.sender : '');
+    }
+
     function isOwnAdminMessage(sender) {
         var s = normalizeRole(sender);
         if (!s || s === 'system') return false;
@@ -80,7 +108,7 @@
     }
 
     function buildAdminMsgHtml(m, bodyHtml, sysMsg) {
-        var own = isOwnAdminMessage(m.sender || '');
+        var own = isOwnMessage(m);
         var rowCls = sysMsg ? 'mt-msg-row--system' : (own ? 'mt-msg-row--own' : 'mt-msg-row--other');
         var msgCls = sysMsg ? 'mt-msg-system' : 'mt-msg-human';
         var displayName = sysMsg ? 'System' : getAdminDisplayName(m, own);
@@ -611,17 +639,98 @@
     }
 
     function formatAdminMessageBody(body) {
-        var text = String(body || '').trim();
-        if (text.indexOf('[REQUEST_INFO]') === 0) {
-            return renderStructuredRequestInfo(text);
+        var text = String(body || '');
+        var trimmed = text.trim();
+        if (trimmed.indexOf('[REQUEST_INFO]') === 0) {
+            return renderStructuredRequestInfo(trimmed);
         }
-        if (text.indexOf('[PROPOSE_QUOTE]') === 0) {
-            return renderStructuredProposeQuote(text);
+        if (trimmed.indexOf('[PROPOSE_QUOTE]') === 0) {
+            return renderStructuredProposeQuote(trimmed);
         }
-        if (text.indexOf('[PROPOSAL_RESPONSE]') === 0) {
-            return renderStructuredProposalResponse(text);
+        if (trimmed.indexOf('[PROPOSAL_RESPONSE]') === 0) {
+            return renderStructuredProposalResponse(trimmed);
         }
-        return '<span style="white-space:pre-wrap;">' + esc(body || '') + '</span>';
+
+        var label = '';
+        var isReply = false;
+        if (trimmed.indexOf('[ACTION]') === 0) {
+            label = 'Action';
+            trimmed = trimmed.replace(/^\[ACTION\]\s*/i, '');
+        } else if (trimmed.indexOf('[REPLY]') === 0) {
+            label = 'Reply';
+            trimmed = trimmed.replace(/^\[REPLY\]\s*/i, '');
+            isReply = true;
+        }
+
+        if (!label) {
+            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+        }
+
+        var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(trimmed);
+        var structuredReplyUpper = trimmed.toUpperCase();
+        if (isReply) {
+            if (structuredReplyUpper.indexOf('REQUEST LABS') !== -1) {
+                messageHtml += '<div style="margin-top:8px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="labs">UPLOAD LABS</button>' +
+                    '</div>';
+            }
+            if (structuredReplyUpper.indexOf('REQUEST IMAGING') !== -1) {
+                messageHtml += '<div style="margin-top:8px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="imaging">UPLOAD IMAGING</button>' +
+                    '</div>';
+            }
+            if (structuredReplyUpper.indexOf('REQUEST PHOTOS') !== -1) {
+                messageHtml += '<div style="margin-top:8px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="photos">UPLOAD PHOTOS</button>' +
+                    '</div>';
+            }
+            if (structuredReplyUpper.indexOf('REQUEST HISTORY') !== -1) {
+                messageHtml += '<div style="margin-top:8px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="history">UPLOAD HISTORY</button>' +
+                    '</div>';
+            }
+
+            var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+            if (structuredReplyUpper.indexOf('DATES AVAILABLE') !== -1 && isItemThread) {
+                messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT THESE DATES</button>' +
+                    '</div>';
+            }
+            if (structuredReplyUpper.indexOf('DATES NOT AVAILABLE') !== -1 && isItemThread) {
+                messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
+                    '<button type="button" class="btn btn-default btn-xs client-propose-new-dates" title="Propose new dates">' +
+                        'PROPOSE NEW DATES' +
+                    '</button>' +
+                    '</div>';
+            }
+        }
+
+        if (isReply && structuredReplyUpper.indexOf('PROPOSED_DATES') !== -1) {
+            messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
+                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT DATES</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">REJECT DATES</button>' +
+                '</div>';
+        }
+
+        if (isReply && structuredReplyUpper.indexOf('FINAL_APPROVED') !== -1 && feeGateActive) {
+            messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
+                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_accept_and_pay">ACCEPT & PAY</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_decline">DECLINE</button>' +
+                '</div>';
+        }
+
+        if (label === 'Action' && trimmed.toUpperCase().indexOf('FINAL_ACCEPT_AND_PAY') === 0) {
+            var bookingId = currentThread && currentThread.booking_id ? currentThread.booking_id : 0;
+            var payUrl = '/booking.php';
+            if (bookingId) {
+                payUrl += '?request_id=' + encodeURIComponent(String(bookingId));
+            }
+            messageHtml += '<div style="margin-top:8px;">' +
+                '<a class="btn btn-xs btn-success" href="' + esc(payUrl) + '">Proceed to pay Coordination Fee</a>' +
+                '</div>';
+        }
+
+        return messageHtml;
     }
 
     function matchesPreferred(thread, preferred) {
@@ -986,12 +1095,15 @@
 
     function addPendingMessage(text) {
         if (!currentThread || !currentThread.thread_id) return '';
+        var currentUserId = getCurrentUserId();
         var tempId = 'temp-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
         var msg = {
             id: tempId,
             _tempId: tempId,
             _status: 'Sending…',
             sender: String(helpConfig.role || 'admin').toLowerCase() || 'admin',
+            sender_user_id: currentUserId,
+            actor_user_id: currentUserId,
             body: text,
             time: new Date().toISOString()
         };
@@ -1231,6 +1343,8 @@
         var $quick = $('#admin-inbox-quick-replies');
         var $msg = $('#admin-inbox-message');
         var $send = $('#admin-inbox-send-form button[type="submit"]');
+        var $composerGroup = $('#admin-inbox-send-form .form-group');
+        var $typing = $('#admin-typing-indicator');
         var $note = $('#admin-inbox-compose-note');
 
         if ($quick.length) {
@@ -1246,11 +1360,35 @@
         if ($send.length) {
             $send.prop('disabled', composeBlocked);
         }
+        if (freeMessageAllowed) {
+            if ($composerGroup.length) $composerGroup.show();
+            if ($send.length) $send.show();
+        } else {
+            if ($composerGroup.length) $composerGroup.hide();
+            if ($send.length) $send.hide();
+            if ($typing.length) $typing.hide();
+        }
 
         if ($note.length) {
             if (!freeMessageAllowed) {
-                $note.text(noticeMessage || 'Messaging will be available after the initial review. Please use the options above.');
-                $note.show();
+                var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+                var noteText = '';
+                if (feeGateActive) {
+                    noteText = 'Coordination Fee required';
+                } else if (typeof noticeMessage === 'string' && noticeMessage.trim() !== '') {
+                    noteText = noticeMessage;
+                    lastComposeNotice = noticeMessage;
+                } else if (lastComposeNotice) {
+                    noteText = lastComposeNotice;
+                } else if (!isItemThread) {
+                    noteText = 'Messaging will be available after the initial review. Please use the options above.';
+                }
+                if (noteText) {
+                    $note.text(noteText);
+                    $note.show();
+                } else {
+                    $note.hide();
+                }
             } else {
                 $note.hide();
             }
@@ -1339,7 +1477,10 @@
             var commissionPaid = parseInt(res.commission_paid || 0, 10) === 1;
             setCommissionGateState(commissionGateEnabled, commissionPaid);
             var canSendFreeMessage = (typeof res.can_send_free_message === 'boolean') ? res.can_send_free_message : !feeLocked;
-            setComposeGateState(canSendFreeMessage, res.free_message_notice || '');
+            if (res.free_message_notice) {
+                lastComposeNotice = res.free_message_notice;
+            }
+            setComposeGateState(canSendFreeMessage, lastComposeNotice);
             currentDocuments = $.isArray(res.documents) ? res.documents : [];
 
             var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM';
@@ -1357,7 +1498,8 @@
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
-                setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                var notice = res.notice || res.free_message_notice || lastComposeNotice || '';
+                setComposeGateState(false, notice);
                 return;
             }
             toastr.error('Could not load messages');
@@ -1401,7 +1543,8 @@
                     return;
                 }
                 if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
-                    setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                    var notice = res.notice || res.free_message_notice || lastComposeNotice || '';
+                    setComposeGateState(false, notice);
                     updatePendingStatus(pendingId, 'Failed');
                     return;
                 }
@@ -1426,7 +1569,8 @@
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
-                setComposeGateState(false, 'Messaging will be available after the initial review. Please use the options above.');
+                var notice = res.notice || res.free_message_notice || lastComposeNotice || '';
+                setComposeGateState(false, notice);
                 return;
             }
             toastr.error('Could not send message');
