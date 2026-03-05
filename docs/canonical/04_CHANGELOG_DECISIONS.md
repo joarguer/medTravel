@@ -41,3 +41,9 @@ Cambios principales:
 - listener en `admin/js/header_notifications.js`
 - refresh mediante `adminReloadNotificationsDebounced()`
 - fallback polling cada 60s
+
+## 2026-03 — Admin commission payment management in my_booking_requests modal
+
+- Gestión de pagos de comisión (Phase 2) centralizada en el modal de detalle
+- Estado del pago y acciones admin (crear, marcar pagado, eliminar)
+- Inbox admin queda solo para mensajería (sin UI de pagos)
