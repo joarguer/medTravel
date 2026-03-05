@@ -49,3 +49,10 @@ Cambios principales:
 - `admin/my_booking_requests.php` (prestador) no renderiza ni llama commission_payments
 - Endpoint `admin/ajax/commission_payments.php` permanece admin-only
 - realtime_admin_token admin-only con mensaje `forbidden_admin_only`
+
+## 2026-03 — Commission requires persisted item price
+
+- booking_request_items debe persistir `proposed_price`/`currency` al crear items desde ofertas
+- ajustes de cotización del proveedor guardan `provider_proposed_price`/`provider_proposed_currency`
+- comisión se calcula desde `proposed_price` (fallback `provider_proposed_price`)
+- UI admin muestra advertencia cuando falta precio y bloquea crear/confirmar pagos

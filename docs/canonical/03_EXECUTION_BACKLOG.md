@@ -7,6 +7,7 @@ Alias al backlog / pasos de ejecución canónico.
 ## Provider Commission Backlog
 
 - DONE: Commission payments managed in booking_requests admin modal (admin-only)
+- DONE: Persist item price/currency in booking_request_items for commission calculations (no manual SQL)
 - Admin UI for provider commission configuration
 - Stripe checkout integration for commission payments
 - Stripe webhook handling for payment confirmation

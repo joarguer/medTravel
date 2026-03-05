@@ -53,6 +53,7 @@ function cp_fetch_item_row($conexion, $requestId, $itemId)
         'provider_proposed_price',
         'proposed_price',
         'provider_proposed_currency',
+        'currency',
         'item_currency',
         'item_type',
     ] as $col) {
@@ -272,15 +273,22 @@ switch ($action) {
 
         $commissionPct = isset($settings['settings']['commission_pct']) ? (float)$settings['settings']['commission_pct'] : 0.0;
         $fixedFee = isset($settings['settings']['fixed_fee_cop']) ? (float)$settings['settings']['fixed_fee_cop'] : 0.0;
+        $fallbackCurrency = (string)($itemRow['currency'] ?? '');
+        if ($fallbackCurrency === '') {
+            $fallbackCurrency = (string)($itemRow['provider_proposed_currency'] ?? '');
+        }
+        if ($fallbackCurrency === '') {
+            $fallbackCurrency = (string)($itemRow['item_currency'] ?? '');
+        }
         $currency = isset($settings['settings']['currency']) && $settings['settings']['currency'] !== ''
             ? $settings['settings']['currency']
-            : (($itemRow['provider_proposed_currency'] ?? '') ?: ($itemRow['item_currency'] ?? 'COP'));
+            : ($fallbackCurrency !== '' ? $fallbackCurrency : 'COP');
 
         $basePrice = 0.0;
-        if (isset($itemRow['provider_proposed_price']) && (float)$itemRow['provider_proposed_price'] > 0) {
-            $basePrice = (float)$itemRow['provider_proposed_price'];
-        } elseif (isset($itemRow['proposed_price']) && (float)$itemRow['proposed_price'] > 0) {
+        if (isset($itemRow['proposed_price']) && (float)$itemRow['proposed_price'] > 0) {
             $basePrice = (float)$itemRow['proposed_price'];
+        } elseif (isset($itemRow['provider_proposed_price']) && (float)$itemRow['provider_proposed_price'] > 0) {
+            $basePrice = (float)$itemRow['provider_proposed_price'];
         }
 
         $amountPreview = cp_compute_amount($basePrice, $commissionPct, $fixedFee, $currency);
@@ -339,19 +347,27 @@ switch ($action) {
 
         $commissionPct = isset($settings['settings']['commission_pct']) ? (float)$settings['settings']['commission_pct'] : 0.0;
         $fixedFee = isset($settings['settings']['fixed_fee_cop']) ? (float)$settings['settings']['fixed_fee_cop'] : 0.0;
+        $fallbackCurrency = (string)($itemRow['currency'] ?? '');
+        if ($fallbackCurrency === '') {
+            $fallbackCurrency = (string)($itemRow['provider_proposed_currency'] ?? '');
+        }
+        if ($fallbackCurrency === '') {
+            $fallbackCurrency = (string)($itemRow['item_currency'] ?? '');
+        }
         $currency = isset($settings['settings']['currency']) && $settings['settings']['currency'] !== ''
             ? $settings['settings']['currency']
-            : (($itemRow['provider_proposed_currency'] ?? '') ?: ($itemRow['item_currency'] ?? 'COP'));
+            : ($fallbackCurrency !== '' ? $fallbackCurrency : 'COP');
 
         $basePrice = 0.0;
-        if (isset($itemRow['provider_proposed_price']) && (float)$itemRow['provider_proposed_price'] > 0) {
-            $basePrice = (float)$itemRow['provider_proposed_price'];
-        } elseif (isset($itemRow['proposed_price']) && (float)$itemRow['proposed_price'] > 0) {
+        if (isset($itemRow['proposed_price']) && (float)$itemRow['proposed_price'] > 0) {
             $basePrice = (float)$itemRow['proposed_price'];
+        } elseif (isset($itemRow['provider_proposed_price']) && (float)$itemRow['provider_proposed_price'] > 0) {
+            $basePrice = (float)$itemRow['provider_proposed_price'];
         }
 
         $amountCalc = cp_compute_amount($basePrice, $commissionPct, $fixedFee, $currency);
         if (!$amountCalc['ok']) {
+            error_log('COMMISSION_PRICE_MISSING request_id=' . $requestId . ' item_id=' . $itemId);
             cp_err('cannot_compute_amount', 422);
         }
 

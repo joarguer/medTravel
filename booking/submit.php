@@ -556,6 +556,8 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     }
     $itemsHasProviderId = table_has_column_local($conexion, 'booking_request_items', 'provider_id');
     $itemsHasServiceProviderId = table_has_column_local($conexion, 'booking_request_items', 'service_provider_id');
+    $itemsHasProposedPrice = table_has_column_local($conexion, 'booking_request_items', 'proposed_price');
+    $itemsHasCurrency = table_has_column_local($conexion, 'booking_request_items', 'currency');
     if (!$itemsHasProviderId && !$itemsHasServiceProviderId) {
         error_log('booking_submit: booking_request_items missing provider_id/service_provider_id; skipping booking_request_id=' . intval($booking_request_id));
         return;
@@ -573,7 +575,11 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     $hasOfferDeleted = table_has_column_local($conexion, 'provider_service_offers', 'is_deleted');
     $hasProviderActive = table_has_column_local($conexion, 'providers', 'is_active');
     $hasProviderDeleted = table_has_column_local($conexion, 'providers', 'is_deleted');
-    $offerSql = "SELECT o.provider_id
+    $offerPriceExpr = table_has_column_local($conexion, 'provider_service_offers', 'price_from') ? 'o.price_from' : 'NULL';
+    $offerCurrencyExpr = table_has_column_local($conexion, 'provider_service_offers', 'currency') ? 'o.currency' : "''";
+    $offerSql = "SELECT o.provider_id,
+                        {$offerPriceExpr} AS offer_price,
+                        {$offerCurrencyExpr} AS offer_currency
                  FROM provider_service_offers o
                  INNER JOIN providers p ON p.id = o.provider_id
                  WHERE o.id = ?";
@@ -596,9 +602,21 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     if ($itemsHasServiceProviderId) {
         $medicalInsertSql .= ", service_provider_id";
     }
+    if ($itemsHasProposedPrice) {
+        $medicalInsertSql .= ", proposed_price";
+    }
+    if ($itemsHasCurrency) {
+        $medicalInsertSql .= ", currency";
+    }
     $medicalInsertSql .= ", provider_id, item_status, created_at) VALUES (?, 'medical_offer', ?";
     if ($itemsHasServiceProviderId) {
         $medicalInsertSql .= ", NULL";
+    }
+    if ($itemsHasProposedPrice) {
+        $medicalInsertSql .= ", ?";
+    }
+    if ($itemsHasCurrency) {
+        $medicalInsertSql .= ", ?";
     }
     $medicalInsertSql .= ", ?, 'pending_provider', NOW())";
     $insertMedicalStmt = $canInsertMedical ? mysqli_prepare($conexion, $medicalInsertSql) : null;
@@ -621,8 +639,38 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
                 continue;
             }
 
+            $offerPrice = null;
+            if (isset($offerRow['offer_price']) && is_numeric($offerRow['offer_price'])) {
+                $offerPrice = round((float)$offerRow['offer_price'], 2);
+                if ($offerPrice <= 0) {
+                    $offerPrice = null;
+                }
+            }
+            $offerCurrency = strtoupper(trim((string)($offerRow['offer_currency'] ?? '')));
+            if ($offerCurrency === '' && $offerPrice !== null) {
+                $offerCurrency = 'USD';
+            }
+            if ($offerCurrency === '') {
+                $offerCurrency = null;
+            }
+
             $providerId = intval($offerRow['provider_id']);
-            mysqli_stmt_bind_param($insertMedicalStmt, 'iii', $booking_request_id, $offerId, $providerId);
+            $params = [$booking_request_id, $offerId];
+            if ($itemsHasProposedPrice) {
+                $params[] = $offerPrice;
+            }
+            if ($itemsHasCurrency) {
+                $params[] = $offerCurrency;
+            }
+            $params[] = $providerId;
+            $types = '';
+            foreach ($params as $param) {
+                $types .= value_type_local($param);
+            }
+            if (!bind_stmt_params_local($insertMedicalStmt, $types, $params)) {
+                error_log('booking_submit: medical item bind failed booking_request_id=' . intval($booking_request_id) . ' offer_id=' . $offerId);
+                continue;
+            }
             if (!mysqli_stmt_execute($insertMedicalStmt)) {
                 error_log('booking_submit: medical item insert failed booking_request_id=' . intval($booking_request_id) . ' offer_id=' . $offerId . ' provider_id=' . $providerId . ' error=' . mysqli_stmt_error($insertMedicalStmt));
             }
@@ -657,7 +705,11 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     $hasSvcProviderActive = $hasSvcProviderTable && table_has_column_local($conexion, 'service_providers', 'is_active');
     $hasSvcProviderDeleted = $hasSvcProviderTable && table_has_column_local($conexion, 'service_providers', 'is_deleted');
 
-    $serviceSql = "SELECT m.`{$serviceProviderColumn}` AS service_provider_id
+    $servicePriceExpr = table_has_column_local($conexion, 'medtravel_services_catalog', 'sale_price') ? 'm.sale_price' : 'NULL';
+    $serviceCurrencyExpr = table_has_column_local($conexion, 'medtravel_services_catalog', 'currency') ? 'm.currency' : "''";
+    $serviceSql = "SELECT m.`{$serviceProviderColumn}` AS service_provider_id,
+                          {$servicePriceExpr} AS service_price,
+                          {$serviceCurrencyExpr} AS service_currency
                    FROM medtravel_services_catalog m";
     if ($hasSvcProviderTable) {
         $serviceSql .= " LEFT JOIN service_providers sp ON sp.id = m.`{$serviceProviderColumn}`";
@@ -682,9 +734,21 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     if ($itemsHasProviderId) {
         $complementaryInsertSql .= ", provider_id";
     }
+    if ($itemsHasProposedPrice) {
+        $complementaryInsertSql .= ", proposed_price";
+    }
+    if ($itemsHasCurrency) {
+        $complementaryInsertSql .= ", currency";
+    }
     $complementaryInsertSql .= ", item_status, created_at) VALUES (?, 'complementary_service', ?, ?";
     if ($itemsHasProviderId) {
         $complementaryInsertSql .= ", NULL";
+    }
+    if ($itemsHasProposedPrice) {
+        $complementaryInsertSql .= ", ?";
+    }
+    if ($itemsHasCurrency) {
+        $complementaryInsertSql .= ", ?";
     }
     $complementaryInsertSql .= ", 'pending_provider', NOW())";
     $insertComplementaryStmt = mysqli_prepare($conexion, $complementaryInsertSql);
@@ -707,8 +771,37 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
                 continue;
             }
 
+            $servicePrice = null;
+            if (isset($serviceRow['service_price']) && is_numeric($serviceRow['service_price'])) {
+                $servicePrice = round((float)$serviceRow['service_price'], 2);
+                if ($servicePrice <= 0) {
+                    $servicePrice = null;
+                }
+            }
+            $serviceCurrency = strtoupper(trim((string)($serviceRow['service_currency'] ?? '')));
+            if ($serviceCurrency === '' && $servicePrice !== null) {
+                $serviceCurrency = 'USD';
+            }
+            if ($serviceCurrency === '') {
+                $serviceCurrency = null;
+            }
+
             $serviceProviderId = intval($serviceRow['service_provider_id']);
-            mysqli_stmt_bind_param($insertComplementaryStmt, 'iii', $booking_request_id, $serviceId, $serviceProviderId);
+            $params = [$booking_request_id, $serviceId, $serviceProviderId];
+            if ($itemsHasProposedPrice) {
+                $params[] = $servicePrice;
+            }
+            if ($itemsHasCurrency) {
+                $params[] = $serviceCurrency;
+            }
+            $types = '';
+            foreach ($params as $param) {
+                $types .= value_type_local($param);
+            }
+            if (!bind_stmt_params_local($insertComplementaryStmt, $types, $params)) {
+                error_log('booking_submit: complementary item bind failed booking_request_id=' . intval($booking_request_id) . ' medtravel_service_id=' . $serviceId);
+                continue;
+            }
             if (!mysqli_stmt_execute($insertComplementaryStmt)) {
                 error_log('booking_submit: complementary item insert failed booking_request_id=' . intval($booking_request_id) . ' medtravel_service_id=' . $serviceId . ' error=' . mysqli_stmt_error($insertComplementaryStmt));
             }

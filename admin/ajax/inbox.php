@@ -1225,6 +1225,10 @@ if ($action === 'send_structured_action') {
     $hasItemUpdatedAt = inbox_table_has_column($conexion, 'booking_request_items', 'updated_at');
     $hasProviderResponseAt = inbox_table_has_column($conexion, 'booking_request_items', 'provider_response_at');
     $hasProviderResponseBy = inbox_table_has_column($conexion, 'booking_request_items', 'provider_response_by');
+    $hasProviderProposedPrice = inbox_table_has_column($conexion, 'booking_request_items', 'provider_proposed_price');
+    $hasProviderProposedCurrency = inbox_table_has_column($conexion, 'booking_request_items', 'provider_proposed_currency');
+    $hasItemProposedPrice = inbox_table_has_column($conexion, 'booking_request_items', 'proposed_price');
+    $hasItemCurrency = inbox_table_has_column($conexion, 'booking_request_items', 'currency');
 
     $setParts = ['bri.item_status = ?'];
     $types = 's';
@@ -1239,6 +1243,26 @@ if ($action === 'send_structured_action') {
         $setParts[] = 'bri.provider_response_by = ?';
         $types .= 'i';
         $params[] = (int)$scope['user_id'];
+    }
+    if ($actionType === 'PROPOSE_QUOTE_ADJUSTMENT') {
+        if ($hasProviderProposedPrice) {
+            $setParts[] = 'bri.provider_proposed_price = ?';
+            $types .= 'd';
+            $params[] = $amount;
+        } elseif ($hasItemProposedPrice) {
+            $setParts[] = 'bri.proposed_price = ?';
+            $types .= 'd';
+            $params[] = $amount;
+        }
+        if ($hasProviderProposedCurrency) {
+            $setParts[] = 'bri.provider_proposed_currency = ?';
+            $types .= 's';
+            $params[] = $currency;
+        } elseif ($hasItemCurrency) {
+            $setParts[] = 'bri.currency = ?';
+            $types .= 's';
+            $params[] = $currency;
+        }
     }
 
     $sql = "UPDATE booking_request_items bri

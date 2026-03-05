@@ -412,13 +412,22 @@ function renderCommissionPaymentBlock(data) {
     var paidAt = (payment.paid_at || '').toString();
     var amount = (payment.amount !== undefined && payment.amount !== null) ? payment.amount : data.amount_preview;
     var currency = (payment.currency || data.amount_currency || '').toString().toUpperCase();
+    var amountError = (data.amount_error || '').toString();
+    var basePrice = parseFloat(data.base_price || 0);
+    var priceMissing = (!basePrice || basePrice <= 0) || amountError === 'cannot_compute_amount';
 
     var html = '' +
         '<div><strong>Gate status:</strong> ' + (gateEnabled ? 'ON' : 'OFF') + '</div>' +
         '<div><strong>Payment status:</strong> ' + escapeHtml(status) + '</div>';
 
-    if (amount !== undefined && amount !== null && amount !== '') {
+    if (priceMissing) {
+        html += '<div style="margin-top:6px;color:#c00;"><strong>Warning:</strong> Item price not set</div>';
+    }
+
+    if (!priceMissing || status !== 'NONE') {
+        if (amount !== undefined && amount !== null && amount !== '') {
         html += '<div><strong>Amount:</strong> ' + escapeHtml(String(amount)) + (currency ? ' ' + escapeHtml(currency) : '') + '</div>';
+        }
     }
 
     if (status === 'PENDING') {
@@ -436,10 +445,10 @@ function renderCommissionPaymentBlock(data) {
     }
 
     var actions = '';
-    if (gateEnabled && status === 'NONE') {
+    if (!priceMissing && gateEnabled && status === 'NONE') {
         actions += '<button type="button" id="btn-commission-create" class="btn btn-primary btn-xs">Create payment link</button> ';
     }
-    if (gateEnabled && status === 'PENDING') {
+    if (!priceMissing && gateEnabled && status === 'PENDING') {
         actions += '<button type="button" id="btn-commission-mark-paid" class="btn btn-success btn-xs">Mark as paid</button> ';
     }
     if (status === 'PENDING' || status === 'PAID') {
