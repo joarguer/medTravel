@@ -24,6 +24,14 @@
         return window.MT_REALTIME || {};
     }
 
+    function realtimeIsAdmin() {
+        var cfg = realtimeConfig();
+        if (cfg && typeof cfg.isAdmin !== 'undefined') {
+            return !!cfg.isAdmin;
+        }
+        return false;
+    }
+
     function realtimeEnabled() {
         var cfg = realtimeConfig();
         return !!(cfg.baseUrl && cfg.socketPath && typeof window.io === 'function');
@@ -142,6 +150,10 @@
     }
 
     function fetchAdminToken(callback) {
+        if (!realtimeIsAdmin()) {
+            callback('');
+            return;
+        }
         var cfg = realtimeConfig();
         if (!cfg.adminTokenUrl) {
             notifDebug('adminTokenUrl missing');
@@ -199,6 +211,9 @@
 
     function initRealtime() {
         if (!realtimeEnabled() || realtimeState.socket) {
+            return;
+        }
+        if (!realtimeIsAdmin()) {
             return;
         }
         var cfg = realtimeConfig();

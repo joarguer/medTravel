@@ -381,7 +381,8 @@ $theme_layout_script =  '<!-- BEGIN THEME LAYOUT SCRIPTS -->
                         window.MT_REALTIME = {
                             baseUrl: ' . json_encode($realtime_base_url) . ',
                             socketPath: ' . json_encode($realtime_socket_path) . ',
-                            adminTokenUrl: ' . json_encode($realtime_admin_token_url) . '
+                            adminTokenUrl: ' . json_encode($realtime_admin_token_url) . ',
+                            isAdmin: ' . json_encode($es_admin ? 1 : 0) . '
                         };
                         </script>
                         <script src="https://medtravel.com.co/realtime/socket.io/socket.io.js" type="text/javascript"></script>
