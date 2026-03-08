@@ -36,8 +36,8 @@ if (!function_exists('blog_author_avatar_href')) {
 // Fetch published blog posts
 $posts = [];
 $blogHeader = mt_blog_fetch_header($conexion);
-$blogHeaderTitle = trim((string)($blogHeader['title'] ?? '')) ?: 'Our Blog';
-$blogHeaderSubtitle = trim((string)($blogHeader['subtitle'] ?? '')) ?: 'Discover experiences and updates from our medical travel community.';
+$blogHeaderTitle = trim((string)($blogHeader['title'] ?? '')) ?: 'MedTravel Insights';
+$blogHeaderSubtitle = trim((string)($blogHeader['subtitle'] ?? '')) ?: 'Educational articles, recovery guidance, and trusted medical travel perspectives for international patients.';
 $blogHeaderImage = trim((string)($blogHeader['bg_image'] ?? ''));
 $hasAuthorUserId = false;
 $authorUserIdCheck = mysqli_query($conexion, "SHOW COLUMNS FROM blog_posts LIKE 'author_user_id'");
@@ -78,7 +78,7 @@ if ($res_posts) {
         <?php echo $head; ?>
     </head>
 
-    <body>
+    <body class="blog-listing-page">
 
         <!-- Spinner Start -->
         <div id="spinner" class="show bg-white position-fixed translate-middle w-100 vh-100 top-50 start-50 d-flex align-items-center justify-content-center">
@@ -101,13 +101,13 @@ if ($res_posts) {
         <!-- Navbar & Hero End -->
 
         <!-- Header Start -->
-        <div class="container-fluid bg-breadcrumb" <?php if ($blogHeaderImage !== ''): ?>style="background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('<?php echo htmlspecialchars($blogHeaderImage, ENT_QUOTES, 'UTF-8'); ?>'); background-size: cover; background-position: center;"<?php endif; ?>>
-            <div class="container text-center py-5" style="max-width: 900px;">
-                <h3 class="text-white display-3 mb-4"><?php echo htmlspecialchars($blogHeaderTitle, ENT_QUOTES, 'UTF-8'); ?></h3>
-                <p class="text-white mb-4"><?php echo htmlspecialchars($blogHeaderSubtitle, ENT_QUOTES, 'UTF-8'); ?></p>
-                <ol class="breadcrumb justify-content-center mb-0">
-                    <li class="breadcrumb-item"><a href="index.html">Home</a></li>
-                    <li class="breadcrumb-item"><a href="#">Pages</a></li>
+        <div class="container-fluid bg-breadcrumb blog-hero" <?php if ($blogHeaderImage !== ''): ?>style="background-image: linear-gradient(rgba(6, 20, 51, 0.68), rgba(8, 24, 57, 0.62)), url('<?php echo htmlspecialchars($blogHeaderImage, ENT_QUOTES, 'UTF-8'); ?>'); background-size: cover; background-position: center;"<?php endif; ?>>
+            <div class="container text-center py-5 blog-hero__inner">
+                <span class="blog-hero__eyebrow">MedTravel Editorial</span>
+                <h1 class="text-white display-3 mb-3 blog-hero__title"><?php echo htmlspecialchars($blogHeaderTitle, ENT_QUOTES, 'UTF-8'); ?></h1>
+                <p class="text-white mb-4 blog-hero__subtitle"><?php echo htmlspecialchars($blogHeaderSubtitle, ENT_QUOTES, 'UTF-8'); ?></p>
+                <ol class="breadcrumb justify-content-center mb-0 blog-hero__breadcrumb">
+                    <li class="breadcrumb-item"><a href="index.php">Home</a></li>
                     <li class="breadcrumb-item active text-white">Blog</li>
                 </ol>    
             </div>
@@ -115,16 +115,16 @@ if ($res_posts) {
         <!-- Header End -->
 
         <!-- Blog Start -->
-        <div class="container-fluid blog py-5">
+        <div class="container-fluid blog py-5 blog-listing">
             <div class="container py-5">
-                <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                    <h5 class="section-title px-3">Our Blog</h5>
-                    <h1 class="mb-4">Latest stories</h1>
-                    <p class="mb-0">Discover experiences and updates from our medical travel community.</p>
+                <div class="mx-auto text-center mb-5 blog-listing__intro" style="max-width: 900px;">
+                    <h5 class="section-title px-3">Editorial Journal</h5>
+                    <h2 class="mb-4">Trusted guidance for your medical travel journey</h2>
+                    <p class="mb-0">Explore articles designed to help patients understand providers, prepare for treatment, and move through recovery with greater confidence.</p>
                 </div>
                 <div class="row g-4 justify-content-center">
                     <?php if (count($posts) === 0): ?>
-                        <div class="col-12 text-center text-muted">No posts published yet.</div>
+                        <div class="col-12 text-center text-muted blog-listing__empty">No posts published yet.</div>
                     <?php else: ?>
                         <?php foreach ($posts as $post): ?>
                         <?php
@@ -156,37 +156,43 @@ if ($res_posts) {
                             $hasProviderContributor = ((int)($post['provider_id'] ?? 0) > 0 && $providerName !== '');
                         ?>
                         <div class="col-lg-4 col-md-6">
-                            <div class="blog-item h-100 shadow-sm border rounded-3 overflow-hidden d-flex flex-column">
-                                <div class="blog-img">
-                                    <div class="blog-img-inner">
+                            <article class="blog-item blog-card h-100 shadow-sm border rounded-3 overflow-hidden d-flex flex-column">
+                                <div class="blog-img blog-card__media">
+                                    <div class="blog-img-inner blog-card__media-inner">
                                         <img class="img-fluid w-100 rounded-top" src="<?php echo htmlspecialchars($coverPath, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?>">
-                                        <div class="blog-icon">
-                                            <a href="#" class="my-auto"><i class="fas fa-link fa-2x text-white"></i></a>
+                                        <div class="blog-icon blog-card__media-overlay">
+                                            <a href="/blog_post.php?slug=<?php echo urlencode($post['slug']); ?>" class="my-auto" aria-label="Read <?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?>"><i class="fas fa-link fa-2x text-white"></i></a>
                                         </div>
                                     </div>
-                                    <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
+                                    <div class="blog-info d-flex align-items-center border border-start-0 border-end-0 blog-card__meta-bar">
                                         <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i><?php echo htmlspecialchars($post['published_on'], ENT_QUOTES, 'UTF-8'); ?></small>
                                         <span class="btn-hover flex-fill text-center text-white py-2"><?php echo htmlspecialchars($hasProviderContributor ? 'Specialist Contributor' : 'MedTravel Editorial', ENT_QUOTES, 'UTF-8'); ?></span>
                                     </div>
                                 </div>
-                                <div class="blog-content border border-top-0 rounded-bottom p-4 flex-grow-1 d-flex flex-column">
-                                    <div class="<?php echo $hasProviderContributor ? 'mb-1' : 'mb-3'; ?> d-flex align-items-center">
+                                <div class="blog-content border border-top-0 rounded-bottom p-4 flex-grow-1 d-flex flex-column blog-card__body">
+                                    <div class="blog-card__badge-row">
+                                        <span class="blog-card__badge"><?php echo htmlspecialchars($hasProviderContributor ? 'Specialist Contributor' : 'MedTravel Editorial', ENT_QUOTES, 'UTF-8'); ?></span>
+                                    </div>
+                                    <div class="blog-card__author <?php echo $hasProviderContributor ? 'mb-2' : 'mb-3'; ?> d-flex align-items-center">
                                         <?php if ($authorAvatarPath !== ''): ?>
-                                            <img src="<?php echo htmlspecialchars($authorAvatarPath, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($authorName, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-circle me-2" style="width: 36px; height: 36px; object-fit: cover;">
+                                            <img src="<?php echo htmlspecialchars($authorAvatarPath, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($authorName, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-circle me-2 blog-card__author-avatar" style="width: 36px; height: 36px; object-fit: cover;">
                                         <?php endif; ?>
-                                        <p class="mb-0">Written by: <?php echo htmlspecialchars($authorName, ENT_QUOTES, 'UTF-8'); ?></p>
+                                        <div>
+                                            <p class="mb-0 blog-card__author-label">Written by</p>
+                                            <p class="mb-0 blog-card__author-name"><?php echo htmlspecialchars($authorName, ENT_QUOTES, 'UTF-8'); ?></p>
+                                        </div>
                                     </div>
                                     <?php if ($hasProviderContributor): ?>
-                                        <p class="text-muted small mb-1">Specialist contributor: <?php echo htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8'); ?></p>
+                                        <p class="text-muted small mb-1 blog-card__contributor">Specialist contributor: <?php echo htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8'); ?></p>
                                     <?php endif; ?>
                                     <?php if ($hasProviderContributor && $providerCity !== ''): ?>
-                                        <p class="text-muted small mb-3"><i class="fa fa-map-marker-alt text-primary me-2"></i><?php echo htmlspecialchars($providerCity, ENT_QUOTES, 'UTF-8'); ?></p>
+                                        <p class="text-muted small mb-3 blog-card__location"><i class="fa fa-map-marker-alt text-primary me-2"></i><?php echo htmlspecialchars($providerCity, ENT_QUOTES, 'UTF-8'); ?></p>
                                     <?php endif; ?>
-                                    <h4 class="h4"><?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?></h4>
-                                    <p class="my-3 flex-grow-1"><?php echo $excerpt_safe; ?></p>
-                                    <a href="/blog_post.php?slug=<?php echo urlencode($post['slug']); ?>" class="btn btn-primary rounded-pill py-2 px-4 mt-auto">Read More</a>
+                                    <h2 class="h4 blog-card__title"><?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?></h2>
+                                    <p class="my-3 flex-grow-1 blog-card__excerpt"><?php echo $excerpt_safe; ?></p>
+                                    <a href="/blog_post.php?slug=<?php echo urlencode($post['slug']); ?>" class="btn btn-primary rounded-pill py-2 px-4 mt-auto blog-card__cta">Read Article</a>
                                 </div>
-                            </div>
+                            </article>
                         </div>
                         <?php endforeach; ?>
                     <?php endif; ?>

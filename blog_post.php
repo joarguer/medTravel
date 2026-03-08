@@ -364,13 +364,14 @@ if ($post) {
 
     $blog_post_schema = [
         '@context' => 'https://schema.org',
-        '@type' => 'BlogPosting',
+        '@type' => 'Article',
         'headline' => (string)$post['title'],
         'url' => $page_canonical,
+        'mainEntityOfPage' => $page_canonical,
         'description' => $page_description,
         'author' => [
-            '@type' => 'Person',
-            'name' => $authorDisplayName,
+            '@type' => 'Organization',
+            'name' => 'MedTravel Editorial Team',
         ],
         'publisher' => [
             '@type' => 'Organization',
@@ -411,6 +412,7 @@ if ($post) {
     }
     $page_schema_jsonld = [$blog_post_schema];
     $metaExtra = [];
+    $metaExtra[] = '<meta property="og:locale" content="en_US">';
     $metaExtra[] = '<meta property="og:image:alt" content="' . htmlspecialchars((string)$post['title'], ENT_QUOTES, 'UTF-8') . '">';
     $metaExtra[] = '<meta name="twitter:url" content="' . htmlspecialchars((string)$page_canonical, ENT_QUOTES, 'UTF-8') . '">';
     if ($publishedIso !== '') {
@@ -419,9 +421,7 @@ if ($post) {
     if ($modifiedIso !== '') {
         $metaExtra[] = '<meta property="article:modified_time" content="' . htmlspecialchars($modifiedIso, ENT_QUOTES, 'UTF-8') . '">';
     }
-    if ($authorDisplayName !== '') {
-        $metaExtra[] = '<meta property="article:author" content="' . htmlspecialchars($authorDisplayName, ENT_QUOTES, 'UTF-8') . '">';
-    }
+    $metaExtra[] = '<meta property="article:author" content="MedTravel Editorial Team">';
     $page_meta_extra = implode("\n    ", $metaExtra);
 } else {
     $page_title = 'Blog Post Not Found | MedTravel';
@@ -433,8 +433,8 @@ if ($post) {
 include('inc/include.php');
 
 $blogHeader = mt_blog_fetch_header($conexion);
-$blogHeaderTitle = trim((string)($blogHeader['title'] ?? '')) ?: 'Our Blog';
-$blogHeaderSubtitle = trim((string)($blogHeader['subtitle'] ?? '')) ?: 'Discover experiences and updates from our medical travel community.';
+$blogHeaderTitle = trim((string)($blogHeader['title'] ?? '')) ?: 'MedTravel Insights';
+$blogHeaderSubtitle = trim((string)($blogHeader['subtitle'] ?? '')) ?: 'Educational articles, recovery guidance, and trusted medical travel perspectives for international patients.';
 $blogHeaderImage = trim((string)($blogHeader['bg_image'] ?? ''));
 
 $providerName = $post ? trim((string)($post['provider_name'] ?? '')) : '';
@@ -465,7 +465,7 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
     <head>
         <?php echo $head; ?>
     </head>
-    <body>
+    <body class="blog-detail-page">
         <!-- Spinner Start -->
         <div id="spinner" class="show bg-white position-fixed translate-middle w-100 vh-100 top-50 start-50 d-flex align-items-center justify-content-center">
             <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
@@ -487,11 +487,12 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
         <!-- Navbar & Hero End -->
 
         <!-- Header Start -->
-        <div class="container-fluid bg-breadcrumb" <?php if ($blogHeaderImage !== ''): ?>style="background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('<?php echo htmlspecialchars($blogHeaderImage, ENT_QUOTES, 'UTF-8'); ?>'); background-size: cover; background-position: center;"<?php endif; ?>>
-            <div class="container text-center py-5" style="max-width: 900px;">
-                <h3 class="text-white display-3 mb-4"><?php echo htmlspecialchars($blogHeaderTitle, ENT_QUOTES, 'UTF-8'); ?></h3>
-                <p class="text-white mb-4"><?php echo htmlspecialchars($blogHeaderSubtitle, ENT_QUOTES, 'UTF-8'); ?></p>
-                <ol class="breadcrumb justify-content-center mb-0">
+        <div class="container-fluid bg-breadcrumb blog-hero" <?php if ($blogHeaderImage !== ''): ?>style="background-image: linear-gradient(rgba(6, 20, 51, 0.68), rgba(8, 24, 57, 0.62)), url('<?php echo htmlspecialchars($blogHeaderImage, ENT_QUOTES, 'UTF-8'); ?>'); background-size: cover; background-position: center;"<?php endif; ?>>
+            <div class="container text-center py-5 blog-hero__inner">
+                <span class="blog-hero__eyebrow">MedTravel Editorial</span>
+                <h1 class="text-white display-3 mb-3 blog-hero__title"><?php echo htmlspecialchars($blogHeaderTitle, ENT_QUOTES, 'UTF-8'); ?></h1>
+                <p class="text-white mb-4 blog-hero__subtitle"><?php echo htmlspecialchars($blogHeaderSubtitle, ENT_QUOTES, 'UTF-8'); ?></p>
+                <ol class="breadcrumb justify-content-center mb-0 blog-hero__breadcrumb">
                     <li class="breadcrumb-item"><a href="index.php">Home</a></li>
                     <li class="breadcrumb-item"><a href="blog.php">Blog</a></li>
                     <li class="breadcrumb-item active text-white"><?php echo $post ? htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8') : '404'; ?></li>
@@ -500,9 +501,9 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
         </div>
         <!-- Header End -->
 
-        <div class="container py-5">
+        <div class="container py-5 blog-detail-shell">
             <?php if (!$post): ?>
-                <div class="text-center py-5">
+                <div class="text-center py-5 blog-detail-empty">
                     <h1>Post not found</h1>
                     <p class="text-muted">The article you are looking for is not available.</p>
                     <a class="btn btn-primary rounded-pill px-4" href="/blog.php">Back to Blog</a>
@@ -519,36 +520,40 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
                                 }
                                 $coverPath = '/' . ltrim($coverPath, '/');
                             }
+                            $showFeaturedImage = ($localVideoPath === '' && $videoEmbedUrl === '');
                         ?>
-                        <div class="card border-0 shadow-sm mb-4">
-                            <img src="<?php echo htmlspecialchars($coverPath, ENT_QUOTES, 'UTF-8'); ?>" class="card-img-top" alt="<?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?>" style="object-fit: cover; max-height: 420px;">
-                            <div class="card-body p-4">
-                                <div class="d-flex justify-content-between text-muted small mb-3 flex-column flex-sm-row">
-                                    <span class="mb-2 mb-sm-0"><i class="fa fa-calendar-alt text-primary me-2"></i><?php echo htmlspecialchars($post['published_on'], ENT_QUOTES, 'UTF-8'); ?></span>
-                                    <span><i class="fa fa-user text-primary me-2"></i><?php echo htmlspecialchars($displayAuthor, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <article class="card border-0 shadow-sm mb-4 blog-article-card">
+                            <div class="card-body p-4 p-lg-5">
+                                <div class="d-flex justify-content-between text-muted small mb-3 flex-column flex-sm-row blog-article-meta">
+                                    <span class="mb-2 mb-sm-0 blog-article-meta__item"><i class="fa fa-calendar-alt text-primary me-2"></i><?php echo htmlspecialchars($post['published_on'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <span class="blog-article-meta__item"><i class="fa fa-user text-primary me-2"></i><?php echo htmlspecialchars($displayAuthor, ENT_QUOTES, 'UTF-8'); ?></span>
                                 </div>
                                 <?php if ($providerExists): ?>
-                                    <div class="d-flex flex-wrap gap-2 mb-3">
-                                        <span class="badge bg-light text-primary border">MedTravel Editorial</span>
-                                        <span class="badge bg-light text-dark border">Specialist contributor: <?php echo htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <div class="d-flex flex-wrap gap-2 mb-4 blog-article-tags">
+                                        <span class="badge bg-light text-primary border blog-premium-badge">MedTravel Editorial</span>
+                                        <span class="badge bg-light text-dark border blog-premium-badge blog-premium-badge--muted">Specialist contributor: <?php echo htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8'); ?></span>
                                         <?php if ($verificationBadgeText !== ''): ?>
-                                            <span class="badge bg-light text-primary border"><?php echo htmlspecialchars($verificationBadgeText, ENT_QUOTES, 'UTF-8'); ?></span>
+                                            <span class="badge bg-light text-primary border blog-premium-badge"><?php echo htmlspecialchars($verificationBadgeText, ENT_QUOTES, 'UTF-8'); ?></span>
                                         <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
-                                <h1 class="h3 mb-3"><?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?></h1>
-                                <?php if (!empty($post['excerpt'])): ?>
-                                    <p class="lead text-muted"><?php echo htmlspecialchars($post['excerpt'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                <h1 class="h3 mb-3 blog-article-title"><?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?></h1>
+                                <?php if ($showFeaturedImage): ?>
+                                    <div class="blog-featured-media mb-4">
+                                        <div class="blog-featured-media__frame">
+                                            <img src="<?php echo htmlspecialchars($coverPath, ENT_QUOTES, 'UTF-8'); ?>" class="blog-featured-media__image" alt="<?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?>">
+                                        </div>
+                                    </div>
                                 <?php endif; ?>
                                 <?php if ($localVideoPath !== ''): ?>
-                                    <div class="ratio ratio-16x9 mt-4 rounded overflow-hidden bg-dark">
+                                    <div class="ratio ratio-16x9 mt-4 rounded overflow-hidden bg-dark blog-featured-media blog-featured-media--video">
                                         <video controls preload="metadata" style="width:100%;height:100%;"<?php echo !empty($coverPath) ? ' poster="' . htmlspecialchars($coverPath, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
                                             <source src="<?php echo htmlspecialchars($localVideoPath, ENT_QUOTES, 'UTF-8'); ?>" type="video/mp4">
                                             Your browser does not support HTML5 video.
                                         </video>
                                     </div>
                                 <?php elseif ($videoEmbedUrl !== ''): ?>
-                                    <div class="ratio ratio-16x9 mt-4 rounded overflow-hidden">
+                                    <div class="ratio ratio-16x9 mt-4 rounded overflow-hidden blog-featured-media blog-featured-media--video">
                                         <iframe
                                             src="<?php echo htmlspecialchars($videoEmbedUrl, ENT_QUOTES, 'UTF-8'); ?>"
                                             title="<?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?>"
@@ -558,50 +563,54 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
                                             referrerpolicy="strict-origin-when-cross-origin"></iframe>
                                     </div>
                                 <?php endif; ?>
+                                <?php if (!empty($post['excerpt'])): ?>
+                                    <p class="lead text-muted blog-article-excerpt"><?php echo htmlspecialchars($post['excerpt'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                <?php endif; ?>
                             </div>
-                        </div>
-                        <div class="row g-4">
+                        </article>
+                        <div class="row g-4 blog-detail-layout">
                             <div class="col-lg-8">
-                                <div class="card border-0 shadow-sm mb-4">
-                                    <div class="card-body p-4">
-                                        <div class="post-body">
+                                <div class="card border-0 shadow-sm mb-4 blog-article-body-card">
+                                    <div class="card-body p-4 p-lg-5">
+                                        <div class="post-body blog-article-body">
                                             <?php echo $post['body']; ?>
                                         </div>
-                                        <div class="mt-4">
+                                        <div class="mt-5">
                                             <a class="btn btn-outline-primary rounded-pill px-4" href="/blog.php"><i class="fa fa-arrow-left me-2"></i>Back to Blog</a>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-lg-4">
-                                <div class="card border-0 shadow-sm mb-4">
-                                    <div class="card-body">
+                                <div class="card border-0 shadow-sm mb-4 blog-contributor-card">
+                                    <div class="card-body p-4">
                                         <?php if ($providerExists): ?>
-                                            <h5 class="mb-3">Editorial medical contributor</h5>
-                                            <div class="d-flex align-items-center mb-3">
+                                            <div class="blog-contributor-card__eyebrow">Clinical review context</div>
+                                            <h5 class="mb-3 blog-contributor-card__title">Editorial medical contributor</h5>
+                                            <div class="d-flex align-items-center mb-4 blog-contributor-card__identity">
                                                 <?php if ($contributorImagePath !== ''): ?>
-                                                    <img src="<?php echo htmlspecialchars($contributorImagePath, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($displayAuthor, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-3 me-3" style="width: 64px; height: 64px; object-fit: cover;">
+                                                    <img src="<?php echo htmlspecialchars($contributorImagePath, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($displayAuthor, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-3 me-3 blog-contributor-card__avatar" style="width: 64px; height: 64px; object-fit: cover;">
                                                 <?php endif; ?>
                                                 <div>
-                                                    <p class="mb-1 fw-semibold"><i class="fa fa-user-md text-primary me-2"></i><?php echo htmlspecialchars($displayAuthor, ENT_QUOTES, 'UTF-8'); ?></p>
-                                                    <p class="mb-1 text-muted"><i class="fa fa-hospital text-primary me-2"></i><?php echo htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8'); ?></p>
+                                                    <p class="mb-1 fw-semibold blog-contributor-card__name"><i class="fa fa-user-md text-primary me-2"></i><?php echo htmlspecialchars($displayAuthor, ENT_QUOTES, 'UTF-8'); ?></p>
+                                                    <p class="mb-1 text-muted blog-contributor-card__provider"><i class="fa fa-hospital text-primary me-2"></i><?php echo htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8'); ?></p>
                                                     <?php if ($providerCity !== ''): ?>
-                                                        <p class="mb-1 text-muted"><i class="fa fa-map-marker-alt text-primary me-2"></i><?php echo htmlspecialchars($providerCity, ENT_QUOTES, 'UTF-8'); ?></p>
+                                                        <p class="mb-1 text-muted blog-contributor-card__meta"><i class="fa fa-map-marker-alt text-primary me-2"></i><?php echo htmlspecialchars($providerCity, ENT_QUOTES, 'UTF-8'); ?></p>
                                                     <?php endif; ?>
                                                     <?php if ($verificationBadgeText !== ''): ?>
-                                                        <span class="badge bg-light text-primary border"><?php echo htmlspecialchars($verificationBadgeText, ENT_QUOTES, 'UTF-8'); ?></span>
+                                                        <span class="badge bg-light text-primary border blog-premium-badge"><?php echo htmlspecialchars($verificationBadgeText, ENT_QUOTES, 'UTF-8'); ?></span>
                                                     <?php endif; ?>
                                                 </div>
                                             </div>
                                             <?php if ($providerDescription !== ''): ?>
-                                                <p class="text-muted small"><?php echo htmlspecialchars(mb_substr($providerDescription, 0, 220, 'UTF-8') . (mb_strlen($providerDescription, 'UTF-8') > 220 ? '...' : ''), ENT_QUOTES, 'UTF-8'); ?></p>
+                                                <p class="text-muted small blog-contributor-card__description"><?php echo htmlspecialchars(mb_substr($providerDescription, 0, 220, 'UTF-8') . (mb_strlen($providerDescription, 'UTF-8') > 220 ? '...' : ''), ENT_QUOTES, 'UTF-8'); ?></p>
                                             <?php endif; ?>
-                                            <p class="text-muted small mb-3">This article is published by MedTravel and includes professional input from one of our allied medical providers.</p>
+                                            <p class="text-muted small mb-3 blog-contributor-card__note">This article is published by MedTravel and includes professional input from one of our allied medical providers.</p>
                                             <?php if ($providerWebsiteHref !== ''): ?>
-                                                <a class="btn btn-outline-secondary w-100 mb-3" href="<?php echo htmlspecialchars($providerWebsiteHref, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener"><i class="fa fa-globe me-2"></i>Provider Website</a>
+                                                <a class="btn btn-outline-secondary w-100 mb-3 blog-contributor-card__button" href="<?php echo htmlspecialchars($providerWebsiteHref, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener"><i class="fa fa-globe me-2"></i>Provider Website</a>
                                             <?php endif; ?>
-                                            <h6 class="text-uppercase text-muted small mb-2">Resources</h6>
-                                            <ul class="list-unstyled mb-0">
+                                            <h6 class="text-uppercase text-muted small mb-2 blog-contributor-card__resources-title">Resources</h6>
+                                            <ul class="list-unstyled mb-0 blog-contributor-card__resources">
                                                 <li class="mb-1"><i class="fa fa-file-alt text-primary me-2"></i><a href="/privacy/" class="text-decoration-none">Privacy Policy</a></li>
                                                 <li class="mb-1"><i class="fa fa-heartbeat text-primary me-2"></i><a href="<?php echo htmlspecialchars($providerServicesUrl, ENT_QUOTES, 'UTF-8'); ?>" class="text-decoration-none">Explore Medical Services</a></li>
                                                 <?php if ($providerCity !== ''): ?>
@@ -610,13 +619,14 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
                                                 <li class="mb-1"><i class="fa fa-building text-primary me-2"></i>Specialist contributor under MedTravel editorial review</li>
                                             </ul>
                                         <?php else: ?>
-                                            <h5 class="mb-3">About this article</h5>
-                                            <p class="mb-1 text-muted"><i class="fa fa-user text-primary me-2"></i><?php echo htmlspecialchars($displayAuthor, ENT_QUOTES, 'UTF-8'); ?></p>
-                                            <p class="text-muted small mb-3">Published as part of the MedTravel editorial blog for educational and trust-building content.</p>
+                                            <div class="blog-contributor-card__eyebrow">Editorial context</div>
+                                            <h5 class="mb-3 blog-contributor-card__title">About this article</h5>
+                                            <p class="mb-1 text-muted blog-contributor-card__meta"><i class="fa fa-user text-primary me-2"></i><?php echo htmlspecialchars($displayAuthor, ENT_QUOTES, 'UTF-8'); ?></p>
+                                            <p class="text-muted small mb-3 blog-contributor-card__note">Published as part of the MedTravel editorial blog for educational and trust-building content.</p>
                                             <a class="btn btn-success w-100 mb-2" href="https://wa.me/573502431667" target="_blank"><i class="fab fa-whatsapp me-2"></i>Contact MedTravel</a>
                                             <a class="btn btn-outline-primary w-100 mb-3" href="mailto:info@medtravel.com"><i class="fa fa-envelope me-2"></i>Email MedTravel</a>
-                                            <h6 class="text-uppercase text-muted small mb-2">Resources</h6>
-                                            <ul class="list-unstyled mb-0">
+                                            <h6 class="text-uppercase text-muted small mb-2 blog-contributor-card__resources-title">Resources</h6>
+                                            <ul class="list-unstyled mb-0 blog-contributor-card__resources">
                                                 <li class="mb-1"><i class="fa fa-file-alt text-primary me-2"></i><a href="/privacy/" class="text-decoration-none">Privacy Policy</a></li>
                                                 <li class="mb-1"><i class="fa fa-phone text-primary me-2"></i>+561 698 8069</li>
                                                 <li class="mb-1"><i class="fa fa-map-marker-alt text-primary me-2"></i>Remote coordination</li>
