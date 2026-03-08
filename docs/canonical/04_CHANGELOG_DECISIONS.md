@@ -56,3 +56,31 @@ Cambios principales:
 - ajustes de cotización del proveedor guardan `provider_proposed_price`/`provider_proposed_currency`
 - comisión se calcula desde `proposed_price` (fallback `provider_proposed_price`)
 - UI admin muestra advertencia cuando falta precio y bloquea crear/confirmar pagos
+
+## 2026-03 — Blog and Commercial Content Management Improvements
+
+- Soporte de video en blog mediante `video_url` para YouTube/Vimeo y `video_file` para MP4 local
+- Limpieza segura de media gestionada al eliminar entradas del blog
+- Normalización del modelo editorial del blog:
+  - MedTravel permanece como identidad principal
+  - `author_name` se usa como byline editorial visible
+  - `provider_id` se interpreta como contribuidor médico / afiliación secundaria
+- Header compartido configurable para `blog.php` y `blog_post.php`
+- Nuevos headers configurables para `booking.php` y `contact.php`
+- Estandarización del patrón de headers públicos:
+  - tabla dedicada
+  - helper en `inc/`
+  - editor admin
+  - endpoint AJAX
+  - render público con fallback
+- Mejoras de UX admin:
+  - menú y gating para blog de proveedores
+  - feedback con Toastr en `admin/blog_edit.php`
+  - formularios y uploads alineados con Metronic
+- Ajustes menores de integración pública:
+  - link `Blog` en navegación pública
+  - testimoniales de `services.php` alineados con homepage
+  - filtrado por `provider_id` en `offers.php`
+- Mejoras de homepage:
+  - hero configurable (carousel / video / disabled)
+  - toggle global y por ítem para “Servicios Detallados”
