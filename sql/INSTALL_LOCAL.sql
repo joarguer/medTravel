@@ -27,6 +27,38 @@ INSERT INTO services_header (id, title, subtitle_1, subtitle_2, activo) VALUES
 (1, 'Our Medical Services', 'MEDICAL SERVICES', 'Discover quality medical services from verified providers', 0);
 
 -- =======================================================
+-- 2.1 TABLA: booking_page_header
+-- =======================================================
+CREATE TABLE booking_page_header (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL DEFAULT 'Online Booking',
+  subtitle TEXT DEFAULT NULL,
+  bg_image VARCHAR(500) DEFAULT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO booking_page_header (id, title, subtitle, bg_image, activo) VALUES
+(1, 'Online Booking', 'Submit your medical travel request and receive a coordinated plan with trusted providers in Colombia.', '', 0);
+
+-- =======================================================
+-- 2.2 TABLA: contact_header
+-- =======================================================
+CREATE TABLE contact_header (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL DEFAULT 'Contact Us',
+  subtitle TEXT DEFAULT NULL,
+  bg_image VARCHAR(500) DEFAULT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO contact_header (id, title, subtitle, bg_image, activo) VALUES
+(1, 'Contact Us', 'Talk to MedTravel about providers, coordination, and booking support for your medical journey.', '', 0);
+
+-- =======================================================
 -- 3. TABLA: service_categories (Categorías de servicios)
 -- =======================================================
 CREATE TABLE service_categories (
@@ -176,6 +208,8 @@ INSERT INTO provider_service_offers (id, provider_id, service_id, title, descrip
 SELECT 
     'Instalación LOCAL completada exitosamente' AS status,
     (SELECT COUNT(*) FROM services_header) AS services_header_rows,
+    (SELECT COUNT(*) FROM booking_page_header) AS booking_header_rows,
+    (SELECT COUNT(*) FROM contact_header) AS contact_header_rows,
     (SELECT COUNT(*) FROM service_categories) AS categories_rows,
     (SELECT COUNT(*) FROM service_catalog) AS services_rows,
     (SELECT COUNT(*) FROM providers) AS providers_rows,

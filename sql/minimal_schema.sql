@@ -1,4 +1,6 @@
 -- Esquema mínimo para entorno local
+-- No ejecutar este archivo completo en hosting compartido o producción.
+-- Este archivo intenta crear y seleccionar una base local de desarrollo.
 CREATE DATABASE IF NOT EXISTS bolsacar_medtravel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE bolsacar_medtravel;
 
@@ -19,6 +21,51 @@ CREATE TABLE IF NOT EXISTS carrucel (
   btn VARCHAR(100) DEFAULT NULL,
   activo TINYINT(1) DEFAULT 0,
   orden INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS home_hero_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  is_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  media_type ENUM('carousel','video') NOT NULL DEFAULT 'carousel',
+  video_url VARCHAR(500) DEFAULT NULL,
+  video_poster VARCHAR(500) DEFAULT NULL,
+  title VARCHAR(255) DEFAULT NULL,
+  subtitle VARCHAR(255) DEFAULT NULL,
+  cta_text VARCHAR(100) DEFAULT NULL,
+  cta_url VARCHAR(500) DEFAULT NULL,
+  detailed_services_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by INT DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS blog_header (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL DEFAULT 'Our Blog',
+  subtitle TEXT DEFAULT NULL,
+  bg_image VARCHAR(500) DEFAULT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS booking_page_header (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL DEFAULT 'Online Booking',
+  subtitle TEXT DEFAULT NULL,
+  bg_image VARCHAR(500) DEFAULT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS contact_header (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL DEFAULT 'Contact Us',
+  subtitle TEXT DEFAULT NULL,
+  bg_image VARCHAR(500) DEFAULT NULL,
+  activo TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS empresas (
@@ -176,6 +223,18 @@ INSERT IGNORE INTO carrucel (img, over_title, title, parrafo, btn, activo, orden
 ('img/carousel-1.jpg', 'Warning', 'Welcome to MedTravel', 'Discover our medical tourism packages.', 'Learn More', 0, 1),
 ('img/carousel-2.jpg', 'Health', 'Top Specialists', 'Find certified specialists and clinics.', 'View Specialists', 0, 2),
 ('img/carousel-3.jpg', 'Care', 'Quality Services', 'Personalized care for international patients.', 'Contact Us', 0, 3);
+
+INSERT IGNORE INTO home_hero_settings (id, is_enabled, media_type, video_url, video_poster, title, subtitle, cta_text, cta_url, detailed_services_enabled, updated_at, updated_by) VALUES
+(1, 1, 'carousel', '', '', '', '', '', '', 1, NOW(), NULL);
+
+INSERT IGNORE INTO blog_header (id, title, subtitle, bg_image, activo) VALUES
+(1, 'Our Blog', 'Discover experiences and updates from our medical travel community.', '', 0);
+
+INSERT IGNORE INTO booking_page_header (id, title, subtitle, bg_image, activo) VALUES
+(1, 'Online Booking', 'Submit your medical travel request and receive a coordinated plan with trusted providers in Colombia.', '', 0);
+
+INSERT IGNORE INTO contact_header (id, title, subtitle, bg_image, activo) VALUES
+(1, 'Contact Us', 'Talk to MedTravel about providers, coordination, and booking support for your medical journey.', '', 0);
 
 INSERT IGNORE INTO empresas (nombre_comercial, estado, email) VALUES ('Empresa Demo', 1, 'demo@example.com');
 
