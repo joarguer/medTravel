@@ -81,6 +81,19 @@ $current = basename($_SERVER['PHP_SELF']);
 $required_permission = get_required_permission_for_script($current);
 
 if ($required_permission !== null) {
+    if ($current === 'blog_edit.php') {
+        $canAccessBlog = (
+            (function_exists('user_can') && user_can(PERM_CONTENT_MANAGE))
+            || (function_exists('user_can') && user_can(PERM_SERVICES_MEDICAL_MANAGE))
+        );
+        if (!$canAccessBlog) {
+            http_response_code(403);
+            header('Content-Type: text/html; charset=utf-8');
+            require __DIR__ . '/../error_403.php';
+            exit();
+        }
+        return;
+    }
     if (!function_exists('user_can') || !user_can($required_permission)) {
         http_response_code(403);
         header('Content-Type: text/html; charset=utf-8');

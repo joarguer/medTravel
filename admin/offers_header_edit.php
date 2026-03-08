@@ -108,7 +108,10 @@ $rst_header = mysqli_fetch_array($busca_header);
             <?php echo $footer;?>
         </div>
 
+        <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+        <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
         <?php echo $theme_global_js;?>
+        <script src="../../assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
         <?php echo $theme_layout_js;?>
         <script src="js/offers_header_edit.js" type="text/javascript"></script>

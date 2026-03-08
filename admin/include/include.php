@@ -536,14 +536,14 @@ require_once __DIR__ . '/menu_helpers.php';
 $current = menu_current_script();
 
 $dashboard_pages = array('index.php');
-$management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php','my_booking_requests.php','app_inbox.php','app_calendar.php','testimonials.php');
-$medical_group_pages = array('service_categories.php','service_catalog.php','providers.php','provider_verification.php','provider_offers.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
+$management_pages = array('service_categories.php','service_catalog.php','providers.php','providers_complementary.php','provider_offers.php','blog_edit.php','mi_empresa.php','clientes.php','provider_verification.php','paquetes.php','booking_requests.php','medtravel_services.php','my_booking_requests.php','app_inbox.php','app_calendar.php','testimonials.php');
+$medical_group_pages = array('service_categories.php','service_catalog.php','providers.php','provider_verification.php','provider_offers.php','blog_edit.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $complementary_scope_pages = array('providers_complementary.php','medtravel_services.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $clients_booking_pages = array('clientes.php','booking_requests.php','app_inbox.php','app_calendar.php','testimonials.php');
 $admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','informes.php','email_settings.php','data_deletion_requests.php','cleanup.php');
 $admin_users_pages = array('mis_datos.php','usuarios.php','crear_usuario.php','roles.php');
-$site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','blog_edit.php','wizard_header_edit.php');
+$site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','booking_header_edit.php','contact_header_edit.php','blog_edit.php','wizard_header_edit.php');
 $profile_pages = array('mis_datos.php');
 $can_manage_complementary_providers = user_can(PERM_PROVIDERS_COMPLEMENTARY_MANAGE);
 $can_manage_complementary_services = user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE);
@@ -632,6 +632,9 @@ if ($es_admin) {
                                         <ul class="dropdown-menu">
                                             <li'.menu_li_class('provider_offers.php').'>
                                                 <a href="./provider_offers.php">Mis Ofertas</a>
+                                            </li>
+                                            <li'.menu_li_class('blog_edit.php').'>
+                                                <a href="./blog_edit.php">Mi Blog</a>
                                             </li>
                                             '.($can_view_clients ? '<li'.menu_li_class('clientes.php').'>
                                                 <a href="./clientes.php">Clientes</a>
@@ -755,9 +758,17 @@ if ($es_admin) {
                                         <a href="offer_detail_edit.php">
                                             <i class="icon-docs"></i> Offer Detail </a>
                                     </li>
+                                    <li'.menu_li_class('booking_header_edit.php').'>
+                                        <a href="booking_header_edit.php">
+                                            <i class="icon-calendar"></i> Booking </a>
+                                    </li>
+                                    <li'.menu_li_class('contact_header_edit.php').'>
+                                        <a href="contact_header_edit.php">
+                                            <i class="icon-envelope"></i> Contact </a>
+                                    </li>
                                     <li'.menu_li_class('wizard_header_edit.php').'>
                                         <a href="wizard_header_edit.php">
-                                            <i class="icon-magic-wand"></i> Wizard Header </a>
+                                            <i class="icon-magic-wand"></i> Booking Wizard </a>
                                     </li>
                                     <li'.menu_li_class('blog_edit.php').'>
                                         <a href="blog_edit.php">
