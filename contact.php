@@ -2,7 +2,12 @@
 $page_title = 'Contact MedTravel | Medical Travel Coordination';
 $page_description = 'Contact MedTravel for questions about medical tourism coordination, providers, and booking support in Colombia.';
 $page_canonical = 'https://medtravel.com.co/contact.php';
-include('inc/include.php'); 
+include('inc/include.php');
+require_once __DIR__ . '/inc/contact_header.php';
+$contactHeader = mt_contact_header_fetch($conexion);
+$contactHeaderTitle = trim((string)($contactHeader['title'] ?? '')) ?: 'Contact Us';
+$contactHeaderSubtitle = trim((string)($contactHeader['subtitle'] ?? '')) ?: 'Talk to MedTravel about providers, coordination, and booking support for your medical journey.';
+$contactHeaderImage = trim((string)($contactHeader['bg_image'] ?? ''));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -34,11 +39,12 @@ include('inc/include.php');
         <!-- Navbar & Hero End -->
 
         <!-- Header Start -->
-        <div class="container-fluid bg-breadcrumb">
+        <div class="container-fluid bg-breadcrumb" <?php if ($contactHeaderImage !== ''): ?>style="background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('<?php echo htmlspecialchars($contactHeaderImage, ENT_QUOTES, 'UTF-8'); ?>'); background-size: cover; background-position: center;"<?php endif; ?>>
             <div class="container text-center py-5" style="max-width: 900px;">
-                <h3 class="text-white display-3 mb-4">Contact Us</h1>
+                <h3 class="text-white display-3 mb-3"><?php echo htmlspecialchars($contactHeaderTitle, ENT_QUOTES, 'UTF-8'); ?></h3>
+                <p class="text-white mb-4"><?php echo htmlspecialchars($contactHeaderSubtitle, ENT_QUOTES, 'UTF-8'); ?></p>
                 <ol class="breadcrumb justify-content-center mb-0">
-                    <li class="breadcrumb-item"><a href="index.html">Home</a></li>
+                    <li class="breadcrumb-item"><a href="index.php">Home</a></li>
                     <li class="breadcrumb-item"><a href="#">Pages</a></li>
                     <li class="breadcrumb-item active text-white">Contact</li>
                 </ol>    

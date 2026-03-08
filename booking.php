@@ -5,9 +5,14 @@ $page_title = 'Online Booking | MedTravel';
 $page_description = 'Submit your medical travel request and receive a coordinated plan with trusted providers in Colombia.';
 $page_canonical = 'https://medtravel.com.co/booking.php';
 include('inc/include.php');
+require_once __DIR__ . '/inc/booking_page_header.php';
 // booking_form.php already included by include.php
 $booking_texts = get_booking_texts();
 $booking_style = booking_background_style($booking_texts);
+$bookingPageHeader = mt_booking_page_header_fetch($conexion);
+$bookingHeaderTitle = trim((string)($bookingPageHeader['title'] ?? '')) ?: 'Online Booking';
+$bookingHeaderSubtitle = trim((string)($bookingPageHeader['subtitle'] ?? '')) ?: 'Submit your medical travel request and receive a coordinated plan with trusted providers in Colombia.';
+$bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -37,9 +42,10 @@ $booking_style = booking_background_style($booking_texts);
     </div>
     <!-- Navbar & Hero End -->
 
-    <div class="container-fluid bg-breadcrumb">
+    <div class="container-fluid bg-breadcrumb" <?php if ($bookingHeaderImage !== ''): ?>style="background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('<?php echo htmlspecialchars($bookingHeaderImage, ENT_QUOTES, 'UTF-8'); ?>'); background-size: cover; background-position: center;"<?php endif; ?>>
         <div class="container text-center py-5" style="max-width: 900px;">
-            <h3 class="text-white display-3 mb-4">Online Booking</h3>
+            <h3 class="text-white display-3 mb-3"><?php echo htmlspecialchars($bookingHeaderTitle, ENT_QUOTES, 'UTF-8'); ?></h3>
+            <p class="text-white mb-4"><?php echo htmlspecialchars($bookingHeaderSubtitle, ENT_QUOTES, 'UTF-8'); ?></p>
             <ol class="breadcrumb justify-content-center mb-0">
                 <li class="breadcrumb-item"><a href="index.php">Home</a></li>
                 <li class="breadcrumb-item"><a href="#">Pages</a></li>
