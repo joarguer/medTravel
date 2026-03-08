@@ -1,4 +1,6 @@
 let dataCarrucel = [];
+let heroSettings = null;
+let heroSettingsTableExists = true;
 const HOME_EDIT_INITIAL_TAB = (typeof homeEditInitialTab !== 'undefined') ? homeEditInitialTab : '';
 let bookingData = null;
 let bookingPendingOpen = HOME_EDIT_INITIAL_TAB === 'booking';
@@ -22,8 +24,232 @@ function escapeHtml(value){
     });
 }
 
+function parseAjaxResponse(res, fallback){
+    if(res && typeof res === 'object'){
+        return res;
+    }
+    if(typeof res === 'string' && res !== ''){
+        try {
+            return JSON.parse(res);
+        } catch (err) {
+            return fallback || {};
+        }
+    }
+    return fallback || {};
+}
+
 function deactivateAllEditorTabs(){
-    $('.btn-carrucel, .btn-como-funciona, .btn-service, .btn-booking').removeClass('active');
+    $('.btn-carrucel, .btn-como-funciona, .btn-service, .btn-booking, .btn-hero-settings, .btn-service-settings').removeClass('active');
+}
+
+function normalizeHeroSettings(settings){
+    const defaults = {
+        id: 0,
+        is_enabled: '1',
+        media_type: 'carousel',
+        video_url: '',
+        video_poster: '',
+        title: '',
+        subtitle: '',
+        cta_text: '',
+        cta_url: '',
+        updated_at: '',
+        updated_by: 0
+    };
+    return Object.assign({}, defaults, settings || {});
+}
+
+function loadHeroSettings(openAfterLoad){
+    $.post('ajax/home_edit.php', { tipo: 'get_hero_settings' }, function(res){
+        let response = parseAjaxResponse(res, {});
+        heroSettingsTableExists = response.table_exists !== false;
+        heroSettings = normalizeHeroSettings(response.settings);
+        if(openAfterLoad){
+            renderHeroSettings();
+        }
+    });
+}
+
+function buildHeroPreview(settings){
+    const enabled = String(settings.is_enabled) === '1';
+    const isVideo = settings.media_type === 'video';
+    const badge = !enabled ? 'Hero deshabilitado' : (isVideo ? 'Modo video' : 'Modo carrusel');
+    const subtitle = isVideo
+        ? (settings.subtitle || 'Configura un mensaje editorial, CTA y poster para el hero en video.')
+        : 'El homepage seguirá usando las diapositivas activas de carrucel sin alterar su CRUD actual.';
+    const title = isVideo
+        ? (settings.title || 'Hero principal con video')
+        : 'Hero principal con carrusel';
+    const posterStyle = settings.video_poster ? ` style="background-image:url('../../${escapeHtml(settings.video_poster)}')"` : '';
+    const cta = settings.cta_text ? `<div class="hero-settings-note">CTA: ${escapeHtml(settings.cta_text)}${settings.cta_url ? ` -> ${escapeHtml(settings.cta_url)}` : ''}</div>` : '';
+    const updatedAt = settings.updated_at ? escapeHtml(settings.updated_at) : 'Sin cambios guardados';
+    return `<div class="hero-settings-preview">
+                <div class="hero-settings-preview__media"${posterStyle}></div>
+                <div class="hero-settings-preview__content">
+                    <span class="hero-settings-preview__badge">${escapeHtml(badge)}</span>
+                    <h2>${escapeHtml(title)}</h2>
+                    <p>${escapeHtml(subtitle)}</p>
+                    ${cta}
+                    <div class="hero-settings-preview__meta">Última actualización: ${updatedAt}</div>
+                </div>
+            </div>`;
+}
+
+function renderHeroSettings(){
+    heroSettings = normalizeHeroSettings(heroSettings);
+    deactivateAllEditorTabs();
+    $('#btn-hero-settings').addClass('active');
+
+    let migrationAlert = '';
+    if(!heroSettingsTableExists){
+        migrationAlert = `<div class="alert alert-warning">
+            La tabla <strong>home_hero_settings</strong> aún no existe en esta base de datos. Ejecuta la migración SQL antes de guardar cambios.
+        </div>`;
+    }
+
+    const enabled = String(heroSettings.is_enabled) === '1';
+    const isVideo = heroSettings.media_type === 'video';
+    const posterValue = escapeHtml(heroSettings.video_poster || '');
+    const videoValue = escapeHtml(heroSettings.video_url || '');
+
+    let body = `${migrationAlert}
+        ${buildHeroPreview(heroSettings)}
+        <div class="hero-settings-card">
+            <h3>Configuración del hero del homepage</h3>
+            <p class="hero-settings-note">Este ajuste decide si el primer bloque del homepage usa el carrusel actual, un hero en video, o si se oculta por completo.</p>
+            <div class="form-group">
+                <label><strong>Enable hero section</strong></label>
+                <div class="mt-checkbox-inline">
+                    <label class="mt-checkbox mt-checkbox-outline">
+                        <input type="checkbox" id="hero_is_enabled" ${enabled ? 'checked' : ''}>
+                        Mostrar hero en homepage
+                        <span></span>
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label><strong>Content type</strong></label>
+                <select class="form-control" id="hero_media_type" onchange="toggleHeroVideoFields()">
+                    <option value="carousel" ${heroSettings.media_type === 'carousel' ? 'selected' : ''}>Carousel</option>
+                    <option value="video" ${heroSettings.media_type === 'video' ? 'selected' : ''}>Video</option>
+                </select>
+            </div>
+            <div id="hero-video-fields" class="hero-settings-group" ${isVideo ? '' : 'hidden'}>
+                <div class="form-group">
+                    <label><strong>Video URL or uploaded MP4</strong></label>
+                    <input type="text" class="form-control" id="hero_video_url" value="${videoValue}" placeholder="https://example.com/hero.mp4 o img/home_hero/archivo.mp4">
+                    <div class="hero-settings-actions">
+                        <button type="button" class="btn btn-default" onclick="uploadHeroAsset('video')">Upload MP4</button>
+                    </div>
+                    <div class="hero-settings-note">Se aceptan URLs MP4 seguras o archivos subidos desde el panel.</div>
+                </div>
+                <div class="form-group">
+                    <label><strong>Poster image</strong></label>
+                    <input type="text" class="form-control" id="hero_video_poster" value="${posterValue}" placeholder="https://example.com/poster.jpg o img/home_hero/poster.jpg">
+                    <div class="hero-settings-actions">
+                        <button type="button" class="btn btn-default" onclick="uploadHeroAsset('poster')">Upload poster</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><strong>Title</strong></label>
+                    <input type="text" class="form-control" id="hero_title" value="${escapeHtml(heroSettings.title || '')}" placeholder="Medical tourism in Colombia">
+                </div>
+                <div class="form-group">
+                    <label><strong>Subtitle</strong></label>
+                    <input type="text" class="form-control" id="hero_subtitle" value="${escapeHtml(heroSettings.subtitle || '')}" placeholder="Trusted providers, concierge coordination, and recovery support">
+                </div>
+                <div class="form-group">
+                    <label><strong>CTA text</strong></label>
+                    <input type="text" class="form-control" id="hero_cta_text" value="${escapeHtml(heroSettings.cta_text || '')}" placeholder="Start your journey">
+                </div>
+                <div class="form-group">
+                    <label><strong>CTA link</strong></label>
+                    <input type="text" class="form-control" id="hero_cta_url" value="${escapeHtml(heroSettings.cta_url || '')}" placeholder="#booking-section, /contact.php o https://...">
+                </div>
+            </div>
+            <div class="hero-settings-actions">
+                <button type="button" class="btn blue" onclick="saveHeroSettings()">Save hero settings</button>
+            </div>
+        </div>`;
+
+    $('.page-content-col').html(body);
+    toggleHeroVideoFields();
+}
+
+function open_hero_settings(){
+    if(!heroSettings){
+        deactivateAllEditorTabs();
+        $('#btn-hero-settings').addClass('active');
+        $('.page-content-col').html('<div class="alert alert-info">Loading hero settings...</div>');
+        loadHeroSettings(true);
+        return;
+    }
+    renderHeroSettings();
+}
+
+function toggleHeroVideoFields(){
+    const isVideo = $('#hero_media_type').val() === 'video';
+    $('#hero-video-fields').attr('hidden', isVideo ? null : 'hidden');
+}
+
+function saveHeroSettings(){
+    const payload = {
+        tipo: 'save_hero_settings',
+        is_enabled: $('#hero_is_enabled').is(':checked') ? 1 : 0,
+        media_type: $('#hero_media_type').val() || 'carousel',
+        video_url: $('#hero_video_url').val() || '',
+        video_poster: $('#hero_video_poster').val() || '',
+        title: $('#hero_title').val() || '',
+        subtitle: $('#hero_subtitle').val() || '',
+        cta_text: $('#hero_cta_text').val() || '',
+        cta_url: $('#hero_cta_url').val() || ''
+    };
+
+    $.post('ajax/home_edit.php', payload, function(res){
+        let response = parseAjaxResponse(res, { status: 'error', message: 'Invalid server response' });
+        if(response.status === 'success'){
+            heroSettings = normalizeHeroSettings(response.settings);
+            notification('Hero settings updated successfully', 'Hero', 'success');
+            renderHeroSettings();
+        } else {
+            notification(response.message || 'Unable to update hero settings', 'Hero', 'error');
+        }
+    });
+}
+
+function uploadHeroAsset(type){
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = type === 'video' ? 'video/mp4,.mp4,.m4v' : 'image/jpeg,image/png,image/gif,image/webp';
+    fileInput.click();
+    fileInput.onchange = function(){
+        if(!fileInput.files || !fileInput.files[0]){
+            return;
+        }
+        const form = new FormData();
+        form.append('file', fileInput.files[0]);
+        form.append('tipo', type === 'video' ? 'upload_hero_video' : 'upload_hero_poster');
+        $.ajax({
+            url: 'ajax/home_edit.php',
+            type: 'POST',
+            data: form,
+            processData: false,
+            contentType: false,
+            success: function(res){
+                let response = parseAjaxResponse(res, { status: 'error', message: 'Invalid server response' });
+                if(response.status === 'success'){
+                    heroSettings = normalizeHeroSettings(response.settings);
+                    notification(type === 'video' ? 'Hero video uploaded successfully' : 'Hero poster uploaded successfully', 'Hero', 'success');
+                    renderHeroSettings();
+                } else {
+                    notification(response.message || 'Unable to upload the selected file', 'Hero', 'error');
+                }
+            },
+            error: function(){
+                notification('Unable to upload the selected file', 'Hero', 'error');
+            }
+        });
+    };
 }
 $(document).ready(function(){
     let url = 'ajax/home_edit.php';
@@ -31,8 +257,12 @@ $(document).ready(function(){
         'tipo': 'get_home'
     };
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
+        let response = parseAjaxResponse(res, []);
         dataCarrucel = response;
+        if(!Array.isArray(response) || response.length === 0){
+            $('.page-content-col').html('<div class="alert alert-info">No hay carruseles configurados.</div>');
+            return;
+        }
         let body = '';
         let i = 0;
         let id = response[i].id;
@@ -79,6 +309,7 @@ $(document).ready(function(){
         $('.about-header p').css('font-weight', '400');
         $('.about-header p').css('color', '#fff');
     });
+    loadHeroSettings(false);
     load_booking();
 });
 
@@ -200,7 +431,7 @@ function addImg(){
             processData: false,
             contentType: false,
             success: function(res){
-                let response = JSON.parse(res);
+                let response = parseAjaxResponse(res, {});
                 if(response.status == 'success'){
                     let text = 'Se ha agregado la imagen';
                     let title = 'Imagen';
@@ -231,7 +462,7 @@ function addInput(id){
         'id': id
     };
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
+        let response = parseAjaxResponse(res, {});
         if(response.status == 'success'){
             let text = 'Se ha agregado el Over Title';
             let title = 'Over Title';
@@ -255,7 +486,7 @@ function editInputSubmit(input,i,id){
         tipo: 'edit_input'
     };
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
+        let response = parseAjaxResponse(res, {});
         if(response.status == 'success'){
             let text = 'Se ha actualizado el Over Title';
             let title = 'Over Title';
@@ -305,7 +536,7 @@ function editImg(i,id){
             processData: false,
             contentType: false,
             success: function(res){
-                let response = JSON.parse(res);
+                let response = parseAjaxResponse(res, {});
                 if(response.status == 'success'){
                     let text = 'Se ha actualizado la imagen';
                     let title = 'Imagen';
@@ -386,7 +617,7 @@ function open_como_funciona(i, id){
     };
     
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
+        let response = parseAjaxResponse(res, {});
         let body = '';
         body += `<div class="row margin-bottom-40">
                     <div class="col-md-12">
@@ -432,7 +663,7 @@ function editComoFunciona(field, i, id){
     };
     
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
+        let response = parseAjaxResponse(res, {});
         if(response.status == 'success'){
             notification('Se ha actualizado el paso', 'Cómo Funciona', 'success');
             // Actualizar preview
@@ -458,7 +689,7 @@ function load_booking(){
     };
     $.post(url, data, function(res){
         bookingFetchCompleted = true;
-        bookingData = JSON.parse(res);
+        bookingData = parseAjaxResponse(res, {});
         if(HOME_EDIT_INITIAL_TAB === 'booking' || bookingPendingOpen){
             open_booking();
         }
@@ -554,7 +785,7 @@ function edit_booking(field, value){
         'value': value
     };
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
+        let response = parseAjaxResponse(res, {});
         if(response.status == 'success'){
             bookingData[field] = value;
             notification('Booking updated', 'Booking', 'success');
@@ -589,7 +820,7 @@ function edit_booking_background(id){
             processData: false,
             contentType: false,
             success: function(res){
-                let response = JSON.parse(res);
+                let response = parseAjaxResponse(res, {});
                 if(response.status == 'success'){
                     bookingData.background_img = response.ruta;
                     notification('Booking background updated', 'Booking', 'success');
@@ -603,6 +834,74 @@ function edit_booking_background(id){
 }
 
 // ========== SERVICIOS DETALLADOS ==========
+function open_service_settings(){
+    deactivateAllEditorTabs();
+    $('#btn-service-settings').addClass('active');
+
+    $.post('ajax/home_edit.php', { tipo: 'get_detailed_services_settings' }, function(res){
+        let response = parseAjaxResponse(res, {});
+        let enabled = String(response.detailed_services_enabled || '1') === '1';
+        let migrationAlert = '';
+        if(response.table_exists === false){
+            migrationAlert = `<div class="alert alert-warning">
+                La configuración global del homepage aún no tiene el campo <strong>detailed_services_enabled</strong>. Ejecuta la migración antes de guardar cambios.
+            </div>`;
+        }
+
+        let body = `${migrationAlert}
+            <div class="portlet light bordered">
+                <div class="portlet-title">
+                    <div class="caption">
+                        <i class="icon-settings font-blue"></i>
+                        <span class="caption-subject font-blue sbold uppercase">Visibilidad de Servicios Detallados</span>
+                    </div>
+                </div>
+                <div class="portlet-body">
+                    <p class="text-muted">Controla si la sección "Servicios Detallados" se renderiza o no en el homepage público.</p>
+                    <div class="form-group">
+                        <label class="mt-checkbox mt-checkbox-outline" style="font-size: 15px; font-weight: 600;">
+                            <input type="checkbox" id="detailed_services_enabled_toggle" ${enabled ? 'checked' : ''}>
+                            Mostrar sección "Servicios Detallados" en homepage
+                            <span></span>
+                        </label>
+                        <div class="help-block" style="margin-top: 8px;">
+                            Si se desactiva, el homepage ocultará completamente esta sección sin afectar los servicios cargados ni su edición.
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 20px;">
+                        <button type="button" class="btn blue" onclick="saveDetailedServicesSettings()">Guardar visibilidad</button>
+                    </div>
+                </div>
+            </div>`;
+
+        $('.page-content-col').html(body);
+    });
+}
+
+function saveDetailedServicesSettings(){
+    let enabled = $('#detailed_services_enabled_toggle').is(':checked') ? 1 : 0;
+    $.post('ajax/home_edit.php', {
+        tipo: 'save_detailed_services_settings',
+        detailed_services_enabled: enabled
+    }, function(res){
+        let response = parseAjaxResponse(res, { status: 'error' });
+        if(response.status == 'success'){
+            notification('La visibilidad de la sección fue actualizada', 'Servicios Detallados', 'success');
+        } else {
+            notification(response.message || 'No fue posible actualizar la visibilidad', 'Servicios Detallados', 'error');
+        }
+    });
+}
+
+function updateServiceSidebarStatus(id, isVisible){
+    let badge = $('#service-status-' + id);
+    if(!badge.length){
+        return;
+    }
+    badge.text(isVisible ? 'Visible' : 'Oculto');
+    badge.toggleClass('is-hidden', !isVisible);
+}
+
 function open_service(i, id){
     deactivateAllEditorTabs();
     $('#btn-service-'+i).addClass('active');
@@ -614,11 +913,12 @@ function open_service(i, id){
     };
     
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
+        let response = parseAjaxResponse(res, {});
         let badge_html = '';
         if(response.badge){
             badge_html = `<span class="badge ${response.badge_class}">${response.badge}</span>`;
         }
+        let isVisible = String(response.activo || '0') === '0';
         
         let body = '';
         body += `<div class="row margin-bottom-40">
@@ -634,6 +934,14 @@ function open_service(i, id){
                             <p>${response.description}</p>
                         </div>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="mt-checkbox mt-checkbox-outline" style="font-size: 15px; font-weight: 600;">
+                        <input onchange="editService('visible',${i},${id})" type="checkbox" id="visible_input_${i}" ${isVisible ? 'checked' : ''}>
+                        Mostrar en inicio
+                        <span></span>
+                    </label>
+                    <div class="help-block" style="margin-top: 8px;">Si se desactiva, este servicio se ocultará del homepage, pero seguirá disponible para edición.</div>
                 </div>
                 <div class="form-group">
                     <label>Icono (clase de Font Awesome)</label>
@@ -685,6 +993,7 @@ function editService(field, i, id){
     let data = {
         'tipo': 'edit_service',
         'id': id,
+        'visible': $('#visible_input_'+i).is(':checked') ? 1 : 0,
         'icon_class': $('#icon_class_input_'+i).val(),
         'title': $('#title_input_'+i).val(),
         'description': $('#description_input_'+i).val(),
@@ -693,7 +1002,7 @@ function editService(field, i, id){
     };
     
     $.post(url, data, function(res){
-        let response = JSON.parse(res);
+        let response = parseAjaxResponse(res, {});
         if(response.status == 'success'){
             notification('Se ha actualizado el servicio', 'Servicios', 'success');
             // Actualizar preview
@@ -719,6 +1028,8 @@ function editService(field, i, id){
                 if(badge_text){
                     $('.service-preview-header .badge').attr('class', 'badge ' + value);
                 }
+            } else if(field == 'visible'){
+                updateServiceSidebarStatus(id, $('#visible_input_'+i).is(':checked'));
             }
         } else {
             notification('Error al actualizar', 'Error', 'error');
@@ -752,7 +1063,7 @@ function editServiceImg(i, id){
             processData: false,
             contentType: false,
             success: function(res){
-                let response = JSON.parse(res);
+                let response = parseAjaxResponse(res, {});
                 if(response.status == 'success'){
                     notification('Se ha actualizado la imagen', 'Imagen', 'success');
                     let img = response.ruta;

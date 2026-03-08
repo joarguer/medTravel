@@ -7,6 +7,83 @@ $page_description = 'We connect patients from the United States with certified m
 $page_canonical = 'https://medtravel.com.co/';
 include('inc/include.php'); 
 require_once __DIR__ . '/inc/testimonials.php';
+
+function home_hero_table_exists_public($conexion) {
+    $query = mysqli_query($conexion, "SHOW TABLES LIKE 'home_hero_settings'");
+    $exists = ($query && mysqli_num_rows($query) > 0);
+    if ($query instanceof mysqli_result) {
+        mysqli_free_result($query);
+    }
+    return $exists;
+}
+
+function home_hero_column_exists_public($conexion, $column_name) {
+    $safe_column = mysqli_real_escape_string($conexion, (string)$column_name);
+    $query = mysqli_query(
+        $conexion,
+        "SELECT COUNT(*) AS total FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'home_hero_settings' AND COLUMN_NAME = '" . $safe_column . "'"
+    );
+    $exists = false;
+    if ($query) {
+        $row = mysqli_fetch_assoc($query);
+        $exists = !empty($row) && intval($row['total']) > 0;
+    }
+    if ($query instanceof mysqli_result) {
+        mysqli_free_result($query);
+    }
+    return $exists;
+}
+
+function home_hero_public_defaults() {
+    return [
+        'is_enabled' => 1,
+        'media_type' => 'carousel',
+        'video_url' => '',
+        'video_poster' => '',
+        'title' => '',
+        'subtitle' => '',
+        'cta_text' => '',
+        'cta_url' => '',
+    ];
+}
+
+$hero_settings = home_hero_public_defaults();
+if (home_hero_table_exists_public($conexion)) {
+    $hero_query = mysqli_query($conexion, "SELECT is_enabled, media_type, video_url, video_poster, title, subtitle, cta_text, cta_url FROM home_hero_settings ORDER BY id DESC LIMIT 1");
+    if ($hero_query && mysqli_num_rows($hero_query) > 0) {
+        $hero_row = mysqli_fetch_assoc($hero_query);
+        if (is_array($hero_row)) {
+            $hero_settings = array_merge($hero_settings, $hero_row);
+        }
+    }
+    if ($hero_query instanceof mysqli_result) {
+        mysqli_free_result($hero_query);
+    }
+}
+
+$hero_is_enabled = intval($hero_settings['is_enabled']) === 1;
+$hero_media_type = ($hero_settings['media_type'] === 'video') ? 'video' : 'carousel';
+$hero_video_url = trim((string)$hero_settings['video_url']);
+$hero_video_poster = trim((string)$hero_settings['video_poster']);
+$hero_title = trim((string)$hero_settings['title']);
+$hero_subtitle = trim((string)$hero_settings['subtitle']);
+$hero_cta_text = trim((string)$hero_settings['cta_text']);
+$hero_cta_url = trim((string)$hero_settings['cta_url']);
+$hero_video_ready = $hero_video_url !== '' && preg_match('~\.(mp4|m4v)(\?.*)?$~i', preg_replace('~^https?://[^/]+~i', '', $hero_video_url));
+$show_video_hero = $hero_is_enabled && $hero_media_type === 'video' && $hero_video_ready;
+$show_carousel_hero = $hero_is_enabled && !$show_video_hero;
+$hero_shell_class = $hero_is_enabled ? 'hero-shell' : 'hero-shell hero-shell--disabled';
+$detailed_services_enabled = 1;
+if (home_hero_table_exists_public($conexion) && home_hero_column_exists_public($conexion, 'detailed_services_enabled')) {
+    $services_settings_query = mysqli_query($conexion, "SELECT detailed_services_enabled FROM home_hero_settings ORDER BY id DESC LIMIT 1");
+    if ($services_settings_query && mysqli_num_rows($services_settings_query) > 0) {
+        $services_settings_row = mysqli_fetch_assoc($services_settings_query);
+        $detailed_services_enabled = intval($services_settings_row['detailed_services_enabled'] ?? 1) === 1 ? 1 : 0;
+    }
+    if ($services_settings_query instanceof mysqli_result) {
+        mysqli_free_result($services_settings_query);
+    }
+}
 $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 ?>
@@ -32,7 +109,7 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
         <!-- Topbar End -->
 
         <!-- Navbar & Hero Start -->
-        <div class="container-fluid position-relative p-0">
+        <div class="container-fluid position-relative p-0 <?php echo $hero_shell_class; ?>">
             <nav class="navbar navbar-expand-lg navbar-light px-4 px-lg-5 py-3 py-lg-0">
                 <?php echo $logo; ?>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse">
@@ -41,6 +118,7 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                 <?php echo $menu; ?>
             </nav>
 
+            <?php if ($show_carousel_hero) { ?>
             <!-- Carousel Start -->
             <div class="carousel-header">
                 <div id="carouselId" class="carousel slide" data-bs-ride="carousel">
@@ -100,6 +178,37 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                 </div>
             </div>
             <!-- Carousel End -->
+            <?php } elseif ($show_video_hero) { ?>
+            <div class="hero-video-block">
+                <video id="homeHeroVideo" class="hero-video-block__media" autoplay muted loop playsinline preload="metadata" <?php echo $hero_video_poster !== '' ? 'poster="' . htmlspecialchars($hero_video_poster, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
+                    <source src="<?php echo htmlspecialchars($hero_video_url, ENT_QUOTES, 'UTF-8'); ?>" type="video/mp4">
+                    Your browser does not support HTML5 video.
+                </video>
+                <div class="hero-video-block__overlay"></div>
+                <div class="hero-video-block__content">
+                    <div class="p-3" style="max-width: 900px;">
+                        <?php if ($hero_title !== '') { ?>
+                        <h1 class="display-2 text-capitalize text-white mb-4"><?php echo htmlspecialchars($hero_title, ENT_QUOTES, 'UTF-8'); ?></h1>
+                        <?php } ?>
+                        <?php if ($hero_subtitle !== '') { ?>
+                        <p class="mb-5 fs-5"><?php echo htmlspecialchars($hero_subtitle, ENT_QUOTES, 'UTF-8'); ?></p>
+                        <?php } ?>
+                        <?php if ($hero_cta_text !== '' && $hero_cta_url !== '') { ?>
+                        <div class="d-flex align-items-center justify-content-center">
+                            <a class="btn-hover-bg btn btn-primary rounded-pill text-white py-3 px-5" href="<?php echo htmlspecialchars($hero_cta_url, ENT_QUOTES, 'UTF-8'); ?>">
+                                <?php echo htmlspecialchars($hero_cta_text, ENT_QUOTES, 'UTF-8'); ?>
+                            </a>
+                        </div>
+                        <?php } ?>
+                        <div class="d-flex align-items-center justify-content-center mt-4">
+                            <button type="button" id="heroVideoAudioToggle" class="hero-video-audio-toggle" aria-pressed="false" aria-label="Enable video audio">
+                                Listen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php } ?>
         </div>
         <!-- <div class="container-fluid search-bar position-relative" style="top: -50%; transform: translateY(-50%);">
             <div class="container">
@@ -110,89 +219,6 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
             </div>
         </div>
         <!-- Navbar & Hero End -->
-
-        <!-- Services Start -->
-        <div class="container-fluid services py-5 bg-light">
-            <div class="container py-5">
-                <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                    <h5 class="section-title px-3">Our Services</h5>
-                    <h1 class="mb-4">Comprehensive Coordination & Management</h1>
-                    <p class="mb-0">We connect patients from the United States with certified medical providers in Colombia, offering complete coordination and support throughout the entire process.</p>
-                </div>
-                <div class="row g-4">
-                    <!-- Coordinación Médica -->
-                    <div class="col-lg-4 col-md-6">
-                        <div class="services-item border border-primary rounded h-100 p-4">
-                            <div class="services-icon mb-3">
-                                <i class="fas fa-heartbeat fa-3x text-primary"></i>
-                            </div>
-                            <h4 class="mb-3">Medical Coordination</h4>
-                            <p class="mb-0">We coordinate your appointments with certified medical providers in Colombia, providing translation, consultation support and post-procedure follow-up.</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Gestión de Vuelos -->
-                    <div class="col-lg-4 col-md-6">
-                        <div class="services-item border border-primary rounded h-100 p-4">
-                            <div class="services-icon mb-3">
-                                <i class="fas fa-plane-departure fa-3x text-primary"></i>
-                            </div>
-                            <h4 class="mb-3">Flight Management</h4>
-                            <p class="mb-0">We find and coordinate the best flight options from the United States to Colombia, adapting to your medical dates and preferences.</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Alojamiento -->
-                    <div class="col-lg-4 col-md-6">
-                        <div class="services-item border border-primary rounded h-100 p-4">
-                            <div class="services-icon mb-3">
-                                <i class="fas fa-hotel fa-3x text-primary"></i>
-                            </div>
-                            <h4 class="mb-3">Accommodation</h4>
-                            <p class="mb-0">We book hotels and lodging options adapted to your budget and recovery, with locations near the clinics.</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Transporte Local -->
-                    <div class="col-lg-4 col-md-6">
-                        <div class="services-item border border-primary rounded h-100 p-4">
-                            <div class="services-icon mb-3">
-                                <i class="fas fa-car fa-3x text-primary"></i>
-                            </div>
-                            <h4 class="mb-3">Local Transportation</h4>
-                            <p class="mb-0">We arrange transfers from the airport to clinics, hotels and points of interest, ensuring your comfort and punctuality.</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Alimentación -->
-                    <div class="col-lg-4 col-md-6">
-                        <div class="services-item border border-primary rounded h-100 p-4">
-                            <div class="services-icon mb-3">
-                                <i class="fas fa-utensils fa-3x text-primary"></i>
-                            </div>
-                            <h4 class="mb-3">Meals</h4>
-                            <p class="mb-0">We coordinate meal options that meet post-operative medical restrictions and special diets during your stay.</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Soporte 24/7 -->
-                    <div class="col-lg-4 col-md-6">
-                        <div class="services-item border border-primary rounded h-100 p-4">
-                            <div class="services-icon mb-3">
-                                <i class="fas fa-headset fa-3x text-primary"></i>
-                            </div>
-                            <h4 class="mb-3">24/7 Support</h4>
-                            <p class="mb-0">24-hour bilingual assistance, emergency management and resolution of unforeseen events throughout your medical tourism experience.</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="text-center mt-5">
-                    <a href="services.php" class="btn btn-primary rounded-pill py-3 px-5">Ver Todos los Servicios</a>
-                </div>
-            </div>
-        </div>
-        <!-- Services End -->
 
         <!-- Cómo Funciona Start -->
         <div class="container-fluid destination py-5">
@@ -532,6 +558,7 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
         </div>
         <!-- Old Destination Section End -->
 
+        <?php if ($detailed_services_enabled === 1) { ?>
         <!-- Servicios Detallados Start -->
         <div class="container-fluid ExploreTour py-5 bg-light">
             <div class="container py-5">
@@ -568,6 +595,7 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
             </div>
         </div>
         <!-- Servicios Detallados End -->
+        <?php } ?>
 
         <!-- Call to Action Start -->
         <div class="container-fluid py-5" style="background: linear-gradient(rgba(19, 53, 123, 0.9), rgba(19, 53, 123, 0.9)), url(img/about-img-1.png);">
@@ -669,6 +697,34 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
 
         <!-- Template Javascript -->
         <script src="js/main.js"></script>
+        <?php if ($show_video_hero) { ?>
+        <script>
+            (function () {
+                var video = document.getElementById('homeHeroVideo');
+                var toggle = document.getElementById('heroVideoAudioToggle');
+                if (!video || !toggle) {
+                    return;
+                }
+
+                function syncState() {
+                    var isMuted = !!video.muted;
+                    toggle.textContent = isMuted ? 'Listen' : 'Mute';
+                    toggle.setAttribute('aria-pressed', isMuted ? 'false' : 'true');
+                    toggle.setAttribute('aria-label', isMuted ? 'Enable video audio' : 'Mute video audio');
+                }
+
+                toggle.addEventListener('click', function () {
+                    video.muted = !video.muted;
+                    if (!video.muted) {
+                        video.volume = 1;
+                    }
+                    syncState();
+                });
+
+                syncState();
+            })();
+        </script>
+        <?php } ?>
     </body>
 
 </html>

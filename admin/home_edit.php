@@ -6,7 +6,7 @@ $rst   = mysqli_fetch_array($busca);
 $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_como_funciona = mysqli_query($conexion,"SELECT * FROM home_como_funciona WHERE activo = '0' ORDER BY step_number ASC");
-$busca_services = mysqli_query($conexion,"SELECT * FROM home_services WHERE activo = '0' ORDER BY orden ASC");
+$busca_services = mysqli_query($conexion,"SELECT * FROM home_services ORDER BY orden ASC");
 $busca_booking = mysqli_query($conexion,"SELECT * FROM home_booking WHERE activo = '1' ORDER BY id DESC");
 $initial_site_tab = isset($_GET['tab']) ? $_GET['tab'] : '';
 $initial_site_tab = ($initial_site_tab === 'booking') ? 'booking' : '';
@@ -32,6 +32,68 @@ mysqli_data_seek($busca_services, 0);
         <link href="../assets/pages/css/about.css" rel="stylesheet" type="text/css" />
         <!-- END PAGE LEVEL STYLES -->
         <style>
+            .hero-settings-preview {
+                border: 1px solid #dfe7f1;
+                border-radius: 6px;
+                padding: 24px;
+                background: linear-gradient(135deg, #123a7a 0%, #091a37 100%);
+                color: #fff;
+                margin-bottom: 20px;
+                min-height: 240px;
+                position: relative;
+                overflow: hidden;
+            }
+            .hero-settings-preview__badge {
+                display: inline-block;
+                padding: 6px 10px;
+                border-radius: 999px;
+                background: rgba(255,255,255,.14);
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: .08em;
+                text-transform: uppercase;
+                margin-bottom: 16px;
+            }
+            .hero-settings-preview__media {
+                position: absolute;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                width: 42%;
+                background-position: center;
+                background-size: cover;
+                opacity: .32;
+            }
+            .hero-settings-preview__content {
+                position: relative;
+                z-index: 2;
+                max-width: 60%;
+            }
+            .hero-settings-preview__meta {
+                font-size: 13px;
+                opacity: .85;
+            }
+            .hero-settings-card {
+                border: 1px solid #e1e6ef;
+                border-radius: 4px;
+                background: #fff;
+                padding: 20px;
+                box-shadow: 0 1px 2px rgba(0,0,0,.04);
+            }
+            .hero-settings-actions {
+                display: flex;
+                gap: 10px;
+                flex-wrap: wrap;
+                margin-top: 15px;
+            }
+            .hero-settings-note {
+                font-size: 12px;
+                color: #6c7a89;
+                margin-top: 6px;
+            }
+            .hero-settings-group[hidden] {
+                display: none !important;
+            }
             .carrucel-sidebar .carrucel-list {
                 list-style: none;
                 margin: 0;
@@ -116,6 +178,22 @@ mysqli_data_seek($busca_services, 0);
                 margin-right: 8px;
                 font-size: 16px;
             }
+            .service-status-badge {
+                display: inline-block;
+                margin-left: 8px;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: .04em;
+                text-transform: uppercase;
+                background: #eaf7ee;
+                color: #1d7d46;
+            }
+            .service-status-badge.is-hidden {
+                background: #fbe8e8;
+                color: #a94442;
+            }
         </style>
         <?php echo $theme_layout_style;?>
         <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
@@ -173,6 +251,19 @@ mysqli_data_seek($busca_services, 0);
                                 <nav class="navbar" role="navigation">
                                     <!-- Brand and toggle get grouped for better mobile display -->
                                     <!-- Collect the nav links, forms, and other content for toggling -->
+                                    <h3>Hero Principal</h3>
+                                    <div class="carrucel-sidebar">
+                                        <ul class="nav navbar-nav margin-bottom-35 carrucel-list">
+                                            <li class="btn-hero-settings carrucel-item" id="btn-hero-settings">
+                                                <div class="carrucel-item__content">
+                                                    <a class="carrucel-link" onclick="open_hero_settings()">
+                                                        <span class="carrucel-link__icon"><i class="icon-control-play"></i></span>
+                                                        <span>Configuración del hero</span>
+                                                    </a>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                    </div>
                                     <h3>Carrucel</h3>
                                     <div class="carrucel-sidebar">
                                         <ul class="nav navbar-nav margin-bottom-35 carrucel-list">
@@ -233,16 +324,28 @@ mysqli_data_seek($busca_services, 0);
                                     <h3>Servicios Detallados</h3>
                                     <div class="services-sidebar">
                                         <ul class="nav navbar-nav margin-bottom-35 services-list">
+                                            <li class="btn-service-settings service-item" id="btn-service-settings">
+                                                <div class="service-item__content">
+                                                    <a class="service-link" onclick="open_service_settings()">
+                                                        <span class="service-link__icon"><i class="icon-settings"></i></span>
+                                                        <span>Configuración de sección</span>
+                                                    </a>
+                                                </div>
+                                            </li>
                                             <?php 
                                                 $p = 0;
                                                 while($fil_service = mysqli_fetch_array($busca_services)){ 
                                                     $id_service = $fil_service['id'];
+                                                    $service_visible = (!isset($fil_service['activo']) || (string)$fil_service['activo'] === '0');
                                             ?>
                                             <li class="btn-service service-item" id="btn-service-<?php echo $p;?>">
                                                 <div class="service-item__content">
                                                     <a class="service-link" onclick="open_service(<?php echo $p;?>,<?php echo $id_service;?>)">
                                                         <span class="service-link__icon"><i class="<?php echo $fil_service['icon_class'];?>"></i></span>
                                                         <span><?php echo $fil_service['title'];?></span>
+                                                        <span class="service-status-badge <?php echo $service_visible ? '' : 'is-hidden'; ?>" id="service-status-<?php echo $id_service;?>">
+                                                            <?php echo $service_visible ? 'Visible' : 'Oculto'; ?>
+                                                        </span>
                                                     </a>
                                                 </div>
                                             </li>
