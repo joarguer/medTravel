@@ -3,13 +3,66 @@ $page_title = 'Medical Travel Blog | MedTravel';
 $page_description = 'Discover updates, patient-oriented guidance, and medical travel stories from MedTravel.';
 $page_canonical = 'https://medtravel.com.co/blog.php';
 include('inc/include.php'); 
+require_once __DIR__ . '/inc/blog_header.php';
+
+if (!function_exists('blog_author_avatar_href')) {
+    function blog_author_avatar_href($avatar)
+    {
+        $normalized = trim((string)$avatar);
+        if ($normalized === '') {
+            return '';
+        }
+
+        if (preg_match('~^https?://~i', $normalized) || strpos($normalized, '//') === 0) {
+            return $normalized;
+        }
+
+        $normalized = str_replace('\\', '/', $normalized);
+        $normalized = ltrim($normalized, '/');
+        $normalized = preg_replace('~^(\.\./)+~', '', $normalized);
+
+        if (preg_match('~^img/perfil/[^/]+$~i', $normalized)) {
+            return '/admin/' . $normalized;
+        }
+
+        if (preg_match('~^admin/img/perfil/[^/]+$~i', $normalized)) {
+            return '/' . $normalized;
+        }
+
+        return '/' . $normalized;
+    }
+}
 
 // Fetch published blog posts
 $posts = [];
-$sql_posts = "SELECT id, title, slug, excerpt, body, cover_image, author_name, DATE_FORMAT(COALESCE(published_at, created_at), '%b %e, %Y') as published_on
-              FROM blog_posts
-              WHERE status = 'published'
-              ORDER BY COALESCE(published_at, created_at) DESC
+$blogHeader = mt_blog_fetch_header($conexion);
+$blogHeaderTitle = trim((string)($blogHeader['title'] ?? '')) ?: 'Our Blog';
+$blogHeaderSubtitle = trim((string)($blogHeader['subtitle'] ?? '')) ?: 'Discover experiences and updates from our medical travel community.';
+$blogHeaderImage = trim((string)($blogHeader['bg_image'] ?? ''));
+$hasAuthorUserId = false;
+$authorUserIdCheck = mysqli_query($conexion, "SHOW COLUMNS FROM blog_posts LIKE 'author_user_id'");
+if ($authorUserIdCheck && mysqli_num_rows($authorUserIdCheck) > 0) {
+    $hasAuthorUserId = true;
+}
+if ($authorUserIdCheck) {
+    mysqli_free_result($authorUserIdCheck);
+}
+$authorUserSelect = $hasAuthorUserId
+    ? "bp.author_user_id, COALESCE(au.avatar, '') AS author_avatar, COALESCE(NULLIF(TRIM(au.nombre), ''), '') AS author_user_name,"
+    : "NULL AS author_user_id, '' AS author_avatar, '' AS author_user_name,";
+$authorUserJoin = $hasAuthorUserId
+    ? "LEFT JOIN usuarios au ON au.id = bp.author_user_id"
+    : "";
+$sql_posts = "SELECT bp.id, bp.title, bp.slug, bp.excerpt, bp.body, bp.cover_image, bp.author_name, bp.provider_id,
+                     {$authorUserSelect}
+                     COALESCE(p.name, '') AS provider_name,
+                     COALESCE(p.city, '') AS provider_city,
+                     DATE_FORMAT(COALESCE(bp.published_at, bp.created_at), '%b %e, %Y') as published_on
+              FROM blog_posts bp
+              LEFT JOIN providers p ON p.id = bp.provider_id
+              {$authorUserJoin}
+              WHERE bp.status = 'published'
+              ORDER BY COALESCE(bp.published_at, bp.created_at) DESC
               LIMIT 9";
 $res_posts = mysqli_query($conexion, $sql_posts);
 if ($res_posts) {
@@ -48,9 +101,10 @@ if ($res_posts) {
         <!-- Navbar & Hero End -->
 
         <!-- Header Start -->
-        <div class="container-fluid bg-breadcrumb">
+        <div class="container-fluid bg-breadcrumb" <?php if ($blogHeaderImage !== ''): ?>style="background-image: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.45)), url('<?php echo htmlspecialchars($blogHeaderImage, ENT_QUOTES, 'UTF-8'); ?>'); background-size: cover; background-position: center;"<?php endif; ?>>
             <div class="container text-center py-5" style="max-width: 900px;">
-                <h3 class="text-white display-3 mb-4">Our Blog</h1>
+                <h3 class="text-white display-3 mb-4"><?php echo htmlspecialchars($blogHeaderTitle, ENT_QUOTES, 'UTF-8'); ?></h3>
+                <p class="text-white mb-4"><?php echo htmlspecialchars($blogHeaderSubtitle, ENT_QUOTES, 'UTF-8'); ?></p>
                 <ol class="breadcrumb justify-content-center mb-0">
                     <li class="breadcrumb-item"><a href="index.html">Home</a></li>
                     <li class="breadcrumb-item"><a href="#">Pages</a></li>
@@ -92,6 +146,14 @@ if ($res_posts) {
                                 }
                             }
                             $excerpt_safe = htmlspecialchars($teaser ?: '...', ENT_QUOTES, 'UTF-8');
+                            $authorName = trim((string)($post['author_name'] ?? ''));
+                            $authorUserName = trim((string)($post['author_user_name'] ?? ''));
+                            $providerName = trim((string)($post['provider_name'] ?? ''));
+                            $providerCity = trim((string)($post['provider_city'] ?? ''));
+                            $authorName = $authorName !== '' ? $authorName : $authorUserName;
+                            $authorName = $authorName !== '' ? $authorName : 'MedTravel Editorial Team';
+                            $authorAvatarPath = blog_author_avatar_href($post['author_avatar'] ?? '');
+                            $hasProviderContributor = ((int)($post['provider_id'] ?? 0) > 0 && $providerName !== '');
                         ?>
                         <div class="col-lg-4 col-md-6">
                             <div class="blog-item h-100 shadow-sm border rounded-3 overflow-hidden d-flex flex-column">
@@ -104,11 +166,22 @@ if ($res_posts) {
                                     </div>
                                     <div class="blog-info d-flex align-items-center border border-start-0 border-end-0">
                                         <small class="flex-fill text-center border-end py-2"><i class="fa fa-calendar-alt text-primary me-2"></i><?php echo htmlspecialchars($post['published_on'], ENT_QUOTES, 'UTF-8'); ?></small>
-                                        <span class="btn-hover flex-fill text-center text-white py-2"><?php echo htmlspecialchars($post['author_name'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                        <span class="btn-hover flex-fill text-center text-white py-2"><?php echo htmlspecialchars($hasProviderContributor ? 'Specialist Contributor' : 'MedTravel Editorial', ENT_QUOTES, 'UTF-8'); ?></span>
                                     </div>
                                 </div>
                                 <div class="blog-content border border-top-0 rounded-bottom p-4 flex-grow-1 d-flex flex-column">
-                                    <p class="mb-3">Posted by: <?php echo htmlspecialchars($post['author_name'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <div class="<?php echo $hasProviderContributor ? 'mb-1' : 'mb-3'; ?> d-flex align-items-center">
+                                        <?php if ($authorAvatarPath !== ''): ?>
+                                            <img src="<?php echo htmlspecialchars($authorAvatarPath, ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($authorName, ENT_QUOTES, 'UTF-8'); ?>" class="rounded-circle me-2" style="width: 36px; height: 36px; object-fit: cover;">
+                                        <?php endif; ?>
+                                        <p class="mb-0">Written by: <?php echo htmlspecialchars($authorName, ENT_QUOTES, 'UTF-8'); ?></p>
+                                    </div>
+                                    <?php if ($hasProviderContributor): ?>
+                                        <p class="text-muted small mb-1">Specialist contributor: <?php echo htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <?php endif; ?>
+                                    <?php if ($hasProviderContributor && $providerCity !== ''): ?>
+                                        <p class="text-muted small mb-3"><i class="fa fa-map-marker-alt text-primary me-2"></i><?php echo htmlspecialchars($providerCity, ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <?php endif; ?>
                                     <h4 class="h4"><?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?></h4>
                                     <p class="my-3 flex-grow-1"><?php echo $excerpt_safe; ?></p>
                                     <a href="/blog_post.php?slug=<?php echo urlencode($post['slug']); ?>" class="btn btn-primary rounded-pill py-2 px-4 mt-auto">Read More</a>
