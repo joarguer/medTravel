@@ -69,7 +69,7 @@ include('inc/include.php');
                     </div>
                     <div class="col-lg-7" style="background: linear-gradient(rgba(255, 255, 255, .8), rgba(255, 255, 255, .8)), url(<?php echo $rst_us['bg'];?>);">
                         <h5 class="section-about-title pe-3"><?php echo $rst_us['titulo_small'];?></h5>
-                        <h1 class="mb-4"><?php echo $rst_us['titulo_1'];?> <span class="text-primary"><?php echo $rst_us['titulo_2'];?></span></h1>
+                        <h1 class="mb-4"><?php echo $rst_us['titulo_1'];?><br><small><span class="text-primary"><?php echo $rst_us['titulo_2'];?></span></small></h1>
                         <?php echo $rst_us['paragrafo'];?>
                         <div class="row gy-2 gx-4 mb-4">
                             <?php

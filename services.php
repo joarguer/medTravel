@@ -74,7 +74,8 @@ if (!empty($services_schema_items)) {
     ]];
 }
 
-include('inc/include.php'); 
+include('inc/include.php');
+require_once __DIR__ . '/inc/testimonials.php';
 
 function format_price($amount, $currency){
     $symbol = ($currency === 'USD') ? '$' : ($currency === 'COP' ? '$' : '');
@@ -430,90 +431,40 @@ function format_price($amount, $currency){
         <div class="container-fluid testimonial py-5">
             <div class="container py-5">
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
-                    <h5 class="section-title px-3">Testimonial</h5>
-                    <h1 class="mb-0">Our Clients Say!!!</h1>
+                    <h5 class="section-title px-3">Testimonials</h5>
+                    <h1 class="mb-0">What Our Clients Say!</h1>
                 </div>
                 <div class="testimonial-carousel owl-carousel">
+                    <?php
+                    $testimonials = mt_testimonials_fetch_approved($conexion, 6);
+                    foreach ($testimonials as $testimonial) {
+                        $comment = nl2br(mt_testimonials_escape($testimonial['comment'] ?? ''));
+                        $avatar = mt_testimonials_escape(mt_testimonials_avatar_path($testimonial));
+                        $name = mt_testimonials_escape($testimonial['client_name'] ?? '');
+                        $location = mt_testimonials_escape($testimonial['client_location'] ?? '');
+                        $stars = mt_testimonials_render_stars($testimonial['rating'] ?? 5);
+                        $initial = mt_testimonials_escape(mt_testimonials_initial($testimonial['client_name'] ?? ''));
+                    ?>
                     <div class="testimonial-item text-center rounded pb-4">
                         <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Quis nostrum cupiditate, eligendi repellendus saepe illum earum architecto dicta quisquam quasi porro officiis. Vero reiciendis,
-                            </p>
+                            <p class="text-center mb-5"><?php echo $comment; ?></p>
                         </div>
                         <div class="testimonial-img p-1">
-                            <img src="img/testimonial-1.jpg" class="img-fluid rounded-circle" alt="Image">
+                            <?php if ($avatar !== '') { ?>
+                                <img src="<?php echo $avatar; ?>" class="img-fluid rounded-circle" alt="Image">
+                            <?php } else { ?>
+                                <div class="testimonial-avatar-default"><?php echo $initial; ?></div>
+                            <?php } ?>
                         </div>
                         <div style="margin-top: -35px;">
-                            <h5 class="mb-0">John Abraham</h5>
-                            <p class="mb-0">New York, USA</p>
+                            <h5 class="mb-0"><?php echo $name; ?></h5>
+                            <p class="mb-0"><?php echo $location; ?></p>
                             <div class="d-flex justify-content-center">
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
+                                <?php echo $stars; ?>
                             </div>
                         </div>
                     </div>
-                    <div class="testimonial-item text-center rounded pb-4">
-                        <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Quis nostrum cupiditate, eligendi repellendus saepe illum earum architecto dicta quisquam quasi porro officiis. Vero reiciendis,
-                            </p>
-                        </div>
-                        <div class="testimonial-img p-1">
-                            <img src="img/testimonial-2.jpg" class="img-fluid rounded-circle" alt="Image">
-                        </div>
-                        <div style="margin-top: -35px;">
-                            <h5 class="mb-0">John Abraham</h5>
-                            <p class="mb-0">New York, USA</p>
-                            <div class="d-flex justify-content-center">
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="testimonial-item text-center rounded pb-4">
-                        <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Quis nostrum cupiditate, eligendi repellendus saepe illum earum architecto dicta quisquam quasi porro officiis. Vero reiciendis,
-                            </p>
-                        </div>
-                        <div class="testimonial-img p-1">
-                            <img src="img/testimonial-3.jpg" class="img-fluid rounded-circle" alt="Image">
-                        </div>
-                        <div style="margin-top: -35px;">
-                            <h5 class="mb-0">John Abraham</h5>
-                            <p class="mb-0">New York, USA</p>
-                            <div class="d-flex justify-content-center">
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="testimonial-item text-center rounded pb-4">
-                        <div class="testimonial-comment bg-light rounded p-4">
-                            <p class="text-center mb-5">Lorem ipsum dolor, sit amet consectetur adipisicing elit. Quis nostrum cupiditate, eligendi repellendus saepe illum earum architecto dicta quisquam quasi porro officiis. Vero reiciendis,
-                            </p>
-                        </div>
-                        <div class="testimonial-img p-1">
-                            <img src="img/testimonial-4.jpg" class="img-fluid rounded-circle" alt="Image">
-                        </div>
-                        <div style="margin-top: -35px;">
-                            <h5 class="mb-0">John Abraham</h5>
-                            <p class="mb-0">New York, USA</p>
-                            <div class="d-flex justify-content-center">
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                                <i class="fas fa-star text-primary"></i>
-                            </div>
-                        </div>
-                    </div>
+                    <?php } ?>
                 </div>
             </div>
         </div>

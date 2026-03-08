@@ -46,6 +46,10 @@ function mt_is_assoc_array(array $array): bool {
 $page_title = $page_title ?? 'MedTravel - Tourism and Health';
 $page_description = $page_description ?? 'Medical tourism services in Colombia. We connect international patients with trusted providers and coordinate their care.';
 $page_robots = $page_robots ?? 'index,follow,max-image-preview:large';
+$page_og_type = $page_og_type ?? 'website';
+$page_og_site_name = $page_og_site_name ?? 'MedTravel';
+$page_twitter_card = $page_twitter_card ?? 'summary_large_image';
+$page_meta_extra = $page_meta_extra ?? '';
 $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
 $request_path = parse_url((string)$request_uri, PHP_URL_PATH);
 if (!is_string($request_path) || $request_path === '') {
@@ -121,6 +125,11 @@ $meta_robots = htmlspecialchars((string)$page_robots, ENT_QUOTES, 'UTF-8');
 $meta_canonical = htmlspecialchars((string)$page_canonical, ENT_QUOTES, 'UTF-8');
 $meta_og_image = htmlspecialchars((string)$page_og_image, ENT_QUOTES, 'UTF-8');
 $meta_lang = htmlspecialchars((string)$page_lang, ENT_QUOTES, 'UTF-8');
+$meta_og_type = htmlspecialchars((string)$page_og_type, ENT_QUOTES, 'UTF-8');
+$meta_og_site_name = htmlspecialchars((string)$page_og_site_name, ENT_QUOTES, 'UTF-8');
+$meta_twitter_card = htmlspecialchars((string)$page_twitter_card, ENT_QUOTES, 'UTF-8');
+$meta_extra = is_string($page_meta_extra) ? trim($page_meta_extra) : '';
+$meta_extra = $meta_extra !== '' ? "\n    " . $meta_extra : '';
 
 $head = '<meta charset="utf-8">
     <title>' . $meta_title . '</title>
@@ -129,16 +138,16 @@ $head = '<meta charset="utf-8">
     <meta name="robots" content="' . $meta_robots . '">
     <meta name="language" content="' . $meta_lang . '">
     <link rel="canonical" href="' . $meta_canonical . '">
-    <meta property="og:type" content="website">
-    <meta property="og:site_name" content="MedTravel">
+    <meta property="og:type" content="' . $meta_og_type . '">
+    <meta property="og:site_name" content="' . $meta_og_site_name . '">
     <meta property="og:title" content="' . $meta_title . '">
     <meta property="og:description" content="' . $meta_description . '">
     <meta property="og:url" content="' . $meta_canonical . '">
     <meta property="og:image" content="' . $meta_og_image . '">
-    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:card" content="' . $meta_twitter_card . '">
     <meta name="twitter:title" content="' . $meta_title . '">
     <meta name="twitter:description" content="' . $meta_description . '">
-    <meta name="twitter:image" content="' . $meta_og_image . '">
+    <meta name="twitter:image" content="' . $meta_og_image . '">' . $meta_extra . '
 
     <!-- Google Web Fonts -->
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css" integrity="sha384-DyZ88mC6Up2uqS4h/KRgHuoeGwBcD4Ng9SiP4dIRy0EXTlnuz47vAwmeGwVChigm" crossorigin="anonymous"/>
@@ -187,9 +196,7 @@ $topbar = '<div class="container-fluid bg-primary px-5 d-none d-lg-block">
     <div class="row gx-0">
         <div class="col-lg-8 text-center text-lg-start mb-2 mb-lg-0">
             <div class="d-inline-flex align-items-center" style="height: 45px;">
-                <a class="btn btn-sm btn-outline-light btn-sm-square rounded-circle me-2" href=""><i class="fab fa-twitter fw-normal"></i></a>
                 <a class="btn btn-sm btn-outline-light btn-sm-square rounded-circle me-2" href=""><i class="fab fa-facebook-f fw-normal"></i></a>
-                <a class="btn btn-sm btn-outline-light btn-sm-square rounded-circle me-2" href=""><i class="fab fa-linkedin-in fw-normal"></i></a>
                 <a class="btn btn-sm btn-outline-light btn-sm-square rounded-circle me-2" href=""><i class="fab fa-instagram fw-normal"></i></a>
                 <a class="btn btn-sm btn-outline-light btn-sm-square rounded-circle" href=""><i class="fab fa-youtube fw-normal"></i></a>
             </div>
@@ -233,6 +240,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 $home_active = ($current_page == 'index.php') ? 'active' : '';
 $about_active = ($current_page == 'about.php') ? 'active' : '';
 $services_active = (in_array($current_page, ['offers.php', 'offer_detail.php', 'services.php'])) ? 'active' : '';
+$blog_active = (in_array($current_page, ['blog.php', 'blog_post.php'])) ? 'active' : '';
 $booking_active = ($current_page == 'booking.php') ? 'active' : '';
 $contact_active = ($current_page == 'contact.php') ? 'active' : '';
 
@@ -241,6 +249,7 @@ $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
         <a href="index.php" class="nav-item nav-link ' . $home_active . '">Home</a>
         <a href="about.php" class="nav-item nav-link ' . $about_active . '">About</a>
         <a href="services.php" class="nav-item nav-link ' . $services_active . '">Services</a>
+        <a href="blog.php" class="nav-item nav-link ' . $blog_active . '">Blog</a>
         <a href="booking.php" class="nav-item nav-link ' . $booking_active . '">Booking</a>
         <div class="nav-item dropdown">
             <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">Medical Services</a>
@@ -322,9 +331,7 @@ $footer = '<div class="container-fluid footer py-5">
                     <div class="d-flex align-items-center">
                         <i class="fas fa-share fa-2x text-white me-2"></i>
                         <a class="btn-square btn btn-primary rounded-circle mx-1" href=""><i class="fab fa-facebook-f"></i></a>
-                        <a class="btn-square btn btn-primary rounded-circle mx-1" href=""><i class="fab fa-twitter"></i></a>
                         <a class="btn-square btn btn-primary rounded-circle mx-1" href=""><i class="fab fa-instagram"></i></a>
-                        <a class="btn-square btn btn-primary rounded-circle mx-1" href=""><i class="fab fa-linkedin-in"></i></a>
                     </div>
                 </div>
             </div>
@@ -397,7 +404,7 @@ $contact = '<div class="container-fluid contact bg-light py-5">
                                 <div class="text-center mb-4">
                                     <i class="fa fa-map-marker-alt fa-3x text-primary"></i>
                                     <h4 class="text-primary"><Address></Address></h4>
-                                    <p class="mb-0">123 ranking Street, <br> New York, USA</p>
+                                    <p class="mb-0">417 Golden River Drive West, <br> Palm Beach Fl. 33411, USA</p>
                                 </div>
                                 <div class="text-center mb-4">
                                     <i class="fa fa-phone-alt fa-3x text-primary mb-3"></i>
