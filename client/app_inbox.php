@@ -11,6 +11,10 @@ if (isset($conexion) && $conexion) {
     $ownerScope = client_build_booking_owner_scope($conexion, 'br', (int)$clientUserId, client_get_session_email());
     $requestId = isset($_GET['request_id']) ? (int)$_GET['request_id'] : (isset($_GET['booking_id']) ? (int)$_GET['booking_id'] : 0);
     $itemId = isset($_GET['item_id']) ? (int)$_GET['item_id'] : 0;
+    $initialThreadType = strtoupper(trim((string)($_GET['thread_type'] ?? 'CARE')));
+    if (!in_array($initialThreadType, ['CARE', 'ITEM'], true)) {
+        $initialThreadType = 'CARE';
+    }
     $bookingIdForFee = $requestId > 0 ? $requestId : 0;
 
     if ($bookingIdForFee <= 0 && $itemId > 0 && ($ownerScope['sql'] ?? '1=0') !== '1=0') {
@@ -42,7 +46,7 @@ if (isset($conexion) && $conexion) {
         }
     }
 
-    if ($bookingIdForFee > 0) {
+    if ($bookingIdForFee > 0 && $initialThreadType !== 'CARE') {
         $clientFeeGateActive = is_booking_fee_required($conexion, $bookingIdForFee);
     }
 

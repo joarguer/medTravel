@@ -1516,12 +1516,12 @@
             var feeStatus = String(res.fee_status || '').toLowerCase();
             var computedFeeLocked = (feeRequired && feeStatus !== 'paid');
             var feeLocked = !!res.fee_locked || computedFeeLocked;
-            setFeeGateState(feeLocked, res.fee_message || 'Unlock after Coordination Fee.');
+            var isCareThread = String(currentThread.thread_type || '').toUpperCase() === 'CARE';
+            setFeeGateState(isCareThread ? false : feeLocked, res.fee_message || 'Unlock after Coordination Fee.');
             var commissionGateEnabled = parseInt(res.commission_gate_enabled || 0, 10) === 1;
             var commissionPaidFlag = parseInt(res.commission_paid || 0, 10) === 1;
             setCommissionGateState(commissionGateEnabled, commissionPaidFlag, res.commission_message || '');
             var canSendFreeMessage = (typeof res.can_send_free_message === 'boolean') ? res.can_send_free_message : !feeLocked;
-            var isCareThread = String(currentThread.thread_type || '').toUpperCase() === 'CARE';
             var effectiveCanSendFreeMessage = isCareThread ? true : canSendFreeMessage;
             var composeNotice = isCareThread ? '' : (res.free_message_notice || '');
             setComposeGateState(effectiveCanSendFreeMessage, composeNotice);
@@ -1572,7 +1572,7 @@
             toastr.warning('Commission payment required');
             return;
         }
-        if (feeGateActive) {
+        if (feeGateActive && String(currentThread.thread_type || '').toUpperCase() !== 'CARE') {
             toastr.warning('Unlock after Coordination Fee');
             return;
         }

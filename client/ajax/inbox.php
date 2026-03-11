@@ -508,15 +508,15 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
     }
 
     $bookingRequestId = (int)($ctx['request_id'] ?? 0);
+    $isCareThread = (strtoupper((string)($ctx['thread_type'] ?? '')) === 'CARE');
     $feeGate = client_inbox_fee_gate_state($conexion, $bookingRequestId);
-    $feeLocked = !empty($feeGate['fee_locked']);
+    $feeLocked = !$isCareThread && !empty($feeGate['fee_locked']);
     $feeRequired = (int)($feeGate['fee_required'] ?? 0);
     $feeStatus = (string)($feeGate['fee_status'] ?? 'pending');
     $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
     $commissionGateEnabled = !empty($commissionGate['enabled']);
     $commissionPaid = !empty($commissionGate['paid']);
     $commissionLocked = $commissionGateEnabled && !$commissionPaid;
-    $isCareThread = (strtoupper((string)($ctx['thread_type'] ?? '')) === 'CARE');
     $freeMessageState = client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate);
     $canSendFreeMessage = !empty($freeMessageState['can_send_free_message']);
     if (!$feeLocked && !$isCareThread) {
