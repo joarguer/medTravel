@@ -816,7 +816,8 @@ if ($action === 'list_messages') {
 
     $documents = [];
     $documentsError = '';
-    if (inbox_table_exists($conexion, 'client_documents')) {
+    $isItemThread = (strtoupper((string)($ctx['thread_type'] ?? '')) === 'ITEM') && ((int)($ctx['item_id'] ?? 0) > 0);
+    if ($isItemThread && inbox_table_exists($conexion, 'client_documents')) {
         $docHasRequestId = inbox_table_has_column($conexion, 'client_documents', 'booking_request_id');
         $docHasItemId = inbox_table_has_column($conexion, 'client_documents', 'item_id');
         if (!$docHasRequestId || !$docHasItemId) {
@@ -936,8 +937,6 @@ if ($action === 'list_messages') {
                     $docSql .= " AND (item_id = ? OR item_id IS NULL)";
                     $docTypes .= 'i';
                     $docParams[] = (int)$ctx['item_id'];
-                } elseif (strtoupper((string)($ctx['thread_type'] ?? 'CARE')) === 'CARE') {
-                    $docSql .= " AND item_id IS NULL";
                 }
                 $docSql .= " ORDER BY " . $orderByColumn . " DESC";
                 $stmtDocs = mysqli_prepare($conexion, $docSql);

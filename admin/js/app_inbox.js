@@ -763,6 +763,10 @@
     }
 
     function renderThreadDocuments(docs) {
+        var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+        if (!isItemThread) {
+            return '';
+        }
         var hasDocs = docs && docs.length > 0;
         var countHtml = hasDocs
             ? ' <span class="badge" style="background:#7f8c9d;">' + docs.length + '</span>'

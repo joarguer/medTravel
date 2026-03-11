@@ -27,6 +27,7 @@
     var selectedFiles = [];
     var composeFiles = [];
     var currentDocuments = [];
+    var currentDocumentsThreadId = '';
     var composeBusy = false;
     var composeBusyMessage = '';
     var feeGateActive = !!config.feeGateActive;
@@ -715,6 +716,10 @@
     }
 
     function renderThreadDocuments() {
+        var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+        if (!isItemThread) {
+            return '';
+        }
         if (!currentDocuments || !currentDocuments.length) {
             return '';
         }
@@ -1813,6 +1818,12 @@
 
     function loadMessages() {
         if (!currentThread || !currentThread.thread_id) return;
+
+        var activeThreadId = String(currentThread.thread_id || '');
+        if (currentDocumentsThreadId !== activeThreadId) {
+            currentDocuments = [];
+            currentDocumentsThreadId = activeThreadId;
+        }
 
         realtimeJoinThread(currentThread.thread_id);
         hideTypingIndicator();
