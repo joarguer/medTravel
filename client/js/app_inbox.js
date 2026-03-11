@@ -1885,10 +1885,6 @@
 
     function uploadComposeDocuments() {
         var deferred = $.Deferred();
-        if (composeBusy) {
-            deferred.reject({ message: 'Upload already in progress' });
-            return deferred.promise();
-        }
         if (!currentThread || !currentThread.thread_id) {
             deferred.reject({ message: 'Select a thread before uploading' });
             return deferred.promise();
