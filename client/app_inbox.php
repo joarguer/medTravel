@@ -378,6 +378,17 @@ if (isset($conexion) && $conexion) {
                                 </form>
                             </div>
                             <div class="inbox-content" id="client-inbox-content" style="display:none;">
+                                <div id="client-inbox-docs-panel" class="panel panel-default" style="display:none;margin-bottom:12px;">
+                                    <div class="panel-heading" style="padding:8px 12px;">
+                                        <a href="#client-inbox-docs-collapse" data-toggle="collapse" aria-expanded="false" aria-controls="client-inbox-docs-collapse" style="display:flex;align-items:center;justify-content:space-between;text-decoration:none;">
+                                            <span><i class="fa fa-paperclip" aria-hidden="true"></i> View shared documents</span>
+                                            <span class="badge" id="client-inbox-docs-count">0</span>
+                                        </a>
+                                    </div>
+                                    <div id="client-inbox-docs-collapse" class="panel-collapse collapse">
+                                        <div class="panel-body" id="client-inbox-docs-content" style="padding:10px;"></div>
+                                    </div>
+                                </div>
                                 <div id="client-inbox-messages" style="max-height:420px;overflow:auto;border:1px solid #eef1f5;padding:12px;background:#fff;"></div>
                                 <form id="client-inbox-send-form" style="margin-top:12px;">
                                     <div class="form-group" style="margin-bottom:8px;">

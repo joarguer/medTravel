@@ -154,30 +154,36 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             margin-top: 8px;
         }
         /* ── Medical Documents section ── */
-        #admin-inbox-messages .mt-docs-section {
+        #admin-inbox-messages .mt-docs-section,
+        #admin-inbox-docs-content .mt-docs-section {
             border: 1px solid #d4e6f1;
             border-radius: 4px;
             background: #eaf4fb;
             padding: 10px 12px;
             margin-bottom: 14px;
         }
-        #admin-inbox-messages .mt-docs-header {
+        #admin-inbox-messages .mt-docs-header,
+        #admin-inbox-docs-content .mt-docs-header {
             font-size: 13px;
             color: #2471a3;
             margin-bottom: 8px;
         }
-        #admin-inbox-messages .mt-docs-icon { margin-right: 3px; }
-        #admin-inbox-messages .mt-docs-empty {
+        #admin-inbox-messages .mt-docs-icon,
+        #admin-inbox-docs-content .mt-docs-icon { margin-right: 3px; }
+        #admin-inbox-messages .mt-docs-empty,
+        #admin-inbox-docs-content .mt-docs-empty {
             margin: 4px 0 0;
             font-style: italic;
             font-size: 12px;
         }
-        #admin-inbox-messages .mt-docs-list {
+        #admin-inbox-messages .mt-docs-list,
+        #admin-inbox-docs-content .mt-docs-list {
             display: flex;
             flex-direction: column;
             gap: 5px;
         }
-        #admin-inbox-messages .mt-doc-row {
+        #admin-inbox-messages .mt-doc-row,
+        #admin-inbox-docs-content .mt-doc-row {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -186,19 +192,23 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             border-radius: 3px;
             padding: 5px 8px;
         }
-        #admin-inbox-messages .mt-doc-type { flex: 0 0 auto; }
-        #admin-inbox-messages .mt-doc-name {
+        #admin-inbox-messages .mt-doc-type,
+        #admin-inbox-docs-content .mt-doc-type { flex: 0 0 auto; }
+        #admin-inbox-messages .mt-doc-name,
+        #admin-inbox-docs-content .mt-doc-name {
             flex: 1 1 auto;
             font-size: 12px;
             min-width: 80px;
             word-break: break-all;
         }
-        #admin-inbox-messages .mt-doc-date {
+        #admin-inbox-messages .mt-doc-date,
+        #admin-inbox-docs-content .mt-doc-date {
             flex: 0 0 auto;
             font-size: 11px;
             white-space: nowrap;
         }
-        #admin-inbox-messages .mt-doc-download { flex: 0 0 auto; }
+        #admin-inbox-messages .mt-doc-download,
+        #admin-inbox-docs-content .mt-doc-download { flex: 0 0 auto; }
         /* ── Section divider ── */
         #admin-inbox-messages .mt-section-divider {
             font-size: 11px;
@@ -477,6 +487,17 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                 <div id="admin-inbox-title">Select a thread</div>
                             </div>
                             <div class="inbox-content" id="admin-inbox-content" style="display:none;">
+                                <div id="admin-inbox-docs-panel" class="panel panel-default" style="display:none;margin-bottom:12px;">
+                                    <div class="panel-heading" style="padding:8px 12px;">
+                                        <a href="#admin-inbox-docs-collapse" data-toggle="collapse" aria-expanded="false" aria-controls="admin-inbox-docs-collapse" style="display:flex;align-items:center;justify-content:space-between;text-decoration:none;">
+                                            <span><i class="fa fa-paperclip" aria-hidden="true"></i> View shared documents</span>
+                                            <span class="badge" id="admin-inbox-docs-count">0</span>
+                                        </a>
+                                    </div>
+                                    <div id="admin-inbox-docs-collapse" class="panel-collapse collapse">
+                                        <div class="panel-body" id="admin-inbox-docs-content" style="padding:10px;"></div>
+                                    </div>
+                                </div>
                                 <div id="admin-inbox-messages" style="max-height:420px;overflow:auto;border:1px solid #eef1f5;padding:12px;background:#fff;"></div>
                                 <div id="admin-inbox-fee-alert" class="note note-warning" style="display:none;margin-top:12px;">
                                     <strong>Coordination Fee required.</strong>

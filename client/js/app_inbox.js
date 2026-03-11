@@ -755,6 +755,27 @@
         return html;
     }
 
+    function syncThreadDocumentsPanel() {
+        var $panel = $('#client-inbox-docs-panel');
+        var $content = $('#client-inbox-docs-content');
+        var $count = $('#client-inbox-docs-count');
+        var $collapse = $('#client-inbox-docs-collapse');
+        if (!$panel.length || !$content.length || !$count.length || !$collapse.length) {
+            return;
+        }
+        var html = renderThreadDocuments();
+        if (!html) {
+            $content.html('');
+            $count.text('0');
+            $panel.hide();
+            $collapse.removeClass('in').css('height', '');
+            return;
+        }
+        $content.html(html);
+        $count.text(String(currentDocuments && currentDocuments.length ? currentDocuments.length : 0));
+        $panel.show();
+    }
+
     function setUploadStatusAlert(level, message) {
         var $status = $('#client-doc-upload-status');
         if (!$status.length) return;
@@ -1071,6 +1092,7 @@
             $('#client-inbox-content').hide();
             $('#client-inbox-empty').show();
             currentThread = null;
+            syncThreadDocumentsPanel();
             return;
         }
 
@@ -1193,13 +1215,12 @@
         var $box = $('#client-inbox-messages');
         if (!$box.length) return;
         if (!messages || !messages.length) {
-            var docsOnlyHtml = renderThreadDocuments();
-            $box.html(docsOnlyHtml + '<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
+            $box.html('<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
             return;
         }
 
         annotateGrouping(messages, null);
-        var html = renderThreadDocuments();
+        var html = '';
         messages.forEach(function (m) {
             var bodyHtml = formatMessageBody(m.body || '');
             html += buildClientMsgHtml(m, bodyHtml);
@@ -1871,6 +1892,7 @@
                 return id > 0 && freshIds.indexOf(id) === -1;
             });
             currentDocuments = freshDocs.concat(localOnly);
+            syncThreadDocumentsPanel();
 
             var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM';
             var headingText = isItemThread ? cleanServiceTitle(currentThread.thread_title || '') : careDisplayTitle();

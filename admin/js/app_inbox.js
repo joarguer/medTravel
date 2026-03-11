@@ -824,6 +824,27 @@
         '</div>';
     }
 
+    function syncThreadDocumentsPanel(docs) {
+        var $panel = $('#admin-inbox-docs-panel');
+        var $content = $('#admin-inbox-docs-content');
+        var $count = $('#admin-inbox-docs-count');
+        var $collapse = $('#admin-inbox-docs-collapse');
+        if (!$panel.length || !$content.length || !$count.length || !$collapse.length) {
+            return;
+        }
+        var html = renderThreadDocuments(docs || []);
+        if (!html) {
+            $content.html('');
+            $count.text('0');
+            $panel.hide();
+            $collapse.removeClass('in').css('height', '');
+            return;
+        }
+        $content.html(html);
+        $count.text(String(($.isArray(docs) ? docs.length : 0)));
+        $panel.show();
+    }
+
     function isSystemActionMessage(body) {
         var text = String(body || '').trim();
         if (text.indexOf('[REQUEST_INFO]') === 0) return true;
@@ -1242,6 +1263,7 @@
             $('#admin-inbox-content').hide();
             $('#admin-inbox-empty').show();
             currentThread = null;
+            syncThreadDocumentsPanel([]);
             return;
         }
 
@@ -1387,15 +1409,14 @@
     function renderMessages(messages) {
         var $box = $('#admin-inbox-messages');
         if (!$box.length) return;
-        var docsHtml = renderThreadDocuments(currentDocuments);
         var divider = '<div class="mt-section-divider">Messages</div>';
         if (!messages || !messages.length) {
-            $box.html(docsHtml + divider + '<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
+            $box.html(divider + '<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
             return;
         }
 
         annotateGrouping(messages, null);
-        var html = docsHtml + divider;
+        var html = divider;
         messages.forEach(function (m) {
             var bodyHtml = formatAdminMessageBody(m.body || '');
             var sysMsg = isSystemActionMessage(m.body || '');
@@ -1901,6 +1922,7 @@
                 return id > 0 && freshIds.indexOf(id) === -1;
             });
             currentDocuments = freshDocs.concat(localOnly);
+            syncThreadDocumentsPanel(currentDocuments);
 
             var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM';
             var headingText = isItemThread ? cleanServiceTitle(currentThread.thread_title || '') : 'MedTravel Coordination';
