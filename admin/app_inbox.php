@@ -471,6 +471,11 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                         <label for="admin-inbox-message">Write a message</label>
                                         <textarea class="form-control" id="admin-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..."></textarea>
                                     </div>
+                                    <div class="form-group" style="margin-bottom:8px;">
+                                        <input type="file" id="admin-chat-attach-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" multiple style="display:none;">
+                                        <button type="button" class="btn btn-default btn-sm" id="admin-chat-attach-btn"><i class="fa fa-paperclip"></i> Attach document</button>
+                                        <div id="admin-chat-attach-list" class="text-muted" style="margin-top:8px;display:none;"></div>
+                                    </div>
                                     <div id="admin-typing-indicator">Patient is typing…</div>
                                     <button type="submit" class="btn btn-primary"><i class="fa fa-paper-plane"></i> Send</button>
                                     <div id="admin-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Messaging will be available after the initial review. Please use the options above.</div>

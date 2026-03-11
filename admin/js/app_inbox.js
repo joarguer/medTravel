@@ -28,6 +28,7 @@
     var freeMessageAllowed = true;
     var lastComposeNotice = '';
     var currentDocuments = [];
+    var composeFiles = [];
     var quickReplies = {
         DATES_AVAILABLE: 'Dates available',
         DATES_NOT_AVAILABLE: 'Dates not available',
@@ -46,6 +47,60 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function renderComposeFilesBatch() {
+        var $list = $('#admin-chat-attach-list');
+        if (!$list.length) return;
+        if (!composeFiles.length) {
+            $list.hide().html('');
+            return;
+        }
+        var html = composeFiles.map(function (file, index) {
+            var name = String((file && file.name) || ('Document ' + (index + 1)));
+            return '<span class="label label-default" style="display:inline-block;margin:0 6px 6px 0;">' +
+                esc(name) +
+                ' <a href="#" class="admin-chat-attach-remove" data-index="' + index + '" style="color:inherit;text-decoration:none;">&times;</a>' +
+            '</span>';
+        }).join('');
+        $list.html('<div><strong>Attached:</strong></div><div style="margin-top:6px;">' + html + '</div>').show();
+    }
+
+    function appendComposeFiles(fileList) {
+        if (!fileList || !fileList.length) {
+            renderComposeFilesBatch();
+            return;
+        }
+        for (var i = 0; i < fileList.length; i++) {
+            if (fileList[i]) {
+                composeFiles.push(fileList[i]);
+            }
+        }
+        renderComposeFilesBatch();
+    }
+
+    function resetComposeFiles() {
+        composeFiles = [];
+        var input = document.getElementById('admin-chat-attach-input');
+        if (input) {
+            input.value = '';
+        }
+        renderComposeFilesBatch();
+    }
+
+    function buildComposeAttachmentSummary(files) {
+        var names = (files || []).map(function (file) {
+            return String((file && file.name) || '').trim();
+        }).filter(function (name) {
+            return name !== '';
+        });
+        if (!names.length) {
+            return 'Shared a document.';
+        }
+        if (names.length === 1) {
+            return 'Shared document: ' + names[0];
+        }
+        return 'Shared ' + names.length + ' documents: ' + names.slice(0, 3).join(', ');
     }
 
     function senderClass(sender) {
@@ -1425,6 +1480,7 @@
         var $quick = $('#admin-inbox-quick-replies');
         var $msg = $('#admin-inbox-message');
         var $send = $('#admin-inbox-send-form button[type="submit"]');
+        var $attach = $('#admin-chat-attach-btn');
         var $composerGroup = $('#admin-inbox-send-form .form-group');
         var $typing = $('#admin-typing-indicator');
         var $note = $('#admin-inbox-compose-note');
@@ -1441,6 +1497,9 @@
         }
         if ($send.length) {
             $send.prop('disabled', composeBlocked);
+        }
+        if ($attach.length) {
+            $attach.prop('disabled', composeBlocked);
         }
         if (freeMessageAllowed) {
             if ($composerGroup.length) $composerGroup.show();
@@ -1588,18 +1647,55 @@
         });
     }
 
-    function sendMessage() {
-        var text = $.trim($('#admin-inbox-message').val() || '');
+    function uploadComposeDocuments() {
+        var deferred = $.Deferred();
+        if (!currentThread || !currentThread.thread_id) {
+            deferred.reject({ message: 'Select a thread before uploading' });
+            return deferred.promise();
+        }
+        if (!composeFiles.length) {
+            deferred.resolve({ ok: true, uploaded_count: 0, results: [] });
+            return deferred.promise();
+        }
+
+        var formData = new FormData();
+        composeFiles.forEach(function (file) {
+            formData.append('chat_files[]', file);
+        });
+        formData.append('action', 'upload_documents');
+        formData.append('thread_id', currentThread.thread_id);
+        formData.append('thread_type', currentThread.thread_type || 'ITEM');
+        formData.append('request_id', currentThread.booking_request_id || 0);
+        formData.append('item_id', currentThread.item_id || 0);
+        formData.append('document_type', 'other');
+
+        $.ajax({
+            url: 'ajax/inbox.php',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json'
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                deferred.reject(res || { message: 'Upload failed. Please try again.' });
+                return;
+            }
+            deferred.resolve(res);
+        }).fail(function (xhr) {
+            deferred.reject((xhr && xhr.responseJSON) ? xhr.responseJSON : { message: 'Upload failed. Please try again.' });
+        });
+
+        return deferred.promise();
+    }
+
+    function sendMessageText(text) {
         if (!currentThread || !currentThread.thread_id) return;
         if (!freeMessageAllowed) {
             return;
         }
         if (feeGateActive) {
             toastr.warning('Coordination Fee required');
-            return;
-        }
-        if (!text) {
-            toastr.warning('Write a message before sending');
             return;
         }
 
@@ -1638,6 +1734,7 @@
             removePendingMessage(pendingId);
             realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
             $('#admin-inbox-message').val('');
+            resetComposeFiles();
             toastr.success('Message sent');
             loadMessages();
             loadThreads();
@@ -1656,6 +1753,29 @@
                 return;
             }
             toastr.error('Could not send message');
+        });
+    }
+
+    function sendMessage() {
+        var text = $.trim($('#admin-inbox-message').val() || '');
+        var hasAttachments = composeFiles.length > 0;
+        if (!text && !hasAttachments) {
+            toastr.warning('Write a message or attach a document before sending');
+            return;
+        }
+        if (!hasAttachments) {
+            sendMessageText(text);
+            return;
+        }
+
+        var composeSnapshot = composeFiles.slice(0);
+        uploadComposeDocuments().done(function () {
+            resetComposeFiles();
+            var messageText = text || buildComposeAttachmentSummary(composeSnapshot);
+            sendMessageText(messageText);
+        }).fail(function (res) {
+            var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
+            toastr.error(errorMessage);
         });
     }
 
@@ -1791,9 +1911,35 @@
                 item_id: parseInt($a.data('item-id') || 0, 10),
                 thread_title: String($a.data('thread-title') || '')
             };
+            resetComposeFiles();
             $('#admin-inbox-thread-list li').removeClass('active');
             $a.closest('li').addClass('active');
             loadMessages();
+        });
+
+        $('#admin-chat-attach-btn').on('click', function () {
+            if (this.disabled) {
+                return;
+            }
+            var input = document.getElementById('admin-chat-attach-input');
+            if (input) {
+                input.click();
+            }
+        });
+
+        $('#admin-chat-attach-input').on('change', function () {
+            appendComposeFiles(this.files || []);
+            $(this).val('');
+        });
+
+        $('#admin-chat-attach-list').on('click', '.admin-chat-attach-remove', function (e) {
+            e.preventDefault();
+            var index = parseInt($(this).data('index') || -1, 10);
+            if (index < 0 || index >= composeFiles.length) {
+                return;
+            }
+            composeFiles.splice(index, 1);
+            renderComposeFilesBatch();
         });
 
         $('#admin-inbox-send-form').on('submit', function (e) {

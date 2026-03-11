@@ -25,6 +25,7 @@
     var preferredThread = null;
     var autoSelectItemRequestId = 0;
     var selectedFiles = [];
+    var composeFiles = [];
     var currentDocuments = [];
     var feeGateActive = !!config.feeGateActive;
     var commissionGateActive = !!config.commissionGateActive;
@@ -417,6 +418,60 @@
             });
         }
         renderSelectedFilesBatch();
+    }
+
+    function renderComposeFilesBatch() {
+        var $list = $('#client-chat-attach-list');
+        if (!$list.length) return;
+        if (!composeFiles.length) {
+            $list.hide().html('');
+            return;
+        }
+        var html = composeFiles.map(function (file, index) {
+            var name = String((file && file.name) || ('Document ' + (index + 1)));
+            return '<span class="label label-default" style="display:inline-block;margin:0 6px 6px 0;">' +
+                esc(name) +
+                ' <a href="#" class="client-chat-attach-remove" data-index="' + index + '" style="color:inherit;text-decoration:none;">&times;</a>' +
+            '</span>';
+        }).join('');
+        $list.html('<div><strong>Attached:</strong></div><div style="margin-top:6px;">' + html + '</div>').show();
+    }
+
+    function appendComposeFiles(fileList) {
+        if (!fileList || !fileList.length) {
+            renderComposeFilesBatch();
+            return;
+        }
+        for (var i = 0; i < fileList.length; i++) {
+            if (fileList[i]) {
+                composeFiles.push(fileList[i]);
+            }
+        }
+        renderComposeFilesBatch();
+    }
+
+    function resetComposeFiles() {
+        composeFiles = [];
+        var input = document.getElementById('client-chat-attach-input');
+        if (input) {
+            input.value = '';
+        }
+        renderComposeFilesBatch();
+    }
+
+    function buildComposeAttachmentSummary(files) {
+        var names = (files || []).map(function (file) {
+            return String((file && file.name) || '').trim();
+        }).filter(function (name) {
+            return name !== '';
+        });
+        if (!names.length) {
+            return 'Shared a document.';
+        }
+        if (names.length === 1) {
+            return 'Shared document: ' + names[0];
+        }
+        return 'Shared ' + names.length + ' documents: ' + names.slice(0, 3).join(', ');
     }
 
     function renderThreadDocuments() {
@@ -1147,6 +1202,7 @@
 
         var $msg = $('#client-inbox-message');
         var $send = $('#client-inbox-send-btn');
+        var $attach = $('#client-chat-attach-btn');
         var $composerGroup = $('#client-inbox-send-form .form-group');
         var $typing = $('#client-typing-indicator');
         if ($msg.length) {
@@ -1154,6 +1210,9 @@
         }
         if ($send.length) {
             $send.prop('disabled', composeBlocked);
+        }
+        if ($attach.length) {
+            $attach.prop('disabled', composeBlocked);
         }
         if (composeBlocked) {
             if ($composerGroup.length) $composerGroup.hide();
@@ -1561,8 +1620,67 @@
         });
     }
 
-    function sendMessage() {
-        var text = $.trim($('#client-inbox-message').val() || '');
+    function uploadComposeDocuments() {
+        var deferred = $.Deferred();
+        if (!currentThread || !currentThread.thread_id) {
+            deferred.reject({ message: 'Select a thread before uploading' });
+            return deferred.promise();
+        }
+        if (!composeFiles.length) {
+            deferred.resolve({ ok: true, uploaded_count: 0, results: [] });
+            return deferred.promise();
+        }
+
+        var requestIdFromThread = parseInt(currentThread.booking_id || 0, 10);
+        var urlParams = new URLSearchParams(window.location.search || '');
+        var requestIdFromUrl = parseInt(urlParams.get('request_id') || '0', 10);
+        var safeRequestId = requestIdFromThread > 0 ? requestIdFromThread : requestIdFromUrl;
+        if (safeRequestId <= 0) {
+            deferred.reject({ message: 'Could not determine request id for upload' });
+            return deferred.promise();
+        }
+
+        var formData = new FormData();
+        var metaArray = [];
+        composeFiles.forEach(function (file) {
+            formData.append('client_doc_files[]', file);
+            metaArray.push({
+                doc_type: 'other',
+                title: '',
+                description: '',
+                original_name: String((file && file.name) || '')
+            });
+        });
+        formData.append('meta_json', JSON.stringify(metaArray));
+        formData.append('document_type', 'other');
+        formData.append('title', '');
+        formData.append('description', '');
+        formData.append('booking_request_id', safeRequestId);
+        formData.append('request_id', safeRequestId);
+        formData.append('item_id', currentThread.item_id || 0);
+        formData.append('thread_type', currentThread.thread_type || 'CARE');
+
+        $.ajax({
+            url: '/client/ajax/upload_medical_document.php',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            dataType: 'json'
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                deferred.reject(res || { message: 'Upload failed. Please try again.' });
+                return;
+            }
+            deferred.resolve(res);
+        }).fail(function (xhr) {
+            deferred.reject((xhr && xhr.responseJSON) ? xhr.responseJSON : { message: 'Upload failed. Please try again.' });
+        });
+
+        return deferred.promise();
+    }
+
+    function sendMessageText(text) {
         if (!currentThread || !currentThread.thread_id) return;
         if (!freeMessageAllowed) {
             toastr.warning(lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
@@ -1574,10 +1692,6 @@
         }
         if (feeGateActive && String(currentThread.thread_type || '').toUpperCase() !== 'CARE') {
             toastr.warning('Unlock after Coordination Fee');
-            return;
-        }
-        if (!text) {
-            toastr.warning('Write a message before sending');
             return;
         }
 
@@ -1612,6 +1726,7 @@
             removePendingMessage(pendingId);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
             $('#client-inbox-message').val('');
+            resetComposeFiles();
             toastr.success('Message sent');
             loadMessages();
             loadThreads();
@@ -1640,6 +1755,31 @@
                 return;
             }
             toastr.error('Could not send message');
+        });
+    }
+
+    function sendMessage() {
+        var text = $.trim($('#client-inbox-message').val() || '');
+        var hasAttachments = composeFiles.length > 0;
+        if (!text && !hasAttachments) {
+            toastr.warning('Write a message or attach a document before sending');
+            return;
+        }
+        if (!hasAttachments) {
+            sendMessageText(text);
+            return;
+        }
+
+        var composeSnapshot = composeFiles.slice(0);
+        uploadComposeDocuments().done(function (uploadRes) {
+            renderUploadStatusFromResponse(uploadRes || null, '');
+            resetComposeFiles();
+            var messageText = text || buildComposeAttachmentSummary(composeSnapshot);
+            sendMessageText(messageText);
+        }).fail(function (res) {
+            var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
+            renderUploadStatusFromResponse(res || null, errorMessage);
+            toastr.error(errorMessage);
         });
     }
 
@@ -2038,9 +2178,35 @@
                 thread_title: $.trim($a.find('.mt-thread-title').text() || ''),
                 thread_subtitle: $.trim($a.find('.mt-thread-location').text() || '')
             };
+            resetComposeFiles();
             $('#client-inbox-thread-list li').removeClass('active');
             $a.closest('li').addClass('active');
             loadMessages();
+        });
+
+        $('#client-chat-attach-btn').on('click', function () {
+            if (this.disabled) {
+                return;
+            }
+            var input = document.getElementById('client-chat-attach-input');
+            if (input) {
+                input.click();
+            }
+        });
+
+        $('#client-chat-attach-input').on('change', function () {
+            appendComposeFiles(this.files || []);
+            $(this).val('');
+        });
+
+        $('#client-chat-attach-list').on('click', '.client-chat-attach-remove', function (e) {
+            e.preventDefault();
+            var index = parseInt($(this).data('index') || -1, 10);
+            if (index < 0 || index >= composeFiles.length) {
+                return;
+            }
+            composeFiles.splice(index, 1);
+            renderComposeFilesBatch();
         });
 
         $('#client-inbox-send-form').on('submit', function (e) {

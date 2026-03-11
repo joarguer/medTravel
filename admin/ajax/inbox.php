@@ -74,6 +74,109 @@ function admin_inbox_notify_message($conexion, $ctx, $senderRole, $message)
     send_interaction_email($clientEmail, $subject, $contentHtml, $textBody, $metaSend, $conexion);
 }
 
+function admin_inbox_normalize_upload_files($files)
+{
+    if (!is_array($files) || !isset($files['name'])) {
+        return [];
+    }
+    if (!is_array($files['name'])) {
+        return [[
+            'name' => (string)($files['name'] ?? ''),
+            'type' => (string)($files['type'] ?? ''),
+            'tmp_name' => (string)($files['tmp_name'] ?? ''),
+            'error' => (int)($files['error'] ?? UPLOAD_ERR_NO_FILE),
+            'size' => (int)($files['size'] ?? 0),
+        ]];
+    }
+    $normalized = [];
+    $count = count($files['name']);
+    for ($i = 0; $i < $count; $i++) {
+        $normalized[] = [
+            'name' => (string)($files['name'][$i] ?? ''),
+            'type' => (string)($files['type'][$i] ?? ''),
+            'tmp_name' => (string)($files['tmp_name'][$i] ?? ''),
+            'error' => (int)($files['error'][$i] ?? UPLOAD_ERR_NO_FILE),
+            'size' => (int)($files['size'][$i] ?? 0),
+        ];
+    }
+    return $normalized;
+}
+
+function admin_inbox_resolve_document_owner($conexion, $bookingRequestId)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $clientUserId = 0;
+    $clientId = 0;
+    $clientEmail = '';
+    if ($bookingRequestId <= 0 || !inbox_table_exists($conexion, 'booking_requests')) {
+        return ['client_user_id' => 0, 'client_id' => 0, 'client_email' => ''];
+    }
+
+    $hasBrClientUserId = inbox_table_has_column($conexion, 'booking_requests', 'client_user_id');
+    $hasBrEmail = inbox_table_has_column($conexion, 'booking_requests', 'email');
+    $selectCols = $hasBrClientUserId ? 'client_user_id' : 'NULL AS client_user_id';
+    $selectCols .= $hasBrEmail ? ', email' : ", '' AS email";
+    $stmtClient = mysqli_prepare($conexion, "SELECT {$selectCols} FROM booking_requests WHERE id = ? LIMIT 1");
+    if ($stmtClient) {
+        mysqli_stmt_bind_param($stmtClient, 'i', $bookingRequestId);
+        if (mysqli_stmt_execute($stmtClient)) {
+            $resClient = mysqli_stmt_get_result($stmtClient);
+            $rowClient = $resClient ? mysqli_fetch_assoc($resClient) : null;
+            if ($rowClient) {
+                $clientUserId = (int)($rowClient['client_user_id'] ?? 0);
+                $clientEmail = trim((string)($rowClient['email'] ?? ''));
+            }
+        }
+        mysqli_stmt_close($stmtClient);
+    }
+
+    if (inbox_table_exists($conexion, 'clientes') && inbox_table_has_column($conexion, 'clientes', 'email')) {
+        $clientesHasClientUserId = inbox_table_has_column($conexion, 'clientes', 'client_user_id');
+        $clientesHasUserId = inbox_table_has_column($conexion, 'clientes', 'user_id');
+        $clientesMapCol = $clientesHasClientUserId ? 'client_user_id' : ($clientesHasUserId ? 'user_id' : '');
+
+        if ($clientEmail !== '') {
+            $clientSelect = $clientesMapCol !== '' ? ($clientesMapCol . ' AS client_user_id') : '0 AS client_user_id';
+            $stmtLookup = mysqli_prepare($conexion, "SELECT {$clientSelect}, id AS client_id FROM clientes WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1");
+            if ($stmtLookup) {
+                mysqli_stmt_bind_param($stmtLookup, 's', $clientEmail);
+                if (mysqli_stmt_execute($stmtLookup)) {
+                    $resLookup = mysqli_stmt_get_result($stmtLookup);
+                    $rowLookup = $resLookup ? mysqli_fetch_assoc($resLookup) : null;
+                    if ($rowLookup) {
+                        if ($clientUserId <= 0) {
+                            $clientUserId = (int)($rowLookup['client_user_id'] ?? 0);
+                        }
+                        $clientId = (int)($rowLookup['client_id'] ?? 0);
+                    }
+                }
+                mysqli_stmt_close($stmtLookup);
+            }
+        }
+
+        if ($clientId <= 0 && $clientUserId > 0 && $clientesMapCol !== '') {
+            $stmtByUser = mysqli_prepare($conexion, "SELECT id FROM clientes WHERE {$clientesMapCol} = ? ORDER BY id DESC LIMIT 1");
+            if ($stmtByUser) {
+                mysqli_stmt_bind_param($stmtByUser, 'i', $clientUserId);
+                if (mysqli_stmt_execute($stmtByUser)) {
+                    $resByUser = mysqli_stmt_get_result($stmtByUser);
+                    $rowByUser = $resByUser ? mysqli_fetch_assoc($resByUser) : null;
+                    if ($rowByUser) {
+                        $clientId = (int)($rowByUser['id'] ?? 0);
+                    }
+                }
+                mysqli_stmt_close($stmtByUser);
+            }
+        }
+    }
+
+    return [
+        'client_user_id' => $clientUserId,
+        'client_id' => $clientId,
+        'client_email' => $clientEmail,
+    ];
+}
+
 function admin_inbox_status_label($status)
 {
     $status = trim((string)$status);
@@ -527,7 +630,7 @@ if ($action === 'list_threads') {
     ]);
 }
 
-if ($action === 'list_messages' || $action === 'send_message' || $action === 'send_quick_reply' || $action === 'send_structured_action' || $action === 'mark_read') {
+if ($action === 'list_messages' || $action === 'send_message' || $action === 'send_quick_reply' || $action === 'send_structured_action' || $action === 'mark_read' || $action === 'upload_documents') {
     $threadIdInput = (string)($_GET['thread_id'] ?? $_POST['thread_id'] ?? '');
     $threadType = (string)($_GET['thread_type'] ?? $_POST['thread_type'] ?? '');
     $requestId = (int)($_GET['request_id'] ?? $_POST['request_id'] ?? $_GET['booking_request_id'] ?? $_POST['booking_request_id'] ?? 0);
@@ -942,6 +1045,247 @@ if ($action === 'send_message') {
             'body' => $message,
             'time' => $createdAt,
         ],
+    ]);
+}
+
+if ($action === 'upload_documents') {
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'POST') {
+        admin_inbox_err('method_not_allowed', 405);
+    }
+    if (!inbox_table_exists($conexion, 'client_documents')) {
+        admin_inbox_err('client_documents_not_available', 409);
+    }
+
+    $bookingRequestId = (int)($ctx['request_id'] ?? 0);
+    $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
+        ? is_booking_fee_required($conexion, $bookingRequestId)
+        : false;
+    $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
+    $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
+    $commissionGateEnabled = !empty($commissionGate['enabled']);
+    $commissionPaid = !empty($commissionGate['paid']);
+    $isProviderItemThread = empty($scope['is_admin'])
+        && strtoupper((string)($scope['reader_role'] ?? '')) === 'PROVIDER'
+        && strtoupper((string)($ctx['thread_type'] ?? '')) === 'ITEM'
+        && (int)($ctx['item_id'] ?? 0) > 0;
+    if ($isProviderItemThread) {
+        $commissionLocked = $commissionGateEnabled && !$commissionPaid;
+        $freeMessageState['can_send_free_message'] = (!$feeLocked && !$commissionLocked);
+    }
+    if ($feeLocked) {
+        http_response_code(403);
+        echo json_encode([
+            'ok' => false,
+            'code' => 'FEE_REQUIRED',
+            'message' => 'Coordination Fee required',
+        ]);
+        exit;
+    }
+    if (empty($freeMessageState['can_send_free_message'])) {
+        http_response_code(403);
+        echo json_encode([
+            'ok' => false,
+            'code' => 'FREE_MESSAGE_BLOCKED',
+            'message' => (string)($freeMessageState['notice'] ?? 'Messaging is temporarily limited.'),
+        ]);
+        exit;
+    }
+
+    $files = admin_inbox_normalize_upload_files($_FILES['chat_files'] ?? null);
+    if (empty($files)) {
+        admin_inbox_err('file_required', 422);
+    }
+
+    $owner = admin_inbox_resolve_document_owner($conexion, $bookingRequestId);
+    $resolvedClientId = (int)($owner['client_id'] ?? 0);
+    $resolvedClientUserId = (int)($owner['client_user_id'] ?? 0);
+    if ($resolvedClientId <= 0) {
+        admin_inbox_err('client_not_resolved', 422);
+    }
+
+    $allowedTypes = [
+        'application/pdf',
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/gif',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx'];
+    $maxFileSize = 10 * 1024 * 1024;
+    $documentType = strtolower(trim((string)($_POST['document_type'] ?? 'other')));
+    $allowedDocTypes = [
+        'passport', 'id_card', 'medical_history', 'lab_results', 'prescription',
+        'invoice', 'contract', 'consent_form', 'insurance', 'photos', 'other'
+    ];
+    if (!in_array($documentType, $allowedDocTypes, true)) {
+        $documentType = 'other';
+    }
+
+    $uploadRoot = __DIR__ . '/../../uploads/medical_docs/';
+    $folderOwner = $resolvedClientUserId > 0 ? $resolvedClientUserId : $resolvedClientId;
+    $clientDir = $uploadRoot . 'client_' . $folderOwner . '/';
+    if (!is_dir($clientDir) && !mkdir($clientDir, 0755, true)) {
+        admin_inbox_err('upload_dir_not_created', 500);
+    }
+
+    $hasDocumentType = inbox_table_has_column($conexion, 'client_documents', 'document_type');
+    $hasFileSize = inbox_table_has_column($conexion, 'client_documents', 'file_size');
+    $hasMimeType = inbox_table_has_column($conexion, 'client_documents', 'mime_type');
+    $hasFileExtension = inbox_table_has_column($conexion, 'client_documents', 'file_extension');
+    $hasSharedWithProvider = inbox_table_has_column($conexion, 'client_documents', 'shared_with_provider');
+    $hasUploadedBy = inbox_table_has_column($conexion, 'client_documents', 'uploaded_by');
+    $hasClientUserId = inbox_table_has_column($conexion, 'client_documents', 'client_user_id');
+
+    $results = [];
+    $uploadedCount = 0;
+    foreach ($files as $index => $file) {
+        $originalFilename = trim((string)($file['name'] ?? ''));
+        $fileError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($fileError === UPLOAD_ERR_NO_FILE) {
+            $results[] = ['index' => $index, 'ok' => false, 'message' => 'file_required', 'original_filename' => $originalFilename];
+            continue;
+        }
+        if ($fileError !== UPLOAD_ERR_OK) {
+            $results[] = ['index' => $index, 'ok' => false, 'message' => 'upload_error', 'original_filename' => $originalFilename];
+            continue;
+        }
+        $fileSize = (int)($file['size'] ?? 0);
+        if ($fileSize > $maxFileSize) {
+            $results[] = ['index' => $index, 'ok' => false, 'message' => 'file_too_large', 'original_filename' => $originalFilename];
+            continue;
+        }
+        $tmpName = (string)($file['tmp_name'] ?? '');
+        if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+            $results[] = ['index' => $index, 'ok' => false, 'message' => 'invalid_tmp_file', 'original_filename' => $originalFilename];
+            continue;
+        }
+        $fileExtension = strtolower(pathinfo($originalFilename, PATHINFO_EXTENSION));
+        if (!in_array($fileExtension, $allowedExtensions, true)) {
+            $results[] = ['index' => $index, 'ok' => false, 'message' => 'file_extension_not_allowed', 'original_filename' => $originalFilename];
+            continue;
+        }
+
+        $mimeType = '';
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mimeType = $finfo ? (string)finfo_file($finfo, $tmpName) : '';
+            if ($finfo) {
+                finfo_close($finfo);
+            }
+        } elseif (function_exists('mime_content_type')) {
+            $mimeType = (string)(@mime_content_type($tmpName) ?: '');
+        }
+        if ($mimeType === '') {
+            $mimeType = 'application/octet-stream';
+        }
+        if ($mimeType !== 'application/octet-stream' && !in_array($mimeType, $allowedTypes, true)) {
+            $results[] = ['index' => $index, 'ok' => false, 'message' => 'file_type_not_allowed', 'original_filename' => $originalFilename];
+            continue;
+        }
+
+        $filename = uniqid('doc_' . $folderOwner . '_') . '.' . $fileExtension;
+        $filePath = 'client_' . $folderOwner . '/' . $filename;
+        $fullPath = $clientDir . $filename;
+        if (!move_uploaded_file($tmpName, $fullPath)) {
+            $results[] = ['index' => $index, 'ok' => false, 'message' => 'file_save_failed', 'original_filename' => $originalFilename];
+            continue;
+        }
+
+        $columns = ['client_id', 'file_path', 'filename', 'original_filename', 'booking_request_id'];
+        $placeholders = ['?', '?', '?', '?', '?'];
+        $types = 'isssi';
+        $params = [$resolvedClientId, $filePath, $filename, $originalFilename, $bookingRequestId];
+
+        if ($hasDocumentType) {
+            $columns[] = 'document_type';
+            $placeholders[] = '?';
+            $types .= 's';
+            $params[] = $documentType;
+        }
+        if ($hasClientUserId && $resolvedClientUserId > 0) {
+            $columns[] = 'client_user_id';
+            $placeholders[] = '?';
+            $types .= 'i';
+            $params[] = $resolvedClientUserId;
+        }
+        if ($hasFileSize) {
+            $columns[] = 'file_size';
+            $placeholders[] = '?';
+            $types .= 'i';
+            $params[] = $fileSize;
+        }
+        if ($hasMimeType) {
+            $columns[] = 'mime_type';
+            $placeholders[] = '?';
+            $types .= 's';
+            $params[] = $mimeType;
+        }
+        if ($hasFileExtension) {
+            $columns[] = 'file_extension';
+            $placeholders[] = '?';
+            $types .= 's';
+            $params[] = $fileExtension;
+        }
+        if ($hasSharedWithProvider) {
+            $columns[] = 'shared_with_provider';
+            $placeholders[] = '?';
+            $types .= 'i';
+            $params[] = 1;
+        }
+        if ($hasUploadedBy) {
+            $columns[] = 'uploaded_by';
+            $placeholders[] = '?';
+            $types .= 'i';
+            $params[] = (int)($scope['user_id'] ?? 0);
+        }
+
+        $columns[] = 'item_id';
+        if ((int)($ctx['item_id'] ?? 0) > 0) {
+            $placeholders[] = '?';
+            $types .= 'i';
+            $params[] = (int)($ctx['item_id'] ?? 0);
+        } else {
+            $placeholders[] = 'NULL';
+        }
+
+        $insertSql = "INSERT INTO client_documents (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
+        $stmtInsert = mysqli_prepare($conexion, $insertSql);
+        if (!$stmtInsert || !inbox_bind_stmt_params($stmtInsert, $types, $params) || !mysqli_stmt_execute($stmtInsert)) {
+            $err = $stmtInsert ? mysqli_stmt_error($stmtInsert) : 'insert_prepare_failed';
+            if ($stmtInsert) {
+                mysqli_stmt_close($stmtInsert);
+            }
+            @unlink($fullPath);
+            $results[] = ['index' => $index, 'ok' => false, 'message' => 'insert_failed: ' . $err, 'original_filename' => $originalFilename];
+            continue;
+        }
+        $documentId = (int)mysqli_insert_id($conexion);
+        mysqli_stmt_close($stmtInsert);
+        $uploadedCount++;
+        $results[] = [
+            'index' => $index,
+            'ok' => true,
+            'document_id' => $documentId,
+            'file_path' => $filePath,
+            'original_filename' => $originalFilename,
+        ];
+    }
+
+    if ($uploadedCount <= 0) {
+        http_response_code(422);
+        echo json_encode([
+            'ok' => false,
+            'message' => 'upload_failed',
+            'results' => $results,
+        ]);
+        exit;
+    }
+
+    admin_inbox_ok([
+        'uploaded_count' => $uploadedCount,
+        'results' => $results,
     ]);
 }
 

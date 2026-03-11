@@ -344,6 +344,11 @@ if (isset($conexion) && $conexion) {
                                         <label for="client-inbox-message">Write a message</label>
                                         <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..." <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>></textarea>
                                     </div>
+                                    <div class="form-group" style="margin-bottom:8px;">
+                                        <input type="file" id="client-chat-attach-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" multiple style="display:none;">
+                                        <button type="button" class="btn btn-default btn-sm" id="client-chat-attach-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paperclip"></i> Attach document</button>
+                                        <div id="client-chat-attach-list" class="text-muted" style="margin-top:8px;display:none;"></div>
+                                    </div>
                                     <div id="client-typing-indicator">Support is typing…</div>
                                     <button type="submit" class="btn btn-primary" id="client-inbox-send-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
                                     <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Free-form messaging is locked right now. Please use the structured actions above.</div>
