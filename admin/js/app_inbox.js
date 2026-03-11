@@ -231,14 +231,71 @@
         if (!names || !names.length) {
             return '';
         }
+        function buildSharedDocumentHref(doc) {
+            if (!doc) {
+                return '';
+            }
+            var href = String(doc.download_url || '').trim();
+            if (href) {
+                return href;
+            }
+            if (doc.id) {
+                return '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
+            }
+            var filePath = String(doc.file_path || '').trim();
+            if (filePath) {
+                return '/uploads/medical_docs/' + String(filePath).replace(/^\/+/, '');
+            }
+            return '';
+        }
         var itemsHtml = names.map(function (name) {
             var doc = resolveSharedMessageDocument(name);
+            if (!doc && names.length === 1 && currentDocuments && currentDocuments.length) {
+                doc = currentDocuments[0];
+                if (window.console && typeof window.console.warn === 'function') {
+                    window.console.warn('[inbox] shared document fallback to latest thread document', {
+                        requested_name: name,
+                        fallback_document: {
+                            id: doc.id || null,
+                            original_filename: doc.original_filename || '',
+                            filename: doc.filename || '',
+                            title: doc.title || '',
+                            download_url: doc.download_url || '',
+                            file_path: doc.file_path || ''
+                        }
+                    });
+                }
+            }
             var originalName = doc
                 ? String(doc.original_filename || doc.filename || name || ('Document #' + (doc.id || '')))
                 : String(name || '');
-            var href = doc ? String(doc.download_url || '').trim() : '';
-            if (!href && doc && doc.id) {
-                href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
+            var href = buildSharedDocumentHref(doc);
+            if (!doc && window.console && typeof window.console.warn === 'function') {
+                window.console.warn('[inbox] shared document unresolved', {
+                    requested_name: name,
+                    current_documents: (currentDocuments || []).map(function (item) {
+                        return {
+                            id: item.id || null,
+                            original_filename: item.original_filename || '',
+                            filename: item.filename || '',
+                            title: item.title || '',
+                            download_url: item.download_url || '',
+                            file_path: item.file_path || ''
+                        };
+                    })
+                });
+            } else if (doc && !href && window.console && typeof window.console.warn === 'function') {
+                window.console.warn('[inbox] shared document resolved without href', {
+                    requested_name: name,
+                    document: {
+                        id: doc.id || null,
+                        original_filename: doc.original_filename || '',
+                        filename: doc.filename || '',
+                        title: doc.title || '',
+                        download_url: doc.download_url || '',
+                        file_path: doc.file_path || ''
+                    }
+                });
             }
             var actionsHtml = href
                 ? ('<div class="mt-shared-doc-actions">' +
