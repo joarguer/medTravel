@@ -286,7 +286,7 @@ $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
         </div>
         <a href="contact.php" class="nav-item nav-link ' . $contact_active . '">Contact</a>
     </div>
-    <a href="login.php" class="btn btn-primary rounded-pill py-2 px-4 ms-lg-4">Sign In</a>
+    <a href="/login.php" class="btn btn-primary rounded-pill py-2 px-4 ms-lg-4">Sign In</a>
 </div>';
 
 $contact_link = mt_valid_public_page('contact.php') ? 'contact.php' : null;
