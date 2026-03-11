@@ -170,6 +170,93 @@ function admin_inbox_resolve_document_owner($conexion, $bookingRequestId)
         }
     }
 
+    if ($clientId <= 0 && $clientEmail !== '') {
+        $requiredCols = [];
+        $requiredTypes = [];
+        $showClientesCols = mysqli_query($conexion, "SHOW COLUMNS FROM `clientes`");
+        if ($showClientesCols) {
+            while ($colRow = mysqli_fetch_assoc($showClientesCols)) {
+                $field = trim((string)($colRow['Field'] ?? ''));
+                $type = strtolower(trim((string)($colRow['Type'] ?? '')));
+                $isNullable = strtoupper(trim((string)($colRow['Null'] ?? 'YES')));
+                $defaultVal = $colRow['Default'] ?? null;
+                $extra = strtolower(trim((string)($colRow['Extra'] ?? '')));
+                if ($field === '' || strpos($extra, 'auto_increment') !== false) {
+                    continue;
+                }
+                if ($isNullable === 'NO' && $defaultVal === null) {
+                    $requiredCols[] = $field;
+                    $requiredTypes[$field] = $type;
+                }
+            }
+        }
+
+        if (!empty($requiredCols)) {
+            $insertCols = [];
+            $insertVals = [];
+            $insertTypes = '';
+            $insertParams = [];
+
+            foreach ($requiredCols as $field) {
+                $fieldLower = strtolower($field);
+                $type = (string)($requiredTypes[$field] ?? '');
+                $value = null;
+
+                if ($fieldLower === 'email') {
+                    $value = $clientEmail;
+                    $insertTypes .= 's';
+                } elseif ($fieldLower === 'nombre') {
+                    $value = 'Client';
+                    $insertTypes .= 's';
+                } elseif ($fieldLower === 'apellido') {
+                    $value = 'Client';
+                    $insertTypes .= 's';
+                } elseif (($fieldLower === 'client_user_id' || $fieldLower === 'user_id') && $clientUserId > 0) {
+                    $value = $clientUserId;
+                    $insertTypes .= 'i';
+                } elseif (strpos($type, 'enum(') === 0 || strpos($type, 'set(') === 0) {
+                    if (preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", $type, $m) && !empty($m[1][0])) {
+                        $value = stripcslashes((string)$m[1][0]);
+                    } else {
+                        $value = '';
+                    }
+                    $insertTypes .= 's';
+                } elseif (preg_match('/int|decimal|float|double|real|bit/', $type)) {
+                    $value = 0;
+                    $insertTypes .= 'i';
+                } elseif (strpos($type, 'datetime') !== false || strpos($type, 'timestamp') !== false) {
+                    $value = date('Y-m-d H:i:s');
+                    $insertTypes .= 's';
+                } elseif (strpos($type, 'date') !== false) {
+                    $value = date('Y-m-d');
+                    $insertTypes .= 's';
+                } elseif (strpos($type, 'time') !== false) {
+                    $value = date('H:i:s');
+                    $insertTypes .= 's';
+                } elseif (strpos($type, 'year') !== false) {
+                    $value = date('Y');
+                    $insertTypes .= 's';
+                } else {
+                    $value = '';
+                    $insertTypes .= 's';
+                }
+
+                $insertCols[] = $field;
+                $insertVals[] = '?';
+                $insertParams[] = $value;
+            }
+
+            $insertClienteSql = "INSERT INTO clientes (" . implode(', ', $insertCols) . ") VALUES (" . implode(', ', $insertVals) . ")";
+            $stmtInsertCliente = mysqli_prepare($conexion, $insertClienteSql);
+            if ($stmtInsertCliente && inbox_bind_stmt_params($stmtInsertCliente, $insertTypes, $insertParams) && mysqli_stmt_execute($stmtInsertCliente)) {
+                $clientId = (int)mysqli_insert_id($conexion);
+            }
+            if ($stmtInsertCliente) {
+                mysqli_stmt_close($stmtInsertCliente);
+            }
+        }
+    }
+
     return [
         'client_user_id' => $clientUserId,
         'client_id' => $clientId,

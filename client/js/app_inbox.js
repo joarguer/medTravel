@@ -523,6 +523,13 @@
         $status.html('<div class="alert alert-' + alertLevel + ' small" role="alert" style="margin-bottom:0;">' + esc(text) + '</div>');
     }
 
+    function clearLegacyUploadStatus() {
+        var $status = $('#client-doc-upload-status');
+        if ($status.length) {
+            $status.html('');
+        }
+    }
+
     function mapStructuredUploadType(uploadType) {
         var key = String(uploadType || '').toLowerCase();
         if (key === 'history') return 'medical_history';
@@ -1682,6 +1689,7 @@
 
     function sendMessageText(text) {
         if (!currentThread || !currentThread.thread_id) return;
+        clearLegacyUploadStatus();
         if (!freeMessageAllowed) {
             toastr.warning(lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
             return;
@@ -1771,14 +1779,13 @@
         }
 
         var composeSnapshot = composeFiles.slice(0);
-        uploadComposeDocuments().done(function (uploadRes) {
-            renderUploadStatusFromResponse(uploadRes || null, '');
+        uploadComposeDocuments().done(function () {
+            clearLegacyUploadStatus();
             resetComposeFiles();
             var messageText = text || buildComposeAttachmentSummary(composeSnapshot);
             sendMessageText(messageText);
         }).fail(function (res) {
             var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
-            renderUploadStatusFromResponse(res || null, errorMessage);
             toastr.error(errorMessage);
         });
     }
