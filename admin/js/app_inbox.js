@@ -237,16 +237,18 @@
                 ? String(doc.original_filename || doc.filename || name || ('Document #' + (doc.id || '')))
                 : String(name || '');
             var href = doc ? String(doc.download_url || '').trim() : '';
-            var innerHtml = '<div style="font-size:12px;font-weight:600;"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
-                '<div style="margin-top:4px;word-break:break-word;' + (href ? 'text-decoration:underline;' : '') + '">' + esc(originalName) + '</div>' +
-                (href ? '<div style="margin-top:6px;"><span class="btn btn-xs btn-default">Open document</span></div>' : '');
-            if (href) {
-                return '<a href="' + esc(href) + '" target="_blank" rel="noopener" style="display:block;margin-top:6px;padding:8px 10px;border:1px solid #d9e2ef;border-radius:8px;background:#f8fbff;color:#1a73e8;text-decoration:none;">' +
-                    innerHtml +
-                '</a>';
+            if (!href && doc && doc.id) {
+                href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
             }
-            return '<div style="margin-top:6px;padding:8px 10px;border:1px solid #d9e2ef;border-radius:8px;background:#f8fbff;">' +
-                innerHtml +
+            var actionsHtml = href
+                ? ('<div class="mt-shared-doc-actions">' +
+                    '<a class="mt-shared-doc-link" href="' + esc(href) + '" data-url="' + esc(href) + '" target="_blank" rel="noopener">Open document</a>' +
+                '</div>')
+                : '';
+            return '<div class="mt-shared-doc-card">' +
+                '<div class="mt-shared-doc-label"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
+                '<div class="mt-shared-doc-name">' + esc(originalName) + '</div>' +
+                actionsHtml +
             '</div>';
         }).join('');
         return '<div class="mt-shared-docs">' + itemsHtml + '</div>';
@@ -2047,6 +2049,15 @@
             if (doc) {
                 openDocViewer(doc);
             }
+        });
+        $('#admin-inbox-messages').on('click', '.mt-shared-doc-link', function (e) {
+            var href = String($(this).attr('data-url') || $(this).attr('href') || '').trim();
+            if (!href) {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            window.open(href, '_blank', 'noopener');
         });
 
         // Clean up preview iframe/img on modal close to stop loading

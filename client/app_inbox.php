@@ -204,6 +204,32 @@ if (isset($conexion) && $conexion) {
             flex-shrink: 0;
         }
         #client-inbox-messages .mt-bubble-body { line-height: 1.5; }
+        #client-inbox-messages .mt-shared-doc-card {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(26,115,232,.16);
+        }
+        #client-inbox-messages .mt-shared-doc-label {
+            font-size: 12px;
+            font-weight: 600;
+            opacity: .85;
+        }
+        #client-inbox-messages .mt-shared-doc-name {
+            margin-top: 4px;
+            word-break: break-word;
+        }
+        #client-inbox-messages .mt-shared-doc-actions {
+            margin-top: 6px;
+        }
+        #client-inbox-messages .mt-shared-doc-link {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: underline;
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+        }
         #client-inbox-messages .mt-bubble-status {
             margin-top: 4px;
             font-size: 10px;
@@ -215,6 +241,14 @@ if (isset($conexion) && $conexion) {
             color: #fff;
             border-radius: 16px 16px 4px 16px;
         }
+        #client-inbox-messages .mt-msg-row--own .mt-shared-doc-card {
+            border-top-color: rgba(255,255,255,.28);
+        }
+        #client-inbox-messages .mt-msg-row--own .mt-shared-doc-label,
+        #client-inbox-messages .mt-msg-row--own .mt-shared-doc-name,
+        #client-inbox-messages .mt-msg-row--own .mt-shared-doc-link {
+            color: #fff;
+        }
         #client-inbox-messages .mt-msg-row--own .mt-bubble-time { opacity: .7; }
         /* Other messages — left, light grey */
         #client-inbox-messages .mt-msg-row--other .mt-msg-bubble {
@@ -222,6 +256,12 @@ if (isset($conexion) && $conexion) {
             color: #2c3e50;
             border-radius: 16px 16px 16px 4px;
             border: 1px solid #e0e4ea;
+        }
+        #client-inbox-messages .mt-msg-row--other .mt-shared-doc-label {
+            color: #51606f;
+        }
+        #client-inbox-messages .mt-msg-row--other .mt-shared-doc-link {
+            color: #1a73e8;
         }
         #client-inbox-messages .mt-msg-row--grouped {
             margin-bottom: 2px;

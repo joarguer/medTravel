@@ -321,6 +321,32 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             flex-shrink: 0;
         }
         #admin-inbox-messages .mt-bubble-body { line-height: 1.5; }
+        #admin-inbox-messages .mt-shared-doc-card {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(26,115,232,.16);
+        }
+        #admin-inbox-messages .mt-shared-doc-label {
+            font-size: 12px;
+            font-weight: 600;
+            opacity: .85;
+        }
+        #admin-inbox-messages .mt-shared-doc-name {
+            margin-top: 4px;
+            word-break: break-word;
+        }
+        #admin-inbox-messages .mt-shared-doc-actions {
+            margin-top: 6px;
+        }
+        #admin-inbox-messages .mt-shared-doc-link {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: underline;
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+        }
         #admin-inbox-messages .mt-bubble-status {
             margin-top: 4px;
             font-size: 10px;
@@ -339,6 +365,14 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             color: #fff;
             border-radius: 16px 16px 4px 16px;
         }
+        #admin-inbox-messages .mt-msg-row--own .mt-shared-doc-card {
+            border-top-color: rgba(255,255,255,.28);
+        }
+        #admin-inbox-messages .mt-msg-row--own .mt-shared-doc-label,
+        #admin-inbox-messages .mt-msg-row--own .mt-shared-doc-name,
+        #admin-inbox-messages .mt-msg-row--own .mt-shared-doc-link {
+            color: #fff;
+        }
         #admin-inbox-messages .mt-msg-row--own .mt-msg-human .mt-bubble-time { opacity: .7; }
         /* Other messages — left-aligned light grey */
         #admin-inbox-messages .mt-msg-row--other .mt-msg-human {
@@ -346,6 +380,12 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             color: #2c3e50;
             border-radius: 16px 16px 16px 4px;
             border: 1px solid #e0e4ea;
+        }
+        #admin-inbox-messages .mt-msg-row--other .mt-shared-doc-label {
+            color: #51606f;
+        }
+        #admin-inbox-messages .mt-msg-row--other .mt-shared-doc-link {
+            color: #1a73e8;
         }
         #admin-inbox-messages .mt-msg-row--grouped {
             margin-bottom: 2px;
