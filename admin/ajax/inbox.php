@@ -100,6 +100,19 @@ function admin_inbox_status_is_update($status)
     ], true);
 }
 
+function admin_inbox_patient_label($name, $requestId)
+{
+    $label = trim((string)$name);
+    if ($label !== '') {
+        return $label;
+    }
+    $requestId = (int)$requestId;
+    if ($requestId > 0) {
+        return 'Patient Request #' . $requestId;
+    }
+    return 'Patient';
+}
+
 function admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked)
 {
     $bookingRequestId = (int)$bookingRequestId;
@@ -377,16 +390,46 @@ if ($limit > 500) {
 if ($action === 'list_threads') {
     $hasItemsSoftDelete = inbox_table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $hasRequestsSoftDelete = inbox_table_has_column($conexion, 'booking_requests', 'is_deleted');
+    $hasBookingName = inbox_table_has_column($conexion, 'booking_requests', 'name');
+    $hasBookingStatus = inbox_table_has_column($conexion, 'booking_requests', 'status');
+    $hasBookingClientUserId = inbox_table_has_column($conexion, 'booking_requests', 'client_user_id');
+    $hasItemStatus = inbox_table_has_column($conexion, 'booking_request_items', 'item_status');
+    $usuariosTableExists = inbox_table_exists($conexion, 'usuarios');
+    $hasUsuariosNombre = $usuariosTableExists && inbox_table_has_column($conexion, 'usuarios', 'nombre');
+
+    $patientNameParts = [];
+    if ($hasBookingName) {
+        $patientNameParts[] = "NULLIF(TRIM(br.name), '')";
+    }
+    if ($hasBookingClientUserId && $hasUsuariosNombre) {
+        $patientNameParts[] = "NULLIF(TRIM(u_cli.nombre), '')";
+    }
+    $patientNameExpr = !empty($patientNameParts)
+        ? 'COALESCE(' . implode(', ', $patientNameParts) . ", '')"
+        : "''";
+    $patientJoin = ($hasBookingClientUserId && $hasUsuariosNombre)
+        ? ' LEFT JOIN usuarios u_cli ON u_cli.id = br.client_user_id'
+        : '';
+    $bookingStatusExpr = $hasBookingStatus
+        ? "COALESCE(NULLIF(TRIM(br.status), ''), 'pending')"
+        : "'pending'";
+    $itemStatusExpr = $hasItemStatus
+        ? "CASE WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider' ELSE bri.item_status END"
+        : "'pending_provider'";
     $threads = [];
 
     if (!empty($scope['is_admin'])) {
-        $careSql = "SELECT id AS request_id, destination, created_at
-                    FROM booking_requests
+        $careSql = "SELECT br.id AS request_id,
+                           br.destination,
+                           br.created_at,
+                           {$patientNameExpr} AS patient_name,
+                           {$bookingStatusExpr} AS booking_status
+                    FROM booking_requests br{$patientJoin}
                     WHERE 1=1";
         if ($hasRequestsSoftDelete) {
-            $careSql .= " AND is_deleted = 0";
+            $careSql .= " AND br.is_deleted = 0";
         }
-        $careSql .= " ORDER BY created_at DESC LIMIT " . (int)$limit;
+        $careSql .= " ORDER BY br.created_at DESC LIMIT " . (int)$limit;
         $careRes = mysqli_query($conexion, $careSql);
         if ($careRes) {
             while ($row = mysqli_fetch_assoc($careRes)) {
@@ -402,6 +445,8 @@ if ($action === 'list_threads') {
                     'booking_request_id' => $requestId,
                     'item_id' => 0,
                     'title' => 'General - Request #' . $requestId,
+                    'patient_name' => admin_inbox_patient_label($row['patient_name'] ?? '', $requestId),
+                    'status_label' => admin_inbox_status_label($row['booking_status'] ?? 'pending'),
                     'subtitle' => trim((string)($row['destination'] ?? '')),
                     'updated_at' => (string)($row['created_at'] ?? ''),
                 ];
@@ -413,6 +458,8 @@ if ($action === 'list_threads') {
                     bri.id AS item_id,
                     bri.booking_request_id AS request_id,
                     COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
+                    {$patientNameExpr} AS patient_name,
+                    {$itemStatusExpr} AS item_status_label,
                     br.destination,
                     br.created_at
                 FROM booking_request_items bri
@@ -420,6 +467,7 @@ if ($action === 'list_threads') {
                 LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
                 LEFT JOIN service_catalog sc ON sc.id = o.service_id
                 LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                {$patientJoin}
                 WHERE 1=1";
     if ($hasItemsSoftDelete) {
         $itemSql .= " AND bri.is_deleted = 0";
@@ -457,6 +505,8 @@ if ($action === 'list_threads') {
                     'booking_request_id' => $requestId,
                     'item_id' => $itemId,
                     'title' => $itemName . ' - Request #' . $requestId,
+                    'patient_name' => admin_inbox_patient_label($row['patient_name'] ?? '', $requestId),
+                    'status_label' => admin_inbox_status_label($row['item_status_label'] ?? 'pending_provider'),
                     'subtitle' => trim((string)($row['destination'] ?? '')),
                     'updated_at' => (string)($row['created_at'] ?? ''),
                 ];

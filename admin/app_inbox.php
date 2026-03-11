@@ -59,6 +59,8 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         }
         #admin-inbox-thread-list .mt-thread-title {
             font-weight: 600;
+            font-size: 14px;
+            line-height: 1.35;
             color: #2f353b;
             white-space: nowrap;
             overflow: hidden;
@@ -68,16 +70,18 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             font-weight: 700;
         }
         #admin-inbox-thread-list .mt-thread-sub {
-            margin-top: 3px;
-            color: #7f8c9d;
+            margin-top: 4px;
+            color: #5f6c7b;
             font-size: 12px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         #admin-inbox-thread-list .mt-thread-preview {
-            margin-top: 2px;
+            margin-top: 4px;
             font-size: 12px;
+            color: #8a94a6;
+            line-height: 1.35;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -99,6 +103,15 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             font-size: 10px;
             padding: 3px 6px;
             line-height: 1.2;
+        }
+        #admin-inbox-thread-list .mt-thread-status-badge {
+            font-size: 10px;
+            padding: 3px 6px;
+            line-height: 1.2;
+            max-width: 88px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         #admin-inbox-thread-list .mt-time {
             font-size: 11px;

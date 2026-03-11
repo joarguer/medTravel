@@ -809,6 +809,39 @@
             return '';
         }
 
+        if (normalized.indexOf('[REQUEST_INFO]') === 0) {
+            return 'requested additional information';
+        }
+        if (normalized.indexOf('[PROPOSE_QUOTE]') === 0) {
+            return 'sent quote adjustment';
+        }
+        if (normalized.indexOf('[PROPOSAL_RESPONSE]') === 0) {
+            var proposalPayload = parseStructuredJson('[PROPOSAL_RESPONSE]', normalized);
+            var proposalAction = String(proposalPayload && proposalPayload.action_type || '').toUpperCase();
+            if (proposalAction === 'ACCEPT_PROPOSAL') return 'accepted proposal';
+            if (proposalAction === 'REQUEST_CHANGES') return 'requested changes';
+            if (proposalAction === 'REJECT_PROPOSAL') return 'rejected proposal';
+            if (proposalAction === 'DOCS_NOT_AVAILABLE') return 'documents unavailable';
+            return 'sent proposal response';
+        }
+
+        normalized = normalized.replace(/^\[(ACTION|REPLY)\]\s*/i, '').trim();
+
+        var quickReplyPreviewMap = {
+            DATES_AVAILABLE: 'dates available',
+            DATES_NOT_AVAILABLE: 'dates unavailable',
+            REQUEST_MEDICAL_HISTORY: 'requested medical history',
+            REQUEST_LABS: 'requested labs',
+            REQUEST_IMAGING: 'requested imaging',
+            REQUEST_PHOTOS: 'requested photos',
+            FINAL_APPROVED: 'case approved',
+            FINAL_NOT_ELIGIBLE: 'case not eligible'
+        };
+        var quickReplyKey = normalized.toUpperCase().replace(/\s+/g, '_');
+        if (quickReplyPreviewMap[quickReplyKey]) {
+            return quickReplyPreviewMap[quickReplyKey];
+        }
+
         if (normalized.length > 110) {
             normalized = normalized.slice(0, 110).trim() + '…';
         }
@@ -824,6 +857,60 @@
         title = title.replace(/\s*-\s*Request\s*#\d+\s*$/i, '').trim();
         title = title.replace(/\s*-\s*Solicitud\s*#\d+\s*$/i, '').trim();
         return title || 'Servicio';
+    }
+
+    function getThreadPatientName(thread) {
+        if (!thread || typeof thread !== 'object') {
+            return 'Patient';
+        }
+        var requestId = parseInt(thread.booking_request_id || thread.request_id || 0, 10);
+        var patientName = String(thread.patient_name || thread.client_name || '').trim();
+        if (patientName) {
+            return patientName;
+        }
+        return requestId > 0 ? ('Patient Request #' + requestId) : 'Patient';
+    }
+
+    function getThreadCaseLabel(thread) {
+        if (!thread || typeof thread !== 'object') {
+            return 'Request';
+        }
+        var requestId = parseInt(thread.booking_request_id || thread.request_id || 0, 10);
+        var threadType = String(thread.thread_type || 'CARE').toUpperCase();
+        var serviceLabel = threadType === 'ITEM'
+            ? cleanServiceTitle(thread.title || '')
+            : 'Care Coordination';
+        var parts = [];
+        if (serviceLabel) {
+            parts.push(serviceLabel);
+        }
+        if (requestId > 0) {
+            parts.push('Request #' + requestId);
+        }
+        return parts.join(' • ') || 'Request';
+    }
+
+    function getThreadStatusMeta(status) {
+        var key = String(status || '').trim().toLowerCase();
+        if (!key) return null;
+        var map = {
+            pending_provider: { cls: 'warning', label: 'Pending' },
+            pending: { cls: 'warning', label: 'Pending' },
+            provider_confirmed: { cls: 'success', label: 'Confirmed' },
+            client_accepted: { cls: 'success', label: 'Accepted' },
+            provider_rejected: { cls: 'danger', label: 'Rejected' },
+            client_rejected: { cls: 'danger', label: 'Rejected' },
+            provider_proposed_change: { cls: 'info', label: 'Changes' },
+            awaiting_client: { cls: 'info', label: 'Awaiting' },
+            cancelled: { cls: 'default', label: 'Cancelled' }
+        };
+        return map[key] || { cls: 'default', label: key.replace(/_/g, ' ') };
+    }
+
+    function renderThreadStatusBadge(status) {
+        var meta = getThreadStatusMeta(status);
+        if (!meta) return '';
+        return '<span class="label label-' + esc(meta.cls) + ' mt-thread-status-badge">' + esc(meta.label) + '</span>';
     }
 
     function renderInboxHeader($target, headingText, requestId) {
@@ -869,12 +956,11 @@
             var unread = parseInt(thread.unread_count || 0, 10);
             totalUnread += (isFinite(unread) ? unread : 0);
             var active = threadId === selectedKey;
-            var threadTypeRaw = String(thread.thread_type || 'CARE').toUpperCase();
-            var threadTypeSub = (threadTypeRaw === 'CARE') ? 'GENERAL' : threadTypeRaw;
-            var requestId = parseInt(thread.booking_request_id || thread.request_id || 0, 10);
-            var location = String(thread.subtitle || '').trim();
+            var patientName = getThreadPatientName(thread);
+            var caseLabel = getThreadCaseLabel(thread);
             var timeLabel = formatThreadTime(thread.updated_at || '');
             var previewText = getThreadPreviewText(thread);
+            var statusHtml = renderThreadStatusBadge(thread.status_label || '');
             var unreadMeta = unread > 0 ? '<span class="badge badge-danger mt-unread">' + unread + '</span>' : '';
             var timeHtml = timeLabel ? '<div class="mt-time">' + esc(timeLabel) + '</div>' : '';
             var previewHtml = previewText ? '<div class="mt-thread-preview text-muted">Last: ' + esc(previewText) + '</div>' : '';
@@ -885,20 +971,16 @@
                 ' data-thread-id="' + esc(threadId) + '"' +
                 ' data-thread-type="' + esc(thread.thread_type) + '"' +
                 ' data-booking-id="' + esc(thread.booking_request_id || thread.request_id || 0) + '"' +
-                ' data-item-id="' + esc(thread.item_id || 0) + '">' +
+                ' data-item-id="' + esc(thread.item_id || 0) + '"' +
+                ' data-thread-title="' + esc(thread.title || '') + '">' +
                 '<div class="mt-thread-row">' +
                     '<div class="mt-thread-main">' +
-                        '<div class="mt-thread-title">' + esc(thread.title || 'Thread') + '</div>' +
-                        '<div class="mt-thread-sub">' +
-                            '<span class="mt-thread-request">Request #' + esc(requestId > 0 ? String(requestId) : '-') + '</span>' +
-                            '<span class="mt-dot">•</span>' +
-                            '<span class="mt-thread-type">' + esc(threadTypeSub) + '</span>' +
-                            (location ? '<span class="mt-dot">•</span><span class="mt-thread-location">' + esc(location) + '</span>' : '') +
-                        '</div>' +
+                        '<div class="mt-thread-title">' + esc(patientName) + '</div>' +
+                        '<div class="mt-thread-sub">' + esc(caseLabel) + '</div>' +
                         previewHtml +
                     '</div>' +
                     '<div class="mt-thread-meta">' +
-                        '<span class="badge badge-info mt-badge">' + esc(threadTypeRaw) + '</span>' +
+                        statusHtml +
                         unreadMeta +
                         timeHtml +
                     '</div>' +
@@ -1707,7 +1789,7 @@
                 thread_type: String($a.data('thread-type') || 'ITEM'),
                 booking_request_id: parseInt($a.data('booking-id') || 0, 10),
                 item_id: parseInt($a.data('item-id') || 0, 10),
-                thread_title: $.trim($a.find('.mt-thread-title').text() || '')
+                thread_title: String($a.data('thread-title') || '')
             };
             $('#admin-inbox-thread-list li').removeClass('active');
             $a.closest('li').addClass('active');
