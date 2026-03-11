@@ -504,13 +504,40 @@
         };
     }
 
+    function normalizeSharedDocumentName(name) {
+        var value = String(name || '').trim().toLowerCase();
+        if (!value) {
+            return '';
+        }
+        if (typeof value.normalize === 'function') {
+            value = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+        value = value
+            .replace(/[\u2010-\u2015]/g, '-')
+            .replace(/[\u00a0\s]+/g, ' ')
+            .replace(/\s*([._-])\s*/g, '$1')
+            .replace(/^["'`]+|["'`]+$/g, '')
+            .trim();
+        return value;
+    }
+
+    function sharedDocumentNameWithoutExtension(name) {
+        var value = normalizeSharedDocumentName(name);
+        return value.replace(/\.[a-z0-9]{2,8}$/i, '');
+    }
+
     function resolveSharedMessageDocuments(names) {
         var wanted = {};
+        var wantedWithoutExt = {};
         var docs = [];
         (names || []).forEach(function (name) {
-            var key = String(name || '').trim().toLowerCase();
+            var key = normalizeSharedDocumentName(name);
             if (key) {
                 wanted[key] = true;
+                var keyWithoutExt = sharedDocumentNameWithoutExtension(key);
+                if (keyWithoutExt) {
+                    wantedWithoutExt[keyWithoutExt] = true;
+                }
             }
         });
         if (!Object.keys(wanted).length || !currentDocuments || !currentDocuments.length) {
@@ -518,8 +545,27 @@
         }
         currentDocuments.forEach(function (doc) {
             var originalName = String(doc.original_filename || doc.filename || '').trim();
-            var key = originalName.toLowerCase();
+            var key = normalizeSharedDocumentName(originalName);
+            var keyWithoutExt = sharedDocumentNameWithoutExtension(originalName);
+            var matched = false;
             if (key && wanted[key]) {
+                matched = true;
+            } else if (keyWithoutExt && wantedWithoutExt[keyWithoutExt]) {
+                matched = true;
+            } else {
+                Object.keys(wanted).some(function (wantedKey) {
+                    if (wantedKey.length < 12 || !key) {
+                        return false;
+                    }
+                    var sameExtension = key.replace(/^.*(\.[a-z0-9]{2,8})$/i, '$1') === wantedKey.replace(/^.*(\.[a-z0-9]{2,8})$/i, '$1');
+                    if (sameExtension && (key.indexOf(wantedKey) !== -1 || wantedKey.indexOf(key) !== -1)) {
+                        matched = true;
+                        return true;
+                    }
+                    return false;
+                });
+            }
+            if (matched) {
                 docs.push(doc);
             }
         });
