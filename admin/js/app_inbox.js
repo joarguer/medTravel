@@ -103,6 +103,74 @@
         return 'Shared ' + names.length + ' documents: ' + names.slice(0, 3).join(', ');
     }
 
+    function parseSharedDocumentMessage(text) {
+        var raw = String(text || '');
+        var lines = raw.split(/\r?\n/);
+        var docNames = [];
+        var kept = [];
+        lines.forEach(function (line) {
+            var trimmedLine = String(line || '').trim();
+            var singleMatch = trimmedLine.match(/^Shared document:\s*(.+)$/i);
+            if (singleMatch) {
+                docNames.push(singleMatch[1].trim());
+                return;
+            }
+            var multiMatch = trimmedLine.match(/^Shared\s+\d+\s+documents:\s*(.+)$/i);
+            if (multiMatch) {
+                multiMatch[1].split(/\s*,\s*/).forEach(function (name) {
+                    var docName = String(name || '').trim();
+                    if (docName !== '') {
+                        docNames.push(docName);
+                    }
+                });
+                return;
+            }
+            kept.push(line);
+        });
+        return {
+            body: kept.join('\n').trim(),
+            names: docNames
+        };
+    }
+
+    function resolveSharedMessageDocuments(names) {
+        var wanted = {};
+        var docs = [];
+        (names || []).forEach(function (name) {
+            var key = String(name || '').trim().toLowerCase();
+            if (key) {
+                wanted[key] = true;
+            }
+        });
+        if (!Object.keys(wanted).length || !currentDocuments || !currentDocuments.length) {
+            return docs;
+        }
+        currentDocuments.forEach(function (doc) {
+            var originalName = String(doc.original_filename || doc.filename || '').trim();
+            var key = originalName.toLowerCase();
+            if (key && wanted[key]) {
+                docs.push(doc);
+            }
+        });
+        return docs;
+    }
+
+    function renderSharedDocumentsBlock(docs) {
+        if (!docs || !docs.length) {
+            return '';
+        }
+        var itemsHtml = docs.map(function (doc) {
+            var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
+            var href = String(doc.download_url || '').trim();
+            return '<div style="margin-top:6px;padding:8px 10px;border:1px solid #d9e2ef;border-radius:8px;background:#f8fbff;">' +
+                '<div style="font-size:12px;font-weight:600;"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
+                '<div style="margin-top:4px;word-break:break-word;">' + esc(originalName) + '</div>' +
+                '<div style="margin-top:6px;"><a href="' + esc(href) + '" target="_blank" rel="noopener" class="btn btn-xs btn-default">Open document</a></div>' +
+            '</div>';
+        }).join('');
+        return '<div class="mt-shared-docs">' + itemsHtml + '</div>';
+    }
+
     function senderClass(sender) {
         var s = String(sender || 'system').toLowerCase();
         if (s === 'provider') return 'success';
@@ -718,6 +786,14 @@
         }
 
         if (!label) {
+            var parsedShared = parseSharedDocumentMessage(text);
+            var sharedDocs = resolveSharedMessageDocuments(parsedShared.names);
+            if (sharedDocs.length) {
+                var bodyHtml = parsedShared.body
+                    ? '<div style="white-space:pre-wrap;">' + esc(parsedShared.body) + '</div>'
+                    : '';
+                return bodyHtml + renderSharedDocumentsBlock(sharedDocs);
+            }
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
 
@@ -1771,7 +1847,8 @@
         var composeSnapshot = composeFiles.slice(0);
         uploadComposeDocuments().done(function () {
             resetComposeFiles();
-            var messageText = text || buildComposeAttachmentSummary(composeSnapshot);
+            var attachmentSummary = buildComposeAttachmentSummary(composeSnapshot);
+            var messageText = text ? (text + '\n\n' + attachmentSummary) : attachmentSummary;
             sendMessageText(messageText);
         }).fail(function (res) {
             var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
