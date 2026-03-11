@@ -344,13 +344,13 @@ if (isset($conexion) && $conexion) {
                                         <label for="client-inbox-message">Write a message</label>
                                         <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..." <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>></textarea>
                                     </div>
-                                    <div class="form-group" style="margin-bottom:8px;">
+                                    <div id="client-typing-indicator" style="font-size:12px;color:#999;min-height:18px;margin-bottom:4px;">Support is typing…</div>
+                                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                                         <input type="file" id="client-chat-attach-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" multiple style="display:none;">
                                         <button type="button" class="btn btn-default btn-sm" id="client-chat-attach-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paperclip"></i> Attach document</button>
-                                        <div id="client-chat-attach-list" class="text-muted" style="margin-top:8px;display:none;"></div>
+                                        <button type="submit" class="btn btn-primary btn-sm" id="client-inbox-send-btn" style="margin-left:auto;" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
                                     </div>
-                                    <div id="client-typing-indicator">Support is typing…</div>
-                                    <button type="submit" class="btn btn-primary" id="client-inbox-send-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
+                                    <div id="client-chat-attach-list" class="text-muted" style="margin-top:6px;display:none;"></div>
                                     <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Free-form messaging is locked right now. Please use the structured actions above.</div>
                                 </form>
                             </div>
