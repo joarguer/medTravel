@@ -653,6 +653,6 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
         <script src="lib/owlcarousel/owl.carousel.min.js"></script>
         <script src="lib/lightbox/js/lightbox.min.js"></script>
         <?php echo $script; ?>
-        <script src="js/main.js"></script>
+        <script src="<?php echo htmlspecialchars(mt_asset_url('js/main.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
     </body>
 </html>

@@ -696,7 +696,7 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
         
 
         <!-- Template Javascript -->
-        <script src="js/main.js"></script>
+        <script src="<?php echo htmlspecialchars(mt_asset_url('js/main.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
         <?php if ($show_video_hero) { ?>
         <script>
             (function () {

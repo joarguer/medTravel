@@ -36,6 +36,26 @@ function mt_valid_public_page(string $relativePath): bool {
     return true;
 }
 
+function mt_asset_url(string $path): string {
+    $trimmed = ltrim($path, '/');
+    if ($trimmed === '') {
+        return $path;
+    }
+
+    $fullPath = __DIR__ . '/../' . $trimmed;
+    if (!is_file($fullPath)) {
+        return $path;
+    }
+
+    $version = filemtime($fullPath);
+    if ($version === false) {
+        return $path;
+    }
+
+    $prefix = str_starts_with($path, '/') ? '/' : '';
+    return $prefix . $trimmed . '?v=' . $version;
+}
+
 function mt_is_assoc_array(array $array): bool {
     if ($array === []) {
         return false;
@@ -130,6 +150,11 @@ $meta_og_site_name = htmlspecialchars((string)$page_og_site_name, ENT_QUOTES, 'U
 $meta_twitter_card = htmlspecialchars((string)$page_twitter_card, ENT_QUOTES, 'UTF-8');
 $meta_extra = is_string($page_meta_extra) ? trim($page_meta_extra) : '';
 $meta_extra = $meta_extra !== '' ? "\n    " . $meta_extra : '';
+$toastr_css_url = htmlspecialchars(mt_asset_url('assets/global/plugins/bootstrap-toastr/toastr.min.css'), ENT_QUOTES, 'UTF-8');
+$bootstrap_css_url = htmlspecialchars(mt_asset_url('css/bootstrap.min.css'), ENT_QUOTES, 'UTF-8');
+$style_css_url = htmlspecialchars(mt_asset_url('css/style.css'), ENT_QUOTES, 'UTF-8');
+$toastr_js_url = htmlspecialchars(mt_asset_url('assets/global/plugins/bootstrap-toastr/toastr.min.js'), ENT_QUOTES, 'UTF-8');
+$booking_summary_js_url = htmlspecialchars(mt_asset_url('/js/booking_summary.js'), ENT_QUOTES, 'UTF-8');
 
 $head = '<meta charset="utf-8">
     <title>' . $meta_title . '</title>
@@ -158,7 +183,7 @@ $head = '<meta charset="utf-8">
     <!-- Icon Font Stylesheet -->
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css"/>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.4.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="assets/global/plugins/bootstrap-toastr/toastr.min.css" rel="stylesheet" type="text/css" />
+    <link href="' . $toastr_css_url . '" rel="stylesheet" type="text/css" />
 
     <!-- Libraries Stylesheet -->
     <link href="lib/owlcarousel/assets/owl.carousel.min.css" rel="stylesheet">
@@ -166,10 +191,10 @@ $head = '<meta charset="utf-8">
 
 
     <!-- Customized Bootstrap Stylesheet -->
-    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="' . $bootstrap_css_url . '" rel="stylesheet">
 
     <!-- Template Stylesheet -->
-    <link href="css/style.css" rel="stylesheet">' . $jsonld_scripts;
+    <link href="' . $style_css_url . '" rel="stylesheet">' . $jsonld_scripts;
 
 $logo = '<a href="index.php" class="navbar-brand p-0">
 <h1 class="m-0"><i class="fas fa-stethoscope me-3"></i><span class="text-warning">Med</span>Travel</h1>
@@ -497,7 +522,7 @@ if (!$is_booking_wizard_page) {
 // Inyectar el resumen canónico en el layout global (footer) para que exista cross-page.
 $footer .= $wizard_package_summary_markup;
 
-$script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
+$script =  '<script src="' . $toastr_js_url . '" type="text/javascript"></script>
             <script>
             // Función para hacer scroll suave al widget de booking
             function scrollToBooking(offerId) {
@@ -549,7 +574,7 @@ $script =  '<script src="assets/global/plugins/bootstrap-toastr/toastr.min.js" t
                 }
             })(document,"script");
             </script>
-            <script src="/js/booking_summary.js"></script>';
+            <script src="' . $booking_summary_js_url . '"></script>';
 
 $copyright = <<<HTML
 <div class="container-fluid copyright text-body py-4">

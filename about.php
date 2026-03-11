@@ -161,8 +161,8 @@ include('inc/include.php');
         <?php echo $script; ?>
 
         <!-- Template Javascript -->
-        <script src="js/main.js"></script>
-        <script src="js/about.js"></script>
+        <script src="<?php echo htmlspecialchars(mt_asset_url('js/main.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+        <script src="<?php echo htmlspecialchars(mt_asset_url('js/about.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
     </body>
 
 </html>
