@@ -1883,7 +1883,13 @@
                 lastComposeNotice = res.free_message_notice;
             }
             setComposeGateState(canSendFreeMessage, lastComposeNotice);
-            currentDocuments = $.isArray(res.documents) ? res.documents : [];
+            var freshDocs = $.isArray(res.documents) ? res.documents : [];
+            var freshIds = freshDocs.map(function (d) { return parseInt(d.id || 0, 10); });
+            var localOnly = currentDocuments.filter(function (d) {
+                var id = parseInt(d.id || 0, 10);
+                return id > 0 && freshIds.indexOf(id) === -1;
+            });
+            currentDocuments = freshDocs.concat(localOnly);
 
             var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM';
             var headingText = isItemThread ? cleanServiceTitle(currentThread.thread_title || '') : 'MedTravel Coordination';
