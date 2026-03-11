@@ -911,9 +911,13 @@ if ($action === 'list_messages') {
                     }
                     $docSql .= ")";
                 } else {
-                    $docSql .= " WHERE cd.client_id = ?";
-                    $docTypes .= 'i';
-                    $docParams[] = $clientesId;
+                    if ($clientesId > 0) {
+                        $docSql .= " WHERE cd.client_id = ?";
+                        $docTypes .= 'i';
+                        $docParams[] = $clientesId;
+                    } else {
+                        $docSql .= " WHERE 1=1"; // booking_request_id filter below scopes the query
+                    }
                 }
 
                 if (inbox_table_has_column($conexion, 'client_documents', 'shared_with_provider')) {

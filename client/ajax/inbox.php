@@ -713,7 +713,7 @@ if ($action === 'list_messages') {
                     $docTypes .= 'i';
                     $docParams[] = $clientIdForDocs;
                 } else {
-                    $docSql .= " WHERE 1=0";
+                    $docSql .= " WHERE 1=1"; // booking_request_id filter below scopes the query
                 }
             }
 
