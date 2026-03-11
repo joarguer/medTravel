@@ -155,63 +155,98 @@
         return value.replace(/\.[a-z0-9]{2,8}$/i, '');
     }
 
-    function resolveSharedMessageDocuments(names) {
-        var wanted = {};
-        var wantedWithoutExt = {};
-        var docs = [];
-        (names || []).forEach(function (name) {
-            var key = normalizeSharedDocumentName(name);
-            if (key) {
-                wanted[key] = true;
-                var keyWithoutExt = sharedDocumentNameWithoutExtension(key);
-                if (keyWithoutExt) {
-                    wantedWithoutExt[keyWithoutExt] = true;
-                }
-            }
-        });
-        if (!Object.keys(wanted).length || !currentDocuments || !currentDocuments.length) {
-            return docs;
-        }
-        currentDocuments.forEach(function (doc) {
-            var originalName = String(doc.original_filename || doc.filename || '').trim();
-            var key = normalizeSharedDocumentName(originalName);
-            var keyWithoutExt = sharedDocumentNameWithoutExtension(originalName);
-            var matched = false;
-            if (key && wanted[key]) {
-                matched = true;
-            } else if (keyWithoutExt && wantedWithoutExt[keyWithoutExt]) {
-                matched = true;
-            } else {
-                Object.keys(wanted).some(function (wantedKey) {
-                    if (wantedKey.length < 12 || !key) {
-                        return false;
-                    }
-                    var sameExtension = key.replace(/^.*(\.[a-z0-9]{2,8})$/i, '$1') === wantedKey.replace(/^.*(\.[a-z0-9]{2,8})$/i, '$1');
-                    if (sameExtension && (key.indexOf(wantedKey) !== -1 || wantedKey.indexOf(key) !== -1)) {
-                        matched = true;
-                        return true;
-                    }
-                    return false;
-                });
-            }
-            if (matched) {
-                docs.push(doc);
-            }
-        });
-        return docs;
+    function sharedDocumentExtension(name) {
+        var match = normalizeSharedDocumentName(name).match(/(\.[a-z0-9]{2,8})$/i);
+        return match ? match[1] : '';
     }
 
-    function renderSharedDocumentsBlock(docs) {
-        if (!docs || !docs.length) {
+    function resolveSharedMessageDocument(name) {
+        var target = normalizeSharedDocumentName(name);
+        var targetWithoutExt = sharedDocumentNameWithoutExtension(name);
+        var targetExt = sharedDocumentExtension(name);
+        var bestDoc = null;
+        var bestScore = -1;
+        if (!target || !currentDocuments || !currentDocuments.length) {
+            return null;
+        }
+
+        currentDocuments.forEach(function (doc) {
+            var candidates = [
+                String(doc.original_filename || '').trim(),
+                String(doc.filename || '').trim(),
+                String(doc.title || '').trim()
+            ].filter(function (value) {
+                return value !== '';
+            });
+            var docBestScore = -1;
+
+            candidates.forEach(function (candidate) {
+                var candidateKey = normalizeSharedDocumentName(candidate);
+                var candidateWithoutExt = sharedDocumentNameWithoutExtension(candidate);
+                var candidateExt = sharedDocumentExtension(candidate);
+                if (!candidateKey) {
+                    return;
+                }
+                if (candidateKey === target) {
+                    docBestScore = Math.max(docBestScore, 100);
+                    return;
+                }
+                if (candidateWithoutExt && candidateWithoutExt === targetWithoutExt) {
+                    docBestScore = Math.max(docBestScore, 95);
+                }
+                if (targetExt && candidateExt && targetExt === candidateExt && (
+                    candidateKey.indexOf(target) !== -1 || target.indexOf(candidateKey) !== -1
+                )) {
+                    docBestScore = Math.max(docBestScore, 85);
+                }
+                var targetTokens = targetWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
+                var candidateTokens = candidateWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
+                var overlap = 0;
+                targetTokens.forEach(function (token) {
+                    if (candidateTokens.indexOf(token) !== -1) {
+                        overlap++;
+                    }
+                });
+                if (overlap >= 3 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
+                    docBestScore = Math.max(docBestScore, 70 + overlap);
+                }
+            });
+
+            if (docBestScore > bestScore) {
+                bestScore = docBestScore;
+                bestDoc = doc;
+            }
+        });
+
+        if (bestScore >= 70) {
+            return bestDoc;
+        }
+        if (currentDocuments.length === 1) {
+            return currentDocuments[0];
+        }
+        return null;
+    }
+
+    function renderSharedDocumentsBlock(names) {
+        if (!names || !names.length) {
             return '';
         }
-        var itemsHtml = docs.map(function (doc) {
-            var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
-            var href = String(doc.download_url || '').trim();
+        var itemsHtml = names.map(function (name) {
+            var doc = resolveSharedMessageDocument(name);
+            var originalName = doc
+                ? String(doc.original_filename || doc.filename || name || ('Document #' + (doc.id || '')))
+                : String(name || '');
+            var href = doc ? String(doc.download_url || '').trim() : '';
+            var innerHtml = '<div style="font-size:12px;font-weight:600;"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
+                '<div style="margin-top:4px;word-break:break-word;' + (href ? 'text-decoration:underline;' : '') + '">' + esc(originalName) + '</div>' +
+                (href ? '<div style="margin-top:6px;"><span class="btn btn-xs btn-default">Open document</span></div>' : '');
+            if (href) {
+                return '<a href="' + esc(href) + '" target="_blank" rel="noopener" style="display:block;margin-top:6px;padding:8px 10px;border:1px solid #d9e2ef;border-radius:8px;background:#f8fbff;color:#1a73e8;text-decoration:none;">' +
+                    innerHtml +
+                '</a>';
+            }
             return '<div style="margin-top:6px;padding:8px 10px;border:1px solid #d9e2ef;border-radius:8px;background:#f8fbff;">' +
-                '<div style="font-size:12px;font-weight:600;"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
-                '<div style="margin-top:4px;word-break:break-word;">' + esc(originalName) + '</div>' +
-                '<div style="margin-top:6px;"><a href="' + esc(href) + '" target="_blank" rel="noopener" class="btn btn-xs btn-default">Open document</a></div>' +
+                innerHtml +
             '</div>';
         }).join('');
         return '<div class="mt-shared-docs">' + itemsHtml + '</div>';
@@ -833,12 +868,11 @@
 
         if (!label) {
             var parsedShared = parseSharedDocumentMessage(text);
-            var sharedDocs = resolveSharedMessageDocuments(parsedShared.names);
-            if (sharedDocs.length) {
+            if (parsedShared.names.length) {
                 var bodyHtml = parsedShared.body
                     ? '<div style="white-space:pre-wrap;">' + esc(parsedShared.body) + '</div>'
                     : '';
-                return bodyHtml + renderSharedDocumentsBlock(sharedDocs);
+                return bodyHtml + renderSharedDocumentsBlock(parsedShared.names);
             }
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
