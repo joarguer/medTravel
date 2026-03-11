@@ -40,13 +40,17 @@
     function renderSummary(totalCount, unreadCount, pendingCount) {
         var badge = document.querySelector('.admin-notif-badge');
         var $summary = $('#admin-notification-summary');
+        var total = parseInt(totalCount || 0, 10);
+        if (!isFinite(total) || total < 0) {
+            total = 0;
+        }
         var unread = parseInt(unreadCount || 0, 10);
         if (!isFinite(unread) || unread < 0) {
             unread = 0;
         }
         if (badge) {
-            if (unread > 0) {
-                badge.textContent = String(unread);
+            if (total > 0) {
+                badge.textContent = String(total);
                 badge.style.display = 'inline-block';
             } else {
                 badge.textContent = '';
@@ -54,7 +58,7 @@
             }
         }
         if ($summary.length) {
-            if (totalCount > 0) {
+            if (total > 0) {
                 var parts = [];
                 if (unreadCount > 0) {
                     parts.push(unreadCount + ' unread message(s)');
@@ -62,7 +66,7 @@
                 if (pendingCount > 0) {
                     parts.push(pendingCount + ' pending service(s)');
                 }
-                $summary.html('<span class="bold">' + totalCount + '</span> notification(s)' + (parts.length ? ' · ' + esc(parts.join(' · ')) : ''));
+                $summary.html('<span class="bold">' + total + '</span> notification(s)' + (parts.length ? ' · ' + esc(parts.join(' · ')) : ''));
             } else {
                 $summary.text('No notifications');
             }
