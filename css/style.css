@@ -462,14 +462,11 @@
     .hero-video-block__content {
         min-height: calc(100vh - 88px);
         min-height: calc(100svh - 88px);
-        min-height: calc(100dvh - 88px);
-        height: calc(100vh - 88px);
-        height: calc(100svh - 88px);
-        height: calc(100dvh - 88px);
+        height: auto;
     }
 
     .hero-video-block__content {
-        padding: 2.5rem 1rem 2.25rem;
+        padding: 2.5rem 1rem calc(2.25rem + env(safe-area-inset-bottom, 0px));
     }
 
     .hero-video-block__content > div {
@@ -502,7 +499,7 @@
 
 @media (max-width: 480px) {
     .hero-video-block__content {
-        padding: 2rem 0.9rem 1.75rem;
+        padding: 2rem 0.9rem calc(1.75rem + env(safe-area-inset-bottom, 0px));
     }
 
     .hero-video-block__content .display-2 {
