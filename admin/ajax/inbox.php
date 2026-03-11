@@ -518,6 +518,10 @@ function admin_inbox_resolve_context($conexion, $scope, $threadType, $requestId,
         ];
     }
 
+    if (!empty($scope['is_admin'])) {
+        return ['ok' => false, 'message' => 'forbidden', 'status' => 403];
+    }
+
     if ($itemId <= 0) {
         return ['ok' => false, 'message' => 'invalid_item_id', 'status' => 422];
     }
@@ -644,65 +648,67 @@ if ($action === 'list_threads') {
         }
     }
 
-    $itemSql = "SELECT
-                    bri.id AS item_id,
-                    bri.booking_request_id AS request_id,
-                    COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
-                    {$patientNameExpr} AS patient_name,
-                    {$itemStatusExpr} AS item_status_label,
-                    br.destination,
-                    br.created_at
-                FROM booking_request_items bri
-                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
-                LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
-                LEFT JOIN service_catalog sc ON sc.id = o.service_id
-                LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
-                {$patientJoin}
-                WHERE 1=1";
-    if ($hasItemsSoftDelete) {
-        $itemSql .= " AND bri.is_deleted = 0";
-    }
-    if ($hasRequestsSoftDelete) {
-        $itemSql .= " AND br.is_deleted = 0";
-    }
-    $itemSql .= (string)$scope['scope_where'];
-    $itemSql .= " ORDER BY br.created_at DESC, bri.id DESC LIMIT " . (int)$limit;
+    if (empty($scope['is_admin'])) {
+        $itemSql = "SELECT
+                        bri.id AS item_id,
+                        bri.booking_request_id AS request_id,
+                        COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
+                        {$patientNameExpr} AS patient_name,
+                        {$itemStatusExpr} AS item_status_label,
+                        br.destination,
+                        br.created_at
+                    FROM booking_request_items bri
+                    INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                    LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                    LEFT JOIN service_catalog sc ON sc.id = o.service_id
+                    LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                    {$patientJoin}
+                    WHERE 1=1";
+        if ($hasItemsSoftDelete) {
+            $itemSql .= " AND bri.is_deleted = 0";
+        }
+        if ($hasRequestsSoftDelete) {
+            $itemSql .= " AND br.is_deleted = 0";
+        }
+        $itemSql .= (string)$scope['scope_where'];
+        $itemSql .= " ORDER BY br.created_at DESC, bri.id DESC LIMIT " . (int)$limit;
 
-    $stmtItem = mysqli_prepare($conexion, $itemSql);
-    if ($stmtItem) {
-        if ((string)$scope['scope_types'] !== '') {
-            $types = (string)$scope['scope_types'];
-            $params = (array)$scope['scope_params'];
-            inbox_bind_stmt_params($stmtItem, $types, $params);
-        }
-        if (mysqli_stmt_execute($stmtItem)) {
-            $res = mysqli_stmt_get_result($stmtItem);
-            while ($res && ($row = mysqli_fetch_assoc($res))) {
-                $requestId = (int)($row['request_id'] ?? 0);
-                $itemId = (int)($row['item_id'] ?? 0);
-                if ($requestId <= 0 || $itemId <= 0) {
-                    continue;
-                }
-                $itemName = trim((string)($row['item_name'] ?? ''));
-                if ($itemName === '') {
-                    $itemName = 'Item #' . $itemId;
-                }
-                $threads[] = [
-                    'thread_id' => inbox_thread_id('ITEM', $requestId, $itemId),
-                    'thread_key' => inbox_thread_id('ITEM', $requestId, $itemId),
-                    'thread_type' => 'ITEM',
-                    'request_id' => $requestId,
-                    'booking_request_id' => $requestId,
-                    'item_id' => $itemId,
-                    'title' => $itemName . ' - Request #' . $requestId,
-                    'patient_name' => admin_inbox_patient_label($row['patient_name'] ?? '', $requestId),
-                    'status_label' => admin_inbox_status_label($row['item_status_label'] ?? 'pending_provider'),
-                    'subtitle' => trim((string)($row['destination'] ?? '')),
-                    'updated_at' => (string)($row['created_at'] ?? ''),
-                ];
+        $stmtItem = mysqli_prepare($conexion, $itemSql);
+        if ($stmtItem) {
+            if ((string)$scope['scope_types'] !== '') {
+                $types = (string)$scope['scope_types'];
+                $params = (array)$scope['scope_params'];
+                inbox_bind_stmt_params($stmtItem, $types, $params);
             }
+            if (mysqli_stmt_execute($stmtItem)) {
+                $res = mysqli_stmt_get_result($stmtItem);
+                while ($res && ($row = mysqli_fetch_assoc($res))) {
+                    $requestId = (int)($row['request_id'] ?? 0);
+                    $itemId = (int)($row['item_id'] ?? 0);
+                    if ($requestId <= 0 || $itemId <= 0) {
+                        continue;
+                    }
+                    $itemName = trim((string)($row['item_name'] ?? ''));
+                    if ($itemName === '') {
+                        $itemName = 'Item #' . $itemId;
+                    }
+                    $threads[] = [
+                        'thread_id' => inbox_thread_id('ITEM', $requestId, $itemId),
+                        'thread_key' => inbox_thread_id('ITEM', $requestId, $itemId),
+                        'thread_type' => 'ITEM',
+                        'request_id' => $requestId,
+                        'booking_request_id' => $requestId,
+                        'item_id' => $itemId,
+                        'title' => $itemName . ' - Request #' . $requestId,
+                        'patient_name' => admin_inbox_patient_label($row['patient_name'] ?? '', $requestId),
+                        'status_label' => admin_inbox_status_label($row['item_status_label'] ?? 'pending_provider'),
+                        'subtitle' => trim((string)($row['destination'] ?? '')),
+                        'updated_at' => (string)($row['created_at'] ?? ''),
+                    ];
+                }
+            }
+            mysqli_stmt_close($stmtItem);
         }
-        mysqli_stmt_close($stmtItem);
     }
 
     $threads = inbox_enrich_threads_with_meta($conexion, $threads, (string)$scope['reader_role'], (int)$scope['user_id']);
@@ -881,7 +887,7 @@ if ($action === 'list_messages') {
                 }
             }
 
-            if (($docHasClientUserId && $clientUserId > 0) || (!$docHasClientUserId && $clientesId > 0)) {
+            if ($bookingRequestId > 0) {
                 $selectCols = ['id', 'file_path', 'filename', 'original_filename', 'document_type', 'booking_request_id', 'item_id'];
                 if (inbox_table_has_column($conexion, 'client_documents', 'file_size')) {
                     $selectCols[] = 'file_size';
@@ -930,6 +936,8 @@ if ($action === 'list_messages') {
                     $docSql .= " AND (item_id = ? OR item_id IS NULL)";
                     $docTypes .= 'i';
                     $docParams[] = (int)$ctx['item_id'];
+                } elseif (strtoupper((string)($ctx['thread_type'] ?? 'CARE')) === 'CARE') {
+                    $docSql .= " AND item_id IS NULL";
                 }
                 $docSql .= " ORDER BY " . $orderByColumn . " DESC";
                 $stmtDocs = mysqli_prepare($conexion, $docSql);

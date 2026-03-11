@@ -28,6 +28,7 @@
     var freeMessageAllowed = true;
     var lastComposeNotice = '';
     var currentDocuments = [];
+    var currentDocumentsThreadId = '';
     var composeFiles = [];
     var composeBusy = false;
     var composeBusyMessage = '';
@@ -1852,6 +1853,12 @@
 
     function loadMessages() {
         if (!currentThread || !currentThread.thread_id) return;
+
+        var activeThreadId = String(currentThread.thread_id || '');
+        if (currentDocumentsThreadId !== activeThreadId) {
+            currentDocuments = [];
+            currentDocumentsThreadId = activeThreadId;
+        }
 
         realtimeJoinThread(currentThread.thread_id);
 
