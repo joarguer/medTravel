@@ -57,6 +57,24 @@ Cambios principales:
 - comisión se calcula desde `proposed_price` (fallback `provider_proposed_price`)
 - UI admin muestra advertencia cuando falta precio y bloquea crear/confirmar pagos
 
+## 2026-03-11 — Cleanup booking reset must include commission payments
+
+- Problema:
+  - `admin/cleanup.php` ejecutaba reset operativo de bookings sin incluir `commission_payments`
+  - el preview mostraba orden “safe” solo con las tablas seleccionadas y omitía hijos FK externos
+- Causa raíz:
+  - `commission_payments.request_id` referencia `booking_requests.id`
+  - el planner de delete order solo evaluaba FKs dentro del subconjunto seleccionado
+- Decisión:
+  - incluir `commission_payments` en el grupo `bookings`
+  - mantener delete order child -> parent dentro del subset
+  - agregar warning en preview cuando existan child tables por FK fuera del set
+  - no adoptar `SET FOREIGN_KEY_CHECKS=0` como estrategia de reset
+- Impacto:
+  - el reset operativo de bookings ahora contempla pagos de comisión del mismo flujo transaccional
+  - para bookings, el orden esperado del planner queda `commission_payments` -> `booking_request_items` -> `booking_requests`
+  - el preview deja explícito que la seguridad del orden depende del subconjunto seleccionado
+
 ## 2026-03 — Blog and Commercial Content Management Improvements
 
 - Soporte de video en blog mediante `video_url` para YouTube/Vimeo y `video_file` para MP4 local

@@ -24,6 +24,37 @@ Alias al documento canónico que describe contexto técnico y runtime.
 **Purpose**
 Control access to sensitive provider contact details until commission payment is completed.
 
+## Dev Cleanup Reset
+
+**Admin interface location**
+- `admin/cleanup.php`
+
+**Operational reset groups**
+- `bookings`
+- `inbox`
+- `calendar`
+- optional `full_catalog`
+
+**Booking reset scope**
+- `commission_payments`
+- `booking_request_items`
+- `booking_requests`
+
+**Delete-order guarantee**
+- Preview / execute delete order is reliable only inside the selected table subset.
+- For `bookings`, the expected child-to-parent order is:
+  - `commission_payments`
+  - `booking_request_items`
+  - `booking_requests`
+
+**Runtime guard**
+- Preview now warns when selected parent tables have FK child tables outside the selected reset set.
+- The reset flow does not use `SET FOREIGN_KEY_CHECKS=0`.
+
+**Rationale**
+- `commission_payments.request_id` is a transactional child of `booking_requests`.
+- A cleanup planner that ignores child tables outside the selected subset can produce a misleading “safe” delete order and fail at execution time.
+
 ## Provider Commission Administration
 
 **Admin interface location**
