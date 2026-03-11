@@ -37,6 +37,41 @@ function cleanup_table_count($conexion, $table)
     return (int)($row['total'] ?? 0);
 }
 
+function cleanup_collect_external_child_fk_edges($conexion, $tables)
+{
+    if (empty($tables)) {
+        return [];
+    }
+    $quoted = [];
+    foreach ($tables as $table) {
+        $quoted[] = "'" . mysqli_real_escape_string($conexion, $table) . "'";
+    }
+    $in = implode(',', $quoted);
+
+    $sql = "SELECT TABLE_NAME, REFERENCED_TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_COLUMN_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND REFERENCED_TABLE_NAME IS NOT NULL
+              AND REFERENCED_TABLE_NAME IN ({$in})
+              AND TABLE_NAME NOT IN ({$in})
+            ORDER BY REFERENCED_TABLE_NAME, TABLE_NAME, CONSTRAINT_NAME";
+    $res = mysqli_query($conexion, $sql);
+    if (!$res) {
+        return [];
+    }
+    $edges = [];
+    while ($row = mysqli_fetch_assoc($res)) {
+        $edges[] = [
+            'child' => (string)($row['TABLE_NAME'] ?? ''),
+            'parent' => (string)($row['REFERENCED_TABLE_NAME'] ?? ''),
+            'constraint' => (string)($row['CONSTRAINT_NAME'] ?? ''),
+            'column' => (string)($row['COLUMN_NAME'] ?? ''),
+            'ref_column' => (string)($row['REFERENCED_COLUMN_NAME'] ?? ''),
+        ];
+    }
+    return $edges;
+}
+
 function cleanup_collect_fk_edges($conexion, $tables)
 {
     if (empty($tables)) {
@@ -192,7 +227,7 @@ function cleanup_log_message($message)
 function cleanup_build_reset_plan($conexion, $include)
 {
     $groups = [
-        'bookings' => ['booking_request_items', 'booking_requests'],
+        'bookings' => ['commission_payments', 'booking_request_items', 'booking_requests'],
         'inbox' => ['inbox_thread_reads', 'inbox_messages'],
         'calendar' => ['calendar_events'],
         'full_catalog' => [
@@ -231,14 +266,21 @@ function cleanup_build_reset_plan($conexion, $include)
     }
 
     $edges = cleanup_collect_fk_edges($conexion, $existing);
+    $externalEdges = cleanup_collect_external_child_fk_edges($conexion, $existing);
     $order = cleanup_delete_order_from_fk($existing, $edges);
+    $warnings = [];
+    if (!empty($externalEdges)) {
+        $warnings[] = 'External FK dependencies detected. Delete order is safe only inside the selected tables.';
+    }
 
     return [
         'selected' => $selected,
         'tables' => $existing,
         'counts' => $counts,
         'fk_edges' => $edges,
+        'external_fk_edges' => $externalEdges,
         'delete_order' => $order,
+        'warnings' => $warnings,
     ];
 }
 
@@ -535,7 +577,24 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                 </table>
                             </div>
                             <div class="col-md-6">
-                                <h5>Delete order (FK-safe)</h5>
+                                <h5>Delete order (within selected tables)</h5>
+                                <?php if (!empty($cleanupPreview['warnings'])): ?>
+                                    <?php foreach ($cleanupPreview['warnings'] as $warning): ?>
+                                        <div class="alert alert-warning" style="margin-bottom:10px;">
+                                            <?php echo htmlspecialchars($warning, ENT_QUOTES, 'UTF-8'); ?>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                                <?php if (!empty($cleanupPreview['external_fk_edges'])): ?>
+                                    <div class="alert alert-warning" style="margin-bottom:10px;">
+                                        <strong>External child tables not included in this reset:</strong>
+                                        <ul style="margin:8px 0 0 18px;">
+                                            <?php foreach ($cleanupPreview['external_fk_edges'] as $edge): ?>
+                                                <li><?php echo htmlspecialchars($edge['child'] . ' -> ' . $edge['parent'] . ' (' . $edge['constraint'] . ')', ENT_QUOTES, 'UTF-8'); ?></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php endif; ?>
                                 <ol>
                                     <?php if (empty($cleanupPreview['delete_order'])): ?>
                                         <li>No tables selected.</li>
