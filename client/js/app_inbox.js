@@ -27,6 +27,8 @@
     var selectedFiles = [];
     var composeFiles = [];
     var currentDocuments = [];
+    var composeBusy = false;
+    var composeBusyMessage = '';
     var feeGateActive = !!config.feeGateActive;
     var commissionGateActive = !!config.commissionGateActive;
     var commissionPaid = !!config.commissionPaid;
@@ -457,6 +459,39 @@
             input.value = '';
         }
         renderComposeFilesBatch();
+    }
+
+    function mergeComposeUploadDocuments(uploadRes) {
+        var results = uploadRes && $.isArray(uploadRes.results) ? uploadRes.results : [];
+        if (!results.length) {
+            return;
+        }
+        results.forEach(function (item) {
+            if (!item || item.ok !== true) {
+                return;
+            }
+            var docId = parseInt(item.document_id || 0, 10);
+            if (docId > 0) {
+                currentDocuments = (currentDocuments || []).filter(function (doc) {
+                    return parseInt(doc.id || 0, 10) !== docId;
+                });
+            }
+            var filePath = String(item.file_path || '').trim();
+            currentDocuments.unshift({
+                id: docId,
+                file_path: filePath,
+                original_filename: String(item.original_filename || ''),
+                filename: String(item.filename || ''),
+                title: String(item.title || ''),
+                download_url: filePath ? buildClientDocumentUrl(filePath) : ''
+            });
+        });
+    }
+
+    function setComposeBusy(enabled, message) {
+        composeBusy = !!enabled;
+        composeBusyMessage = composeBusy ? String(message || 'Working...') : '';
+        setComposeGateState(freeMessageAllowed, composeBusyMessage);
     }
 
     function buildComposeAttachmentSummary(files) {
@@ -1407,7 +1442,8 @@
 
     function setComposeGateState(canSendFreeMessage, noticeMessage) {
         freeMessageAllowed = !!canSendFreeMessage;
-        var composeBlocked = feeGateActive || commissionGateActive || !freeMessageAllowed;
+        var permissionBlocked = feeGateActive || commissionGateActive || !freeMessageAllowed;
+        var composeBlocked = permissionBlocked || composeBusy;
         if (typeof noticeMessage === 'string' && noticeMessage !== '') {
             lastComposeNotice = noticeMessage;
         }
@@ -1415,6 +1451,7 @@
         var $msg = $('#client-inbox-message');
         var $send = $('#client-inbox-send-btn');
         var $attach = $('#client-chat-attach-btn');
+        var $attachInput = $('#client-chat-attach-input');
         var $composerGroup = $('#client-inbox-send-form .form-group');
         var $typing = $('#client-typing-indicator');
         if ($msg.length) {
@@ -1426,18 +1463,25 @@
         if ($attach.length) {
             $attach.prop('disabled', composeBlocked);
         }
-        if (composeBlocked) {
+        if ($attachInput.length) {
+            $attachInput.prop('disabled', composeBlocked);
+        }
+        if (permissionBlocked) {
             if ($composerGroup.length) $composerGroup.hide();
             if ($send.length) $send.hide();
             if ($typing.length) $typing.hide();
         } else {
             if ($composerGroup.length) $composerGroup.show();
             if ($send.length) $send.show();
+            if ($typing.length) $typing.show();
         }
 
         var $note = $('#client-inbox-compose-note');
         if ($note.length) {
-            if (commissionGateActive) {
+            if (composeBusy) {
+                $note.text(composeBusyMessage || 'Uploading document...');
+                $note.show();
+            } else if (commissionGateActive) {
                 $note.text(commissionGateMessage || 'Free-form messaging is locked until the commission payment is completed. Please use the structured actions above.');
                 $note.show();
             } else if (!freeMessageAllowed) {
@@ -1841,6 +1885,10 @@
 
     function uploadComposeDocuments() {
         var deferred = $.Deferred();
+        if (composeBusy) {
+            deferred.reject({ message: 'Upload already in progress' });
+            return deferred.promise();
+        }
         if (!currentThread || !currentThread.thread_id) {
             deferred.reject({ message: 'Select a thread before uploading' });
             return deferred.promise();
@@ -1901,6 +1949,7 @@
 
     function sendMessageText(text) {
         if (!currentThread || !currentThread.thread_id) return;
+        if (composeBusy) return;
         clearLegacyUploadStatus();
         if (!freeMessageAllowed) {
             toastr.warning(lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
@@ -1917,6 +1966,7 @@
 
         var pendingId = addPendingMessage(text);
         emitTyping('stop');
+        setComposeBusy(true, 'Sending message...');
 
         $.ajax({
             url: '/client/ajax/inbox.php',
@@ -1929,6 +1979,7 @@
             }
         }).done(function (res) {
             if (!res || res.ok !== true) {
+                setComposeBusy(false, '');
                 toastr.error((res && res.message) ? res.message : 'Could not send message');
                 updatePendingStatus(pendingId, 'Failed');
                 return;
@@ -1948,9 +1999,11 @@
             $('#client-inbox-message').val('');
             resetComposeFiles();
             toastr.success('Message sent');
+            setComposeBusy(false, '');
             loadMessages();
             loadThreads();
         }).fail(function (xhr) {
+            setComposeBusy(false, '');
             var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
             updatePendingStatus(pendingId, 'Failed');
             if (res && res.code === 'FEE_REQUIRED') {
@@ -1979,6 +2032,9 @@
     }
 
     function sendMessage() {
+        if (composeBusy) {
+            return;
+        }
         var text = $.trim($('#client-inbox-message').val() || '');
         var hasAttachments = composeFiles.length > 0;
         if (!text && !hasAttachments) {
@@ -1991,13 +2047,17 @@
         }
 
         var composeSnapshot = composeFiles.slice(0);
-        uploadComposeDocuments().done(function () {
+        setComposeBusy(true, 'Uploading document...');
+        uploadComposeDocuments().done(function (uploadRes) {
+            mergeComposeUploadDocuments(uploadRes || null);
             clearLegacyUploadStatus();
             resetComposeFiles();
+            setComposeBusy(false, '');
             var attachmentSummary = buildComposeAttachmentSummary(composeSnapshot);
             var messageText = text ? (text + '\n\n' + attachmentSummary) : attachmentSummary;
             sendMessageText(messageText);
         }).fail(function (res) {
+            setComposeBusy(false, '');
             var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
             toastr.error(errorMessage);
         });
