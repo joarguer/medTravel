@@ -109,6 +109,28 @@ function cleanup_collect_fk_edges($conexion, $tables)
 
 function cleanup_delete_order_from_fk($tables, $edges)
 {
+    $priorityMap = [
+        // Current operational case flow: thread metadata/messages/docs/events before items/request.
+        'inbox_email_throttle' => 10,
+        'inbox_thread_reads' => 20,
+        'inbox_messages' => 30,
+        'client_documents' => 40,
+        'calendar_events' => 50,
+        'commission_payments' => 60,
+        'booking_request_items' => 70,
+        'booking_requests' => 80,
+        // Catalog reset remains secondary to the operational flow above.
+        'provider_service_offers' => 110,
+        'provider_catalog_services' => 120,
+        'provider_categories' => 130,
+        'medtravel_services_catalog' => 140,
+        'service_providers' => 150,
+        'providers' => 160,
+    ];
+    $priorityFor = function ($table) use ($priorityMap) {
+        return isset($priorityMap[$table]) ? (int)$priorityMap[$table] : 999;
+    };
+
     $inDegree = [];
     $adj = [];
     foreach ($tables as $table) {
@@ -131,6 +153,10 @@ function cleanup_delete_order_from_fk($tables, $edges)
             $queue[] = $table;
         }
     }
+    usort($queue, function ($a, $b) use ($priorityFor) {
+        $cmp = $priorityFor($a) <=> $priorityFor($b);
+        return $cmp !== 0 ? $cmp : strcmp($a, $b);
+    });
 
     $order = [];
     while (!empty($queue)) {
@@ -142,14 +168,24 @@ function cleanup_delete_order_from_fk($tables, $edges)
                 $queue[] = $parent;
             }
         }
+        usort($queue, function ($a, $b) use ($priorityFor) {
+            $cmp = $priorityFor($a) <=> $priorityFor($b);
+            return $cmp !== 0 ? $cmp : strcmp($a, $b);
+        });
     }
 
     if (count($order) !== count($tables)) {
+        $remaining = [];
         foreach ($tables as $table) {
             if (!in_array($table, $order, true)) {
-                $order[] = $table;
+                $remaining[] = $table;
             }
         }
+        usort($remaining, function ($a, $b) use ($priorityFor) {
+            $cmp = $priorityFor($a) <=> $priorityFor($b);
+            return $cmp !== 0 ? $cmp : strcmp($a, $b);
+        });
+        $order = array_merge($order, $remaining);
     }
     return $order;
 }
@@ -157,20 +193,47 @@ function cleanup_delete_order_from_fk($tables, $edges)
 function cleanup_detect_attachment_dirs($rootDir)
 {
     $candidates = [
-        'uploads/bookings',
-        'upload/bookings',
-        'booking/uploads',
-        'booking/attachments',
-        'booking/files',
+        ['relative' => 'uploads/bookings', 'group' => 'bookings', 'label' => 'Booking attachments'],
+        ['relative' => 'upload/bookings', 'group' => 'bookings', 'label' => 'Booking attachments'],
+        ['relative' => 'booking/uploads', 'group' => 'bookings', 'label' => 'Booking attachments'],
+        ['relative' => 'booking/attachments', 'group' => 'bookings', 'label' => 'Booking attachments'],
+        ['relative' => 'booking/files', 'group' => 'bookings', 'label' => 'Booking attachments'],
+        // Dedicated storage used by client_documents in the current inbox/document flow.
+        ['relative' => 'uploads/medical_docs', 'group' => 'bookings', 'label' => 'Shared medical documents'],
     ];
     $found = [];
-    foreach ($candidates as $relative) {
+    foreach ($candidates as $meta) {
+        $relative = (string)($meta['relative'] ?? '');
         $path = $rootDir . DIRECTORY_SEPARATOR . $relative;
         if (is_dir($path)) {
-            $found[] = ['relative' => $relative, 'path' => $path];
+            $found[] = [
+                'relative' => $relative,
+                'path' => $path,
+                'group' => (string)($meta['group'] ?? 'bookings'),
+                'label' => (string)($meta['label'] ?? $relative),
+            ];
         }
     }
     return $found;
+}
+
+function cleanup_filter_attachment_dirs($dirs, $include)
+{
+    $selected = [];
+    foreach ((array)$dirs as $dirMeta) {
+        $group = (string)($dirMeta['group'] ?? 'bookings');
+        if ($group === 'bookings' && empty($include['bookings'])) {
+            continue;
+        }
+        if ($group === 'calendar' && empty($include['calendar'])) {
+            continue;
+        }
+        if ($group === 'inbox' && empty($include['inbox'])) {
+            continue;
+        }
+        $selected[] = $dirMeta;
+    }
+    return $selected;
 }
 
 function cleanup_count_files_recursive($path)
@@ -227,8 +290,10 @@ function cleanup_log_message($message)
 function cleanup_build_reset_plan($conexion, $include)
 {
     $groups = [
-        'bookings' => ['commission_payments', 'booking_request_items', 'booking_requests'],
-        'inbox' => ['inbox_thread_reads', 'inbox_messages'],
+        // Current case lifecycle: request -> items -> documents/commission and related case records.
+        'bookings' => ['client_documents', 'commission_payments', 'booking_request_items', 'booking_requests'],
+        // Operational conversation metadata derived from thread_id / request_id / item_id.
+        'inbox' => ['inbox_email_throttle', 'inbox_thread_reads', 'inbox_messages'],
         'calendar' => ['calendar_events'],
         'full_catalog' => [
             'provider_catalog_services',
@@ -272,6 +337,12 @@ function cleanup_build_reset_plan($conexion, $include)
     if (!empty($externalEdges)) {
         $warnings[] = 'External FK dependencies detected. Delete order is safe only inside the selected tables.';
     }
+    if (!empty($include['bookings']) && cleanup_table_exists($conexion, 'client_documents')) {
+        $warnings[] = 'Shared documents are part of the booking reset because client_documents is scoped by booking_request_id / item_id in the active inbox flow.';
+    }
+    if (!empty($include['inbox']) && cleanup_table_exists($conexion, 'inbox_email_throttle')) {
+        $warnings[] = 'Inbox reset includes inbox_email_throttle to remove stale notification metadata tied to thread_id.';
+    }
 
     return [
         'selected' => $selected,
@@ -305,7 +376,10 @@ if ($cleanupAction === '') {
     $includeOptions['reset_autoincrement'] = true;
 }
 
-$attachmentDirs = cleanup_detect_attachment_dirs($cleanupRootDir ?: dirname(__DIR__));
+$attachmentDirs = cleanup_filter_attachment_dirs(
+    cleanup_detect_attachment_dirs($cleanupRootDir ?: dirname(__DIR__)),
+    $includeOptions
+);
 foreach ($attachmentDirs as $k => $dirMeta) {
     $attachmentDirs[$k]['files'] = cleanup_count_files_recursive($dirMeta['path']);
 }
@@ -346,6 +420,9 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
         mysqli_begin_transaction($conexion);
         try {
             foreach ($executedTables as $table) {
+                if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+                    throw new Exception('Unsafe table name in delete plan: ' . $table);
+                }
                 $sql = "DELETE FROM `{$table}`";
                 if (!mysqli_query($conexion, $sql)) {
                     throw new Exception('Delete failed for ' . $table . ': ' . mysqli_error($conexion));
@@ -470,15 +547,15 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                 <div class="col-md-6">
                                     <h4>Operational reset (recommended)</h4>
                                     <div class="mt-checkbox-list">
-                                        <label class="mt-checkbox mt-checkbox-outline"> Include bookings and items
+                                        <label class="mt-checkbox mt-checkbox-outline"> Include cases, items, documents and commissions
                                             <input type="checkbox" name="include_bookings" value="1" <?php echo $includeOptions['bookings'] ? 'checked' : ''; ?>>
                                             <span></span>
                                         </label>
-                                        <label class="mt-checkbox mt-checkbox-outline"> Include inbox messages
+                                        <label class="mt-checkbox mt-checkbox-outline"> Include inbox messages and thread metadata
                                             <input type="checkbox" name="include_inbox" value="1" <?php echo $includeOptions['inbox'] ? 'checked' : ''; ?>>
                                             <span></span>
                                         </label>
-                                        <label class="mt-checkbox mt-checkbox-outline"> Include calendar events
+                                        <label class="mt-checkbox mt-checkbox-outline"> Include calendar events / appointments
                                             <input type="checkbox" name="include_calendar" value="1" <?php echo $includeOptions['calendar'] ? 'checked' : ''; ?>>
                                             <span></span>
                                         </label>
@@ -498,7 +575,7 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                     </div>
                                     <?php if (!empty($attachmentDirs)): ?>
                                         <div class="mt-checkbox-list">
-                                            <label class="mt-checkbox mt-checkbox-outline"> Also delete generated booking files
+                                            <label class="mt-checkbox mt-checkbox-outline"> Also delete dedicated case/document upload folders
                                                 <input type="checkbox" name="include_files" value="1" <?php echo $includeOptions['include_files'] ? 'checked' : ''; ?>>
                                                 <span></span>
                                             </label>
@@ -508,13 +585,17 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                             <?php
                                             $folderLabels = [];
                                             foreach ($attachmentDirs as $dirMeta) {
-                                                $folderLabels[] = htmlspecialchars($dirMeta['relative'], ENT_QUOTES, 'UTF-8') . ' (' . (int)$dirMeta['files'] . ' files)';
+                                                $folderLabels[] = htmlspecialchars($dirMeta['label'], ENT_QUOTES, 'UTF-8')
+                                                    . ': '
+                                                    . htmlspecialchars($dirMeta['relative'], ENT_QUOTES, 'UTF-8')
+                                                    . ' (' . (int)$dirMeta['files'] . ' files)';
                                             }
                                             echo implode(' · ', $folderLabels);
                                             ?>
                                         </p>
+                                        <p class="help-block">Only dedicated project folders are included here. No generic upload roots are deleted.</p>
                                     <?php else: ?>
-                                        <p class="help-block">No specific booking attachment folders detected in this environment.</p>
+                                        <p class="help-block">No dedicated case/document upload folders detected in this environment.</p>
                                     <?php endif; ?>
 
                                     <hr>
