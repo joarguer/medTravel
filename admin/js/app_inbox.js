@@ -800,7 +800,7 @@
                 innerHtml +=
                     '<div class="mt-doc-row">' +
                         '<span class="label ' + cls + ' mt-doc-type">' + esc(typeLabel) + '</span>' +
-                        '<span class="mt-doc-name">' + esc(originalName) + '</span>' +
+                        '<a href="' + esc(href) + '" class="mt-doc-name mt-doc-open" data-doc-id="' + esc(String(doc.id || '')) + '" data-url="' + esc(encodedHref) + '" title="View ' + esc(originalName) + '">' + esc(originalName) + '</a>' +
                         (dateText ? '<small class="mt-doc-date text-muted"><i class="fa fa-clock-o" aria-hidden="true"></i> ' + esc(dateText) + '</small>' : '') +
                         '<button type="button" class="btn btn-xs btn-info mt-doc-view"' +
                             ' data-doc-id="' + esc(String(doc.id || '')) + '"' +
@@ -2190,8 +2190,10 @@
             loadThreads();
         });
 
-        // Doc viewer: open modal when View button is clicked
-        $('#admin-inbox-messages').on('click', '.mt-doc-view', function () {
+        // Doc viewer: open modal when View button or document name is clicked
+        $('#admin-inbox-docs-content').on('click', '.mt-doc-view, .mt-doc-open', function (evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
             var docId = String($(this).data('doc-id') || '');
             var doc = null;
             for (var i = 0; i < currentDocuments.length; i++) {

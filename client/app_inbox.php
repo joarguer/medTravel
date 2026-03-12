@@ -276,11 +276,129 @@ if (isset($conexion) && $conexion) {
             border-radius: 8px;
             color: #2c3e50;
         }
+        #client-inbox-docs-content .mt-docs-section {
+            border: 1px solid #d4e6f1;
+            border-radius: 4px;
+            background: #eaf4fb;
+            padding: 10px 12px;
+            margin-bottom: 0;
+        }
+        #client-inbox-docs-content .mt-docs-header {
+            font-size: 13px;
+            color: #2471a3;
+            margin-bottom: 8px;
+        }
+        #client-inbox-docs-content .mt-docs-icon { margin-right: 3px; }
+        #client-inbox-docs-content .mt-docs-empty {
+            margin: 4px 0 0;
+            font-style: italic;
+            font-size: 12px;
+        }
+        #client-inbox-docs-content .mt-docs-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        #client-inbox-docs-content .mt-doc-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: #fff;
+            border-radius: 3px;
+            padding: 5px 8px;
+        }
+        #client-inbox-docs-content .mt-doc-type { flex: 0 0 auto; }
+        #client-inbox-docs-content .mt-doc-name {
+            flex: 1 1 auto;
+            font-size: 12px;
+            min-width: 80px;
+            word-break: break-all;
+            text-decoration: none;
+            color: #2f353b;
+        }
+        #client-inbox-docs-content .mt-doc-name:hover {
+            text-decoration: underline;
+            color: #1a73e8;
+        }
+        #client-inbox-docs-content .mt-doc-date {
+            flex: 0 0 auto;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        #client-inbox-docs-content .mt-doc-download { flex: 0 0 auto; }
+        #clientDocViewerModal .mt-dv-type-badge {
+            font-size: 12px;
+            vertical-align: middle;
+            margin-left: 6px;
+        }
+        #clientDocViewerModal .mt-dv-filename {
+            word-break: break-all;
+            font-weight: 600;
+            color: #2f353b;
+        }
+        #clientDocViewerModal .mt-dv-meta {
+            font-size: 11px;
+            color: #7f8c9d;
+            margin-top: 3px;
+        }
+        #clientDocViewerModal .mt-dv-preview-wrap {
+            background: #f4f6f7;
+            border: 1px solid #dfe6ee;
+            border-radius: 4px;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 0;
+        }
+        #clientDocViewerModal .mt-dv-preview-wrap iframe {
+            width: 100%;
+            height: 80vh;
+            max-height: 80vh;
+            border: none;
+            display: block;
+        }
+        #clientDocViewerModal .mt-dv-preview-wrap img {
+            max-width: 100%;
+            max-height: 80vh;
+            display: block;
+            margin: auto;
+        }
+        #clientDocViewerModal .mt-dv-no-preview {
+            text-align: center;
+            padding: 40px 20px;
+            color: #7f8c9d;
+        }
+        #clientDocViewerModal .mt-dv-no-preview .fa {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 10px;
+            color: #bdc3c7;
+        }
         #client-typing-indicator {
             font-size: 12px;
             color: #7f8c9d;
             margin-top: 6px;
             display: none;
+        }
+        @media (max-width: 767px) {
+            #clientDocViewerModal .modal-dialog {
+                margin: 0;
+                width: 100%;
+            }
+            #clientDocViewerModal .modal-content {
+                border-radius: 0;
+                min-height: 100vh;
+            }
+            #clientDocViewerModal .mt-dv-preview-wrap iframe {
+                height: 60vh;
+                max-height: 60vh;
+            }
+            #clientDocViewerModal .mt-dv-preview-wrap img {
+                max-height: 60vh;
+            }
         }
     </style>
 </head>
@@ -414,6 +532,34 @@ if (isset($conexion) && $conexion) {
             </div>
         </div>
         <?php echo $footer; ?>
+    </div>
+</div>
+
+<div class="modal fade" id="clientDocViewerModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">
+                    <span id="clientDocViewerName" class="mt-dv-filename">Document</span>
+                    <span id="clientDocViewerType" class="label label-info mt-dv-type-badge"></span>
+                </h4>
+                <p id="clientDocViewerMeta" class="mt-dv-meta" style="margin:0;"></p>
+            </div>
+            <div class="modal-body" style="padding:12px;">
+                <div class="mt-dv-preview-wrap" id="clientDocViewerPreview">
+                    <div class="mt-dv-no-preview">
+                        <i class="fa fa-file-o" aria-hidden="true"></i>
+                        <span>Preview not available.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-times" aria-hidden="true"></i> Close</button>
+                <a id="clientDocViewerOpen" href="#" target="_blank" rel="noopener" class="btn btn-default"><i class="fa fa-external-link" aria-hidden="true"></i> Open in new tab</a>
+                <a id="clientDocViewerDownload" href="#" target="_blank" rel="noopener" class="btn btn-primary"><i class="fa fa-download" aria-hidden="true"></i> Download</a>
+            </div>
+        </div>
     </div>
 </div>
 

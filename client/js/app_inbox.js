@@ -723,36 +723,137 @@
         if (!currentDocuments || !currentDocuments.length) {
             return '';
         }
+        var hasDocs = currentDocuments.length > 0;
+        var countHtml = hasDocs
+            ? ' <span class="badge" style="background:#7f8c9d;">' + currentDocuments.length + '</span>'
+            : '';
+        var innerHtml;
+        if (!hasDocs) {
+            innerHtml = '<p class="mt-docs-empty text-muted">No medical documents uploaded yet.</p>';
+        } else {
+            var typeCls = { labs: 'label-info', imaging: 'label-primary', photos: 'label-success', medical_history: 'label-warning', other: 'label-default' };
+            innerHtml = '<div class="mt-docs-list">';
+            currentDocuments.forEach(function (doc) {
+                var typeKey = String(doc.document_type || 'other').toLowerCase();
+                var typeLabel = docTypeLabel(typeKey);
+                var cls = typeCls[typeKey] || 'label-default';
+                var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
+                var uploadedRaw = String(doc.uploaded_at || doc.created_at || '').trim();
+                var href = String(doc.download_url || '').trim();
+                if (!href) {
+                    href = buildClientDocumentUrl(doc.file_path || '');
+                }
+                var encodedHref = href ? encodeURIComponent(href) : '';
+                var dateText = '';
+                if (uploadedRaw) {
+                    var d = new Date(uploadedRaw.replace(' ', 'T'));
+                    if (!isNaN(d.getTime())) {
+                        var dd = (d.getDate() < 10 ? '0' : '') + d.getDate();
+                        var mo = ((d.getMonth() + 1) < 10 ? '0' : '') + (d.getMonth() + 1);
+                        dateText = dd + '/' + mo + '/' + d.getFullYear();
+                    }
+                }
+                innerHtml +=
+                    '<div class="mt-doc-row">' +
+                        '<span class="label ' + cls + ' mt-doc-type">' + esc(typeLabel) + '</span>' +
+                        '<a href="' + esc(href) + '" class="mt-doc-name mt-doc-open" data-doc-id="' + esc(String(doc.id || '')) + '" data-url="' + esc(encodedHref) + '" title="View ' + esc(originalName) + '">' + esc(originalName) + '</a>' +
+                        (dateText ? '<small class="mt-doc-date text-muted"><i class="fa fa-clock-o" aria-hidden="true"></i> ' + esc(dateText) + '</small>' : '') +
+                        '<button type="button" class="btn btn-xs btn-info mt-doc-view"' +
+                            ' data-doc-id="' + esc(String(doc.id || '')) + '"' +
+                            ' data-url="' + esc(encodedHref) + '"' +
+                            ' title="View ' + esc(originalName) + '">' +
+                            '<i class="fa fa-eye" aria-hidden="true"></i> View' +
+                        '</button>' +
+                        '<a class="btn btn-xs btn-default mt-doc-download" href="' + esc(href) + '" target="_blank" rel="noopener" title="Download ' + esc(originalName) + '">' +
+                            '<i class="fa fa-download" aria-hidden="true"></i> Download' +
+                        '</a>' +
+                    '</div>';
+            });
+            innerHtml += '</div>';
+        }
+        return '<div class="mt-docs-section">' +
+            '<div class="mt-docs-header">' +
+                '<i class="fa fa-paperclip mt-docs-icon" aria-hidden="true"></i> ' +
+                '<strong>Medical Documents' + countHtml + '</strong>' +
+            '</div>' +
+            innerHtml +
+        '</div>';
+    }
 
-        var html = '<div class="well well-sm" style="margin-bottom:10px;">' +
-            '<strong>Medical documents</strong>' +
-            '<ul style="margin:8px 0 0 18px;padding:0;">';
+    function findDocumentById(docId) {
+        var target = String(docId || '');
+        if (!target) {
+            return null;
+        }
+        for (var i = 0; i < currentDocuments.length; i++) {
+            if (String(currentDocuments[i].id || '') === target) {
+                return currentDocuments[i];
+            }
+        }
+        return null;
+    }
 
-        currentDocuments.forEach(function (doc) {
-            var docType = String(doc.document_type || '').replace(/_/g, ' ');
-            var title = String(doc.title || '').trim();
-            var description = String(doc.description || '').trim();
-            var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
-            var href = String(doc.download_url || '').trim();
-            if (!href) {
-                href = buildClientDocumentUrl(doc.file_path || '');
-            }
-            html += '<li style="margin-bottom:8px;">' +
-                '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(originalName) + '</a>';
-            if (docType) {
-                html += ' <span class="label label-default" style="margin-left:6px;">' + esc(docType) + '</span>';
-            }
-            if (title) {
-                html += '<div><strong>' + esc(title) + '</strong></div>';
-            }
-            if (description) {
-                html += '<div class="text-muted">' + esc(description) + '</div>';
-            }
-            html += '</li>';
+    function openDocViewer(doc, fallbackUrl) {
+        var originalName = String(doc && (doc.original_filename || doc.filename) || 'Document');
+        var typeKey = String(doc && doc.document_type || 'other').toLowerCase();
+        var typeLabel = docTypeLabel(typeKey);
+        var mimeType = String(doc && doc.mime_type || '').toLowerCase().trim();
+        var href = String(doc && doc.download_url || fallbackUrl || '').trim();
+        if (!href && doc) {
+            href = buildClientDocumentUrl(doc.file_path || '');
+        }
+        var previewType = resolvePreviewType({
+            mime: mimeType,
+            name: originalName,
+            url: href
         });
 
-        html += '</ul></div>';
-        return html;
+        $('#clientDocViewerName').text(originalName);
+        $('#clientDocViewerType').text(typeLabel);
+        var typeCls = { labs: 'label-info', imaging: 'label-primary', photos: 'label-success', medical_history: 'label-warning', other: 'label-default' };
+        $('#clientDocViewerType').attr('class', 'label ' + (typeCls[typeKey] || 'label-default') + ' mt-dv-type-badge');
+
+        var metaParts = [];
+        var uploadedRaw = String(doc && (doc.uploaded_at || doc.created_at) || '').trim();
+        if (uploadedRaw) {
+            var d = new Date(uploadedRaw.replace(' ', 'T'));
+            if (!isNaN(d.getTime())) {
+                var dd = (d.getDate() < 10 ? '0' : '') + d.getDate();
+                var mo = ((d.getMonth() + 1) < 10 ? '0' : '') + (d.getMonth() + 1);
+                metaParts.push('Uploaded: ' + dd + '/' + mo + '/' + d.getFullYear());
+            }
+        }
+        if (doc && doc.file_size > 0) {
+            var kb = (doc.file_size / 1024).toFixed(1);
+            metaParts.push(kb + ' KB');
+        }
+        if (mimeType) {
+            metaParts.push(mimeType);
+        }
+        $('#clientDocViewerMeta').text(metaParts.join(' · '));
+        $('#clientDocViewerDownload').attr('href', href || '#');
+        $('#clientDocViewerOpen').attr('href', href || '#');
+
+        var $preview = $('#clientDocViewerPreview');
+        if (previewType === 'image' && href) {
+            $preview.html('<img src="' + esc(href) + '" alt="' + esc(originalName) + '">');
+        } else if (previewType === 'pdf' && href) {
+            $preview.html('<iframe src="' + esc(href) + '" title="' + esc(originalName) + '"></iframe>');
+        } else {
+            $preview.html(
+                '<div class="mt-dv-no-preview">' +
+                    '<i class="fa fa-file-o" aria-hidden="true"></i>' +
+                    '<div>Preview not available for this file type.</div>' +
+                    '<div style="margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+                        '<a href="' + esc(href || '#') + '" target="_blank" rel="noopener" class="btn btn-default btn-sm">' +
+                            '<i class="fa fa-external-link" aria-hidden="true"></i> Open in new tab</a>' +
+                        '<a href="' + esc(href || '#') + '" target="_blank" rel="noopener" class="btn btn-primary btn-sm">' +
+                            '<i class="fa fa-download" aria-hidden="true"></i> Download</a>' +
+                    '</div>' +
+                '</div>'
+            );
+        }
+        $('#clientDocViewerModal').modal('show');
     }
 
     function syncThreadDocumentsPanel() {
@@ -2528,6 +2629,14 @@
             e.preventDefault();
             sendMessage();
         });
+        $('#client-inbox-docs-content').on('click', '.mt-doc-view, .mt-doc-open', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var docId = String($(this).data('doc-id') || '').trim();
+            var fallbackHref = String(decodeURIComponent($(this).attr('data-url') || '') || $(this).attr('href') || '').trim();
+            var doc = findDocumentById(docId);
+            openDocViewer(doc || null, fallbackHref);
+        });
         $('#client-inbox-messages').on('click', '.mt-shared-doc-link', function (e) {
             var href = String($(this).attr('data-url') || $(this).attr('href') || '').trim();
             if (!href) {
@@ -2536,6 +2645,14 @@
             e.preventDefault();
             e.stopPropagation();
             window.open(href, '_blank', 'noopener');
+        });
+        $('#clientDocViewerModal').on('hidden.bs.modal', function () {
+            $('#clientDocViewerPreview').html(
+                '<div class="mt-dv-no-preview">' +
+                    '<i class="fa fa-file-o" aria-hidden="true"></i>' +
+                    '<span>Preview not available.</span>' +
+                '</div>'
+            );
         });
         $('#client-inbox-message').on('input', function () {
             handleLocalTyping();

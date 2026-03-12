@@ -200,6 +200,13 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             font-size: 12px;
             min-width: 80px;
             word-break: break-all;
+            text-decoration: none;
+            color: #2f353b;
+        }
+        #admin-inbox-messages .mt-doc-name:hover,
+        #admin-inbox-docs-content .mt-doc-name:hover {
+            text-decoration: underline;
+            color: #1a73e8;
         }
         #admin-inbox-messages .mt-doc-date,
         #admin-inbox-docs-content .mt-doc-date {
