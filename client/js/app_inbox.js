@@ -386,7 +386,9 @@
     }
 
     function buildClientDocumentUrl(filePath) {
-        var relative = String(filePath || '').replace(/^\/+/, '');
+        var relative = String(filePath || '').trim().replace(/\\+/g, '/').replace(/^\/+/, '');
+        relative = relative.replace(/^uploads\/medical_docs\//i, '');
+        relative = relative.replace(/^medical_docs\//i, '');
         if (!relative) return '#';
         return '/uploads/medical_docs/' + encodeURI(relative);
     }

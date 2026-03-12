@@ -739,7 +739,15 @@ if ($action === 'list_messages') {
                 if (inbox_bind_stmt_params($stmtDocs, $docTypes, $docParams) && mysqli_stmt_execute($stmtDocs)) {
                     $docRes = mysqli_stmt_get_result($stmtDocs);
                     while ($docRes && ($docRow = mysqli_fetch_assoc($docRes))) {
-                        $filePath = ltrim((string)($docRow['file_path'] ?? ''), '/');
+                        $filePath = preg_replace('/\\\\+/', '/', (string)($docRow['file_path'] ?? ''));
+                        $filePath = ltrim($filePath, '/');
+                        if (stripos($filePath, 'uploads/medical_docs/') === 0) {
+                            $filePath = substr($filePath, strlen('uploads/medical_docs/'));
+                        }
+                        if (stripos($filePath, 'medical_docs/') === 0) {
+                            $filePath = substr($filePath, strlen('medical_docs/'));
+                        }
+                        $filePath = ltrim((string)$filePath, '/');
                         $docRow['download_url'] = $filePath !== '' ? '/uploads/medical_docs/' . $filePath : '';
                         $documents[] = $docRow;
                     }

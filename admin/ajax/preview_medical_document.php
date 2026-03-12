@@ -182,6 +182,21 @@ if ($filePath === '') {
     exit;
 }
 
+$normalized = preg_replace('/\\\\+/', '/', $filePath);
+$normalized = ltrim($normalized, '/');
+if (stripos($normalized, 'uploads/medical_docs/') === 0) {
+    $normalized = substr($normalized, strlen('uploads/medical_docs/'));
+}
+if (stripos($normalized, 'medical_docs/') === 0) {
+    $normalized = substr($normalized, strlen('medical_docs/'));
+}
+$normalized = ltrim((string)$normalized, '/');
+if ($normalized === '') {
+    http_response_code(404);
+    echo 'file_not_found';
+    exit;
+}
+
 $baseDir = realpath(__DIR__ . '/../../uploads/medical_docs');
 if ($baseDir === false) {
     http_response_code(500);
@@ -189,7 +204,6 @@ if ($baseDir === false) {
     exit;
 }
 
-$normalized = ltrim($filePath, '/');
 $fullPath = realpath($baseDir . '/' . $normalized);
 if ($fullPath === false || strpos($fullPath, $baseDir . DIRECTORY_SEPARATOR) !== 0) {
     http_response_code(403);
