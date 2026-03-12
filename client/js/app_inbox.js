@@ -353,6 +353,38 @@
         return (n / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
+    function docTypeLabel(type) {
+        return normalizeDocTypeLabel(type);
+    }
+
+    function resolvePreviewType(meta) {
+        var mime = String(meta && meta.mime || '').toLowerCase().trim();
+        if (mime === 'application/pdf' || mime === 'application/x-pdf') {
+            return 'pdf';
+        }
+        if (mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/png' || mime === 'image/webp') {
+            return 'image';
+        }
+
+        var source = String((meta && (meta.name || meta.url)) || '').trim();
+        if (!source) {
+            return '';
+        }
+        var clean = source.split('?')[0].split('#')[0].toLowerCase();
+        var dotIndex = clean.lastIndexOf('.');
+        if (dotIndex === -1) {
+            return '';
+        }
+        var ext = clean.slice(dotIndex + 1);
+        if (ext === 'pdf') {
+            return 'pdf';
+        }
+        if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'webp') {
+            return 'image';
+        }
+        return '';
+    }
+
     function buildClientDocumentUrl(filePath) {
         var relative = String(filePath || '').replace(/^\/+/, '');
         if (!relative) return '#';
@@ -703,7 +735,7 @@
             }
             var actionsHtml = href
                 ? ('<div class="mt-shared-doc-actions">' +
-                    '<a class="mt-shared-doc-link" href="' + esc(href) + '" data-url="' + esc(href) + '" target="_blank" rel="noopener">Open document</a>' +
+                    '<a class="mt-shared-doc-link" href="' + esc(href) + '" data-doc-id="' + esc(String(doc && doc.id ? doc.id : '')) + '" data-url="' + esc(href) + '" target="_blank" rel="noopener">Open document</a>' +
                 '</div>')
                 : '';
             return '<div class="mt-shared-doc-card">' +
@@ -2638,13 +2670,12 @@
             openDocViewer(doc || null, fallbackHref);
         });
         $('#client-inbox-messages').on('click', '.mt-shared-doc-link', function (e) {
-            var href = String($(this).attr('data-url') || $(this).attr('href') || '').trim();
-            if (!href) {
-                return;
-            }
             e.preventDefault();
             e.stopPropagation();
-            window.open(href, '_blank', 'noopener');
+            var docId = String($(this).data('doc-id') || '').trim();
+            var href = String(decodeURIComponent($(this).attr('data-url') || '') || $(this).attr('href') || '').trim();
+            var doc = findDocumentById(docId);
+            openDocViewer(doc || null, href);
         });
         $('#clientDocViewerModal').on('hidden.bs.modal', function () {
             $('#clientDocViewerPreview').html(

@@ -337,7 +337,7 @@
             }
             var actionsHtml = href
                 ? ('<div class="mt-shared-doc-actions">' +
-                    '<a class="mt-shared-doc-link" href="' + esc(href) + '" data-url="' + esc(href) + '" target="_blank" rel="noopener">Open document</a>' +
+                    '<a class="mt-shared-doc-link" href="' + esc(href) + '" data-doc-id="' + esc(String(doc && doc.id ? doc.id : '')) + '" data-url="' + esc(href) + '" target="_blank" rel="noopener">Open document</a>' +
                 '</div>')
                 : '';
             return '<div class="mt-shared-doc-card">' +
@@ -1350,19 +1350,34 @@
         }
     }
 
-    function openDocViewer(doc) {
-        var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
-        var typeKey = String(doc.document_type || 'other').toLowerCase();
+    function findDocumentById(docId) {
+        var target = String(docId || '').trim();
+        if (!target) {
+            return null;
+        }
+        for (var i = 0; i < currentDocuments.length; i++) {
+            if (String(currentDocuments[i].id || '') === target) {
+                return currentDocuments[i];
+            }
+        }
+        return null;
+    }
+
+    function openDocViewer(doc, fallbackUrl) {
+        var safeDoc = doc || {};
+        var originalName = String(safeDoc.original_filename || safeDoc.filename || 'Document');
+        var typeKey = String(safeDoc.document_type || 'other').toLowerCase();
         var typeLabel = docTypeLabel(typeKey);
-        var mimeType = String(doc.mime_type || '').toLowerCase().trim();
-        var href = String(doc.download_url || '').trim();
-        if (!href && doc.id) {
-            href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
+        var mimeType = String(safeDoc.mime_type || '').toLowerCase().trim();
+        var href = String(safeDoc.download_url || fallbackUrl || '').trim();
+        if (!href && safeDoc.id) {
+            href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(safeDoc.id));
         }
         var previewUrl = href;
-        if (doc.id) {
-            previewUrl = '/admin/ajax/preview_medical_document.php?doc_id=' + encodeURIComponent(String(doc.id));
+        if (safeDoc.id) {
+            previewUrl = '/admin/ajax/preview_medical_document.php?doc_id=' + encodeURIComponent(String(safeDoc.id));
         }
+        var previewType = resolvePreviewType({ mime: mimeType, name: originalName, url: href });
         // Header
         $('#adminDocViewerName').text(originalName);
         $('#adminDocViewerType').text(typeLabel);
@@ -1370,7 +1385,7 @@
         $('#adminDocViewerType').attr('class', 'label ' + (typeCls[typeKey] || 'label-default') + ' mt-dv-type-badge');
         // Meta: size + date
         var metaParts = [];
-        var uploadedRaw = String(doc.uploaded_at || doc.created_at || '').trim();
+        var uploadedRaw = String(safeDoc.uploaded_at || safeDoc.created_at || '').trim();
         if (uploadedRaw) {
             var d = new Date(uploadedRaw.replace(' ', 'T'));
             if (!isNaN(d.getTime())) {
@@ -1379,27 +1394,31 @@
                 metaParts.push('Uploaded: ' + dd + '/' + mo + '/' + d.getFullYear());
             }
         }
-        if (doc.file_size > 0) {
-            var kb = (doc.file_size / 1024).toFixed(1);
+        if (safeDoc.file_size > 0) {
+            var kb = (safeDoc.file_size / 1024).toFixed(1);
             metaParts.push(kb + ' KB');
         }
         if (mimeType) { metaParts.push(mimeType); }
         $('#adminDocViewerMeta').text(metaParts.join(' · '));
         // Download button
-        $('#adminDocViewerDownload').attr('href', href);
+        $('#adminDocViewerDownload').attr('href', href || '#');
         // Preview
         var $preview = $('#adminDocViewerPreview');
-        if (mimeType.indexOf('image/') === 0) {
+        if (previewType === 'image' && previewUrl) {
             $preview.html('<img src="' + esc(previewUrl) + '" alt="' + esc(originalName) + '">');
-        } else if (mimeType === 'application/pdf') {
+        } else if (previewType === 'pdf' && previewUrl) {
             $preview.html('<iframe src="' + esc(previewUrl) + '" title="' + esc(originalName) + '"></iframe>');
         } else {
             $preview.html(
                 '<div class="mt-dv-no-preview">' +
                     '<i class="fa fa-file-o" aria-hidden="true"></i>' +
                     '<div>Preview not available for this file type.</div>' +
-                    '<div style="margin-top:8px;"><a href="' + esc(href) + '" target="_blank" rel="noopener" class="btn btn-default btn-sm">' +
-                        '<i class="fa fa-download" aria-hidden="true"></i> Download to view</a></div>' +
+                    '<div style="margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+                        '<a href="' + esc(href || '#') + '" target="_blank" rel="noopener" class="btn btn-default btn-sm">' +
+                            '<i class="fa fa-external-link" aria-hidden="true"></i> Open in new tab</a>' +
+                        '<a href="' + esc(href || '#') + '" target="_blank" rel="noopener" class="btn btn-primary btn-sm">' +
+                            '<i class="fa fa-download" aria-hidden="true"></i> Download</a>' +
+                    '</div>' +
                 '</div>'
             );
         }
@@ -2194,26 +2213,18 @@
         $('#admin-inbox-docs-content').on('click', '.mt-doc-view, .mt-doc-open', function (evt) {
             evt.preventDefault();
             evt.stopPropagation();
-            var docId = String($(this).data('doc-id') || '');
-            var doc = null;
-            for (var i = 0; i < currentDocuments.length; i++) {
-                if (String(currentDocuments[i].id || '') === docId) {
-                    doc = currentDocuments[i];
-                    break;
-                }
-            }
-            if (doc) {
-                openDocViewer(doc);
-            }
+            var docId = String($(this).data('doc-id') || '').trim();
+            var href = String(decodeURIComponent($(this).attr('data-url') || '') || $(this).attr('href') || '').trim();
+            var doc = findDocumentById(docId);
+            openDocViewer(doc || null, href);
         });
         $('#admin-inbox-messages').on('click', '.mt-shared-doc-link', function (e) {
-            var href = String($(this).attr('data-url') || $(this).attr('href') || '').trim();
-            if (!href) {
-                return;
-            }
             e.preventDefault();
             e.stopPropagation();
-            window.open(href, '_blank', 'noopener');
+            var docId = String($(this).data('doc-id') || '').trim();
+            var href = String(decodeURIComponent($(this).attr('data-url') || '') || $(this).attr('href') || '').trim();
+            var doc = findDocumentById(docId);
+            openDocViewer(doc || null, href);
         });
 
         // Clean up preview iframe/img on modal close to stop loading
