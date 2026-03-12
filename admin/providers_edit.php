@@ -46,6 +46,8 @@ $isVerified  = !empty($provider['is_verified']);
 $isActive    = !empty($provider['is_active']);
 $hasCommissionAjax = is_file(__DIR__ . '/ajax/provider_commission_settings.php');
 $hasCommissionJs = is_file(__DIR__ . '/js/provider_commission.js');
+$hasMedicalStaffAjax = is_file(__DIR__ . '/ajax/provider_medical_staff.php');
+$hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
 
 // ── Commission gate badge (resolved via commission_settings AJAX on load) ──
 // The JS will inject the badge after fetching; this placeholder prevents flicker.
@@ -112,6 +114,7 @@ $hasCommissionJs = is_file(__DIR__ . '/js/provider_commission.js');
                         <div class="tabbable-line">
                             <ul class="nav nav-tabs">
                                 <li class="active"><a href="#tab-info" data-toggle="tab"><i class="fa fa-info-circle"></i> Información</a></li>
+                                <li><a href="#tab-medical-staff" data-toggle="tab"><i class="fa fa-user-md"></i> Staff médico <span id="staff-count-badge" class="badge badge-default">0</span></a></li>
                                 <li><a href="#tab-commission" data-toggle="tab" id="tab-commission-link"><i class="fa fa-usd"></i> Commission Settings</a></li>
                             </ul>
                             <div class="tab-content">
@@ -140,6 +143,59 @@ $hasCommissionJs = is_file(__DIR__ . '/js/provider_commission.js');
                                                 </tbody>
                                             </table>
                                             <a href="providers.php" class="btn btn-default btn-sm"><i class="fa fa-arrow-left"></i> Volver al listado</a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- ── Tab 2: Staff medico ── -->
+                                <div class="tab-pane" id="tab-medical-staff">
+                                    <?php if (!$hasMedicalStaffAjax || !$hasMedicalStaffJs): ?>
+                                        <div class="note note-danger">
+                                            Faltan assets del staff médico. Verifica
+                                            <code>admin/ajax/provider_medical_staff.php</code> y
+                                            <code>admin/js/provider_medical_staff.js</code>.
+                                        </div>
+                                    <?php endif; ?>
+                                    <div class="portlet light">
+                                        <div class="portlet-title">
+                                            <div class="caption">
+                                                <i class="fa fa-user-md theme-font"></i>
+                                                <span class="caption-subject font-dark bold uppercase">Staff médico</span>
+                                            </div>
+                                            <div class="actions">
+                                                <span class="text-muted" style="margin-right:12px;">
+                                                    Activos: <strong id="staff-active-counter">0</strong>
+                                                </span>
+                                                <button type="button" class="btn btn-primary btn-sm" id="btn-add-medical-staff">
+                                                    <i class="fa fa-plus"></i> Agregar médico
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="portlet-body">
+                                            <p class="text-muted" style="max-width:840px;">
+                                                Registra médicos o staff clínico interno del prestador. Esta relación deja preparada la base para futuras asignaciones de médico al caso o al item, sin reemplazar al prestador como entidad principal.
+                                            </p>
+                                            <div id="medical-staff-feedback"></div>
+                                            <div class="table-responsive">
+                                                <table class="table table-striped table-bordered table-hover" id="tbl-provider-medical-staff">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Nombre / especialidad</th>
+                                                            <th>Registro profesional</th>
+                                                            <th>Contacto</th>
+                                                            <th>Clínica / sede</th>
+                                                            <th>Estado</th>
+                                                            <th>Actualizado</th>
+                                                            <th style="width:180px;">Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr>
+                                                            <td colspan="7" class="text-center text-muted" style="padding:24px 12px;">Cargando staff médico...</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -271,11 +327,90 @@ $hasCommissionJs = is_file(__DIR__ . '/js/provider_commission.js');
     <?php echo $sider_bar; ?>
     <?php echo $theme_layout_script; ?>
 
+    <div id="providerMedicalStaffModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="providerMedicalStaffModalLabel">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header" style="background:#f7f7f7; border-bottom:1px solid #ebebeb;">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><i class="fa fa-times"></i></button>
+                    <h4 class="modal-title" id="providerMedicalStaffModalLabel"><strong>Agregar médico</strong></h4>
+                </div>
+                <div class="modal-body">
+                    <form id="form-provider-medical-staff">
+                        <input type="hidden" id="pms-id" name="id" value="" />
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-full-name">Nombre completo <span class="required">*</span></label>
+                                    <input type="text" class="form-control" id="pms-full-name" name="full_name" maxlength="180" required />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-specialty">Especialidad</label>
+                                    <input type="text" class="form-control" id="pms-specialty" name="specialty" maxlength="180" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-license">Registro profesional</label>
+                                    <input type="text" class="form-control" id="pms-license" name="professional_license" maxlength="120" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-clinic">Clínica / sede</label>
+                                    <input type="text" class="form-control" id="pms-clinic" name="clinic_name" maxlength="180" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-email">Correo</label>
+                                    <input type="email" class="form-control" id="pms-email" name="email" maxlength="190" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-phone">Teléfono</label>
+                                    <input type="text" class="form-control" id="pms-phone" name="phone" maxlength="80" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="pms-notes">Notas</label>
+                            <textarea class="form-control" id="pms-notes" name="notes" rows="4"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label class="mt-checkbox mt-checkbox-outline">
+                                <input type="checkbox" id="pms-active" name="active" value="1" checked />
+                                Activo
+                                <span></span>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <span id="pms-save-msg" class="pull-left" style="display:none;"></span>
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btn-save-medical-staff">
+                        <i class="fa fa-save"></i> Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         window.PROVIDER_ID = <?php echo $provider_id; ?>;
     </script>
     <?php if ($hasCommissionJs): ?>
         <script src="js/provider_commission.js" type="text/javascript"></script>
+    <?php endif; ?>
+    <?php if ($hasMedicalStaffJs): ?>
+        <script src="js/provider_medical_staff.js" type="text/javascript"></script>
     <?php endif; ?>
 </div>
 </body>
