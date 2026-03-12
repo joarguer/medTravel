@@ -6,6 +6,7 @@
         : 0;
     var ENDPOINT = 'ajax/provider_medical_staff.php';
     var linkableUsers = [];
+    var providerServices = [];
 
     function canManageStaff() {
         return !$('#btn-add-medical-staff').prop('disabled');
@@ -79,7 +80,8 @@
                 '<tr data-id="' + escapeHtml(item.id) + '">' +
                     '<td>' +
                         '<strong>' + escapeHtml(withFallback(item.full_name, '-')) + '</strong>' +
-                        '<div class="text-muted small">' + escapeHtml(withFallback(item.specialty, 'Sin especialidad registrada')) + '</div>' +
+                        '<div class="small"><span class="label label-info">' + escapeHtml(withFallback(item.service_summary, 'Sin servicios asignados')) + '</span></div>' +
+                        '<div class="text-muted small">' + escapeHtml(withFallback(item.specialty, 'Sin especialidad complementaria')) + '</div>' +
                     '</td>' +
                     '<td>' + escapeHtml(withFallback(item.professional_license, 'Sin registro')) + '</td>' +
                     '<td>' +
@@ -126,6 +128,48 @@
         $('#pms-can-access-admin').prop('disabled', !isEdit);
     }
 
+    function renderServiceOptions(items, selectedIds) {
+        var selectedMap = {};
+        (selectedIds || []).forEach(function (id) {
+            selectedMap[parseInt(id, 10)] = true;
+        });
+
+        if (!Array.isArray(items) || items.length === 0) {
+            $('#pms-service-ids').html('<option value="">Este prestador no tiene servicios activos habilitados</option>');
+            return;
+        }
+
+        var options = items.map(function (item) {
+            var serviceId = parseInt(item.service_id || item.id, 10);
+            var selected = selectedMap[serviceId] ? ' selected' : '';
+            var label = item.label || item.service_name || ('Servicio #' + serviceId);
+            return '<option value="' + escapeHtml(serviceId) + '"' + selected + '>' + escapeHtml(label) + '</option>';
+        });
+        $('#pms-service-ids').html(options.join(''));
+    }
+
+    function loadProviderServices(selectedIds) {
+        return $.ajax({
+            url: ENDPOINT,
+            method: 'GET',
+            dataType: 'json',
+            data: {
+                action: 'list_provider_services',
+                provider_id: PROVIDER_ID
+            }
+        }).done(function (res) {
+            providerServices = (res && Array.isArray(res.items)) ? res.items : [];
+            renderServiceOptions(providerServices, selectedIds || []);
+        }).fail(function (xhr) {
+            providerServices = [];
+            var message = 'No fue posible cargar los servicios habilitados.';
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                message = xhr.responseJSON.message;
+            }
+            $('#pms-service-ids').html('<option value="">' + escapeHtml(message) + '</option>');
+        });
+    }
+
     function resetForm() {
         var form = document.getElementById('form-provider-medical-staff');
         if (form) {
@@ -137,6 +181,8 @@
         $('#pms-access-status').text('Sin usuario vinculado');
         $('#providerMedicalStaffModalLabel').text('Agregar médico');
         $('#pms-save-msg').hide().empty();
+        providerServices = [];
+        renderServiceOptions([], []);
         renderLinkedUserOptions([], 0);
         setAccessSectionMode('create');
     }
@@ -153,6 +199,7 @@
         $('#pms-active').prop('checked', parseInt(item.active, 10) === 1);
         $('#pms-can-access-admin').prop('checked', parseInt(item.can_access_admin, 10) === 1);
         $('#pms-access-status').text(item.access_status_label || 'Sin usuario vinculado');
+        renderServiceOptions(providerServices, item.service_ids || []);
         $('#providerMedicalStaffModalLabel').text('Editar médico');
         setAccessSectionMode('edit');
     }
@@ -237,7 +284,9 @@
 
     function openCreateModal() {
         resetForm();
-        $('#providerMedicalStaffModal').modal('show');
+        loadProviderServices([]).always(function () {
+            $('#providerMedicalStaffModal').modal('show');
+        });
     }
 
     function openEditModal(staffId) {
@@ -256,7 +305,10 @@
                 toast((res && res.message) || 'No fue posible cargar el registro.', 'error');
                 return;
             }
-            loadLinkableUsers(res.item.linked_user_id || 0, res.item.id || 0).always(function () {
+            $.when(
+                loadLinkableUsers(res.item.linked_user_id || 0, res.item.id || 0),
+                loadProviderServices(res.item.service_ids || [])
+            ).always(function () {
                 fillForm(res.item);
                 $('#pms-linked-user-id').val(res.item.linked_user_id || '');
                 $('#providerMedicalStaffModal').modal('show');
@@ -296,6 +348,10 @@
             linked_user_id: $('#pms-linked-user-id').val() || '',
             notes: $.trim($('#pms-notes').val() || '')
         };
+        ($('#pms-service-ids').val() || []).forEach(function (serviceId) {
+            payload['service_ids[]'] = payload['service_ids[]'] || [];
+            payload['service_ids[]'].push(serviceId);
+        });
         if ($('#pms-active').is(':checked')) {
             payload.active = 1;
         }

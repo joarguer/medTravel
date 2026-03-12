@@ -53,6 +53,17 @@ function pms_table_ready($conexion)
     return $ready;
 }
 
+function pms_staff_services_table_ready($conexion)
+{
+    static $ready = null;
+    if ($ready !== null) {
+        return $ready;
+    }
+    $q = mysqli_query($conexion, "SHOW TABLES LIKE 'provider_medical_staff_services'");
+    $ready = ($q && mysqli_num_rows($q) > 0);
+    return $ready;
+}
+
 function pms_table_has_column($conexion, $table, $column)
 {
     static $cache = [];
@@ -103,6 +114,20 @@ function pms_clean_email($value)
         return '';
     }
     return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : false;
+}
+
+function pms_service_label($row)
+{
+    $serviceName = trim((string)($row['service_name'] ?? ''));
+    $categoryName = trim((string)($row['category_name'] ?? ''));
+    if ($serviceName === '') {
+        $serviceId = (int)($row['service_id'] ?? 0);
+        return $serviceId > 0 ? ('Servicio #' . $serviceId) : 'Servicio';
+    }
+    if ($categoryName === '') {
+        return $serviceName;
+    }
+    return $serviceName . ' · ' . $categoryName;
 }
 
 function pms_session_provider_id()
@@ -157,6 +182,313 @@ function pms_has_access_columns($conexion)
 {
     return pms_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')
         && pms_table_has_column($conexion, 'provider_medical_staff', 'can_access_admin');
+}
+
+function pms_provider_enabled_services($conexion, $providerId, $activeOnly = true)
+{
+    if (
+        !pms_table_has_column($conexion, 'provider_catalog_services', 'provider_id') ||
+        !pms_table_has_column($conexion, 'provider_catalog_services', 'service_id') ||
+        !pms_table_has_column($conexion, 'service_catalog', 'id')
+    ) {
+        return [];
+    }
+
+    $hasServiceActive = pms_table_has_column($conexion, 'service_catalog', 'is_active');
+    $hasServiceDeleted = pms_table_has_column($conexion, 'service_catalog', 'is_deleted');
+    $hasCategoryTable = pms_table_has_column($conexion, 'service_categories', 'id');
+    $hasServiceCategory = pms_table_has_column($conexion, 'service_catalog', 'category_id');
+    $categoryOrderExpr = ($hasCategoryTable && $hasServiceCategory) ? "COALESCE(cat.name, '')" : "''";
+
+    $select = [
+        'sc.id AS service_id',
+        'sc.name AS service_name',
+        $hasServiceCategory ? 'sc.category_id' : 'NULL AS category_id',
+        ($hasCategoryTable && $hasServiceCategory) ? 'cat.name AS category_name' : "'' AS category_name",
+    ];
+
+    $sql = 'SELECT ' . implode(', ', $select) . '
+            FROM provider_catalog_services pcs
+            INNER JOIN service_catalog sc ON sc.id = pcs.service_id';
+    if ($hasCategoryTable && $hasServiceCategory) {
+        $sql .= ' LEFT JOIN service_categories cat ON cat.id = sc.category_id';
+    }
+    $sql .= ' WHERE pcs.provider_id = ?';
+    if ($activeOnly && $hasServiceActive) {
+        $sql .= ' AND sc.is_active = 1';
+    }
+    if ($hasServiceDeleted) {
+        $sql .= ' AND sc.is_deleted = 0';
+    }
+    $sql .= ' ORDER BY ' . $categoryOrderExpr . ' ASC, sc.name ASC, sc.id ASC';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return [];
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $rows = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $row['service_id'] = (int)($row['service_id'] ?? 0);
+        $row['category_id'] = isset($row['category_id']) && $row['category_id'] !== null ? (int)$row['category_id'] : null;
+        $row['label'] = pms_service_label($row);
+        $rows[] = $row;
+    }
+    mysqli_stmt_close($stmt);
+    return $rows;
+}
+
+function pms_requested_service_ids()
+{
+    $raw = $_POST['service_ids'] ?? $_POST['service_ids[]'] ?? [];
+    if (!is_array($raw)) {
+        $raw = trim((string)$raw);
+        if ($raw === '') {
+            return [];
+        }
+        $raw = preg_split('/\s*,\s*/', $raw);
+    }
+
+    $ids = [];
+    foreach ($raw as $value) {
+        $id = (int)$value;
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+    }
+    return array_values($ids);
+}
+
+function pms_validate_provider_service_ids($conexion, $providerId, $serviceIds)
+{
+    $serviceIds = array_values(array_unique(array_map('intval', (array)$serviceIds)));
+    if (empty($serviceIds)) {
+        return [];
+    }
+
+    $allowed = pms_provider_enabled_services($conexion, $providerId, true);
+    $allowedById = [];
+    foreach ($allowed as $row) {
+        $allowedById[(int)$row['service_id']] = $row;
+    }
+
+    $resolved = [];
+    foreach ($serviceIds as $serviceId) {
+        if ($serviceId <= 0 || !isset($allowedById[$serviceId])) {
+            return ['error' => 'invalid_provider_service', 'service_id' => $serviceId];
+        }
+        $resolved[] = $allowedById[$serviceId];
+    }
+    return $resolved;
+}
+
+function pms_fetch_staff_services_map($conexion, $providerId, $staffIds = [], $activeOnly = true)
+{
+    if (!pms_staff_services_table_ready($conexion)) {
+        return [];
+    }
+
+    $hasRelActive = pms_table_has_column($conexion, 'provider_medical_staff_services', 'active');
+    $hasServiceActive = pms_table_has_column($conexion, 'service_catalog', 'is_active');
+    $hasServiceDeleted = pms_table_has_column($conexion, 'service_catalog', 'is_deleted');
+    $hasCategoryTable = pms_table_has_column($conexion, 'service_categories', 'id');
+    $hasServiceCategory = pms_table_has_column($conexion, 'service_catalog', 'category_id');
+    $categoryOrderExpr = ($hasCategoryTable && $hasServiceCategory) ? "COALESCE(cat.name, '')" : "''";
+
+    $select = [
+        'rel.provider_medical_staff_id AS staff_id',
+        'sc.id AS service_id',
+        'sc.name AS service_name',
+        ($hasServiceCategory ? 'sc.category_id' : 'NULL') . ' AS category_id',
+        ($hasCategoryTable && $hasServiceCategory) ? 'cat.name AS category_name' : "'' AS category_name",
+    ];
+
+    $sql = 'SELECT ' . implode(', ', $select) . '
+            FROM provider_medical_staff_services rel
+            INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id
+            INNER JOIN service_catalog sc ON sc.id = rel.service_id';
+    if ($hasCategoryTable && $hasServiceCategory) {
+        $sql .= ' LEFT JOIN service_categories cat ON cat.id = sc.category_id';
+    }
+    $sql .= ' WHERE pms.provider_id = ?';
+    if ($activeOnly && $hasRelActive) {
+        $sql .= ' AND rel.active = 1';
+    }
+    if ($hasServiceActive) {
+        $sql .= ' AND sc.is_active = 1';
+    }
+    if ($hasServiceDeleted) {
+        $sql .= ' AND sc.is_deleted = 0';
+    }
+
+    $types = 'i';
+    $params = [$providerId];
+    $staffIds = array_values(array_filter(array_map('intval', (array)$staffIds)));
+    if (!empty($staffIds)) {
+        $placeholders = implode(',', array_fill(0, count($staffIds), '?'));
+        $sql .= ' AND rel.provider_medical_staff_id IN (' . $placeholders . ')';
+        $types .= str_repeat('i', count($staffIds));
+        foreach ($staffIds as $staffId) {
+            $params[] = $staffId;
+        }
+    }
+    $sql .= ' ORDER BY ' . $categoryOrderExpr . ' ASC, sc.name ASC, sc.id ASC';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return [];
+    }
+    bind_stmt_params($stmt, $types, $params);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $map = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $staffId = (int)($row['staff_id'] ?? 0);
+        if ($staffId <= 0) {
+            continue;
+        }
+        $row['service_id'] = (int)($row['service_id'] ?? 0);
+        $row['category_id'] = isset($row['category_id']) && $row['category_id'] !== null ? (int)$row['category_id'] : null;
+        $row['label'] = pms_service_label($row);
+        if (!isset($map[$staffId])) {
+            $map[$staffId] = [];
+        }
+        $map[$staffId][] = $row;
+    }
+    mysqli_stmt_close($stmt);
+    return $map;
+}
+
+function pms_attach_service_payload($rows, $serviceMap)
+{
+    $out = [];
+    foreach ((array)$rows as $row) {
+        $staffId = (int)($row['id'] ?? 0);
+        $serviceItems = isset($serviceMap[$staffId]) ? $serviceMap[$staffId] : [];
+        $serviceIds = [];
+        $serviceLabels = [];
+        foreach ($serviceItems as $serviceItem) {
+            $serviceIds[] = (int)$serviceItem['service_id'];
+            $serviceLabels[] = (string)($serviceItem['label'] ?? pms_service_label($serviceItem));
+        }
+        $summary = 'Sin servicios asignados';
+        $count = count($serviceLabels);
+        if ($count > 0) {
+            $summaryParts = array_slice($serviceLabels, 0, 3);
+            $summary = implode(', ', $summaryParts);
+            if ($count > 3) {
+                $summary .= ' +' . ($count - 3);
+            }
+        }
+        $row['service_items'] = $serviceItems;
+        $row['service_ids'] = $serviceIds;
+        $row['service_count'] = $count;
+        $row['service_summary'] = $summary;
+        $row['primary_service_label'] = $count > 0 ? $serviceLabels[0] : '';
+        $out[] = $row;
+    }
+    return $out;
+}
+
+function pms_replace_staff_services($conexion, $providerId, $staffId, $serviceIds)
+{
+    if (!pms_staff_services_table_ready($conexion)) {
+        if (!empty($serviceIds)) {
+            return ['error' => 'staff_services_table_missing'];
+        }
+        return ['ok' => true];
+    }
+
+    $deleteSql = 'DELETE rel
+                  FROM provider_medical_staff_services rel
+                  INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id
+                  WHERE rel.provider_medical_staff_id = ? AND pms.provider_id = ?';
+    $deleteStmt = mysqli_prepare($conexion, $deleteSql);
+    if (!$deleteStmt) {
+        return ['error' => 'db_prepare_failed'];
+    }
+    mysqli_stmt_bind_param($deleteStmt, 'ii', $staffId, $providerId);
+    $deleted = mysqli_stmt_execute($deleteStmt);
+    $deleteErr = mysqli_stmt_error($deleteStmt);
+    mysqli_stmt_close($deleteStmt);
+    if (!$deleted) {
+        return ['error' => 'db_error', 'detail' => $deleteErr];
+    }
+
+    $serviceIds = array_values(array_unique(array_map('intval', (array)$serviceIds)));
+    if (empty($serviceIds)) {
+        return ['ok' => true];
+    }
+
+    $hasActive = pms_table_has_column($conexion, 'provider_medical_staff_services', 'active');
+    if ($hasActive) {
+        $insertSql = 'INSERT INTO provider_medical_staff_services
+                        (provider_medical_staff_id, service_id, active)
+                      VALUES (?, ?, 1)';
+    } else {
+        $insertSql = 'INSERT INTO provider_medical_staff_services
+                        (provider_medical_staff_id, service_id)
+                      VALUES (?, ?)';
+    }
+    $insertStmt = mysqli_prepare($conexion, $insertSql);
+    if (!$insertStmt) {
+        return ['error' => 'db_prepare_failed'];
+    }
+    foreach ($serviceIds as $serviceId) {
+        mysqli_stmt_bind_param($insertStmt, 'ii', $staffId, $serviceId);
+        $ok = mysqli_stmt_execute($insertStmt);
+        if (!$ok) {
+            $err = mysqli_stmt_error($insertStmt);
+            mysqli_stmt_close($insertStmt);
+            return ['error' => 'db_error', 'detail' => $err];
+        }
+    }
+    mysqli_stmt_close($insertStmt);
+    return ['ok' => true];
+}
+
+function pms_resolve_provider_service_id($conexion, $providerId, $serviceId = 0, $offerId = 0)
+{
+    $serviceId = (int)$serviceId;
+    $offerId = (int)$offerId;
+    if ($serviceId > 0) {
+        $validated = pms_validate_provider_service_ids($conexion, $providerId, [$serviceId]);
+        if (!empty($validated['error'])) {
+            return ['error' => 'invalid_provider_service'];
+        }
+        return ['service_id' => $serviceId];
+    }
+
+    if ($offerId <= 0 || !pms_table_has_column($conexion, 'provider_service_offers', 'id')) {
+        return ['error' => 'service_id_or_offer_id_required'];
+    }
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        'SELECT service_id FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1'
+    );
+    if (!$stmt) {
+        return ['error' => 'db_prepare_failed'];
+    }
+    mysqli_stmt_bind_param($stmt, 'ii', $offerId, $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    if (!$row || empty($row['service_id'])) {
+        return ['error' => 'offer_not_found'];
+    }
+
+    $resolvedServiceId = (int)$row['service_id'];
+    $validated = pms_validate_provider_service_ids($conexion, $providerId, [$resolvedServiceId]);
+    if (!empty($validated['error'])) {
+        return ['error' => 'invalid_provider_service'];
+    }
+    return ['service_id' => $resolvedServiceId];
 }
 
 function pms_fetch_linked_user($conexion, $userId, $providerId, $currentStaffId = 0)
@@ -335,7 +667,11 @@ function pms_staff_row($conexion, $staffId, $providerId = 0)
         return null;
     }
     $row['active_label'] = ((int)($row['active'] ?? 0) === 1) ? 'Activo' : 'Inactivo';
-    return array_merge($row, pms_access_status_payload($row));
+    $row = array_merge($row, pms_access_status_payload($row));
+    $effectiveProviderId = $providerId > 0 ? $providerId : (int)($row['provider_id'] ?? 0);
+    $serviceMap = pms_fetch_staff_services_map($conexion, $effectiveProviderId, [$staffId]);
+    $items = pms_attach_service_payload([$row], $serviceMap);
+    return !empty($items) ? $items[0] : $row;
 }
 
 function pms_fetch_linkable_users($conexion, $providerId, $currentStaffId = 0)
@@ -472,7 +808,7 @@ function pms_list_staff_rows($conexion, $providerId, $activeOnly = false)
         $rows[] = array_merge($row, pms_access_status_payload($row));
     }
     mysqli_stmt_close($stmt);
-    return $rows;
+    return pms_attach_service_payload($rows, pms_fetch_staff_services_map($conexion, $providerId));
 }
 
 if (!pms_table_ready($conexion)) {
@@ -505,6 +841,21 @@ switch ($action) {
             'items' => $rows,
             'total' => count($rows),
             'active_total' => $activeCount,
+        ]);
+    }
+
+    case 'list_provider_services': {
+        $providerId = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
+        pms_assert_provider_scope($providerId);
+
+        $provider = pms_provider_exists($conexion, $providerId);
+        if (!$provider) {
+            pms_err('provider_not_found', 404);
+        }
+
+        pms_ok([
+            'provider' => $provider,
+            'items' => pms_provider_enabled_services($conexion, $providerId, true),
         ]);
     }
 
@@ -542,7 +893,11 @@ switch ($action) {
             pms_err('staff_not_found', 404);
         }
 
-        pms_ok(['item' => $row, 'provider' => $provider]);
+        pms_ok([
+            'item' => $row,
+            'provider' => $provider,
+            'provider_services' => pms_provider_enabled_services($conexion, $providerId, true),
+        ]);
     }
 
     case 'save_staff': {
@@ -572,6 +927,7 @@ switch ($action) {
         $active = isset($_POST['active']) ? 1 : 0;
         $linkedUserId = (int)($_POST['linked_user_id'] ?? 0);
         $canAccessAdmin = isset($_POST['can_access_admin']) ? 1 : 0;
+        $requestedServiceIds = pms_requested_service_ids();
 
         if ($canAccessAdmin === 1 && $linkedUserId <= 0) {
             pms_err('Debes seleccionar un usuario vinculado para habilitar acceso al admin', 422);
@@ -605,6 +961,14 @@ switch ($action) {
             $canAccessAdmin = 0;
         }
 
+        $validatedServices = pms_validate_provider_service_ids($conexion, $providerId, $requestedServiceIds);
+        if (!empty($validatedServices['error'])) {
+            pms_err('Solo puedes asignar al médico servicios activos habilitados para este prestador', 422);
+        }
+
+        mysqli_begin_transaction($conexion);
+
+        try {
         if ($staffId > 0) {
             if (pms_has_access_columns($conexion)) {
                 $stmt = mysqli_prepare(
@@ -664,7 +1028,7 @@ switch ($action) {
             $err = mysqli_stmt_error($stmt);
             mysqli_stmt_close($stmt);
             if (!$ok) {
-                pms_err('db_error: ' . $err, 500);
+                throw new Exception('db_error: ' . $err);
             }
             $savedId = $staffId;
             $message = 'Staff médico actualizado correctamente';
@@ -724,9 +1088,24 @@ switch ($action) {
             $savedId = (int)mysqli_insert_id($conexion);
             mysqli_stmt_close($stmt);
             if (!$ok) {
-                pms_err('db_error: ' . $err, 500);
+                throw new Exception('db_error: ' . $err);
             }
             $message = 'Staff médico creado correctamente';
+        }
+
+        $replaceResult = pms_replace_staff_services($conexion, $providerId, $savedId, $requestedServiceIds);
+        if (!empty($replaceResult['error'])) {
+            if ($replaceResult['error'] === 'staff_services_table_missing') {
+                throw new Exception('provider_medical_staff_services_table_missing — run sql/2026_03_12_provider_medical_staff_services.sql');
+            }
+            throw new Exception(!empty($replaceResult['detail']) ? $replaceResult['detail'] : $replaceResult['error']);
+        }
+
+        mysqli_commit($conexion);
+        } catch (Exception $e) {
+            mysqli_rollback($conexion);
+            $status = (strpos($e->getMessage(), 'provider_medical_staff_services_table_missing') !== false) ? 503 : 500;
+            pms_err($e->getMessage(), $status);
         }
 
         $saved = pms_staff_row($conexion, $savedId, $providerId);
@@ -734,6 +1113,40 @@ switch ($action) {
             'item' => $saved,
             'message' => $message,
             'provider' => $provider,
+        ]);
+    }
+
+    case 'list_assignable_staff': {
+        $providerId = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
+        $serviceId = (int)($_GET['service_id'] ?? $_POST['service_id'] ?? 0);
+        $offerId = (int)($_GET['offer_id'] ?? $_POST['offer_id'] ?? 0);
+        pms_assert_provider_scope($providerId);
+
+        $provider = pms_provider_exists($conexion, $providerId);
+        if (!$provider) {
+            pms_err('provider_not_found', 404);
+        }
+
+        $resolved = pms_resolve_provider_service_id($conexion, $providerId, $serviceId, $offerId);
+        if (!empty($resolved['error'])) {
+            pms_err($resolved['error'], 422);
+        }
+
+        $rows = pms_list_staff_rows($conexion, $providerId, true);
+        $targetServiceId = (int)$resolved['service_id'];
+        $items = [];
+        foreach ($rows as $row) {
+            $serviceIds = array_map('intval', (array)($row['service_ids'] ?? []));
+            if (in_array($targetServiceId, $serviceIds, true)) {
+                $items[] = $row;
+            }
+        }
+
+        pms_ok([
+            'provider' => $provider,
+            'service_id' => $targetServiceId,
+            'items' => $items,
+            'total' => count($items),
         ]);
     }
 

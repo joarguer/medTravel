@@ -486,7 +486,7 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                                 <table class="table table-striped table-bordered table-hover" id="tbl-provider-medical-staff">
                                                     <thead>
                                                         <tr>
-                                                            <th>Nombre / especialidad</th>
+                                                            <th>Nombre / servicios</th>
                                                             <th>Registro profesional</th>
                                                             <th>Contacto</th>
                                                             <th>Clínica / sede</th>
@@ -541,10 +541,16 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="pms-specialty">Especialidad</label>
+                                    <label for="pms-specialty">Especialidad principal (opcional)</label>
                                     <input type="text" class="form-control" id="pms-specialty" name="specialty" maxlength="180" />
+                                    <span class="help-block">Dato complementario / legacy. La capacidad clínica principal se define por servicios.</span>
                                 </div>
                             </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="pms-service-ids">Servicios habilitados</label>
+                            <select class="form-control" id="pms-service-ids" name="service_ids[]" multiple size="8"></select>
+                            <span class="help-block">Selecciona los servicios activos del prestador que este médico puede atender.</span>
                         </div>
                         <div class="row">
                             <div class="col-md-6">
