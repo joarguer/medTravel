@@ -5,6 +5,11 @@
         ? parseInt(window.PROVIDER_ID, 10)
         : 0;
     var ENDPOINT = 'ajax/provider_medical_staff.php';
+    var linkableUsers = [];
+
+    function canManageStaff() {
+        return !$('#btn-add-medical-staff').prop('disabled');
+    }
 
     function escapeHtml(value) {
         return $('<div>').text(value == null ? '' : String(value)).html();
@@ -37,7 +42,7 @@
 
     function renderEmpty(message) {
         $('#tbl-provider-medical-staff tbody').html(
-            '<tr><td colspan="7" class="text-center text-muted" style="padding:24px 12px;">' +
+            '<tr><td colspan="8" class="text-center text-muted" style="padding:24px 12px;">' +
             escapeHtml(message) +
             '</td></tr>'
         );
@@ -56,6 +61,19 @@
                 : '<span class="label label-default">Inactivo</span>';
             var toggleLabel = active ? 'Desactivar' : 'Activar';
             var toggleValue = active ? 0 : 1;
+            var accessBadgeClass = 'label label-default';
+            if (item.access_status === 'enabled') {
+                accessBadgeClass = 'label label-info';
+            } else if (item.access_status === 'linked_user_inactive') {
+                accessBadgeClass = 'label label-warning';
+            }
+
+            var actionsHtml = canManageStaff()
+                ? '<button type="button" class="btn btn-xs btn-default staff-edit"><i class="fa fa-pencil"></i> Editar</button> ' +
+                  '<button type="button" class="btn btn-xs ' + (active ? 'btn-warning' : 'btn-success') + ' staff-toggle" data-value="' + toggleValue + '">' +
+                      '<i class="fa ' + (active ? 'fa-pause' : 'fa-check') + '"></i> ' + toggleLabel +
+                  '</button>'
+                : '<span class="text-muted">Solo lectura</span>';
 
             return '' +
                 '<tr data-id="' + escapeHtml(item.id) + '">' +
@@ -69,14 +87,13 @@
                         '<div class="text-muted small">' + escapeHtml(withFallback(item.phone, 'Sin teléfono')) + '</div>' +
                     '</td>' +
                     '<td>' + escapeHtml(withFallback(item.clinic_name, 'Sin definir')) + '</td>' +
+                    '<td>' +
+                        '<div>' + escapeHtml(withFallback(item.linked_user_label, 'Sin usuario vinculado')) + '</div>' +
+                        '<div class="small"><span class="' + accessBadgeClass + '">' + escapeHtml(withFallback(item.access_status_label, 'Sin usuario vinculado')) + '</span></div>' +
+                    '</td>' +
                     '<td>' + stateBadge + '</td>' +
                     '<td>' + escapeHtml(withFallback(item.updated_at, item.created_at || '-')) + '</td>' +
-                    '<td class="text-right">' +
-                        '<button type="button" class="btn btn-xs btn-default staff-edit"><i class="fa fa-pencil"></i> Editar</button> ' +
-                        '<button type="button" class="btn btn-xs ' + (active ? 'btn-warning' : 'btn-success') + ' staff-toggle" data-value="' + toggleValue + '">' +
-                            '<i class="fa ' + (active ? 'fa-pause' : 'fa-check') + '"></i> ' + toggleLabel +
-                        '</button>' +
-                    '</td>' +
+                    '<td class="text-right">' + actionsHtml + '</td>' +
                 '</tr>';
         }).join('');
 
@@ -109,8 +126,11 @@
         }
         $('#pms-id').val('');
         $('#pms-active').prop('checked', true);
+        $('#pms-can-access-admin').prop('checked', false);
+        $('#pms-access-status').text('Sin usuario vinculado');
         $('#providerMedicalStaffModalLabel').text('Agregar médico');
         $('#pms-save-msg').hide().empty();
+        renderLinkedUserOptions([], 0);
     }
 
     function fillForm(item) {
@@ -123,7 +143,52 @@
         $('#pms-clinic').val(item.clinic_name || '');
         $('#pms-notes').val(item.notes || '');
         $('#pms-active').prop('checked', parseInt(item.active, 10) === 1);
+        $('#pms-can-access-admin').prop('checked', parseInt(item.can_access_admin, 10) === 1);
+        $('#pms-access-status').text(item.access_status_label || 'Sin usuario vinculado');
         $('#providerMedicalStaffModalLabel').text('Editar médico');
+    }
+
+    function renderLinkedUserOptions(items, selectedId) {
+        var options = ['<option value="">Sin usuario vinculado</option>'];
+        items.forEach(function (item) {
+            var disabled = item.available ? '' : ' disabled';
+            var selected = parseInt(selectedId, 10) === parseInt(item.id, 10) ? ' selected' : '';
+            var suffix = '';
+            if (!item.available && item.linked_staff_name) {
+                suffix = ' (Vinculado a ' + item.linked_staff_name + ')';
+            } else if (parseInt(item.activo, 10) !== 1) {
+                suffix = ' (Usuario inactivo)';
+            }
+            options.push(
+                '<option value="' + escapeHtml(item.id) + '"' + selected + disabled + '>' +
+                escapeHtml((item.label || ('Usuario #' + item.id)) + suffix) +
+                '</option>'
+            );
+        });
+        $('#pms-linked-user-id').html(options.join(''));
+    }
+
+    function loadLinkableUsers(selectedId, currentStaffId) {
+        $('#pms-linked-user-id').html('<option value="">Cargando usuarios...</option>');
+        return $.ajax({
+            url: ENDPOINT,
+            method: 'GET',
+            dataType: 'json',
+            data: {
+                action: 'list_linkable_users',
+                provider_id: PROVIDER_ID,
+                staff_id: currentStaffId || ''
+            }
+        }).done(function (res) {
+            linkableUsers = (res && Array.isArray(res.items)) ? res.items : [];
+            renderLinkedUserOptions(linkableUsers, selectedId || 0);
+        }).fail(function (xhr) {
+            var message = 'No fue posible cargar los usuarios vinculables.';
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                message = xhr.responseJSON.message;
+            }
+            $('#pms-linked-user-id').html('<option value="">' + escapeHtml(message) + '</option>');
+        });
     }
 
     function loadStaffList() {
@@ -163,7 +228,9 @@
 
     function openCreateModal() {
         resetForm();
-        $('#providerMedicalStaffModal').modal('show');
+        loadLinkableUsers(0, 0).always(function () {
+            $('#providerMedicalStaffModal').modal('show');
+        });
     }
 
     function openEditModal(staffId) {
@@ -182,8 +249,11 @@
                 toast((res && res.message) || 'No fue posible cargar el registro.', 'error');
                 return;
             }
-            fillForm(res.item);
-            $('#providerMedicalStaffModal').modal('show');
+            loadLinkableUsers(res.item.linked_user_id || 0, res.item.id || 0).always(function () {
+                fillForm(res.item);
+                $('#pms-linked-user-id').val(res.item.linked_user_id || '');
+                $('#providerMedicalStaffModal').modal('show');
+            });
         }).fail(function (xhr) {
             var message = 'No fue posible cargar el registro.';
             if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
@@ -201,6 +271,10 @@
             $('#pms-save-msg').html('<span class="text-danger">El nombre completo es obligatorio.</span>').show();
             return;
         }
+        if ($('#pms-can-access-admin').is(':checked') && !$('#pms-linked-user-id').val()) {
+            $('#pms-save-msg').html('<span class="text-danger">Debes seleccionar un usuario vinculado para habilitar acceso al admin.</span>').show();
+            return;
+        }
 
         var payload = {
             action: 'save_staff',
@@ -212,10 +286,14 @@
             email: $.trim($('#pms-email').val() || ''),
             phone: $.trim($('#pms-phone').val() || ''),
             clinic_name: $.trim($('#pms-clinic').val() || ''),
+            linked_user_id: $('#pms-linked-user-id').val() || '',
             notes: $.trim($('#pms-notes').val() || '')
         };
         if ($('#pms-active').is(':checked')) {
             payload.active = 1;
+        }
+        if ($('#pms-can-access-admin').is(':checked')) {
+            payload.can_access_admin = 1;
         }
 
         var $btn = $('#btn-save-medical-staff');
@@ -287,8 +365,38 @@
         });
         $('#form-provider-medical-staff').on('submit', saveStaff);
         $('#providerMedicalStaffModal').on('hidden.bs.modal', resetForm);
+        $('#pms-linked-user-id').on('change', function () {
+            if ($(this).val()) {
+                var selected = linkableUsers.find(function (item) {
+                    return parseInt(item.id, 10) === parseInt($('#pms-linked-user-id').val(), 10);
+                });
+                if (selected && parseInt(selected.activo, 10) !== 1) {
+                    $('#pms-access-status').text('Usuario vinculado inactivo');
+                } else if ($('#pms-can-access-admin').is(':checked')) {
+                    $('#pms-access-status').text('Médico con acceso propio');
+                } else {
+                    $('#pms-access-status').text('Usuario vinculado sin acceso');
+                }
+            } else {
+                $('#pms-access-status').text('Sin usuario vinculado');
+                $('#pms-can-access-admin').prop('checked', false);
+            }
+        });
+        $('#pms-can-access-admin').on('change', function () {
+            if (!$('#pms-linked-user-id').val()) {
+                $('#pms-access-status').text('Sin usuario vinculado');
+                if ($(this).is(':checked')) {
+                    $('#pms-save-msg').html('<span class="text-danger">Selecciona un usuario antes de habilitar acceso.</span>').show();
+                }
+                return;
+            }
+            $('#pms-access-status').text($(this).is(':checked') ? 'Médico con acceso propio' : 'Usuario vinculado sin acceso');
+        });
 
         $('#tbl-provider-medical-staff').on('click', '.staff-edit', function () {
+            if (!canManageStaff()) {
+                return;
+            }
             var staffId = parseInt($(this).closest('tr').data('id'), 10) || 0;
             if (staffId > 0) {
                 openEditModal(staffId);
@@ -296,6 +404,9 @@
         });
 
         $('#tbl-provider-medical-staff').on('click', '.staff-toggle', function () {
+            if (!canManageStaff()) {
+                return;
+            }
             var $row = $(this).closest('tr');
             var staffId = parseInt($row.data('id'), 10) || 0;
             var nextValue = parseInt($(this).data('value'), 10);

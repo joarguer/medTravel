@@ -73,6 +73,7 @@ function auth_dev_scope_log($action, $scope) {
 }
 
 function resolve_company_scope() {
+    global $conexion;
     $isAdmin = is_role_admin_session();
     $roleId = current_role_id();
     $providerId = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
@@ -100,6 +101,11 @@ function resolve_company_scope() {
 
     $canEditSelf = (!$isAdmin && ($domain === 'medical' || $domain === 'complementary'));
     $canUploadLogo = ($canEditSelf && $domain === 'medical');
+    $isLinkedMedicalStaff = ($domain === 'medical') ? is_provider_linked_medical_staff_session($conexion ?? null) : false;
+    if ($isLinkedMedicalStaff) {
+        $canEditSelf = false;
+        $canUploadLogo = false;
+    }
 
     return [
         'is_admin' => $isAdmin,
@@ -108,6 +114,7 @@ function resolve_company_scope() {
         'scope_id' => $scopeId,
         'can_edit_self' => $canEditSelf,
         'can_upload_logo' => $canUploadLogo,
+        'is_linked_medical_staff' => $isLinkedMedicalStaff,
     ];
 }
 

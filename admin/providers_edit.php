@@ -184,6 +184,7 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                                             <th>Registro profesional</th>
                                                             <th>Contacto</th>
                                                             <th>Clínica / sede</th>
+                                                            <th>Usuario vinculado / acceso</th>
                                                             <th>Estado</th>
                                                             <th>Actualizado</th>
                                                             <th style="width:180px;">Acciones</th>
@@ -191,7 +192,7 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                                     </thead>
                                                     <tbody>
                                                         <tr>
-                                                            <td colspan="7" class="text-center text-muted" style="padding:24px 12px;">Cargando staff médico...</td>
+                                                            <td colspan="8" class="text-center text-muted" style="padding:24px 12px;">Cargando staff médico...</td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -382,6 +383,29 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
                         <div class="form-group">
                             <label for="pms-notes">Notas</label>
                             <textarea class="form-control" id="pms-notes" name="notes" rows="4"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-linked-user-id">Usuario vinculado</label>
+                                    <select class="form-control" id="pms-linked-user-id" name="linked_user_id">
+                                        <option value="">Sin usuario vinculado</option>
+                                    </select>
+                                    <span class="help-block">Debe pertenecer al mismo prestador y tener usuario activo en el sistema.</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group" style="padding-top:26px;">
+                                    <label class="mt-checkbox mt-checkbox-outline">
+                                        <input type="checkbox" id="pms-can-access-admin" name="can_access_admin" value="1" />
+                                        Permitir acceso al admin
+                                        <span></span>
+                                    </label>
+                                    <span class="help-block">
+                                        Estado de acceso: <strong id="pms-access-status">Sin usuario vinculado</strong>
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="mt-checkbox mt-checkbox-outline">

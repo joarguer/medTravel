@@ -26,6 +26,8 @@ SET @sql := IF(
     `email` VARCHAR(190) NOT NULL DEFAULT '',
     `phone` VARCHAR(80) NOT NULL DEFAULT '',
     `clinic_name` VARCHAR(180) NOT NULL DEFAULT '',
+    `linked_user_id` INT NULL COMMENT 'Logical FK -> usuarios.id',
+    `can_access_admin` TINYINT(1) NOT NULL DEFAULT 0,
     `notes` TEXT NULL,
     `active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -56,6 +58,18 @@ SET @idx_exists := (
 SET @sql := IF(
   @idx_exists = 0,
   "ALTER TABLE `provider_medical_staff` ADD INDEX `idx_pms_provider_name` (`provider_id`, `full_name`)",
+  "SELECT 1"
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @idx_exists := (
+  SELECT COUNT(*)
+  FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = @t AND INDEX_NAME = 'idx_pms_linked_user'
+);
+SET @sql := IF(
+  @idx_exists = 0,
+  "ALTER TABLE `provider_medical_staff` ADD INDEX `idx_pms_linked_user` (`linked_user_id`)",
   "SELECT 1"
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;

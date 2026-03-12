@@ -228,10 +228,138 @@ function get_role_permissions($role_id){
     return $perms;
 }
 
+function current_admin_user_id() {
+    $keys = ['id_usuario', 'id', 'user_id', 'usuario_id'];
+    foreach ($keys as $key) {
+        if (isset($_SESSION[$key]) && is_numeric($_SESSION[$key])) {
+            $id = intval($_SESSION[$key]);
+            if ($id > 0) {
+                return $id;
+            }
+        }
+    }
+    return 0;
+}
+
+function roles_table_exists($conexion, $table) {
+    static $cache = [];
+    if (!$conexion) return false;
+    if (array_key_exists($table, $cache)) return $cache[$table];
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $res = mysqli_query($conexion, "SHOW TABLES LIKE '{$tableEsc}'");
+    $cache[$table] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$table];
+}
+
+function roles_table_has_column($conexion, $table, $column) {
+    static $cache = [];
+    if (!$conexion) return false;
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) return $cache[$key];
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+    $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$key];
+}
+
+function current_provider_medical_staff_context($conexion = null) {
+    static $cacheLoaded = false;
+    static $cacheValue = null;
+
+    if ($cacheLoaded) {
+        return $cacheValue;
+    }
+    $cacheLoaded = true;
+
+    if ($conexion === null) {
+        global $conexion;
+    }
+
+    if (!$conexion || is_role_admin_session()) {
+        return null;
+    }
+
+    $sessionUserId = current_admin_user_id();
+    $providerId = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
+    if ($sessionUserId <= 0 || $providerId <= 0) {
+        return null;
+    }
+
+    if (!roles_table_exists($conexion, 'provider_medical_staff')) {
+        return null;
+    }
+    if (!roles_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id') ||
+        !roles_table_has_column($conexion, 'provider_medical_staff', 'can_access_admin')) {
+        return null;
+    }
+
+    $hasUserActivo = roles_table_exists($conexion, 'usuarios') && roles_table_has_column($conexion, 'usuarios', 'activo');
+    $hasUserDeleted = roles_table_exists($conexion, 'usuarios') && roles_table_has_column($conexion, 'usuarios', 'is_deleted');
+
+    $sql = "SELECT pms.id, pms.provider_id, pms.full_name, pms.linked_user_id, pms.can_access_admin
+            FROM provider_medical_staff pms";
+    if (roles_table_exists($conexion, 'usuarios')) {
+        $sql .= " LEFT JOIN usuarios u ON u.id = pms.linked_user_id";
+    }
+    $sql .= " WHERE pms.provider_id = ?
+              AND pms.linked_user_id = ?
+              AND pms.active = 1
+              AND pms.can_access_admin = 1";
+    if ($hasUserActivo) {
+        $sql .= " AND COALESCE(u.activo, 0) = 1";
+    }
+    if ($hasUserDeleted) {
+        $sql .= " AND COALESCE(u.is_deleted, 0) = 0";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'ii', $providerId, $sessionUserId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    $cacheValue = $row ?: null;
+    return $cacheValue;
+}
+
+function current_provider_medical_staff_id($conexion = null) {
+    $ctx = current_provider_medical_staff_context($conexion);
+    return $ctx ? intval($ctx['id'] ?? 0) : 0;
+}
+
+function is_provider_linked_medical_staff_session($conexion = null) {
+    return current_provider_medical_staff_id($conexion) > 0;
+}
+
 function user_can($permission_slug){
     if(is_role_admin_session()) return true; // admin principal tiene todo
     $rid = current_role_id();
     if($rid === null) return false;
+
+    if (is_provider_linked_medical_staff_session()) {
+        $blockedForLinkedStaff = [
+            PERM_PROVIDERS_MEDICAL_MANAGE,
+            PERM_SERVICES_MEDICAL_MANAGE,
+            PERM_USERS_MANAGE,
+            'providers.view',
+            'providers.medical.view',
+            'providers.edit',
+            'providers.medical.edit',
+            'offers.manage',
+            'users.view',
+            'users.create',
+            'users.edit',
+            'users.manage',
+        ];
+        if (in_array($permission_slug, $blockedForLinkedStaff, true)) {
+            return false;
+        }
+    }
 
     // Hardening: complementary_admin no administra catálogo de proveedores complementarios.
     if (intval($rid) === ROLE_COMPLEMENTARY_ADMIN && $permission_slug === PERM_PROVIDERS_COMPLEMENTARY_MANAGE) {
