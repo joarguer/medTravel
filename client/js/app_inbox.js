@@ -2342,21 +2342,31 @@
     }
 
     function sendMessageText(text, opts) {
-        if (!currentThread || !currentThread.thread_id) return;
-        if (composeBusy) return;
+        var deferred = $.Deferred();
+        if (!currentThread || !currentThread.thread_id) {
+            deferred.reject({ message: 'Select a thread first' });
+            return deferred.promise();
+        }
+        if (composeBusy) {
+            deferred.reject({ message: 'The message composer is busy' });
+            return deferred.promise();
+        }
         var options = opts && typeof opts === 'object' ? opts : {};
         clearLegacyUploadStatus();
         if (!freeMessageAllowed) {
             toastr.warning(lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
-            return;
+            deferred.reject({ code: 'FREE_MESSAGE_BLOCKED', message: lastComposeNotice || 'Free-form messaging is locked right now.' });
+            return deferred.promise();
         }
         if (commissionGateActive) {
             toastr.warning('Commission payment required');
-            return;
+            deferred.reject({ code: 'COMMISSION_REQUIRED', message: 'Commission payment required' });
+            return deferred.promise();
         }
         if (feeGateActive && String(currentThread.thread_type || '').toUpperCase() !== 'CARE') {
             toastr.warning('Unlock after Coordination Fee');
-            return;
+            deferred.reject({ code: 'FEE_REQUIRED', message: 'Unlock after Coordination Fee' });
+            return deferred.promise();
         }
 
         var pendingId = addPendingMessage(text);
@@ -2377,6 +2387,7 @@
                 setComposeBusy(false, '');
                 toastr.error((res && res.message) ? res.message : 'Could not send message');
                 updatePendingStatus(pendingId, 'Failed');
+                deferred.reject(res || { message: 'Could not send message' });
                 return;
             }
             var sentId = res && res.message ? res.message.id : 0;
@@ -2398,6 +2409,7 @@
             setComposeBusy(false, '');
             loadMessages();
             loadThreads();
+            deferred.resolve(res);
         }).fail(function (xhr) {
             setComposeBusy(false, '');
             var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
@@ -2406,12 +2418,14 @@
                 setFeeGateState(true, 'Unlock after Coordination Fee.');
                 setComposeGateState(true, '');
                 toastr.warning('Unlock after Coordination Fee');
+                deferred.reject(res);
                 return;
             }
             if (res && res.code === 'COMMISSION_REQUIRED') {
                 setCommissionGateState(true, false, res.message || 'Provider details and free messaging unlock after the commission payment is completed.');
                 setComposeGateState(true, '');
                 toastr.warning('Commission payment required');
+                deferred.reject(res);
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
@@ -2421,10 +2435,13 @@
                 } else {
                     setComposeGateState(false, lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
                 }
+                deferred.reject(res);
                 return;
             }
             toastr.error('Could not send message');
+            deferred.reject(res || { message: 'Could not send message' });
         });
+        return deferred.promise();
     }
 
     function sendMessage() {
@@ -2468,19 +2485,25 @@
             note: note
         }];
         setAttachModalBusy(true);
+        setAttachStatus('');
         setComposeBusy(true, 'Attaching document...');
         uploadChatDocuments(docs).done(function (uploadRes) {
-            mergeUploadedDocuments(uploadRes || null);
-            syncThreadDocumentsPanel();
             var messageText = buildSharedDocumentMessage(uploadRes && uploadRes.results ? uploadRes.results : []);
-            setAttachStatus('Document ready to be posted in the chat.', 'success');
-            $('#clientAttachDocumentModal').modal('hide');
             setComposeBusy(false, '');
-            setAttachModalBusy(false);
             sendMessageText(messageText, {
                 busyMessage: 'Posting document...',
                 successToast: 'Document attached to the chat',
                 clearComposer: false
+            }).done(function () {
+                mergeUploadedDocuments(uploadRes || null);
+                syncThreadDocumentsPanel();
+                setAttachStatus('Document attached to the chat.', 'success');
+                setAttachModalBusy(false);
+                $('#clientAttachDocumentModal').modal('hide');
+            }).fail(function (res) {
+                setAttachModalBusy(false);
+                var failureMessage = (res && res.message) ? String(res.message) : 'The file was uploaded, but the chat message could not be published.';
+                setAttachStatus(failureMessage, 'danger');
             });
         }).fail(function (res) {
             setComposeBusy(false, '');
