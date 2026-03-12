@@ -27,6 +27,122 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     <link href="../../assets/global/plugins/bootstrap-toastr/toastr.min.css" rel="stylesheet" type="text/css" />
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
+    <style>
+        .mt-request-detail .mt-detail-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        .mt-request-detail .mt-eyebrow {
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-bottom: 4px;
+        }
+        .mt-request-detail .mt-detail-title {
+            margin: 0 0 6px;
+        }
+        .mt-request-detail .mt-inline-meta,
+        .mt-request-detail .mt-header-actions,
+        .mt-request-detail .mt-inline-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .mt-request-detail .mt-inline-label {
+            font-weight: 600;
+            color: #555;
+            margin-right: 4px;
+        }
+        .mt-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .mt-summary-card {
+            border: 1px solid #e7ecf1;
+            border-radius: 6px;
+            background: #fafcfe;
+            padding: 12px;
+        }
+        .mt-summary-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: #7f8c8d;
+            margin-bottom: 6px;
+        }
+        .mt-summary-value {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .mt-section {
+            border-top: 1px solid #eef1f5;
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+        .mt-section:first-child {
+            border-top: 0;
+            padding-top: 0;
+            margin-top: 0;
+        }
+        .mt-section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .mt-section-head h5 {
+            margin: 0;
+            font-weight: 700;
+        }
+        .mt-conversation-log {
+            max-height: 320px;
+            overflow: auto;
+            border: 1px solid #e5e5e5;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 6px;
+        }
+        .mt-message-row {
+            border-bottom: 1px solid #ececec;
+            padding: 10px 0;
+        }
+        .mt-message-row:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+        .mt-message-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .mt-message-time,
+        .mt-message-actor {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        .mt-role-chip {
+            min-width: 84px;
+            text-align: center;
+        }
+        .btn[aria-disabled="true"] {
+            pointer-events: auto;
+            opacity: .65;
+        }
+        @media (max-width: 767px) {
+            .mt-request-detail .mt-detail-header {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
 <div class="wrapper">
@@ -44,7 +160,7 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
             <div class="breadcrumbs">
                 <h1>Mis Solicitudes</h1>
                 <ol class="breadcrumb">
-                    <li><a href="index.php">Home</a></li>
+                    <li><a href="index.php">Inicio</a></li>
                     <li class="active">Mis Solicitudes</li>
                 </ol>
             </div>
@@ -56,7 +172,7 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
                             <div class="portlet-title">
                                 <div class="caption">
                                     <i class="icon-list font-blue"></i>
-                                    <span class="caption-subject font-blue bold uppercase">Items de Solicitudes</span>
+                                    <span class="caption-subject font-blue bold uppercase">Solicitudes asignadas</span>
                                 </div>
                                 <div class="actions">
                                     <button class="btn btn-circle btn-icon-only btn-default" id="btn-reload-my-bookings">
@@ -68,9 +184,9 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
                                 <table class="table table-striped table-bordered table-hover" id="my_booking_requests_table">
                                     <thead>
                                     <tr>
-                                        <th>Booking</th>
+                                        <th>Caso</th>
                                         <th>Fecha</th>
-                                        <th>Destino / Timeline</th>
+                                        <th>Destino / Línea de tiempo</th>
                                         <th>Tipo</th>
                                         <th>Servicio</th>
                                         <th>Estado</th>
@@ -95,7 +211,7 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
                     <span aria-hidden="true">&times;</span>
                 </button>
                 <h4 class="modal-title">Detalle de solicitud</h4>
@@ -112,21 +228,21 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
                     <span aria-hidden="true">&times;</span>
                 </button>
-                <h4 class="modal-title">Rechazar solicitud</h4>
+                <h4 class="modal-title">Rechazar caso</h4>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="provider_reject_item_id" value="">
                 <div class="form-group">
-                    <label for="provider_reject_reason">Motivo (obligatorio)</label>
-                    <input type="text" class="form-control" id="provider_reject_reason" maxlength="255" placeholder="Motivo breve del rechazo">
+                    <label for="provider_reject_reason">Motivo del rechazo (obligatorio)</label>
+                    <input type="text" class="form-control" id="provider_reject_reason" maxlength="255" placeholder="Explica brevemente por qué no tomarás este caso">
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" id="btn-provider-reject-save">Confirmar rechazo</button>
+                <button type="button" class="btn btn-danger" id="btn-provider-reject-save">Rechazar caso</button>
             </div>
         </div>
     </div>
@@ -136,23 +252,23 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
                     <span aria-hidden="true">&times;</span>
                 </button>
-                <h4 class="modal-title">Proponer cambio</h4>
+                <h4 class="modal-title">Proponer cita</h4>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="provider_propose_item_id" value="">
                 <div class="row">
                     <div class="col-sm-6">
                         <div class="form-group">
-                            <label for="provider_proposed_date_from">Fecha desde (opcional)</label>
+                            <label for="provider_proposed_date_from">Fecha propuesta desde (opcional)</label>
                             <input type="date" class="form-control" id="provider_proposed_date_from">
                         </div>
                     </div>
                     <div class="col-sm-6">
                         <div class="form-group">
-                            <label for="provider_proposed_date_to">Fecha hasta (opcional)</label>
+                            <label for="provider_proposed_date_to">Fecha propuesta hasta (opcional)</label>
                             <input type="date" class="form-control" id="provider_proposed_date_to">
                         </div>
                     </div>
@@ -160,7 +276,7 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
                 <div class="row">
                     <div class="col-sm-6">
                         <div class="form-group">
-                            <label for="provider_proposed_price">Precio propuesto (opcional)</label>
+                            <label for="provider_proposed_price">Valor propuesto (opcional)</label>
                             <input type="number" class="form-control" id="provider_proposed_price" step="0.01" min="0">
                         </div>
                     </div>
@@ -175,13 +291,13 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="provider_proposed_notes">Notas del proveedor (obligatorio)</label>
-                    <textarea class="form-control" id="provider_proposed_notes" rows="3" placeholder="Explica disponibilidad, condiciones o ajuste sugerido"></textarea>
+                    <label for="provider_proposed_notes">Notas para la propuesta (obligatorio)</label>
+                    <textarea class="form-control" id="provider_proposed_notes" rows="3" placeholder="Explica disponibilidad, agenda sugerida o condiciones relevantes"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btn-provider-propose-save">Enviar propuesta</button>
+                <button type="button" class="btn btn-primary" id="btn-provider-propose-save">Enviar propuesta de cita</button>
             </div>
         </div>
     </div>

@@ -113,12 +113,723 @@ function resolve_patientcare_admin_email($conexion)
 function provider_status_label($status)
 {
     $map = [
-        'provider_confirmed' => 'Confirmed by provider',
-        'provider_rejected' => 'Rejected by provider',
-        'provider_proposed_change' => 'Provider proposed changes',
+        'provider_confirmed' => 'Caso aceptado',
+        'provider_rejected' => 'Caso rechazado',
+        'provider_proposed_change' => 'Cita propuesta',
     ];
     $key = trim((string)$status);
     return isset($map[$key]) ? $map[$key] : $key;
+}
+
+function generic_status_label_es($status)
+{
+    $status = strtolower(trim((string)$status));
+    $map = [
+        'pending' => 'Pendiente',
+        'pending_provider' => 'Pendiente de revisión del prestador',
+        'provider_reviewing' => 'Pendiente de revisión del prestador',
+        'needs_more_info' => 'Información adicional requerida',
+        'provider_confirmed' => 'Caso aceptado',
+        'client_accepted' => 'Caso aceptado',
+        'provider_rejected' => 'Caso rechazado',
+        'client_rejected' => 'Caso rechazado',
+        'awaiting_client' => 'Pendiente de respuesta del paciente',
+        'provider_proposed_change' => 'Cita propuesta',
+        'not_applicable' => 'No aplica',
+        'required_pending' => 'Comisión pendiente',
+        'paid' => 'Comisión pagada',
+        'waived' => 'Comisión exonerada',
+        'disabled_manually' => 'Comisión desactivada manualmente',
+        'doctor_assigned' => 'Médico asignado',
+        'date_proposed' => 'Cita propuesta',
+        'date_confirmed' => 'Cita confirmada',
+        'rescheduled' => 'Cita reprogramada',
+        'completed' => 'Atención realizada',
+        'cancelled' => 'Caso cerrado',
+        'confirmed' => 'Confirmado',
+        'new' => 'Nuevo caso',
+    ];
+    return isset($map[$status]) ? $map[$status] : ($status !== '' ? $status : 'Sin definir');
+}
+
+function fee_status_label_es($status)
+{
+    $status = strtolower(trim((string)$status));
+    $map = [
+        'pending' => 'Pendiente',
+        'not_applicable' => 'No aplica',
+        'required_pending' => 'Comisión pendiente',
+        'paid' => 'Comisión pagada',
+        'waived' => 'Comisión exonerada',
+        'disabled_manually' => 'Comisión desactivada manualmente',
+    ];
+    return isset($map[$status]) ? $map[$status] : ($status !== '' ? $status : 'Sin definir');
+}
+
+function appointment_status_label_es($status)
+{
+    $status = strtolower(trim((string)$status));
+    $map = [
+        'pending' => 'Pendiente',
+        'pending_provider' => 'Cita pendiente de propuesta',
+        'provider_reviewing' => 'Cita pendiente de propuesta',
+        'needs_more_info' => 'Información adicional requerida',
+        'doctor_assigned' => 'Médico pendiente de propuesta de cita',
+        'date_proposed' => 'Cita propuesta',
+        'date_confirmed' => 'Cita confirmada',
+        'rescheduled' => 'Cita reprogramada',
+        'completed' => 'Atención realizada',
+        'cancelled' => 'Cita cancelada',
+        'confirmed' => 'Cita confirmada',
+        'scheduled' => 'Cita programada',
+        'proposed' => 'Cita propuesta',
+    ];
+    return isset($map[$status]) ? $map[$status] : ($status !== '' ? generic_status_label_es($status) : 'Sin definir');
+}
+
+function role_label_es($role)
+{
+    $role = strtoupper(trim((string)$role));
+    $map = [
+        'CLIENT' => 'Cliente',
+        'PROVIDER' => 'Prestador',
+        'COORDINATOR' => 'Coordinación',
+        'DOCTOR' => 'Médico',
+        'SYSTEM' => 'Sistema',
+    ];
+    return isset($map[$role]) ? $map[$role] : ($role !== '' ? $role : 'Sistema');
+}
+
+function event_type_label_es($eventType)
+{
+    $eventType = strtolower(trim((string)$eventType));
+    $map = [
+        'coordination_fee_required' => 'Comisión pendiente',
+        'coordination_fee_paid' => 'Comisión pagada',
+        'coordination_fee_waived' => 'Comisión exonerada',
+        'contact_unlocked' => 'Contacto desbloqueado',
+        'doctor_assigned' => 'Médico asignado',
+        'medical_docs_requested' => 'Documentos solicitados',
+        'medical_docs_uploaded' => 'Documentos cargados',
+        'appointment_proposed' => 'Cita propuesta',
+        'appointment_confirmed' => 'Cita confirmada',
+        'appointment_rescheduled' => 'Cita reprogramada',
+        'appointment_cancelled' => 'Cita cancelada',
+    ];
+    return isset($map[$eventType]) ? $map[$eventType] : ($eventType !== '' ? $eventType : 'Evento');
+}
+
+function first_existing_column($conexion, $table, $candidates)
+{
+    foreach ((array)$candidates as $candidate) {
+        $candidate = trim((string)$candidate);
+        if ($candidate !== '' && table_has_column($conexion, $table, $candidate)) {
+            return $candidate;
+        }
+    }
+    return null;
+}
+
+function normalize_coordination_fee_status($rawStatus, $feeRequired)
+{
+    $status = strtolower(trim((string)$rawStatus));
+    $feeRequired = (int)$feeRequired === 1;
+
+    if ($status === 'paid') {
+        return 'paid';
+    }
+    if ($status === 'waived') {
+        return 'waived';
+    }
+    if (in_array($status, ['disabled_manually', 'manual_disabled', 'disabled'], true)) {
+        return 'disabled_manually';
+    }
+    if (in_array($status, ['not_required', 'not_applicable'], true)) {
+        return 'not_applicable';
+    }
+    if (in_array($status, ['pending', 'required_pending'], true)) {
+        return $feeRequired ? 'required_pending' : 'not_applicable';
+    }
+
+    return $feeRequired ? 'required_pending' : 'not_applicable';
+}
+
+function coordination_fee_is_unlocked($functionalStatus, $isAdminSession = false)
+{
+    if ($isAdminSession) {
+        return true;
+    }
+    return in_array((string)$functionalStatus, ['not_applicable', 'paid', 'waived', 'disabled_manually'], true);
+}
+
+function mask_contact_value($value, $kind)
+{
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '-';
+    }
+
+    if ($kind === 'email') {
+        $parts = explode('@', $value, 2);
+        if (count($parts) === 2) {
+            $local = $parts[0];
+            $domain = $parts[1];
+            $visible = strlen($local) > 1 ? substr($local, 0, 1) : '';
+            return $visible . '***@' . $domain;
+        }
+    }
+
+    $digits = preg_replace('/\D+/', '', $value);
+    if ($kind === 'phone' && $digits !== '') {
+        $tail = strlen($digits) > 2 ? substr($digits, -2) : $digits;
+        return '*** *** ' . $tail;
+    }
+
+    if (strlen($value) <= 2) {
+        return str_repeat('*', strlen($value));
+    }
+    return substr($value, 0, 1) . str_repeat('*', max(strlen($value) - 2, 3)) . substr($value, -1);
+}
+
+function resolve_contact_access_state($email, $phone, $functionalFeeStatus, $isAdminSession = false)
+{
+    $unlocked = coordination_fee_is_unlocked($functionalFeeStatus, $isAdminSession);
+    $locked = !$unlocked;
+    $note = $locked ? 'Bloqueado hasta pagar la comisión de coordinación' : '';
+
+    return [
+        'locked' => $locked,
+        'unlocked' => $unlocked,
+        'note' => $note,
+        'email_display' => $locked ? mask_contact_value($email, 'email') : (trim((string)$email) !== '' ? trim((string)$email) : '-'),
+        'phone_display' => $locked ? mask_contact_value($phone, 'phone') : (trim((string)$phone) !== '' ? trim((string)$phone) : '-'),
+    ];
+}
+
+function build_coordination_fee_meta($conexion, $bookingRequestId, $seedRow, $isAdminSession = false)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $seedRow = is_array($seedRow) ? $seedRow : [];
+    $bookingData = $seedRow;
+
+    if ($bookingRequestId > 0 && table_exists($conexion, 'booking_requests')) {
+        $candidateColumns = [
+            'id',
+            'fee_status',
+            'fee_required',
+            'coordination_fee_amount',
+            'fee_amount',
+            'coordination_fee_paid_at',
+            'fee_paid_at',
+            'coordination_fee_waived_at',
+            'fee_waived_at',
+            'coordination_unlocked_at',
+            'fee_unlocked_at',
+            'coordination_unlock_scope',
+            'fee_unlock_scope',
+        ];
+        $selectCols = [];
+        foreach ($candidateColumns as $col) {
+            if (table_has_column($conexion, 'booking_requests', $col)) {
+                $selectCols[] = 'br.`' . $col . '`';
+            }
+        }
+        if (!empty($selectCols)) {
+            $sql = "SELECT " . implode(', ', $selectCols) . " FROM booking_requests br WHERE br.id = ?";
+            if (table_has_column($conexion, 'booking_requests', 'is_deleted')) {
+                $sql .= " AND br.is_deleted = 0";
+            }
+            $sql .= " LIMIT 1";
+            $stmt = mysqli_prepare($conexion, $sql);
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, 'i', $bookingRequestId);
+                if (mysqli_stmt_execute($stmt)) {
+                    $res = mysqli_stmt_get_result($stmt);
+                    $row = $res ? mysqli_fetch_assoc($res) : null;
+                    if ($row) {
+                        $bookingData = array_merge($bookingData, $row);
+                    }
+                }
+                mysqli_stmt_close($stmt);
+            }
+        }
+    }
+
+    $legacyRequired = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId)) ? 1 : 0;
+    $feeRequired = array_key_exists('fee_required', $bookingData)
+        ? (((int)($bookingData['fee_required'] ?? 0) === 1) ? 1 : 0)
+        : $legacyRequired;
+    if ($feeRequired !== 1 && $legacyRequired === 1) {
+        $feeRequired = 1;
+    }
+
+    $functionalStatus = normalize_coordination_fee_status($bookingData['fee_status'] ?? '', $feeRequired);
+    $amount = array_key_exists('coordination_fee_amount', $bookingData)
+        ? $bookingData['coordination_fee_amount']
+        : (array_key_exists('fee_amount', $bookingData) ? $bookingData['fee_amount'] : null);
+    $paidAt = array_key_exists('coordination_fee_paid_at', $bookingData)
+        ? $bookingData['coordination_fee_paid_at']
+        : (array_key_exists('fee_paid_at', $bookingData) ? $bookingData['fee_paid_at'] : null);
+    $waivedAt = array_key_exists('coordination_fee_waived_at', $bookingData)
+        ? $bookingData['coordination_fee_waived_at']
+        : (array_key_exists('fee_waived_at', $bookingData) ? $bookingData['fee_waived_at'] : null);
+    $unlockedAt = array_key_exists('coordination_unlocked_at', $bookingData)
+        ? $bookingData['coordination_unlocked_at']
+        : (array_key_exists('fee_unlocked_at', $bookingData) ? $bookingData['fee_unlocked_at'] : null);
+    $unlockScope = array_key_exists('coordination_unlock_scope', $bookingData)
+        ? $bookingData['coordination_unlock_scope']
+        : (array_key_exists('fee_unlock_scope', $bookingData) ? $bookingData['fee_unlock_scope'] : null);
+
+    if ((trim((string)$unlockedAt) === '') && coordination_fee_is_unlocked($functionalStatus, $isAdminSession)) {
+        $unlockedAt = $paidAt ?: $waivedAt;
+    }
+
+    return [
+        'status' => $functionalStatus,
+        'status_label_es' => fee_status_label_es($functionalStatus),
+        'required' => $feeRequired ? 1 : 0,
+        'amount' => ($amount !== null && $amount !== '') ? $amount : null,
+        'paid_at' => trim((string)$paidAt) !== '' ? (string)$paidAt : null,
+        'waived_at' => trim((string)$waivedAt) !== '' ? (string)$waivedAt : null,
+        'unlocked_at' => trim((string)$unlockedAt) !== '' ? (string)$unlockedAt : null,
+        'unlock_scope' => trim((string)$unlockScope) !== '' ? (string)$unlockScope : null,
+        'unlocked' => coordination_fee_is_unlocked($functionalStatus, $isAdminSession),
+        'message' => $functionalStatus === 'required_pending' ? 'Comisión pendiente' : '',
+    ];
+}
+
+function detect_message_role($message)
+{
+    $sender = strtolower(trim((string)($message['sender'] ?? 'system')));
+    if (in_array($sender, ['admin', 'patientcare', 'coordinator'], true)) {
+        return 'COORDINATOR';
+    }
+    if ($sender === 'doctor') {
+        return 'DOCTOR';
+    }
+    if ($sender === 'provider') {
+        return 'PROVIDER';
+    }
+    if ($sender === 'client') {
+        return 'CLIENT';
+    }
+    $actor = strtolower(trim((string)($message['actor'] ?? '')));
+    if ($actor !== '' && strpos($actor, 'doctor') !== false) {
+        return 'DOCTOR';
+    }
+    return 'SYSTEM';
+}
+
+function fetch_named_entity($conexion, $table, $id, $nameCandidates, $extraCandidates = [])
+{
+    $id = (int)$id;
+    if ($id <= 0 || !table_exists($conexion, $table)) {
+        return [];
+    }
+
+    $nameCol = first_existing_column($conexion, $table, $nameCandidates);
+    if ($nameCol === null) {
+        return [];
+    }
+
+    $selects = ["`{$nameCol}` AS entity_name"];
+    foreach ((array)$extraCandidates as $alias => $candidates) {
+        $col = first_existing_column($conexion, $table, (array)$candidates);
+        if ($col !== null) {
+            $selects[] = "`{$col}` AS `{$alias}`";
+        }
+    }
+
+    $sql = "SELECT " . implode(', ', $selects) . " FROM `{$table}` WHERE id = ? LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return [];
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $id);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return [];
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ?: [];
+}
+
+function build_in_clause($values)
+{
+    $count = count((array)$values);
+    if ($count <= 0) {
+        return '';
+    }
+    return implode(',', array_fill(0, $count, '?'));
+}
+
+function fetch_calendar_event_trace_map($conexion, $itemIds)
+{
+    $itemIds = array_values(array_unique(array_filter(array_map('intval', (array)$itemIds))));
+    if (empty($itemIds) || !table_exists($conexion, 'calendar_events')) {
+        return [];
+    }
+
+    $inClause = build_in_clause($itemIds);
+    if ($inClause === '') {
+        return [];
+    }
+
+    $sql = "SELECT
+                ce.id,
+                ce.item_id,
+                ce.title,
+                ce.description,
+                ce.start_at,
+                ce.end_at,
+                ce.status,
+                ce.created_at,
+                ce.updated_at
+            FROM calendar_events ce
+            WHERE ce.event_type = 'ITEM'
+              AND ce.item_id IN ({$inClause})
+            ORDER BY ce.item_id ASC, ce.start_at ASC, ce.id ASC";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return [];
+    }
+
+    $types = str_repeat('i', count($itemIds));
+    $params = $itemIds;
+    if (!bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return [];
+    }
+
+    $res = mysqli_stmt_get_result($stmt);
+    $grouped = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $grouped[(int)($row['item_id'] ?? 0)][] = $row;
+    }
+    mysqli_stmt_close($stmt);
+
+    $nowTs = time();
+    $traceMap = [];
+    foreach ($grouped as $itemId => $events) {
+        $latest = null;
+        $confirmedAt = '';
+        $proposedAt = '';
+        $nextEvent = null;
+        $activeCount = 0;
+        foreach ($events as $event) {
+            $status = strtolower(trim((string)($event['status'] ?? 'scheduled')));
+            $eventTs = strtotime((string)($event['start_at'] ?? ''));
+            if ($status !== 'cancelled') {
+                $activeCount++;
+                if ($eventTs !== false && $eventTs >= $nowTs && $nextEvent === null) {
+                    $nextEvent = $event;
+                }
+            }
+            if ($status === 'confirmed') {
+                $confirmedAt = (string)($event['start_at'] ?? '');
+            }
+            if (in_array($status, ['proposed', 'scheduled'], true)) {
+                $proposedAt = (string)($event['start_at'] ?? '');
+            }
+            $latest = $event;
+        }
+
+        $rescheduleCount = max(0, $activeCount - 1);
+        $latestStatus = strtolower(trim((string)($latest['status'] ?? '')));
+        $appointmentStatus = '';
+        if ($latestStatus === 'cancelled') {
+            $appointmentStatus = 'cancelled';
+        } elseif ($latestStatus === 'confirmed') {
+            $appointmentStatus = ($rescheduleCount > 0) ? 'rescheduled' : 'date_confirmed';
+        } elseif (in_array($latestStatus, ['proposed', 'scheduled'], true)) {
+            $appointmentStatus = ($rescheduleCount > 0) ? 'rescheduled' : 'date_proposed';
+        }
+
+        $lastActionText = '';
+        if ($latest) {
+            if ($latestStatus === 'confirmed') {
+                $lastActionText = 'Cita confirmada';
+            } elseif ($latestStatus === 'cancelled') {
+                $lastActionText = 'Cita cancelada';
+            } elseif (in_array($latestStatus, ['proposed', 'scheduled'], true)) {
+                $lastActionText = 'Cita propuesta';
+            } else {
+                $lastActionText = trim((string)($latest['title'] ?? ''));
+            }
+        }
+
+        $traceMap[$itemId] = [
+            'events' => $events,
+            'proposed_appointment_date' => $proposedAt !== '' ? $proposedAt : null,
+            'confirmed_appointment_date' => $confirmedAt !== '' ? $confirmedAt : null,
+            'next_appointment' => $nextEvent ? [
+                'title' => (string)($nextEvent['title'] ?? ''),
+                'start_at' => (string)($nextEvent['start_at'] ?? ''),
+                'status' => (string)($nextEvent['status'] ?? ''),
+            ] : null,
+            'appointment_status' => $appointmentStatus,
+            'reschedule_count' => $rescheduleCount,
+            'last_provider_action' => $lastActionText !== '' ? $lastActionText : null,
+            'updated_at' => $latest ? ((string)($latest['updated_at'] ?? '') !== '' ? (string)$latest['updated_at'] : (string)($latest['start_at'] ?? '')) : null,
+        ];
+    }
+
+    return $traceMap;
+}
+
+function derive_medical_coordination_status($row, $trace)
+{
+    $explicit = trim((string)($row['medical_coordination_status'] ?? ''));
+    if ($explicit !== '') {
+        return $explicit;
+    }
+
+    $appointmentStatus = trim((string)($trace['appointment_status'] ?? ''));
+    if ($appointmentStatus !== '') {
+        return $appointmentStatus;
+    }
+
+    $providerStatus = trim((string)($row['provider_status'] ?? $row['item_status'] ?? ''));
+    if (in_array($providerStatus, ['provider_rejected', 'client_rejected', 'cancelled'], true)) {
+        return 'cancelled';
+    }
+    if ($providerStatus === 'provider_confirmed') {
+        return !empty($row['assigned_doctor']) ? 'doctor_assigned' : 'provider_reviewing';
+    }
+    if (!empty($row['assigned_doctor'])) {
+        return 'doctor_assigned';
+    }
+    return 'pending_provider';
+}
+
+function enrich_item_trace_row($conexion, $row, $calendarTraceMap)
+{
+    $row = is_array($row) ? $row : [];
+    $itemId = (int)($row['item_id'] ?? 0);
+    $trace = isset($calendarTraceMap[$itemId]) && is_array($calendarTraceMap[$itemId]) ? $calendarTraceMap[$itemId] : [];
+
+    $providerStatus = trim((string)($row['provider_status'] ?? ''));
+    if ($providerStatus === '') {
+        $providerStatus = normalize_legacy_item_status($row['item_status'] ?? '');
+    }
+    $row['provider_status'] = $providerStatus;
+
+    $providerId = (int)($row['provider_id'] ?? 0);
+    $serviceProviderId = (int)($row['service_provider_id'] ?? 0);
+    $providerInfo = $providerId > 0
+        ? fetch_named_entity($conexion, 'providers', $providerId, ['name', 'provider_name'], ['provider_type' => ['type'], 'provider_timezone' => ['provider_timezone', 'timezone']])
+        : [];
+    $serviceProviderInfo = $serviceProviderId > 0
+        ? fetch_named_entity($conexion, 'service_providers', $serviceProviderId, ['provider_name', 'name'], ['provider_timezone' => ['provider_timezone', 'timezone']])
+        : [];
+
+    $assignedProvider = trim((string)($row['assigned_provider'] ?? ''));
+    if ($assignedProvider === '') {
+        $assignedProvider = trim((string)($providerInfo['entity_name'] ?? $serviceProviderInfo['entity_name'] ?? ''));
+    }
+
+    $assignedDoctor = trim((string)($row['assigned_doctor'] ?? ''));
+    $clinic = trim((string)($row['clinic'] ?? ''));
+    $providerType = strtolower(trim((string)($providerInfo['provider_type'] ?? '')));
+    if ($assignedDoctor === '' && $providerType === 'medico') {
+        $assignedDoctor = trim((string)($providerInfo['entity_name'] ?? ''));
+    }
+    if ($clinic === '' && $providerType === 'clinica') {
+        $clinic = trim((string)($providerInfo['entity_name'] ?? ''));
+    }
+
+    $row['assigned_provider'] = $assignedProvider !== '' ? $assignedProvider : null;
+    $row['assigned_doctor'] = $assignedDoctor !== '' ? $assignedDoctor : null;
+    $row['clinic'] = $clinic !== '' ? $clinic : null;
+    $row['proposed_appointment_date'] = $row['proposed_appointment_date'] ?? ($trace['proposed_appointment_date'] ?? null);
+    $row['confirmed_appointment_date'] = $row['confirmed_appointment_date'] ?? ($trace['confirmed_appointment_date'] ?? null);
+
+    $timezone = trim((string)($row['timezone'] ?? ''));
+    if ($timezone === '') {
+        $timezone = trim((string)($providerInfo['provider_timezone'] ?? $serviceProviderInfo['provider_timezone'] ?? ''));
+    }
+    $row['timezone'] = $timezone !== '' ? $timezone : null;
+
+    $location = trim((string)($row['location'] ?? ''));
+    $row['location'] = $location !== '' ? $location : null;
+    $row['reschedule_count'] = isset($row['reschedule_count']) && $row['reschedule_count'] !== null && $row['reschedule_count'] !== ''
+        ? (int)$row['reschedule_count']
+        : (int)($trace['reschedule_count'] ?? 0);
+    $row['last_provider_action'] = trim((string)($row['last_provider_action'] ?? '')) !== ''
+        ? (string)$row['last_provider_action']
+        : (isset($trace['last_provider_action']) ? (string)$trace['last_provider_action'] : null);
+    $row['updated_at'] = trim((string)($row['updated_at'] ?? '')) !== ''
+        ? (string)$row['updated_at']
+        : (trim((string)($row['item_updated_at'] ?? '')) !== '' ? (string)$row['item_updated_at'] : (isset($trace['updated_at']) ? (string)$trace['updated_at'] : null));
+    $row['appointment_status'] = trim((string)($row['appointment_status'] ?? '')) !== ''
+        ? (string)$row['appointment_status']
+        : (isset($trace['appointment_status']) ? (string)$trace['appointment_status'] : null);
+    $row['medical_coordination_status'] = derive_medical_coordination_status($row, $trace);
+    $row['next_appointment'] = isset($trace['next_appointment']) ? $trace['next_appointment'] : null;
+
+    return $row;
+}
+
+function build_detail_event_log($detailRow, $itemsHistory, $messages, $documents)
+{
+    $events = [];
+    $detailRow = is_array($detailRow) ? $detailRow : [];
+    $itemsHistory = is_array($itemsHistory) ? $itemsHistory : [];
+    $messages = is_array($messages) ? $messages : [];
+    $documents = is_array($documents) ? $documents : [];
+
+    $feeMeta = isset($detailRow['coordination_fee']) && is_array($detailRow['coordination_fee']) ? $detailRow['coordination_fee'] : [];
+    $feeStatus = (string)($feeMeta['status'] ?? '');
+    $bookingRequestId = (int)($detailRow['booking_request_id'] ?? 0);
+    if ($feeStatus === 'required_pending') {
+        $events[] = [
+            'scope' => 'request',
+            'request_id' => $bookingRequestId,
+            'item_id' => 0,
+            'event_type' => 'coordination_fee_required',
+            'actor_role' => 'SYSTEM',
+            'time' => (string)($detailRow['booking_updated_at'] ?? $detailRow['booking_created_at'] ?? ''),
+            'summary' => 'La coordinación permanece bloqueada hasta completar la comisión.',
+        ];
+    }
+    if (trim((string)($feeMeta['paid_at'] ?? '')) !== '') {
+        $events[] = [
+            'scope' => 'request',
+            'request_id' => $bookingRequestId,
+            'item_id' => 0,
+            'event_type' => 'coordination_fee_paid',
+            'actor_role' => 'SYSTEM',
+            'time' => (string)$feeMeta['paid_at'],
+            'summary' => 'La comisión de coordinación fue marcada como pagada.',
+        ];
+    }
+    if (trim((string)($feeMeta['waived_at'] ?? '')) !== '') {
+        $events[] = [
+            'scope' => 'request',
+            'request_id' => $bookingRequestId,
+            'item_id' => 0,
+            'event_type' => 'coordination_fee_waived',
+            'actor_role' => 'SYSTEM',
+            'time' => (string)$feeMeta['waived_at'],
+            'summary' => 'La comisión de coordinación fue exonerada.',
+        ];
+    }
+    if (!empty($feeMeta['unlocked']) && trim((string)($feeMeta['unlocked_at'] ?? '')) !== '') {
+        $events[] = [
+            'scope' => 'request',
+            'request_id' => $bookingRequestId,
+            'item_id' => 0,
+            'event_type' => 'contact_unlocked',
+            'actor_role' => 'SYSTEM',
+            'time' => (string)$feeMeta['unlocked_at'],
+            'summary' => 'Los datos de contacto quedaron disponibles para coordinación.',
+        ];
+    }
+
+    foreach ($itemsHistory as $item) {
+        $itemId = (int)($item['item_id'] ?? 0);
+        $assignedDoctor = trim((string)($item['assigned_doctor'] ?? ''));
+        if ($assignedDoctor !== '') {
+            $events[] = [
+                'scope' => 'item',
+                'request_id' => $bookingRequestId,
+                'item_id' => $itemId,
+                'event_type' => 'doctor_assigned',
+                'actor_role' => 'SYSTEM',
+                'time' => (string)($item['updated_at'] ?? $item['item_updated_at'] ?? ''),
+                'summary' => 'Médico asignado: ' . $assignedDoctor,
+            ];
+        }
+        if (trim((string)($item['proposed_appointment_date'] ?? '')) !== '') {
+            $events[] = [
+                'scope' => 'item',
+                'request_id' => $bookingRequestId,
+                'item_id' => $itemId,
+                'event_type' => 'appointment_proposed',
+                'actor_role' => 'PROVIDER',
+                'time' => (string)$item['proposed_appointment_date'],
+                'summary' => 'Se propuso una cita.',
+            ];
+        }
+        if (trim((string)($item['confirmed_appointment_date'] ?? '')) !== '') {
+            $events[] = [
+                'scope' => 'item',
+                'request_id' => $bookingRequestId,
+                'item_id' => $itemId,
+                'event_type' => (($item['reschedule_count'] ?? 0) > 0) ? 'appointment_rescheduled' : 'appointment_confirmed',
+                'actor_role' => 'COORDINATOR',
+                'time' => (string)$item['confirmed_appointment_date'],
+                'summary' => (($item['reschedule_count'] ?? 0) > 0) ? 'La cita fue reprogramada y confirmada.' : 'La cita fue confirmada.',
+            ];
+        }
+        if ((string)($item['appointment_status'] ?? '') === 'cancelled') {
+            $events[] = [
+                'scope' => 'item',
+                'request_id' => $bookingRequestId,
+                'item_id' => $itemId,
+                'event_type' => 'appointment_cancelled',
+                'actor_role' => 'SYSTEM',
+                'time' => (string)($item['updated_at'] ?? $item['item_updated_at'] ?? ''),
+                'summary' => 'La cita fue cancelada.',
+            ];
+        }
+    }
+
+    foreach ($documents as $doc) {
+        $events[] = [
+            'scope' => 'request',
+            'request_id' => $bookingRequestId,
+            'item_id' => (int)($doc['item_id'] ?? 0),
+            'event_type' => 'medical_docs_uploaded',
+            'actor_role' => 'CLIENT',
+            'time' => (string)($doc['uploaded_at'] ?? ''),
+            'summary' => 'Documento médico cargado: ' . trim((string)($doc['title'] ?? $doc['original_filename'] ?? $doc['filename'] ?? 'Documento')),
+        ];
+    }
+
+    foreach ($messages as $message) {
+        $body = strtolower(trim((string)($message['body'] ?? '')));
+        if ($body === '') {
+            continue;
+        }
+        $eventType = '';
+        $summary = '';
+        if (strpos($body, 'requested clinical photos') !== false || strpos($body, 'requested medical documents') !== false) {
+            $eventType = 'medical_docs_requested';
+            $summary = 'Se solicitaron documentos médicos.';
+        } elseif (strpos($body, 'appointment proposed') !== false) {
+            $eventType = 'appointment_proposed';
+            $summary = 'Se propuso una cita en la conversación.';
+        } elseif (strpos($body, 'appointment confirmed') !== false) {
+            $eventType = 'appointment_confirmed';
+            $summary = 'Se confirmó una cita en la conversación.';
+        }
+
+        if ($eventType !== '') {
+            $events[] = [
+                'scope' => strtoupper((string)($message['thread_type'] ?? 'CARE')) === 'ITEM' ? 'item' : 'request',
+                'request_id' => $bookingRequestId,
+                'item_id' => (int)($message['thread_item_id'] ?? 0),
+                'event_type' => $eventType,
+                'actor_role' => detect_message_role($message),
+                'time' => (string)($message['time'] ?? ''),
+                'summary' => $summary,
+            ];
+        }
+    }
+
+    usort($events, function ($a, $b) {
+        $ta = strtotime((string)($a['time'] ?? ''));
+        $tb = strtotime((string)($b['time'] ?? ''));
+        if ($ta === $tb) {
+            return strcmp((string)($a['event_type'] ?? ''), (string)($b['event_type'] ?? ''));
+        }
+        return ($ta > $tb) ? -1 : 1;
+    });
+
+    return $events;
 }
 
 function parse_additional_notes_messages($additionalNotes)
@@ -654,6 +1365,18 @@ $hasBookingSelectedOffers = table_has_column($conexion, 'booking_requests', 'sel
 $hasBookingCreatedAt = table_has_column($conexion, 'booking_requests', 'created_at');
 $hasBookingUpdatedAt = table_has_column($conexion, 'booking_requests', 'updated_at');
 
+// TODO: when richer coordination columns land in DB, these optional aliases will start populating automatically.
+$itemProviderStatusCol = first_existing_column($conexion, 'booking_request_items', ['provider_status']);
+$itemMedicalCoordStatusCol = first_existing_column($conexion, 'booking_request_items', ['medical_coordination_status', 'coordination_status']);
+$itemAssignedDoctorCol = first_existing_column($conexion, 'booking_request_items', ['assigned_doctor', 'doctor_name']);
+$itemClinicCol = first_existing_column($conexion, 'booking_request_items', ['clinic', 'clinic_name']);
+$itemProposedAppointmentCol = first_existing_column($conexion, 'booking_request_items', ['proposed_appointment_date']);
+$itemConfirmedAppointmentCol = first_existing_column($conexion, 'booking_request_items', ['confirmed_appointment_date']);
+$itemTimezoneCol = first_existing_column($conexion, 'booking_request_items', ['timezone', 'provider_timezone']);
+$itemLocationCol = first_existing_column($conexion, 'booking_request_items', ['location']);
+$itemRescheduleCountCol = first_existing_column($conexion, 'booking_request_items', ['reschedule_count']);
+$itemLastProviderActionCol = first_existing_column($conexion, 'booking_request_items', ['last_provider_action']);
+
 if (!$hasItemStatus) {
     json_err('item_status_not_available', 409);
 }
@@ -696,6 +1419,16 @@ $proposedDateFromExpr = $hasProviderProposedDateFrom ? 'bri.provider_proposed_da
 $proposedDateToExpr = $hasProviderProposedDateTo ? 'bri.provider_proposed_date_to' : 'NULL';
 $proposedPriceExpr = $hasProviderProposedPrice ? 'bri.provider_proposed_price' : ($hasItemProposedPrice ? 'bri.proposed_price' : 'NULL');
 $proposedCurrencyExpr = $hasProviderProposedCurrency ? 'bri.provider_proposed_currency' : ($hasItemCurrency ? 'bri.currency' : 'NULL');
+$providerStatusExpr = $itemProviderStatusCol ? 'bri.`' . $itemProviderStatusCol . '`' : 'NULL';
+$medicalCoordinationStatusExpr = $itemMedicalCoordStatusCol ? 'bri.`' . $itemMedicalCoordStatusCol . '`' : 'NULL';
+$assignedDoctorExpr = $itemAssignedDoctorCol ? 'bri.`' . $itemAssignedDoctorCol . '`' : 'NULL';
+$clinicExpr = $itemClinicCol ? 'bri.`' . $itemClinicCol . '`' : 'NULL';
+$proposedAppointmentExpr = $itemProposedAppointmentCol ? 'bri.`' . $itemProposedAppointmentCol . '`' : 'NULL';
+$confirmedAppointmentExpr = $itemConfirmedAppointmentCol ? 'bri.`' . $itemConfirmedAppointmentCol . '`' : 'NULL';
+$timezoneExpr = $itemTimezoneCol ? 'bri.`' . $itemTimezoneCol . '`' : 'NULL';
+$locationExpr = $itemLocationCol ? 'bri.`' . $itemLocationCol . '`' : 'NULL';
+$rescheduleCountExpr = $itemRescheduleCountCol ? 'bri.`' . $itemRescheduleCountCol . '`' : 'NULL';
+$lastProviderActionExpr = $itemLastProviderActionCol ? 'bri.`' . $itemLastProviderActionCol . '`' : 'NULL';
 
 if ($action === 'list_threads') {
     $threads = [];
@@ -898,10 +1631,22 @@ if ($action === 'get_detail') {
                 bri.id AS item_id,
                 bri.booking_request_id,
                 bri.item_type,
+                " . ($hasItemsProviderId ? 'bri.provider_id' : 'NULL') . " AS provider_id,
+                " . ($hasItemsServiceProviderId ? 'bri.service_provider_id' : 'NULL') . " AS service_provider_id,
                 CASE
                     WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
                     ELSE bri.item_status
                 END AS item_status,
+                {$providerStatusExpr} AS provider_status,
+                {$medicalCoordinationStatusExpr} AS medical_coordination_status,
+                {$assignedDoctorExpr} AS assigned_doctor,
+                {$clinicExpr} AS clinic,
+                {$proposedAppointmentExpr} AS proposed_appointment_date,
+                {$confirmedAppointmentExpr} AS confirmed_appointment_date,
+                {$timezoneExpr} AS timezone,
+                {$locationExpr} AS location,
+                {$rescheduleCountExpr} AS reschedule_count,
+                {$lastProviderActionExpr} AS last_provider_action,
                 {$bookingNameExpr} AS client_name,
                 {$bookingEmailExpr} AS client_email,
                 {$bookingPhoneExpr} AS client_phone,
@@ -973,29 +1718,20 @@ if ($action === 'get_detail') {
         json_err('not_found', 404);
     }
 
-    if (!$isAdminSession) {
-        $feeStatus = strtolower(trim((string)($row['fee_status'] ?? '')));
-        $itemStatus = strtolower(trim((string)($row['item_status'] ?? '')));
-        $allowedItemStatuses = ['provider_confirmed', 'client_accepted'];
-        $canShowContact = ($feeStatus === 'paid');
-        if ($canShowContact && $itemStatus !== '' && !in_array($itemStatus, $allowedItemStatuses, true)) {
-            $canShowContact = false;
-        }
-        if (!$canShowContact) {
-            $row['client_email'] = 'Locked until Coordination Fee is paid';
-            $row['client_phone'] = 'Locked until Coordination Fee is paid';
-        }
-    }
-
     $bookingRequestId = (int)$row['booking_request_id'];
-    $feeStatusNow = strtolower(trim((string)($row['fee_status'] ?? 'pending')));
-    $feeRequiredNow = (int)($row['fee_required'] ?? 0) === 1;
-    if ($hasFeeRequired && $hasBookingFeeStatus) {
-        $feeLocked = ($feeRequiredNow && $feeStatusNow !== 'paid');
-    } else {
-        $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
-    }
+    $coordinationFee = build_coordination_fee_meta($conexion, $bookingRequestId, $row, $isAdminSession);
+    $feeLocked = !$coordinationFee['unlocked'];
+    $row['coordination_fee'] = $coordinationFee;
     $row['fee_locked'] = $feeLocked ? 1 : 0;
+    $row['fee_status'] = $coordinationFee['status'];
+    $row['fee_required'] = (int)$coordinationFee['required'];
+
+    $contactAccess = resolve_contact_access_state($row['client_email'] ?? '', $row['client_phone'] ?? '', $coordinationFee['status'], $isAdminSession);
+    $row['contact_access'] = $contactAccess;
+    $row['client_email_raw'] = trim((string)($row['client_email'] ?? ''));
+    $row['client_phone_raw'] = trim((string)($row['client_phone'] ?? ''));
+    $row['client_email'] = $contactAccess['email_display'];
+    $row['client_phone'] = $contactAccess['phone_display'];
     $rawAdditionalNotes = (string)($row['additional_notes'] ?? '');
     $row['messages'] = parse_additional_notes_messages($rawAdditionalNotes);
     if ($isMedicalProviderSession) {
@@ -1066,6 +1802,11 @@ if ($action === 'get_detail') {
         }
     }
     $row['documents'] = $documents;
+    $row['documents_access'] = [
+        'locked' => !$coordinationFee['unlocked'] && !$isAdminSession,
+        'note' => (!$coordinationFee['unlocked'] && !$isAdminSession) ? 'Documentos bloqueados por condición de coordinación' : '',
+        'has_documents' => !empty($documents),
+    ];
     if ($documentsError !== '') {
         $row['documents_error'] = $documentsError;
     }
@@ -1074,10 +1815,22 @@ if ($action === 'get_detail') {
     $historySql = "SELECT
                     bri.id AS item_id,
                     bri.item_type,
+                    " . ($hasItemsProviderId ? 'bri.provider_id' : 'NULL') . " AS provider_id,
+                    " . ($hasItemsServiceProviderId ? 'bri.service_provider_id' : 'NULL') . " AS service_provider_id,
                     CASE
                         WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
                         ELSE bri.item_status
                     END AS item_status,
+                    {$providerStatusExpr} AS provider_status,
+                    {$medicalCoordinationStatusExpr} AS medical_coordination_status,
+                    {$assignedDoctorExpr} AS assigned_doctor,
+                    {$clinicExpr} AS clinic,
+                    {$proposedAppointmentExpr} AS proposed_appointment_date,
+                    {$confirmedAppointmentExpr} AS confirmed_appointment_date,
+                    {$timezoneExpr} AS timezone,
+                    {$locationExpr} AS location,
+                    {$rescheduleCountExpr} AS reschedule_count,
+                    {$lastProviderActionExpr} AS last_provider_action,
                     " . ($hasItemCreatedAt ? "bri.created_at" : "NULL") . " AS item_created_at,
                     " . ($hasItemUpdatedAt ? "bri.updated_at" : "NULL") . " AS item_updated_at,
                     {$responseAtExpr} AS provider_response_at,
@@ -1117,6 +1870,41 @@ if ($action === 'get_detail') {
             }
         }
         mysqli_stmt_close($stmtHistory);
+    }
+
+    $calendarTraceMap = fetch_calendar_event_trace_map($conexion, array_merge([$itemId], array_column($history, 'item_id')));
+    $row = enrich_item_trace_row($conexion, $row, $calendarTraceMap);
+    foreach ($history as $historyIndex => $historyRow) {
+        $history[$historyIndex] = enrich_item_trace_row($conexion, $historyRow, $calendarTraceMap);
+    }
+
+    $row['coordination_unlocked'] = $coordinationFee['unlocked'] ? 1 : 0;
+    $row['coordination_actions_locked'] = (!$coordinationFee['unlocked'] && !$isAdminSession) ? 1 : 0;
+    $row['coordination_pending_message'] = $coordinationFee['message'];
+    $row['booking_status_label_es'] = generic_status_label_es($row['booking_status'] ?? '');
+    $row['item_status_label_es'] = generic_status_label_es($row['item_status'] ?? '');
+    $row['provider_status_label_es'] = generic_status_label_es($row['provider_status'] ?? '');
+    $row['appointment_status_label_es'] = appointment_status_label_es($row['appointment_status'] ?? $row['medical_coordination_status'] ?? '');
+    $row['medical_coordination_status_label_es'] = generic_status_label_es($row['medical_coordination_status'] ?? '');
+    $row['fee_status_label_es'] = fee_status_label_es($coordinationFee['status']);
+    $row['summary'] = [
+        'coordination_fee_status' => $coordinationFee['status'],
+        'coordination_fee_status_label_es' => fee_status_label_es($coordinationFee['status']),
+        'coordination_unlocked' => $coordinationFee['unlocked'] ? 'yes' : 'no',
+        'assigned_provider' => $row['assigned_provider'] ?? null,
+        'assigned_doctor' => $row['assigned_doctor'] ?? null,
+        'next_appointment' => isset($row['next_appointment']['start_at']) ? $row['next_appointment']['start_at'] : null,
+    ];
+    $row['event_log'] = build_detail_event_log($row, $history, $row['messages'], $documents);
+    foreach ($row['event_log'] as $eventIndex => $eventRow) {
+        $row['event_log'][$eventIndex]['event_type_label_es'] = event_type_label_es($eventRow['event_type'] ?? '');
+        $row['event_log'][$eventIndex]['actor_role_label_es'] = role_label_es($eventRow['actor_role'] ?? '');
+    }
+    foreach ($history as $historyIndex => $historyRow) {
+        $history[$historyIndex]['item_status_label_es'] = generic_status_label_es($historyRow['item_status'] ?? '');
+        $history[$historyIndex]['provider_status_label_es'] = generic_status_label_es($historyRow['provider_status'] ?? '');
+        $history[$historyIndex]['appointment_status_label_es'] = appointment_status_label_es($historyRow['appointment_status'] ?? $historyRow['medical_coordination_status'] ?? '');
+        $history[$historyIndex]['medical_coordination_status_label_es'] = generic_status_label_es($historyRow['medical_coordination_status'] ?? '');
     }
 
     json_ok(['data' => $row, 'items_history' => $history]);
@@ -1175,7 +1963,8 @@ if ($action === 'list_messages') {
         }
     }
 
-    $feeLocked = ($bookingRequestId > 0 && is_booking_fee_required($conexion, $bookingRequestId));
+    $coordinationFee = build_coordination_fee_meta($conexion, $bookingRequestId, [], $isAdminSession);
+    $feeLocked = !$coordinationFee['unlocked'];
 
     $parsedMessages = parse_additional_notes_messages(fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete));
     $messages = [];
@@ -1263,7 +2052,7 @@ if ($action === 'list_messages') {
                             'type' => 'provider_reject_reason',
                             'time' => $eventTime,
                             'actor' => '',
-                            'body' => 'Rejection reason: ' . $rejectReason,
+                            'body' => 'Motivo del rechazo: ' . $rejectReason,
                             'thread_type' => 'ITEM',
                             'thread_item_id' => $rowItemId,
                         ];
@@ -1276,7 +2065,7 @@ if ($action === 'list_messages') {
                             'type' => 'status_update',
                             'time' => $eventTime,
                             'actor' => '',
-                            'body' => 'Service status updated to: ' . $status,
+                            'body' => 'Estado del caso actualizado a: ' . generic_status_label_es($status),
                             'thread_type' => 'ITEM',
                             'thread_item_id' => $rowItemId,
                         ];
@@ -1318,11 +2107,16 @@ if ($action === 'list_messages') {
     }
 
     sort_messages_by_time($messages);
+    foreach ($messages as $idx => $message) {
+        $messages[$idx]['display_role'] = detect_message_role($message);
+        $messages[$idx]['display_role_label_es'] = role_label_es($messages[$idx]['display_role']);
+    }
     json_ok([
         'booking_request_id' => $bookingRequestId,
         'thread_type' => $threadType,
         'item_id' => $threadType === 'ITEM' ? $itemId : 0,
         'fee_locked' => $feeLocked ? 1 : 0,
+        'coordination_fee' => $coordinationFee,
         'messages' => $messages
     ]);
 }
@@ -1385,36 +2179,8 @@ if ($action === 'send_message') {
         }
     }
 
-    $feeLocked = false;
-    if ($bookingRequestId > 0) {
-        if ($hasFeeRequired && $hasBookingFeeStatus) {
-            $feeSql = "SELECT fee_required, fee_status FROM booking_requests WHERE id = ?";
-            if ($hasRequestsSoftDelete) {
-                $feeSql .= " AND is_deleted = 0";
-            }
-            $feeSql .= " LIMIT 1";
-            $stmtFee = mysqli_prepare($conexion, $feeSql);
-            if (!$stmtFee) {
-                json_err('db_prepare_error', 500);
-            }
-            mysqli_stmt_bind_param($stmtFee, 'i', $bookingRequestId);
-            if (!mysqli_stmt_execute($stmtFee)) {
-                $err = mysqli_stmt_error($stmtFee);
-                mysqli_stmt_close($stmtFee);
-                json_err('db_error: ' . $err, 500);
-            }
-            $feeRes = mysqli_stmt_get_result($stmtFee);
-            $feeRow = $feeRes ? mysqli_fetch_assoc($feeRes) : null;
-            mysqli_stmt_close($stmtFee);
-            if ($feeRow) {
-                $feeRequiredNow = (int)($feeRow['fee_required'] ?? 0) === 1;
-                $feeStatusNow = strtolower(trim((string)($feeRow['fee_status'] ?? 'pending')));
-                $feeLocked = ($feeRequiredNow && $feeStatusNow !== 'paid');
-            }
-        } else {
-            $feeLocked = is_booking_fee_required($conexion, $bookingRequestId);
-        }
-    }
+    $coordinationFee = build_coordination_fee_meta($conexion, $bookingRequestId, [], $isAdminSession);
+    $feeLocked = !$coordinationFee['unlocked'];
     if ($feeLocked && !$isAdminSession) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'message' => 'coordination_fee_required', 'code' => 'FEE_REQUIRED']);
