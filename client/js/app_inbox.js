@@ -706,6 +706,11 @@
                 ? String(doc.original_filename || doc.filename || name || ('Document #' + (doc.id || '')))
                 : String(name || '');
             var href = buildSharedDocumentHref(doc);
+            var docIdAttr = esc(String(doc && doc.id ? doc.id : ''));
+            var encodedHref = esc(href);
+            var nameHtml = href
+                ? ('<a class="mt-shared-doc-link mt-shared-doc-name" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">' + esc(originalName) + '</a>')
+                : ('<div class="mt-shared-doc-name">' + esc(originalName) + '</div>');
             if (!doc && window.console && typeof window.console.warn === 'function') {
                 window.console.warn('[inbox] shared document unresolved', {
                     requested_name: name,
@@ -735,12 +740,12 @@
             }
             var actionsHtml = href
                 ? ('<div class="mt-shared-doc-actions">' +
-                    '<a class="mt-shared-doc-link" href="' + esc(href) + '" data-doc-id="' + esc(String(doc && doc.id ? doc.id : '')) + '" data-url="' + esc(href) + '" target="_blank" rel="noopener">Open document</a>' +
+                    '<a class="mt-shared-doc-link" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">Open document</a>' +
                 '</div>')
                 : '';
             return '<div class="mt-shared-doc-card">' +
                 '<div class="mt-shared-doc-label"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
-                '<div class="mt-shared-doc-name">' + esc(originalName) + '</div>' +
+                nameHtml +
                 actionsHtml +
             '</div>';
         }).join('');

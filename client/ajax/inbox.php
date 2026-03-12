@@ -654,8 +654,10 @@ if ($action === 'list_messages') {
     }
 
     $documents = [];
-    $isItemThreadForDocs = (strtoupper((string)($ctx['thread_type'] ?? '')) === 'ITEM') && ((int)($ctx['item_id'] ?? 0) > 0);
-    if ($isItemThreadForDocs && client_table_exists($conexion, 'client_documents')) {
+    $threadTypeUpper = strtoupper((string)($ctx['thread_type'] ?? ''));
+    $isItemThreadForDocs = ($threadTypeUpper === 'ITEM') && ((int)($ctx['item_id'] ?? 0) > 0);
+    $isCareThreadForDocs = ($threadTypeUpper === 'CARE');
+    if (($isItemThreadForDocs || $isCareThreadForDocs) && client_table_exists($conexion, 'client_documents')) {
         $docHasRequestId = client_table_has_column($conexion, 'client_documents', 'booking_request_id');
         $docHasItemId = client_table_has_column($conexion, 'client_documents', 'item_id');
         if ($docHasRequestId && $docHasItemId) {
@@ -722,10 +724,12 @@ if ($action === 'list_messages') {
             $docTypes .= 'i';
             $docParams[] = (int)$ctx['request_id'];
 
-            if ((int)($ctx['item_id'] ?? 0) > 0) {
+            if ($isItemThreadForDocs && (int)($ctx['item_id'] ?? 0) > 0) {
                 $docSql .= " AND (cd.item_id = ? OR cd.item_id IS NULL)";
                 $docTypes .= 'i';
                 $docParams[] = (int)$ctx['item_id'];
+            } elseif ($isCareThreadForDocs) {
+                $docSql .= " AND (cd.item_id IS NULL OR cd.item_id = 0)";
             }
 
             $docSql .= " ORDER BY " . $orderByColumn . " DESC";
