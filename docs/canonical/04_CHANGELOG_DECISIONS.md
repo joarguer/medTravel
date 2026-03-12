@@ -1,5 +1,34 @@
 # Changelog Decisions
 
+## 2026-03-12 — MedTravel adopta arquitectura operativa de gestion de casos
+
+**Rationale**
+- El producto ya no puede describirse correctamente solo como solicitud + chat + commission unlock.
+- La operacion real exige separar caso, item, cita y coordinacion / pago como dimensiones distintas.
+- Tambien exige separar prestador de medico o staff interno del prestador.
+
+**Outcome**
+- Caso, cita y coordinacion / pago quedan formalmente definidos como dimensiones distintas del modelo.
+- Prestador y medico / staff interno se separan a nivel canónico, aunque la persistencia tecnica siga evolucionando por fases.
+- La UI operativa debe mostrar estados de negocio visibles y comprensibles para operacion.
+- Las acciones oficiales del item quedan canonizadas como:
+  - Aceptar caso
+  - Rechazar caso
+  - Solicitar informacion
+  - Proponer cita
+- El admin operativo para proveedores, medicos y servicios complementarios en Colombia se estandariza en espanol por defecto.
+- El modelo previo de commission / unlock se mantiene como:
+  - compatibilidad legacy
+  - capacidad opcional por proveedor
+  - configurable desde admin
+  - subflujo comercial complementario
+  - no eje principal del producto
+
+**Impact**
+- La documentacion canónica ya no debe presentar la comision como regla global obligatoria.
+- Los componentes existentes de comision siguen vigentes, pero subordinados al modelo operativo principal.
+- Las futuras decisiones tecnicas deben preservar compatibilidad con proveedores con comision habilitada y con proveedores sin comision.
+
 ## Decision: Introduce Stage 2 commission unlock system
 
 **Rationale**

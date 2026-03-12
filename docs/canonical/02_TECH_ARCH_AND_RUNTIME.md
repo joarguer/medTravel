@@ -4,6 +4,59 @@ Alias al documento canónico que describe contexto técnico y runtime.
 
 - Ver: [DEV_CONTEXT.md](../../DEV_CONTEXT.md)
 
+## Arquitectura operativa complementaria: caso, cita y staff medico
+
+Esta capa complementa el runtime existente y redefine el marco tecnico esperado para MedTravel sin invalidar componentes legacy.
+
+### Separacion formal de dominios
+
+- Caso:
+  - dimension operativa principal del paciente
+  - agrupa contexto general, items, conversacion transversal y coordinacion
+- Cita:
+  - evento operativo separado
+  - puede ser propuesta, confirmada, reprogramada o cancelada sin redefinir por completo el caso
+- Coordinacion / pago:
+  - capa operativa o comercial posterior a ciertos hitos del item
+  - puede incluir desbloqueos, validaciones, pagos o tareas administrativas
+
+### Separacion entre prestador y medico
+
+- `providers` o equivalente actual sigue representando al prestador responsable del item.
+- El sistema debe soportar la separacion entre prestador y medico o staff medico interno.
+- Si hoy no existe una tabla definitiva, la evolucion prevista puede materializarse como `provider_medical_staff` o equivalente logico.
+- La documentacion tecnica no debe asumir que prestador = medico en todos los casos.
+
+### Resultado operativo esperado por item medico
+
+Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
+
+- prestador asignado
+- medico o staff asignado
+- sede o clinic
+- fecha propuesta
+- fecha confirmada
+- estado de cita
+- event log / timeline
+
+### Event log y trazabilidad
+
+- La trazabilidad debe poder diferenciar eventos a nivel caso y a nivel item.
+- La UI operativa debe mostrar eventos de negocio, no solo mutaciones tecnicas.
+- Appointment proposal, confirmation, reschedule, cancelacion, solicitud de informacion y desbloqueos comerciales deben poder representarse en timeline.
+
+### Compatibilidad legacy
+
+- El runtime actual puede seguir apoyandose en `booking_requests`, `booking_request_items`, inbox, calendar y componentes auxiliares mientras el modelo evoluciona.
+- Cuando falten campos dedicados, el sistema debe soportar derivacion segura o alias logicos sin inventar una tabla definitiva que aun no exista.
+- La separacion operativa canonica ya es obligatoria a nivel de documentacion, aunque la persistencia siga madurando por fases.
+
+### Idioma del admin por rol / contexto
+
+- Front publico internacional y paciente: ingles.
+- Admin operativo para proveedores, medicos y servicios complementarios en Colombia: espanol por defecto.
+- Los nombres tecnicos del runtime pueden mantenerse en ingles cuando ya existan en codigo o integraciones.
+
 ## Commission System
 
 **Tables**
@@ -22,7 +75,13 @@ Alias al documento canónico que describe contexto técnico y runtime.
 - `admin/ajax/inbox.php`
 
 **Purpose**
-Control access to sensitive provider contact details until commission payment is completed.
+Soportar una capa comercial opcional por proveedor para controlar ciertos desbloqueos o etapas operativas cuando el acuerdo comercial lo requiera.
+
+**Operational framing**
+- La configuracion de comision es por proveedor.
+- La comision es opcional y administrada desde admin.
+- El sistema debe soportar proveedores con comision habilitada y proveedores sin comision.
+- El flujo principal del caso, la cita y la atencion no depende de que exista comision.
 
 ## Dev Cleanup Reset
 
@@ -73,7 +132,11 @@ Control access to sensitive provider contact details until commission payment is
 - `admin/ajax/inbox.php`
 
 **Purpose**
-Allow MedTravel to control monetization terms per provider while preserving free negotiation in Stage 1.
+Allow MedTravel to control monetization terms per provider while preserving the main case workflow independently from commission.
+
+**Policy**
+- Admin can enable or disable commission per provider.
+- Providers without commission configuration must continue through the normal operational case flow.
 
 ### Inbox UI Architecture – Chat Bubble System
 
