@@ -29,7 +29,7 @@
     var lastComposeNotice = '';
     var currentDocuments = [];
     var currentDocumentsThreadId = '';
-    var composeFiles = [];
+    var attachModalBusy = false;
     var composeBusy = false;
     var composeBusyMessage = '';
     var quickReplies = {
@@ -52,46 +52,130 @@
             .replace(/'/g, '&#039;');
     }
 
-    function renderComposeFilesBatch() {
-        var $list = $('#admin-chat-attach-list');
-        if (!$list.length) return;
-        if (!composeFiles.length) {
-            $list.hide().html('');
+    function resetAttachDocumentModal() {
+        var $form = $('#admin-attach-document-form');
+        if ($form.length && $form[0]) {
+            $form[0].reset();
+        }
+        $('#admin-attach-thread-id').val('');
+        $('#admin-attach-thread-type').val('');
+        $('#admin-attach-request-id').val('');
+        $('#admin-attach-item-id').val('');
+        $('#admin-attach-context').text('Contexto sin definir.');
+        setAttachModalBusy(false);
+        setAttachStatus('');
+    }
+
+    function setAttachStatus(message, tone) {
+        var $status = $('#admin-chat-attach-status');
+        if (!$status.length) return;
+        var text = String(message || '').trim();
+        if (!text) {
+            $status.hide().removeClass('text-danger text-success text-warning').text('');
             return;
         }
-        var html = composeFiles.map(function (file, index) {
-            var name = String((file && file.name) || ('Document ' + (index + 1)));
-            return '<span class="label label-default" style="display:inline-block;margin:0 6px 6px 0;">' +
-                esc(name) +
-                ' <a href="#" class="admin-chat-attach-remove" data-index="' + index + '" style="color:inherit;text-decoration:none;">&times;</a>' +
-            '</span>';
-        }).join('');
-        $list.html('<div><strong>Attached:</strong></div><div style="margin-top:6px;">' + html + '</div>').show();
+        $status
+            .removeClass('text-danger text-success text-warning')
+            .addClass(tone ? ('text-' + tone) : '')
+            .text(text)
+            .show();
     }
 
-    function appendComposeFiles(fileList) {
-        if (!fileList || !fileList.length) {
-            renderComposeFilesBatch();
+    function setAttachModalBusy(enabled) {
+        attachModalBusy = !!enabled;
+        $('#admin-attach-submit-btn').prop('disabled', attachModalBusy);
+        $('#admin-attach-document-form').find('input, select, textarea').prop('disabled', attachModalBusy);
+    }
+
+    function describeUploadError(res) {
+        var code = '';
+        if (res && res.results && res.results[0] && res.results[0].message) {
+            code = String(res.results[0].message);
+        } else if (res && res.message) {
+            code = String(res.message);
+        }
+        var map = {
+            FEE_REQUIRED: 'La condición de coordinación sigue pendiente.',
+            FREE_MESSAGE_BLOCKED: 'El envío de mensajes está limitado temporalmente para este hilo.',
+            file_required: 'Debes seleccionar un archivo.',
+            upload_error: 'No se pudo procesar el archivo cargado.',
+            file_too_large: 'El archivo supera el tamaño máximo permitido.',
+            invalid_tmp_file: 'No se pudo leer el archivo temporal.',
+            file_extension_not_allowed: 'La extensión del archivo no está permitida.',
+            file_type_not_allowed: 'El tipo de archivo no está permitido.',
+            file_save_failed: 'No se pudo guardar el archivo.',
+            insert_failed: 'No se pudieron guardar los metadatos del documento.',
+            upload_failed: 'No se pudo adjuntar el documento. Intenta de nuevo.',
+            client_not_resolved: 'No se pudo resolver el paciente asociado a esta solicitud.'
+        };
+        if (map[code]) {
+            return map[code];
+        }
+        if (code.indexOf('insert_failed:') === 0) {
+            return map.insert_failed;
+        }
+        return code || 'No se pudo adjuntar el documento. Intenta de nuevo.';
+    }
+
+    function cleanDocumentTitleFallback(filename) {
+        var raw = String(filename || '').trim();
+        if (!raw) return 'Documento';
+        var base = raw.replace(/\.[a-z0-9]{2,8}$/i, '');
+        base = base.replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+        return base || raw;
+    }
+
+    function normalizeDocumentTypeKey(type) {
+        var key = String(type || 'other').toLowerCase().trim();
+        var aliasMap = {
+            history: 'medical_history',
+            medical_history: 'medical_history',
+            labs: 'lab_results',
+            lab_results: 'lab_results',
+            imaging: 'diagnostic_imaging',
+            diagnostic_imaging: 'diagnostic_imaging',
+            photos: 'photos',
+            quote: 'quote',
+            consent_form: 'consent_form',
+            medical_order: 'medical_order',
+            prescription: 'prescription',
+            administrative_document: 'administrative_document',
+            invoice: 'administrative_document',
+            contract: 'administrative_document',
+            insurance: 'administrative_document',
+            passport: 'administrative_document',
+            id_card: 'administrative_document',
+            other: 'other'
+        };
+        return aliasMap[key] || 'other';
+    }
+
+    function populateAttachDocumentContext() {
+        var threadId = currentThread && currentThread.thread_id ? String(currentThread.thread_id) : '';
+        var threadType = currentThread && currentThread.thread_type ? String(currentThread.thread_type) : 'ITEM';
+        var requestId = currentThread ? parseInt(currentThread.booking_request_id || 0, 10) : 0;
+        var itemId = currentThread ? parseInt(currentThread.item_id || 0, 10) : 0;
+        $('#admin-attach-thread-id').val(threadId);
+        $('#admin-attach-thread-type').val(threadType);
+        $('#admin-attach-request-id').val(requestId > 0 ? String(requestId) : '');
+        $('#admin-attach-item-id').val(itemId > 0 ? String(itemId) : '');
+        var parts = ['Hilo: ' + (threadId || 'Sin definir')];
+        if (requestId > 0) parts.push('Solicitud #' + requestId);
+        if (itemId > 0) parts.push('Item #' + itemId);
+        $('#admin-attach-context').text(parts.join(' · '));
+    }
+
+    function openAttachDocumentModal() {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Selecciona primero un hilo del inbox');
             return;
         }
-        for (var i = 0; i < fileList.length; i++) {
-            if (fileList[i]) {
-                composeFiles.push(fileList[i]);
-            }
-        }
-        renderComposeFilesBatch();
+        resetAttachDocumentModal();
+        populateAttachDocumentContext();
+        $('#adminAttachDocumentModal').modal('show');
     }
 
-    function resetComposeFiles() {
-        composeFiles = [];
-        var input = document.getElementById('admin-chat-attach-input');
-        if (input) {
-            input.value = '';
-        }
-        renderComposeFilesBatch();
-    }
-
-    function mergeComposeUploadDocuments(uploadRes) {
+    function mergeUploadedDocuments(uploadRes) {
         var results = uploadRes && $.isArray(uploadRes.results) ? uploadRes.results : [];
         if (!results.length) {
             return;
@@ -110,9 +194,14 @@
             currentDocuments.unshift({
                 id: docId,
                 file_path: filePath,
+                document_type: normalizeDocumentTypeKey(item.document_type || 'other'),
                 original_filename: String(item.original_filename || ''),
                 filename: String(item.filename || ''),
                 title: String(item.title || ''),
+                description: String(item.description || item.document_note || ''),
+                file_size: parseInt(item.file_size || 0, 10) || 0,
+                mime_type: String(item.mime_type || ''),
+                uploaded_at: String(item.uploaded_at || ''),
                 download_url: docId > 0
                     ? '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(docId))
                     : (filePath ? '/uploads/medical_docs/' + filePath.replace(/^\/+/, '') : '')
@@ -126,48 +215,97 @@
         setComposeGateState(freeMessageAllowed, composeBusyMessage);
     }
 
-    function buildComposeAttachmentSummary(files) {
-        var names = (files || []).map(function (file) {
-            return String((file && file.name) || '').trim();
-        }).filter(function (name) {
-            return name !== '';
-        });
-        if (!names.length) {
-            return 'Shared a document.';
+    function buildSharedDocumentMessage(results) {
+        var docs = $.isArray(results) ? results.filter(function (item) {
+            return item && item.ok === true;
+        }) : [];
+        if (!docs.length) {
+            return 'Documento compartido';
         }
-        if (names.length === 1) {
-            return 'Shared document: ' + names[0];
-        }
-        return 'Shared ' + names.length + ' documents: ' + names.slice(0, 3).join(', ');
+        return docs.map(function (item) {
+            var title = String(item.title || cleanDocumentTitleFallback(item.original_filename || item.filename || 'Documento')).trim();
+            var typeLabel = docTypeLabel(item.document_type || 'other');
+            var fileLabel = String(item.original_filename || item.filename || '').trim();
+            var note = String(item.description || item.document_note || '').trim();
+            var lines = ['Documento compartido: ' + title, 'Tipo: ' + typeLabel];
+            if (fileLabel) {
+                lines.push('Archivo: ' + fileLabel);
+            }
+            if (note) {
+                lines.push('Observación: ' + note);
+            }
+            return lines.join('\n');
+        }).join('\n\n');
     }
 
     function parseSharedDocumentMessage(text) {
         var raw = String(text || '');
         var lines = raw.split(/\r?\n/);
-        var docNames = [];
+        var entries = [];
         var kept = [];
-        lines.forEach(function (line) {
+        var i = 0;
+        while (i < lines.length) {
+            var line = lines[i];
             var trimmedLine = String(line || '').trim();
-            var singleMatch = trimmedLine.match(/^Shared document:\s*(.+)$/i);
+            var singleMatch = trimmedLine.match(/^(Documento compartido|Shared document):\s*(.+)$/i);
             if (singleMatch) {
-                docNames.push(singleMatch[1].trim());
-                return;
+                var entry = {
+                    lookup_name: singleMatch[2].trim(),
+                    title: singleMatch[2].trim(),
+                    document_type: '',
+                    file_name: '',
+                    note: ''
+                };
+                i++;
+                while (i < lines.length) {
+                    var detailLine = String(lines[i] || '').trim();
+                    if (!detailLine) {
+                        i++;
+                        break;
+                    }
+                    var typeMatch = detailLine.match(/^(Tipo|Type):\s*(.+)$/i);
+                    if (typeMatch) {
+                        entry.document_type = normalizeDocumentTypeKey(typeMatch[2]);
+                        i++;
+                        continue;
+                    }
+                    var fileMatch = detailLine.match(/^(Archivo|File):\s*(.+)$/i);
+                    if (fileMatch) {
+                        entry.file_name = fileMatch[2].trim();
+                        i++;
+                        continue;
+                    }
+                    var noteMatch = detailLine.match(/^(Observación|Observation):\s*(.+)$/i);
+                    if (noteMatch) {
+                        entry.note = noteMatch[2].trim();
+                        i++;
+                        continue;
+                    }
+                    break;
+                }
+                if (!entry.lookup_name && entry.file_name) {
+                    entry.lookup_name = entry.file_name;
+                }
+                entries.push(entry);
+                continue;
             }
             var multiMatch = trimmedLine.match(/^Shared\s+\d+\s+documents:\s*(.+)$/i);
             if (multiMatch) {
                 multiMatch[1].split(/\s*,\s*/).forEach(function (name) {
                     var docName = String(name || '').trim();
                     if (docName !== '') {
-                        docNames.push(docName);
+                        entries.push({ lookup_name: docName, title: '', document_type: '', file_name: '', note: '' });
                     }
                 });
-                return;
+                i++;
+                continue;
             }
             kept.push(line);
-        });
+            i++;
+        }
         return {
             body: kept.join('\n').trim(),
-            names: docNames
+            entries: entries
         };
     }
 
@@ -198,13 +336,13 @@
         return match ? match[1] : '';
     }
 
-    function resolveSharedMessageDocument(name) {
-        var target = normalizeSharedDocumentName(name);
-        var targetWithoutExt = sharedDocumentNameWithoutExtension(name);
-        var targetExt = sharedDocumentExtension(name);
+    function resolveSharedMessageDocument(ref) {
+        var reference = ref && typeof ref === 'object'
+            ? [ref.lookup_name, ref.file_name, ref.title].filter(function (value) { return String(value || '').trim() !== ''; })
+            : [ref];
         var bestDoc = null;
         var bestScore = -1;
-        if (!target || !currentDocuments || !currentDocuments.length) {
+        if (!reference.length || !currentDocuments || !currentDocuments.length) {
             return null;
         }
 
@@ -218,36 +356,44 @@
             });
             var docBestScore = -1;
 
-            candidates.forEach(function (candidate) {
-                var candidateKey = normalizeSharedDocumentName(candidate);
-                var candidateWithoutExt = sharedDocumentNameWithoutExtension(candidate);
-                var candidateExt = sharedDocumentExtension(candidate);
-                if (!candidateKey) {
+            reference.forEach(function (targetValue) {
+                var target = normalizeSharedDocumentName(targetValue);
+                var targetWithoutExt = sharedDocumentNameWithoutExtension(targetValue);
+                var targetExt = sharedDocumentExtension(targetValue);
+                if (!target) {
                     return;
                 }
-                if (candidateKey === target) {
-                    docBestScore = Math.max(docBestScore, 100);
-                    return;
-                }
-                if (candidateWithoutExt && candidateWithoutExt === targetWithoutExt) {
-                    docBestScore = Math.max(docBestScore, 95);
-                }
-                if (targetExt && candidateExt && targetExt === candidateExt && (
-                    candidateKey.indexOf(target) !== -1 || target.indexOf(candidateKey) !== -1
-                )) {
-                    docBestScore = Math.max(docBestScore, 85);
-                }
-                var targetTokens = targetWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
-                var candidateTokens = candidateWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
-                var overlap = 0;
-                targetTokens.forEach(function (token) {
-                    if (candidateTokens.indexOf(token) !== -1) {
-                        overlap++;
+                candidates.forEach(function (candidate) {
+                    var candidateKey = normalizeSharedDocumentName(candidate);
+                    var candidateWithoutExt = sharedDocumentNameWithoutExtension(candidate);
+                    var candidateExt = sharedDocumentExtension(candidate);
+                    if (!candidateKey) {
+                        return;
+                    }
+                    if (candidateKey === target) {
+                        docBestScore = Math.max(docBestScore, 100);
+                        return;
+                    }
+                    if (candidateWithoutExt && candidateWithoutExt === targetWithoutExt) {
+                        docBestScore = Math.max(docBestScore, 95);
+                    }
+                    if (targetExt && candidateExt && targetExt === candidateExt && (
+                        candidateKey.indexOf(target) !== -1 || target.indexOf(candidateKey) !== -1
+                    )) {
+                        docBestScore = Math.max(docBestScore, 85);
+                    }
+                    var targetTokens = targetWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
+                    var candidateTokens = candidateWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
+                    var overlap = 0;
+                    targetTokens.forEach(function (token) {
+                        if (candidateTokens.indexOf(token) !== -1) {
+                            overlap++;
+                        }
+                    });
+                    if (overlap >= 3 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
+                        docBestScore = Math.max(docBestScore, 70 + overlap);
                     }
                 });
-                if (overlap >= 3 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
-                    docBestScore = Math.max(docBestScore, 70 + overlap);
-                }
             });
 
             if (docBestScore > bestScore) {
@@ -265,8 +411,8 @@
         return null;
     }
 
-    function renderSharedDocumentsBlock(names) {
-        if (!names || !names.length) {
+    function renderSharedDocumentsBlock(entries) {
+        if (!entries || !entries.length) {
             return '';
         }
         function buildSharedDocumentHref(doc) {
@@ -286,13 +432,13 @@
             }
             return '';
         }
-        var itemsHtml = names.map(function (name) {
-            var doc = resolveSharedMessageDocument(name);
-            if (!doc && names.length === 1 && currentDocuments && currentDocuments.length) {
+        var itemsHtml = entries.map(function (entry) {
+            var doc = resolveSharedMessageDocument(entry);
+            if (!doc && entries.length === 1 && currentDocuments && currentDocuments.length) {
                 doc = currentDocuments[0];
                 if (window.console && typeof window.console.warn === 'function') {
                     window.console.warn('[inbox] shared document fallback to latest thread document', {
-                        requested_name: name,
+                        requested_name: entry,
                         fallback_document: {
                             id: doc.id || null,
                             original_filename: doc.original_filename || '',
@@ -304,18 +450,25 @@
                     });
                 }
             }
+            var title = doc
+                ? String(doc.title || entry.title || cleanDocumentTitleFallback(doc.original_filename || doc.filename || 'Documento'))
+                : String(entry.title || cleanDocumentTitleFallback(entry.file_name || entry.lookup_name || 'Documento'));
             var originalName = doc
-                ? String(doc.original_filename || doc.filename || name || ('Document #' + (doc.id || '')))
-                : String(name || '');
+                ? String(doc.original_filename || doc.filename || entry.file_name || title || ('Documento #' + (doc.id || '')))
+                : String(entry.file_name || entry.lookup_name || title || '');
+            var typeKey = normalizeDocumentTypeKey((doc && doc.document_type) || entry.document_type || 'other');
+            var note = doc
+                ? String(doc.description || entry.note || '').trim()
+                : String(entry.note || '').trim();
             var href = buildSharedDocumentHref(doc);
             var docIdAttr = esc(String(doc && doc.id ? doc.id : ''));
             var encodedHref = esc(href);
-            var nameHtml = href
-                ? ('<a class="mt-shared-doc-link mt-shared-doc-name" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">' + esc(originalName) + '</a>')
-                : ('<div class="mt-shared-doc-name">' + esc(originalName) + '</div>');
+            var titleHtml = href
+                ? ('<a class="mt-shared-doc-link mt-shared-doc-name" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">' + esc(title) + '</a>')
+                : ('<div class="mt-shared-doc-name">' + esc(title) + '</div>');
             if (!doc && window.console && typeof window.console.warn === 'function') {
                 window.console.warn('[inbox] shared document unresolved', {
-                    requested_name: name,
+                    requested_name: entry,
                     current_documents: (currentDocuments || []).map(function (item) {
                         return {
                             id: item.id || null,
@@ -329,7 +482,7 @@
                 });
             } else if (doc && !href && window.console && typeof window.console.warn === 'function') {
                 window.console.warn('[inbox] shared document resolved without href', {
-                    requested_name: name,
+                    requested_name: entry,
                     document: {
                         id: doc.id || null,
                         original_filename: doc.original_filename || '',
@@ -342,12 +495,15 @@
             }
             var actionsHtml = href
                 ? ('<div class="mt-shared-doc-actions">' +
-                    '<a class="mt-shared-doc-link" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">Open document</a>' +
+                    '<a class="mt-shared-doc-link" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">Abrir documento</a>' +
                 '</div>')
                 : '';
             return '<div class="mt-shared-doc-card">' +
-                '<div class="mt-shared-doc-label"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
-                nameHtml +
+                '<div class="mt-shared-doc-label"><i class="fa fa-paperclip" aria-hidden="true"></i> Documento compartido</div>' +
+                titleHtml +
+                '<div class="mt-shared-doc-meta">Tipo: ' + esc(docTypeLabel(typeKey)) + '</div>' +
+                (originalName ? '<div class="mt-shared-doc-file">Archivo: ' + esc(originalName) + '</div>' : '') +
+                (note ? '<div class="mt-shared-doc-note">Observación: ' + esc(note) + '</div>' : '') +
                 actionsHtml +
             '</div>';
         }).join('');
@@ -724,14 +880,19 @@
 
     function docTypeLabel(type) {
         var labels = {
-            labs: 'Labs',
-            imaging: 'Imaging',
-            photos: 'Photos',
-            medical_history: 'Medical history',
-            other: 'Other'
+            medical_history: 'Historia clínica',
+            lab_results: 'Examen / laboratorio',
+            diagnostic_imaging: 'Imagen diagnóstica',
+            photos: 'Imagen clínica',
+            quote: 'Cotización',
+            consent_form: 'Consentimiento',
+            medical_order: 'Orden médica',
+            prescription: 'Fórmula / indicación',
+            administrative_document: 'Documento administrativo',
+            other: 'Otro'
         };
-        var key = String(type || '').toLowerCase();
-        return labels[key] || key || 'Other';
+        var key = normalizeDocumentTypeKey(type || 'other');
+        return labels[key] || 'Otro';
     }
 
     function extractFileExtension(value) {
@@ -778,15 +939,28 @@
             : '';
         var innerHtml;
         if (!hasDocs) {
-            innerHtml = '<p class="mt-docs-empty text-muted">No medical documents uploaded yet.</p>';
+            innerHtml = '<p class="mt-docs-empty text-muted">Aún no hay documentos compartidos.</p>';
         } else {
-            var typeCls = { labs: 'label-info', imaging: 'label-primary', photos: 'label-success', medical_history: 'label-warning', other: 'label-default' };
+            var typeCls = {
+                lab_results: 'label-info',
+                diagnostic_imaging: 'label-primary',
+                photos: 'label-success',
+                medical_history: 'label-warning',
+                quote: 'label-primary',
+                consent_form: 'label-warning',
+                medical_order: 'label-info',
+                prescription: 'label-success',
+                administrative_document: 'label-default',
+                other: 'label-default'
+            };
             innerHtml = '<div class="mt-docs-list">';
             docs.forEach(function (doc) {
-                var typeKey = String(doc.document_type || 'other').toLowerCase();
+                var typeKey = normalizeDocumentTypeKey(doc.document_type || 'other');
                 var typeLabel = docTypeLabel(typeKey);
                 var cls = typeCls[typeKey] || 'label-default';
-                var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
+                var originalName = String(doc.original_filename || doc.filename || ('Documento #' + (doc.id || '')));
+                var title = String(doc.title || cleanDocumentTitleFallback(originalName)).trim();
+                var note = String(doc.description || '').trim();
                 var uploadedRaw = String(doc.uploaded_at || doc.created_at || '').trim();
                 var href = String(doc.download_url || '').trim();
                 if (!href && doc.id) {
@@ -805,16 +979,20 @@
                 innerHtml +=
                     '<div class="mt-doc-row">' +
                         '<span class="label ' + cls + ' mt-doc-type">' + esc(typeLabel) + '</span>' +
-                        '<a href="' + esc(href) + '" class="mt-doc-name mt-doc-open" data-doc-id="' + esc(String(doc.id || '')) + '" data-url="' + esc(encodedHref) + '" title="View ' + esc(originalName) + '">' + esc(originalName) + '</a>' +
+                        '<div class="mt-doc-main">' +
+                            '<a href="' + esc(href) + '" class="mt-doc-title mt-doc-open" data-doc-id="' + esc(String(doc.id || '')) + '" data-url="' + esc(encodedHref) + '" title="Ver ' + esc(title) + '">' + esc(title) + '</a>' +
+                            '<span class="mt-doc-name">Archivo: ' + esc(originalName) + '</span>' +
+                            (note ? '<span class="mt-doc-note">Observación: ' + esc(note) + '</span>' : '') +
+                        '</div>' +
                         (dateText ? '<small class="mt-doc-date text-muted"><i class="fa fa-clock-o" aria-hidden="true"></i> ' + esc(dateText) + '</small>' : '') +
                         '<button type="button" class="btn btn-xs btn-info mt-doc-view"' +
                             ' data-doc-id="' + esc(String(doc.id || '')) + '"' +
                             ' data-url="' + esc(encodedHref) + '"' +
-                            ' title="Ver ' + esc(originalName) + '">' +
+                            ' title="Ver ' + esc(title) + '">' +
                             '<i class="fa fa-eye" aria-hidden="true"></i> Ver' +
                         '</button>' +
-                        '<a class="btn btn-xs btn-default mt-doc-download" href="' + esc(href) + '" target="_blank" rel="noopener" title="Download ' + esc(originalName) + '">' +
-                            '<i class="fa fa-download" aria-hidden="true"></i> Download' +
+                        '<a class="btn btn-xs btn-default mt-doc-download" href="' + esc(href) + '" target="_blank" rel="noopener" title="Descargar ' + esc(title) + '">' +
+                            '<i class="fa fa-download" aria-hidden="true"></i> Descargar' +
                         '</a>' +
                     '</div>';
             });
@@ -823,7 +1001,7 @@
         return '<div class="mt-docs-section">' +
             '<div class="mt-docs-header">' +
                 '<i class="fa fa-paperclip mt-docs-icon" aria-hidden="true"></i> ' +
-                '<strong>Medical Documents' + countHtml + '</strong>' +
+                '<strong>Documentos compartidos' + countHtml + '</strong>' +
             '</div>' +
             innerHtml +
         '</div>';
@@ -995,11 +1173,11 @@
 
         if (!label) {
             var parsedShared = parseSharedDocumentMessage(text);
-            if (parsedShared.names.length) {
+            if (parsedShared.entries.length) {
                 var bodyHtml = parsedShared.body
                     ? '<div style="white-space:pre-wrap;">' + esc(parsedShared.body) + '</div>'
                     : '';
-                return bodyHtml + renderSharedDocumentsBlock(parsedShared.names);
+                return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries);
             }
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
@@ -1370,8 +1548,9 @@
 
     function openDocViewer(doc, fallbackUrl) {
         var safeDoc = doc || {};
-        var originalName = String(safeDoc.original_filename || safeDoc.filename || 'Document');
-        var typeKey = String(safeDoc.document_type || 'other').toLowerCase();
+        var originalName = String(safeDoc.original_filename || safeDoc.filename || 'Documento');
+        var displayTitle = String(safeDoc.title || cleanDocumentTitleFallback(originalName));
+        var typeKey = normalizeDocumentTypeKey(safeDoc.document_type || 'other');
         var typeLabel = docTypeLabel(typeKey);
         var mimeType = String(safeDoc.mime_type || '').toLowerCase().trim();
         var href = String(safeDoc.download_url || fallbackUrl || '').trim();
@@ -1384,19 +1563,31 @@
         }
         var previewType = resolvePreviewType({ mime: mimeType, name: originalName, url: href });
         // Header
-        $('#adminDocViewerName').text(originalName);
+        $('#adminDocViewerName').text(displayTitle);
         $('#adminDocViewerType').text(typeLabel);
-        var typeCls = { labs: 'label-info', imaging: 'label-primary', photos: 'label-success', medical_history: 'label-warning', other: 'label-default' };
+        var typeCls = {
+            lab_results: 'label-info',
+            diagnostic_imaging: 'label-primary',
+            photos: 'label-success',
+            medical_history: 'label-warning',
+            quote: 'label-primary',
+            consent_form: 'label-warning',
+            medical_order: 'label-info',
+            prescription: 'label-success',
+            administrative_document: 'label-default',
+            other: 'label-default'
+        };
         $('#adminDocViewerType').attr('class', 'label ' + (typeCls[typeKey] || 'label-default') + ' mt-dv-type-badge');
         // Meta: size + date
         var metaParts = [];
+        metaParts.push('Archivo: ' + originalName);
         var uploadedRaw = String(safeDoc.uploaded_at || safeDoc.created_at || '').trim();
         if (uploadedRaw) {
             var d = new Date(uploadedRaw.replace(' ', 'T'));
             if (!isNaN(d.getTime())) {
                 var dd = (d.getDate() < 10 ? '0' : '') + d.getDate();
                 var mo = ((d.getMonth() + 1) < 10 ? '0' : '') + (d.getMonth() + 1);
-                metaParts.push('Uploaded: ' + dd + '/' + mo + '/' + d.getFullYear());
+                metaParts.push('Cargado: ' + dd + '/' + mo + '/' + d.getFullYear());
             }
         }
         if (safeDoc.file_size > 0) {
@@ -1417,12 +1608,12 @@
             $preview.html(
                 '<div class="mt-dv-no-preview">' +
                     '<i class="fa fa-file-o" aria-hidden="true"></i>' +
-                    '<div>Preview not available for this file type.</div>' +
+                    '<div>Vista previa no disponible para este tipo de archivo.</div>' +
                     '<div style="margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
                         '<a href="' + esc(href || '#') + '" target="_blank" rel="noopener" class="btn btn-default btn-sm">' +
-                            '<i class="fa fa-external-link" aria-hidden="true"></i> Open in new tab</a>' +
+                            '<i class="fa fa-external-link" aria-hidden="true"></i> Abrir en otra pestaña</a>' +
                         '<a href="' + esc(href || '#') + '" target="_blank" rel="noopener" class="btn btn-primary btn-sm">' +
-                            '<i class="fa fa-download" aria-hidden="true"></i> Download</a>' +
+                            '<i class="fa fa-download" aria-hidden="true"></i> Descargar</a>' +
                     '</div>' +
                 '</div>'
             );
@@ -1433,7 +1624,7 @@
     function renderMessages(messages) {
         var $box = $('#admin-inbox-messages');
         if (!$box.length) return;
-        var divider = '<div class="mt-section-divider">Messages</div>';
+        var divider = '<div class="mt-section-divider">Mensajes</div>';
         if (!messages || !messages.length) {
             $box.html(divider + '<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
             return;
@@ -1614,10 +1805,10 @@
 
     function typingLabelForRole(role) {
         var normalized = String(role || '').toLowerCase();
-        if (normalized === 'client') return 'Patient is typing…';
-        if (normalized === 'provider') return 'Provider is typing…';
-        if (normalized === 'patientcare' || normalized === 'admin') return 'Support is typing…';
-        return 'Someone is typing…';
+        if (normalized === 'client') return 'El paciente está escribiendo…';
+        if (normalized === 'provider') return 'El prestador está escribiendo…';
+        if (normalized === 'patientcare' || normalized === 'admin') return 'Soporte está escribiendo…';
+        return 'Alguien está escribiendo…';
     }
 
     function realtimeCanEmit(threadId) {
@@ -1784,7 +1975,6 @@
         var $msg = $('#admin-inbox-message');
         var $send = $('#admin-inbox-send-form button[type="submit"]');
         var $attach = $('#admin-chat-attach-btn');
-        var $attachInput = $('#admin-chat-attach-input');
         var $composerGroup = $('#admin-inbox-send-form .form-group');
         var $typing = $('#admin-typing-indicator');
         var $note = $('#admin-inbox-compose-note');
@@ -1805,9 +1995,6 @@
         if ($attach.length) {
             $attach.prop('disabled', composeBlocked);
         }
-        if ($attachInput.length) {
-            $attachInput.prop('disabled', composeBlocked);
-        }
         if (permissionBlocked) {
             if ($composerGroup.length) $composerGroup.hide();
             if ($send.length) $send.hide();
@@ -1826,7 +2013,7 @@
                 var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
                 var noteText = '';
                 if (feeGateActive) {
-                    noteText = 'Coordination Fee required';
+                    noteText = 'La condición de coordinación sigue pendiente.';
                 } else if (typeof noticeMessage === 'string' && noticeMessage.trim() !== '') {
                     noteText = noticeMessage;
                     lastComposeNotice = noticeMessage;
@@ -1911,7 +2098,7 @@
 
         realtimeJoinThread(currentThread.thread_id);
 
-        $('#admin-inbox-title').text('Loading...');
+        $('#admin-inbox-title').text('Cargando...');
         $('#admin-inbox-empty').hide();
         $('#admin-inbox-content').show();
 
@@ -1925,7 +2112,7 @@
             }
         }).done(function (res) {
             if (!res || res.ok !== true) {
-                toastr.error((res && res.message) ? res.message : 'Could not load messages');
+                toastr.error((res && res.message) ? res.message : 'No se pudieron cargar los mensajes');
                 return;
             }
 
@@ -1959,7 +2146,7 @@
             if (res && res.code === 'FEE_REQUIRED') {
                 setFeeGateState(true);
                 setComposeGateState(true, '');
-                toastr.warning('Coordination Fee required');
+                toastr.warning('La condición de coordinación sigue pendiente');
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
@@ -1967,31 +2154,33 @@
                 setComposeGateState(false, notice);
                 return;
             }
-            toastr.error('Could not load messages');
+            toastr.error('No se pudieron cargar los mensajes');
         });
     }
 
-    function uploadComposeDocuments() {
+    function uploadDocumentsBatch(documents) {
         var deferred = $.Deferred();
         if (!currentThread || !currentThread.thread_id) {
-            deferred.reject({ message: 'Select a thread before uploading' });
+            deferred.reject({ message: 'Selecciona primero un hilo del inbox' });
             return deferred.promise();
         }
-        if (!composeFiles.length) {
+        if (!documents || !documents.length) {
             deferred.resolve({ ok: true, uploaded_count: 0, results: [] });
             return deferred.promise();
         }
 
         var formData = new FormData();
-        composeFiles.forEach(function (file) {
-            formData.append('chat_files[]', file);
+        documents.forEach(function (doc) {
+            formData.append('chat_files[]', doc.file);
+            formData.append('document_title[]', doc.title || '');
+            formData.append('document_type[]', normalizeDocumentTypeKey(doc.document_type || 'other'));
+            formData.append('document_note[]', doc.note || '');
         });
         formData.append('action', 'upload_documents');
         formData.append('thread_id', currentThread.thread_id);
         formData.append('thread_type', currentThread.thread_type || 'ITEM');
         formData.append('request_id', currentThread.booking_request_id || 0);
         formData.append('item_id', currentThread.item_id || 0);
-        formData.append('document_type', 'other');
 
         $.ajax({
             url: 'ajax/inbox.php',
@@ -2002,31 +2191,32 @@
             dataType: 'json'
         }).done(function (res) {
             if (!res || res.ok !== true) {
-                deferred.reject(res || { message: 'Upload failed. Please try again.' });
+                deferred.reject(res || { message: 'No se pudo adjuntar el documento. Intenta de nuevo.' });
                 return;
             }
             deferred.resolve(res);
         }).fail(function (xhr) {
-            deferred.reject((xhr && xhr.responseJSON) ? xhr.responseJSON : { message: 'Upload failed. Please try again.' });
+            deferred.reject((xhr && xhr.responseJSON) ? xhr.responseJSON : { message: 'No se pudo adjuntar el documento. Intenta de nuevo.' });
         });
 
         return deferred.promise();
     }
 
-    function sendMessageText(text) {
+    function sendMessageText(text, options) {
+        options = options || {};
         if (!currentThread || !currentThread.thread_id) return;
         if (composeBusy) return;
         if (!freeMessageAllowed) {
             return;
         }
         if (feeGateActive) {
-            toastr.warning('Coordination Fee required');
+            toastr.warning('La condición de coordinación sigue pendiente');
             return;
         }
 
         var pendingId = addPendingMessage(text);
         emitTyping('stop');
-        setComposeBusy(true, 'Sending message...');
+        setComposeBusy(true, options.busyMessage || 'Enviando mensaje...');
 
         $.ajax({
             url: 'ajax/inbox.php',
@@ -2043,37 +2233,42 @@
                 if (res && res.code === 'FEE_REQUIRED') {
                     setFeeGateState(true);
                     setComposeGateState(true, '');
-                    toastr.warning('Coordination Fee required');
-                    updatePendingStatus(pendingId, 'Failed');
+                    toastr.warning('La condición de coordinación sigue pendiente');
+                    updatePendingStatus(pendingId, 'Falló');
                     return;
                 }
                 if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
                     var notice = res.notice || res.free_message_notice || lastComposeNotice || '';
                     setComposeGateState(false, notice);
-                    updatePendingStatus(pendingId, 'Failed');
+                    updatePendingStatus(pendingId, 'Falló');
                     return;
                 }
-                toastr.error((res && res.message) ? res.message : 'Could not send message');
-                updatePendingStatus(pendingId, 'Failed');
+                toastr.error((res && res.message) ? res.message : 'No se pudo enviar el mensaje');
+                updatePendingStatus(pendingId, 'Falló');
                 return;
             }
             markSentFromResponse(res);
             removePendingMessage(pendingId);
             realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
-            $('#admin-inbox-message').val('');
-            resetComposeFiles();
-            toastr.success('Message sent');
+            if (options.clearComposer !== false) {
+                $('#admin-inbox-message').val('');
+            }
+            if (options.successToast) {
+                toastr.success(options.successToast);
+            } else {
+                toastr.success('Mensaje enviado');
+            }
             setComposeBusy(false, '');
             loadMessages();
             loadThreads();
         }).fail(function (xhr) {
             setComposeBusy(false, '');
             var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
-            updatePendingStatus(pendingId, 'Failed');
+            updatePendingStatus(pendingId, 'Falló');
             if (res && res.code === 'FEE_REQUIRED') {
                 setFeeGateState(true);
                 setComposeGateState(true, '');
-                toastr.warning('Coordination Fee required');
+                toastr.warning('La condición de coordinación sigue pendiente');
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
@@ -2081,7 +2276,7 @@
                 setComposeGateState(false, notice);
                 return;
             }
-            toastr.error('Could not send message');
+            toastr.error('No se pudo enviar el mensaje');
         });
     }
 
@@ -2090,28 +2285,61 @@
             return;
         }
         var text = $.trim($('#admin-inbox-message').val() || '');
-        var hasAttachments = composeFiles.length > 0;
-        if (!text && !hasAttachments) {
-            toastr.warning('Write a message or attach a document before sending');
+        if (!text) {
+            toastr.warning('Escribe un mensaje antes de enviar');
             return;
         }
-        if (!hasAttachments) {
-            sendMessageText(text);
+        sendMessageText(text);
+    }
+
+    function submitAttachDocument() {
+        if (attachModalBusy || composeBusy) {
+            return;
+        }
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Selecciona primero un hilo del inbox');
+            return;
+        }
+        var fileInput = document.getElementById('admin-attach-file');
+        var file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+        var title = $.trim($('#admin-attach-title').val() || '');
+        var type = normalizeDocumentTypeKey($('#admin-attach-type').val() || 'other');
+        var note = $.trim($('#admin-attach-note').val() || '');
+        if (!file) {
+            toastr.warning('Selecciona un archivo');
+            return;
+        }
+        if (!title) {
+            toastr.warning('Ingresa el título del documento');
             return;
         }
 
-        var composeSnapshot = composeFiles.slice(0);
-        setComposeBusy(true, 'Uploading document...');
-        uploadComposeDocuments().done(function (uploadRes) {
-            mergeComposeUploadDocuments(uploadRes || null);
-            resetComposeFiles();
+        var docs = [{
+            file: file,
+            title: title,
+            document_type: type,
+            note: note
+        }];
+        setAttachModalBusy(true);
+        setComposeBusy(true, 'Adjuntando documento...');
+        uploadDocumentsBatch(docs).done(function (uploadRes) {
+            mergeUploadedDocuments(uploadRes || null);
+            syncThreadDocumentsPanel(currentDocuments);
+            var messageText = buildSharedDocumentMessage(uploadRes && uploadRes.results ? uploadRes.results : []);
+            setAttachStatus('Documento listo para publicarse en el chat.', 'success');
+            $('#adminAttachDocumentModal').modal('hide');
             setComposeBusy(false, '');
-            var attachmentSummary = buildComposeAttachmentSummary(composeSnapshot);
-            var messageText = text ? (text + '\n\n' + attachmentSummary) : attachmentSummary;
-            sendMessageText(messageText);
+            setAttachModalBusy(false);
+            sendMessageText(messageText, {
+                busyMessage: 'Publicando documento...',
+                successToast: 'Documento adjuntado al chat',
+                clearComposer: false
+            });
         }).fail(function (res) {
             setComposeBusy(false, '');
-            var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
+            setAttachModalBusy(false);
+            var errorMessage = describeUploadError(res);
+            setAttachStatus(errorMessage, 'danger');
             toastr.error(errorMessage);
         });
     }
@@ -2156,7 +2384,7 @@
 
     function sendStructuredAction(actionType, payload) {
         if (!currentThread || !currentThread.thread_id) {
-            toastr.warning('Select a thread before sending');
+            toastr.warning('Selecciona primero un hilo antes de enviar');
             return;
         }
         if (String(currentThread.thread_type || '').toUpperCase() !== 'ITEM') {
@@ -2237,7 +2465,7 @@
             $('#adminDocViewerPreview').html(
                 '<div class="mt-dv-no-preview">' +
                     '<i class="fa fa-file-o" aria-hidden="true"></i>' +
-                    '<span>Preview not available.</span>' +
+                    '<span>Vista previa no disponible.</span>' +
                 '</div>'
             );
         });
@@ -2251,7 +2479,7 @@
                 item_id: parseInt($a.data('item-id') || 0, 10),
                 thread_title: String($a.data('thread-title') || '')
             };
-            resetComposeFiles();
+            setAttachStatus('');
             $('#admin-inbox-thread-list li').removeClass('active');
             $a.closest('li').addClass('active');
             loadMessages();
@@ -2261,25 +2489,27 @@
             if (this.disabled) {
                 return;
             }
-            var input = document.getElementById('admin-chat-attach-input');
-            if (input) {
-                input.click();
-            }
+            openAttachDocumentModal();
         });
 
-        $('#admin-chat-attach-input').on('change', function () {
-            appendComposeFiles(this.files || []);
-            $(this).val('');
-        });
-
-        $('#admin-chat-attach-list').on('click', '.admin-chat-attach-remove', function (e) {
-            e.preventDefault();
-            var index = parseInt($(this).data('index') || -1, 10);
-            if (index < 0 || index >= composeFiles.length) {
+        $('#admin-attach-file').on('change', function () {
+            var file = this.files && this.files[0] ? this.files[0] : null;
+            if (!file) {
                 return;
             }
-            composeFiles.splice(index, 1);
-            renderComposeFilesBatch();
+            var currentTitle = $.trim($('#admin-attach-title').val() || '');
+            if (!currentTitle) {
+                $('#admin-attach-title').val(cleanDocumentTitleFallback(file.name || ''));
+            }
+        });
+
+        $('#admin-attach-document-form').on('submit', function (e) {
+            e.preventDefault();
+            submitAttachDocument();
+        });
+
+        $('#adminAttachDocumentModal').on('hidden.bs.modal', function () {
+            resetAttachDocumentModal();
         });
 
         $('#admin-inbox-send-form').on('submit', function (e) {

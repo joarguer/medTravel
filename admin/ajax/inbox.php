@@ -102,6 +102,52 @@ function admin_inbox_normalize_upload_files($files)
     return $normalized;
 }
 
+function admin_inbox_array_value($value, $index, $default = '')
+{
+    if (is_array($value)) {
+        return isset($value[$index]) ? (string)$value[$index] : (string)$default;
+    }
+    return $index === 0 ? (string)$value : (string)$default;
+}
+
+function admin_inbox_document_title_fallback($filename)
+{
+    $filename = trim((string)$filename);
+    if ($filename === '') {
+        return 'Documento';
+    }
+    $title = preg_replace('/\.[a-z0-9]{2,8}$/i', '', $filename);
+    $title = preg_replace('/[_\-]+/', ' ', (string)$title);
+    $title = trim((string)preg_replace('/\s+/', ' ', (string)$title));
+    return $title !== '' ? $title : $filename;
+}
+
+function admin_inbox_normalize_document_type($value)
+{
+    $key = strtolower(trim((string)$value));
+    $map = [
+        'history' => 'medical_history',
+        'medical_history' => 'medical_history',
+        'labs' => 'lab_results',
+        'lab_results' => 'lab_results',
+        'imaging' => 'diagnostic_imaging',
+        'diagnostic_imaging' => 'diagnostic_imaging',
+        'photos' => 'photos',
+        'quote' => 'quote',
+        'consent_form' => 'consent_form',
+        'medical_order' => 'medical_order',
+        'prescription' => 'prescription',
+        'administrative_document' => 'administrative_document',
+        'invoice' => 'administrative_document',
+        'contract' => 'administrative_document',
+        'insurance' => 'administrative_document',
+        'passport' => 'administrative_document',
+        'id_card' => 'administrative_document',
+        'other' => 'other',
+    ];
+    return isset($map[$key]) ? $map[$key] : 'other';
+}
+
 function admin_inbox_resolve_document_owner($conexion, $bookingRequestId)
 {
     $bookingRequestId = (int)$bookingRequestId;
@@ -904,6 +950,12 @@ if ($action === 'list_messages') {
                 if (inbox_table_has_column($conexion, 'client_documents', 'description')) {
                     $selectCols[] = 'description';
                 }
+                if (inbox_table_has_column($conexion, 'client_documents', 'uploaded_at')) {
+                    $selectCols[] = 'uploaded_at';
+                }
+                if (inbox_table_has_column($conexion, 'client_documents', 'created_at')) {
+                    $selectCols[] = 'created_at';
+                }
                 $orderByColumn = inbox_table_has_column($conexion, 'client_documents', 'uploaded_at') ? 'uploaded_at' : 'id';
                 $docSql = "SELECT " . implode(', ', $selectCols) . " FROM client_documents cd";
                 $docTypes = '';
@@ -1179,7 +1231,7 @@ if ($action === 'upload_documents') {
         echo json_encode([
             'ok' => false,
             'code' => 'FEE_REQUIRED',
-            'message' => 'Coordination Fee required',
+            'message' => 'La condición de coordinación sigue pendiente.',
         ]);
         exit;
     }
@@ -1188,7 +1240,7 @@ if ($action === 'upload_documents') {
         echo json_encode([
             'ok' => false,
             'code' => 'FREE_MESSAGE_BLOCKED',
-            'message' => (string)($freeMessageState['notice'] ?? 'Messaging is temporarily limited.'),
+            'message' => (string)($freeMessageState['notice'] ?? 'La mensajería está limitada temporalmente.'),
         ]);
         exit;
     }
@@ -1216,14 +1268,9 @@ if ($action === 'upload_documents') {
     ];
     $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx'];
     $maxFileSize = 10 * 1024 * 1024;
-    $documentType = strtolower(trim((string)($_POST['document_type'] ?? 'other')));
-    $allowedDocTypes = [
-        'passport', 'id_card', 'medical_history', 'lab_results', 'prescription',
-        'invoice', 'contract', 'consent_form', 'insurance', 'photos', 'other'
-    ];
-    if (!in_array($documentType, $allowedDocTypes, true)) {
-        $documentType = 'other';
-    }
+    $documentTitles = $_POST['document_title'] ?? [];
+    $documentTypes = $_POST['document_type'] ?? [];
+    $documentNotes = $_POST['document_note'] ?? [];
 
     $uploadRoot = __DIR__ . '/../../uploads/medical_docs/';
     $folderOwner = $resolvedClientUserId > 0 ? $resolvedClientUserId : $resolvedClientId;
@@ -1239,11 +1286,28 @@ if ($action === 'upload_documents') {
     $hasSharedWithProvider = inbox_table_has_column($conexion, 'client_documents', 'shared_with_provider');
     $hasUploadedBy = inbox_table_has_column($conexion, 'client_documents', 'uploaded_by');
     $hasClientUserId = inbox_table_has_column($conexion, 'client_documents', 'client_user_id');
+    $hasTitle = inbox_table_has_column($conexion, 'client_documents', 'title');
+    $hasDescription = inbox_table_has_column($conexion, 'client_documents', 'description');
+    $hasUploadedAt = inbox_table_has_column($conexion, 'client_documents', 'uploaded_at');
+    $hasCreatedAt = inbox_table_has_column($conexion, 'client_documents', 'created_at');
 
     $results = [];
     $uploadedCount = 0;
     foreach ($files as $index => $file) {
         $originalFilename = trim((string)($file['name'] ?? ''));
+        $documentTitle = trim(admin_inbox_array_value($documentTitles, $index, ''));
+        if ($documentTitle === '') {
+            $documentTitle = admin_inbox_document_title_fallback($originalFilename);
+        }
+        $documentType = admin_inbox_normalize_document_type(admin_inbox_array_value($documentTypes, $index, 'other'));
+        $documentNote = trim(admin_inbox_array_value($documentNotes, $index, ''));
+        if (function_exists('mb_substr')) {
+            $documentTitle = mb_substr($documentTitle, 0, 190);
+            $documentNote = mb_substr($documentNote, 0, 500);
+        } else {
+            $documentTitle = substr($documentTitle, 0, 190);
+            $documentNote = substr($documentNote, 0, 500);
+        }
         $fileError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
         if ($fileError === UPLOAD_ERR_NO_FILE) {
             $results[] = ['index' => $index, 'ok' => false, 'message' => 'file_required', 'original_filename' => $originalFilename];
@@ -1305,6 +1369,18 @@ if ($action === 'upload_documents') {
             $placeholders[] = '?';
             $types .= 's';
             $params[] = $documentType;
+        }
+        if ($hasTitle) {
+            $columns[] = 'title';
+            $placeholders[] = '?';
+            $types .= 's';
+            $params[] = $documentTitle;
+        }
+        if ($hasDescription) {
+            $columns[] = 'description';
+            $placeholders[] = '?';
+            $types .= 's';
+            $params[] = $documentNote;
         }
         if ($hasClientUserId && $resolvedClientUserId > 0) {
             $columns[] = 'client_user_id';
@@ -1371,7 +1447,16 @@ if ($action === 'upload_documents') {
             'ok' => true,
             'document_id' => $documentId,
             'file_path' => $filePath,
+            'filename' => $filename,
             'original_filename' => $originalFilename,
+            'title' => $documentTitle,
+            'document_type' => $documentType,
+            'description' => $documentNote,
+            'document_note' => $documentNote,
+            'file_size' => $fileSize,
+            'mime_type' => $mimeType,
+            'uploaded_at' => ($hasUploadedAt || $hasCreatedAt) ? date('Y-m-d H:i:s') : null,
+            'download_url' => '/admin/ajax/download_medical_document.php?doc_id=' . $documentId,
         ];
     }
 

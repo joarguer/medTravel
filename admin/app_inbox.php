@@ -185,7 +185,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         #admin-inbox-messages .mt-doc-row,
         #admin-inbox-docs-content .mt-doc-row {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 8px;
             flex-wrap: wrap;
             background: #fff;
@@ -194,19 +194,39 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         }
         #admin-inbox-messages .mt-doc-type,
         #admin-inbox-docs-content .mt-doc-type { flex: 0 0 auto; }
-        #admin-inbox-messages .mt-doc-name,
-        #admin-inbox-docs-content .mt-doc-name {
-            flex: 1 1 auto;
-            font-size: 12px;
-            min-width: 80px;
-            word-break: break-all;
-            text-decoration: none;
-            color: #2f353b;
+        #admin-inbox-messages .mt-doc-main,
+        #admin-inbox-docs-content .mt-doc-main {
+            flex: 1 1 220px;
+            min-width: 160px;
         }
-        #admin-inbox-messages .mt-doc-name:hover,
-        #admin-inbox-docs-content .mt-doc-name:hover {
+        #admin-inbox-messages .mt-doc-title,
+        #admin-inbox-docs-content .mt-doc-title {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #2f353b;
+            text-decoration: none;
+            word-break: break-word;
+        }
+        #admin-inbox-messages .mt-doc-title:hover,
+        #admin-inbox-docs-content .mt-doc-title:hover {
             text-decoration: underline;
             color: #1a73e8;
+        }
+        #admin-inbox-messages .mt-doc-name,
+        #admin-inbox-docs-content .mt-doc-name {
+            display: block;
+            margin-top: 2px;
+            font-size: 11px;
+            word-break: break-all;
+            color: #7f8c9d;
+        }
+        #admin-inbox-messages .mt-doc-note,
+        #admin-inbox-docs-content .mt-doc-note {
+            display: block;
+            margin-top: 4px;
+            font-size: 11px;
+            color: #5f6c7b;
         }
         #admin-inbox-messages .mt-doc-date,
         #admin-inbox-docs-content .mt-doc-date {
@@ -277,6 +297,18 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             display: block;
             margin-bottom: 10px;
             color: #bdc3c7;
+        }
+        #adminAttachDocumentModal .help-block {
+            margin-bottom: 0;
+        }
+        #adminAttachDocumentModal .mt-attach-context {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        #admin-chat-attach-status {
+            margin-top: 8px;
+            display: none;
         }
         /* Responsive: full-screen on mobile */
         @media (max-width: 767px) {
@@ -351,6 +383,15 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         #admin-inbox-messages .mt-shared-doc-name {
             margin-top: 4px;
             word-break: break-word;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        #admin-inbox-messages .mt-shared-doc-meta,
+        #admin-inbox-messages .mt-shared-doc-file,
+        #admin-inbox-messages .mt-shared-doc-note {
+            margin-top: 4px;
+            font-size: 12px;
+            opacity: .9;
         }
         #admin-inbox-messages .mt-shared-doc-actions {
             margin-top: 6px;
@@ -491,13 +532,13 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                 </div>
                             </div>
                             <div class="inbox-header">
-                                <div id="admin-inbox-title">Select a thread</div>
+                                <div id="admin-inbox-title">Selecciona un hilo</div>
                             </div>
                             <div class="inbox-content" id="admin-inbox-content" style="display:none;">
                                 <div id="admin-inbox-docs-panel" class="panel panel-default" style="display:none;margin-bottom:12px;">
                                     <div class="panel-heading" style="padding:8px 12px;">
                                         <a href="#admin-inbox-docs-collapse" data-toggle="collapse" aria-expanded="false" aria-controls="admin-inbox-docs-collapse" style="display:flex;align-items:center;justify-content:space-between;text-decoration:none;">
-                                            <span><i class="fa fa-paperclip" aria-hidden="true"></i> View shared documents</span>
+                                            <span><i class="fa fa-paperclip" aria-hidden="true"></i> Ver documentos compartidos</span>
                                             <span class="badge" id="admin-inbox-docs-count">0</span>
                                         </a>
                                     </div>
@@ -507,12 +548,12 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                 </div>
                                 <div id="admin-inbox-messages" style="max-height:420px;overflow:auto;border:1px solid #eef1f5;padding:12px;background:#fff;"></div>
                                 <div id="admin-inbox-fee-alert" class="note note-warning" style="display:none;margin-top:12px;">
-                                    <strong>Coordination Fee required.</strong>
-                                    Use quick replies while the fee is pending.
+                                    <strong>Condición de coordinación pendiente.</strong>
+                                    Usa respuestas rápidas mientras se habilita la mensajería.
                                 </div>
                                 <div id="admin-inbox-commission-alert" class="note note-info" style="display:none;margin-top:12px;">
-                                    <strong>Commission status.</strong>
-                                    This request is pending commission payment.
+                                    <strong>Estado de comisión.</strong>
+                                    Esta solicitud tiene una condición comercial pendiente.
                                 </div>
                                 <div id="admin-inbox-quick-replies" style="display:none;margin-top:12px;">
                                     <label>Quick replies</label>
@@ -536,21 +577,20 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                 </div>
                                 <form id="admin-inbox-send-form" style="margin-top:12px;">
                                     <div class="form-group" style="margin-bottom:8px;">
-                                        <label for="admin-inbox-message">Write a message</label>
-                                        <textarea class="form-control" id="admin-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..."></textarea>
+                                        <label for="admin-inbox-message">Escribir mensaje</label>
+                                        <textarea class="form-control" id="admin-inbox-message" rows="3" maxlength="2000" placeholder="Escribe tu mensaje..."></textarea>
                                     </div>
-                                    <div id="admin-typing-indicator" style="font-size:12px;color:#999;min-height:18px;margin-bottom:4px;">Patient is typing…</div>
+                                    <div id="admin-typing-indicator" style="font-size:12px;color:#999;min-height:18px;margin-bottom:4px;">El paciente está escribiendo…</div>
                                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                                        <input type="file" id="admin-chat-attach-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" multiple style="display:none;">
-                                        <button type="button" class="btn btn-default btn-sm" id="admin-chat-attach-btn"><i class="fa fa-paperclip"></i> Attach document</button>
-                                        <button type="submit" class="btn btn-primary btn-sm" style="margin-left:auto;"><i class="fa fa-paper-plane"></i> Send</button>
+                                        <button type="button" class="btn btn-default btn-sm" id="admin-chat-attach-btn"><i class="fa fa-paperclip"></i> Adjuntar documento</button>
+                                        <button type="submit" class="btn btn-primary btn-sm" style="margin-left:auto;"><i class="fa fa-paper-plane"></i> Enviar</button>
                                     </div>
-                                    <div id="admin-chat-attach-list" class="text-muted" style="margin-top:6px;display:none;"></div>
-                                    <div id="admin-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Messaging will be available after the initial review. Please use the options above.</div>
+                                    <div id="admin-chat-attach-status" class="text-muted"></div>
+                                    <div id="admin-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">La mensajería estará disponible después de la revisión inicial. Usa primero las opciones visibles arriba.</div>
                                 </form>
                             </div>
                             <div class="inbox-content" id="admin-inbox-empty">
-                                <div class="note note-info" style="margin:0;">Select a thread from the left panel.</div>
+                                <div class="note note-info" style="margin:0;">Selecciona un hilo en el panel izquierdo.</div>
                             </div>
                         </div>
                     </div>
@@ -565,9 +605,9 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
                 <h4 class="modal-title">
-                    <span id="adminDocViewerName" class="mt-dv-filename">Document</span>
+                    <span id="adminDocViewerName" class="mt-dv-filename">Documento</span>
                     <span id="adminDocViewerType" class="label label-info mt-dv-type-badge"></span>
                 </h4>
                 <p id="adminDocViewerMeta" class="mt-dv-meta" style="margin:0;"></p>
@@ -576,14 +616,65 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                 <div class="mt-dv-preview-wrap" id="adminDocViewerPreview">
                     <div class="mt-dv-no-preview">
                         <i class="fa fa-file-o" aria-hidden="true"></i>
-                        <span>Preview not available.</span>
+                        <span>Vista previa no disponible.</span>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-times" aria-hidden="true"></i> Close</button>
-                <a id="adminDocViewerDownload" href="#" target="_blank" rel="noopener" class="btn btn-primary"><i class="fa fa-download" aria-hidden="true"></i> Download</a>
+                <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-times" aria-hidden="true"></i> Cerrar</button>
+                <a id="adminDocViewerDownload" href="#" target="_blank" rel="noopener" class="btn btn-primary"><i class="fa fa-download" aria-hidden="true"></i> Descargar</a>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="adminAttachDocumentModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form id="admin-attach-document-form">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title">Adjuntar documento</h4>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="admin-attach-thread-id" value="">
+                    <input type="hidden" id="admin-attach-thread-type" value="">
+                    <input type="hidden" id="admin-attach-request-id" value="">
+                    <input type="hidden" id="admin-attach-item-id" value="">
+                    <div class="form-group">
+                        <label for="admin-attach-file">Seleccionar archivo</label>
+                        <input type="file" class="form-control" id="admin-attach-file" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-attach-title">Título del documento</label>
+                        <input type="text" class="form-control" id="admin-attach-title" maxlength="190" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-attach-type">Tipo de documento</label>
+                        <select class="form-control" id="admin-attach-type" required>
+                            <option value="other">Otro</option>
+                            <option value="medical_history">Historia clínica</option>
+                            <option value="lab_results">Examen / laboratorio</option>
+                            <option value="diagnostic_imaging">Imagen diagnóstica</option>
+                            <option value="quote">Cotización</option>
+                            <option value="consent_form">Consentimiento</option>
+                            <option value="medical_order">Orden médica</option>
+                            <option value="prescription">Fórmula / indicación</option>
+                            <option value="administrative_document">Documento administrativo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-attach-note">Observación (opcional)</label>
+                        <textarea class="form-control" id="admin-attach-note" rows="3" maxlength="500" placeholder="Ejemplo: soporte enviado por el paciente para revisión inicial"></textarea>
+                    </div>
+                    <p class="help-block">El documento se adjuntará al hilo actual y quedará disponible en el chat y en la lista de documentos compartidos.</p>
+                    <div class="mt-attach-context" id="admin-attach-context">Contexto sin definir.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="admin-attach-submit-btn">Adjuntar al chat</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
