@@ -384,26 +384,31 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
                             <label for="pms-notes">Notas</label>
                             <textarea class="form-control" id="pms-notes" name="notes" rows="4"></textarea>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-linked-user-id">Usuario vinculado</label>
-                                    <select class="form-control" id="pms-linked-user-id" name="linked_user_id">
-                                        <option value="">Sin usuario vinculado</option>
-                                    </select>
-                                    <span class="help-block">Debe pertenecer al mismo prestador y tener usuario activo en el sistema.</span>
+                        <div id="pms-access-section" style="display:none;">
+                            <hr />
+                            <h4 class="bold" style="margin-top:0;">Acceso al sistema</h4>
+                            <p class="text-muted">Configura aquí si este médico tendrá acceso propio al admin y con qué usuario quedará vinculado.</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="pms-linked-user-id">Usuario vinculado</label>
+                                        <select class="form-control" id="pms-linked-user-id" name="linked_user_id">
+                                            <option value="">Sin usuario vinculado</option>
+                                        </select>
+                                        <span class="help-block">Debe pertenecer al mismo prestador y tener usuario activo en el sistema.</span>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group" style="padding-top:26px;">
-                                    <label class="mt-checkbox mt-checkbox-outline">
-                                        <input type="checkbox" id="pms-can-access-admin" name="can_access_admin" value="1" />
-                                        Permitir acceso al admin
-                                        <span></span>
-                                    </label>
-                                    <span class="help-block">
-                                        Estado de acceso: <strong id="pms-access-status">Sin usuario vinculado</strong>
-                                    </span>
+                                <div class="col-md-6">
+                                    <div class="form-group" style="padding-top:26px;">
+                                        <label class="mt-checkbox mt-checkbox-outline">
+                                            <input type="checkbox" id="pms-can-access-admin" name="can_access_admin" value="1" />
+                                            Permitir acceso al admin
+                                            <span></span>
+                                        </label>
+                                        <span class="help-block">
+                                            Estado de acceso: <strong id="pms-access-status">Sin usuario vinculado</strong>
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>

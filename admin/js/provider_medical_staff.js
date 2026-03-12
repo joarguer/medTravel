@@ -119,6 +119,13 @@
         }
     }
 
+    function setAccessSectionMode(mode) {
+        var isEdit = mode === 'edit';
+        $('#pms-access-section').toggle(isEdit);
+        $('#pms-linked-user-id').prop('disabled', !isEdit);
+        $('#pms-can-access-admin').prop('disabled', !isEdit);
+    }
+
     function resetForm() {
         var form = document.getElementById('form-provider-medical-staff');
         if (form) {
@@ -131,6 +138,7 @@
         $('#providerMedicalStaffModalLabel').text('Agregar médico');
         $('#pms-save-msg').hide().empty();
         renderLinkedUserOptions([], 0);
+        setAccessSectionMode('create');
     }
 
     function fillForm(item) {
@@ -146,6 +154,7 @@
         $('#pms-can-access-admin').prop('checked', parseInt(item.can_access_admin, 10) === 1);
         $('#pms-access-status').text(item.access_status_label || 'Sin usuario vinculado');
         $('#providerMedicalStaffModalLabel').text('Editar médico');
+        setAccessSectionMode('edit');
     }
 
     function renderLinkedUserOptions(items, selectedId) {
@@ -228,9 +237,7 @@
 
     function openCreateModal() {
         resetForm();
-        loadLinkableUsers(0, 0).always(function () {
-            $('#providerMedicalStaffModal').modal('show');
-        });
+        $('#providerMedicalStaffModal').modal('show');
     }
 
     function openEditModal(staffId) {
