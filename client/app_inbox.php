@@ -218,6 +218,14 @@ if (isset($conexion) && $conexion) {
             margin-top: 4px;
             word-break: break-word;
         }
+        #client-inbox-messages .mt-shared-doc-meta,
+        #client-inbox-messages .mt-shared-doc-file,
+        #client-inbox-messages .mt-shared-doc-note {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            opacity: .88;
+        }
         #client-inbox-messages .mt-shared-doc-actions {
             margin-top: 6px;
         }
@@ -246,6 +254,9 @@ if (isset($conexion) && $conexion) {
         }
         #client-inbox-messages .mt-msg-row--own .mt-shared-doc-label,
         #client-inbox-messages .mt-msg-row--own .mt-shared-doc-name,
+        #client-inbox-messages .mt-msg-row--own .mt-shared-doc-meta,
+        #client-inbox-messages .mt-msg-row--own .mt-shared-doc-file,
+        #client-inbox-messages .mt-msg-row--own .mt-shared-doc-note,
         #client-inbox-messages .mt-msg-row--own .mt-shared-doc-link {
             color: #fff;
         }
@@ -309,17 +320,39 @@ if (isset($conexion) && $conexion) {
             padding: 5px 8px;
         }
         #client-inbox-docs-content .mt-doc-type { flex: 0 0 auto; }
+        #client-inbox-docs-content .mt-doc-main {
+            flex: 1 1 220px;
+            min-width: 160px;
+        }
+        #client-inbox-docs-content .mt-doc-title {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #2f353b;
+            text-decoration: none;
+            word-break: break-word;
+        }
+        #client-inbox-docs-content .mt-doc-title:hover {
+            text-decoration: underline;
+            color: #1a73e8;
+        }
         #client-inbox-docs-content .mt-doc-name {
-            flex: 1 1 auto;
+            display: block;
+            margin-top: 2px;
             font-size: 12px;
-            min-width: 80px;
             word-break: break-all;
             text-decoration: none;
-            color: #2f353b;
+            color: #7f8c9d;
         }
         #client-inbox-docs-content .mt-doc-name:hover {
             text-decoration: underline;
             color: #1a73e8;
+        }
+        #client-inbox-docs-content .mt-doc-note {
+            display: block;
+            margin-top: 4px;
+            font-size: 11px;
+            color: #5f6c7b;
         }
         #client-inbox-docs-content .mt-doc-date {
             flex: 0 0 auto;
@@ -327,6 +360,18 @@ if (isset($conexion) && $conexion) {
             white-space: nowrap;
         }
         #client-inbox-docs-content .mt-doc-download { flex: 0 0 auto; }
+        #clientAttachDocumentModal .help-block {
+            margin-bottom: 0;
+        }
+        #clientAttachDocumentModal .mt-attach-context {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        #client-chat-attach-status {
+            margin-top: 8px;
+            display: none;
+        }
         #clientDocViewerModal .mt-dv-type-badge {
             font-size: 12px;
             vertical-align: middle;
@@ -515,11 +560,10 @@ if (isset($conexion) && $conexion) {
                                     </div>
                                     <div id="client-typing-indicator" style="font-size:12px;color:#999;min-height:18px;margin-bottom:4px;">Support is typing…</div>
                                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                                        <input type="file" id="client-chat-attach-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" multiple style="display:none;">
                                         <button type="button" class="btn btn-default btn-sm" id="client-chat-attach-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paperclip"></i> Attach document</button>
                                         <button type="submit" class="btn btn-primary btn-sm" id="client-inbox-send-btn" style="margin-left:auto;" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
                                     </div>
-                                    <div id="client-chat-attach-list" class="text-muted" style="margin-top:6px;display:none;"></div>
+                                    <div id="client-chat-attach-status" class="text-muted"></div>
                                     <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Free-form messaging is locked right now. Please use the structured actions above.</div>
                                 </form>
                             </div>
@@ -532,6 +576,57 @@ if (isset($conexion) && $conexion) {
             </div>
         </div>
         <?php echo $footer; ?>
+    </div>
+</div>
+
+<div class="modal fade" id="clientAttachDocumentModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form id="client-attach-document-form">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title">Attach document</h4>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="client-attach-thread-id" value="">
+                    <input type="hidden" id="client-attach-thread-type" value="">
+                    <input type="hidden" id="client-attach-request-id" value="">
+                    <input type="hidden" id="client-attach-item-id" value="">
+                    <div class="form-group">
+                        <label for="client-attach-file">Select file</label>
+                        <input type="file" class="form-control" id="client-attach-file" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-attach-title">Document title</label>
+                        <input type="text" class="form-control" id="client-attach-title" maxlength="190" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-attach-type">Document type</label>
+                        <select class="form-control" id="client-attach-type" required>
+                            <option value="other">Other</option>
+                            <option value="medical_history">Medical history</option>
+                            <option value="lab_results">Exam / lab result</option>
+                            <option value="diagnostic_imaging">Diagnostic image</option>
+                            <option value="quote">Quote / estimate</option>
+                            <option value="consent_form">Consent form</option>
+                            <option value="medical_order">Medical order</option>
+                            <option value="prescription">Prescription / indication</option>
+                            <option value="administrative_document">Administrative document</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-attach-note">Note (optional)</label>
+                        <textarea class="form-control" id="client-attach-note" rows="3" maxlength="500" placeholder="Example: shared for the provider review"></textarea>
+                    </div>
+                    <p class="help-block">The document will be attached to the current thread and will remain visible in the chat and in shared documents.</p>
+                    <div class="mt-attach-context" id="client-attach-context">Thread context not available.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="client-attach-submit-btn">Attach to chat</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 

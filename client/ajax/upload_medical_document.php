@@ -25,20 +25,67 @@ function client_doc_ok($data = [])
 function client_doc_document_label($type)
 {
     $map = [
-        'passport' => 'Passport',
-        'id_card' => 'ID card',
         'medical_history' => 'Medical history',
-        'lab_results' => 'Lab results',
-        'prescription' => 'Prescription',
-        'invoice' => 'Invoice',
-        'contract' => 'Contract',
+        'lab_results' => 'Exam / lab result',
+        'diagnostic_imaging' => 'Diagnostic image',
+        'photos' => 'Clinical image',
+        'quote' => 'Quote / estimate',
         'consent_form' => 'Consent form',
-        'insurance' => 'Insurance',
-        'photos' => 'Photos',
+        'medical_order' => 'Medical order',
+        'prescription' => 'Prescription',
+        'administrative_document' => 'Administrative document',
         'other' => 'Other'
     ];
-    $key = strtolower(trim((string)$type));
+    $key = client_doc_normalize_document_type($type);
     return isset($map[$key]) ? $map[$key] : ($key !== '' ? $key : 'Other');
+}
+
+function client_doc_clean_title_fallback($filename)
+{
+    $raw = trim((string)$filename);
+    if ($raw === '') {
+        return 'Document';
+    }
+    $title = preg_replace('/\.[a-z0-9]{2,8}$/i', '', $raw);
+    $title = preg_replace('/[_\-]+/', ' ', (string)$title);
+    $title = trim((string)preg_replace('/\s+/', ' ', (string)$title));
+    return $title !== '' ? $title : $raw;
+}
+
+function client_doc_normalize_document_type($value)
+{
+    $key = strtolower(trim((string)$value));
+    $map = [
+        'history' => 'medical_history',
+        'medical_history' => 'medical_history',
+        'medical history' => 'medical_history',
+        'labs' => 'lab_results',
+        'lab_results' => 'lab_results',
+        'lab results' => 'lab_results',
+        'exam / lab result' => 'lab_results',
+        'imaging' => 'diagnostic_imaging',
+        'diagnostic_imaging' => 'diagnostic_imaging',
+        'diagnostic image' => 'diagnostic_imaging',
+        'photos' => 'photos',
+        'clinical image' => 'photos',
+        'quote' => 'quote',
+        'quote / estimate' => 'quote',
+        'consent_form' => 'consent_form',
+        'consent form' => 'consent_form',
+        'medical_order' => 'medical_order',
+        'medical order' => 'medical_order',
+        'prescription' => 'prescription',
+        'prescription / indication' => 'prescription',
+        'administrative_document' => 'administrative_document',
+        'administrative document' => 'administrative_document',
+        'invoice' => 'administrative_document',
+        'contract' => 'administrative_document',
+        'insurance' => 'administrative_document',
+        'passport' => 'administrative_document',
+        'id_card' => 'administrative_document',
+        'other' => 'other',
+    ];
+    return isset($map[$key]) ? $map[$key] : 'other';
 }
 
 function client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $documentType)
@@ -138,6 +185,51 @@ function client_doc_enum_first_value($type)
     return stripcslashes((string)$m[1][0]);
 }
 
+function client_doc_enum_values($type)
+{
+    if (!preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", (string)$type, $m)) {
+        return [];
+    }
+    return array_map('stripcslashes', (array)($m[1] ?? []));
+}
+
+function client_doc_storage_document_type($normalizedType, $columnType)
+{
+    $normalizedType = client_doc_normalize_document_type($normalizedType);
+    $columnType = strtolower(trim((string)$columnType));
+    if ($normalizedType === '' || $columnType === '' || strpos($columnType, 'enum(') !== 0) {
+        return $normalizedType !== '' ? $normalizedType : 'other';
+    }
+    $allowed = client_doc_enum_values($columnType);
+    if (empty($allowed)) {
+        return $normalizedType !== '' ? $normalizedType : 'other';
+    }
+    if (in_array($normalizedType, $allowed, true)) {
+        return $normalizedType;
+    }
+    $legacyFallbacks = [
+        'diagnostic_imaging' => ['imaging', 'photos', 'other'],
+        'quote' => ['other', 'invoice', 'contract'],
+        'medical_order' => ['prescription', 'other'],
+        'administrative_document' => ['invoice', 'contract', 'insurance', 'passport', 'id_card', 'other'],
+        'prescription' => ['prescription', 'other'],
+        'consent_form' => ['consent_form', 'other'],
+        'photos' => ['photos', 'other'],
+        'medical_history' => ['medical_history', 'other'],
+        'lab_results' => ['lab_results', 'other'],
+        'other' => ['other'],
+    ];
+    $candidates = isset($legacyFallbacks[$normalizedType]) ? $legacyFallbacks[$normalizedType] : ['other'];
+    foreach ($candidates as $candidate) {
+        if (in_array($candidate, $allowed, true)) {
+            return $candidate;
+        }
+    }
+    return in_array('other', $allowed, true)
+        ? 'other'
+        : (string)(reset($allowed) ?: $normalizedType);
+}
+
 if (!isset($conexion) || !$conexion) {
     client_doc_err('db_not_available', 500);
 }
@@ -153,6 +245,7 @@ $itemId = isset($_POST['item_id']) ? (int)$_POST['item_id'] : 0;
 $threadType = strtoupper(trim((string)($_POST['thread_type'] ?? '')));
 $requiredSchemaCols = ['client_id', 'file_path', 'filename', 'original_filename', 'booking_request_id', 'item_id'];
 $existingCols = [];
+$existingColTypes = [];
 $showColsSql = "SHOW COLUMNS FROM `client_documents`";
 $db = $conexion;
 if (!$db) {
@@ -170,6 +263,7 @@ while ($row = mysqli_fetch_assoc($showColsRes)) {
     $field = strtolower(trim((string)($row['Field'] ?? '')));
     if ($field !== '') {
         $existingCols[$field] = true;
+        $existingColTypes[$field] = strtolower(trim((string)($row['Type'] ?? '')));
     }
 }
 
@@ -437,18 +531,17 @@ $allowedTypes = [
 ];
 $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx'];
 
-$documentTypeMaster = strtolower(trim((string)($_POST['document_type'] ?? 'other')));
+$documentTypeMaster = client_doc_normalize_document_type($_POST['document_type'] ?? 'other');
 $allowedDocTypes = [
-    'passport',
-    'id_card',
     'medical_history',
     'lab_results',
-    'prescription',
-    'invoice',
-    'contract',
-    'consent_form',
-    'insurance',
+    'diagnostic_imaging',
     'photos',
+    'quote',
+    'consent_form',
+    'medical_order',
+    'prescription',
+    'administrative_document',
     'other'
 ];
 if (!in_array($documentTypeMaster, $allowedDocTypes, true)) {
@@ -484,6 +577,7 @@ $hasDescription = client_table_has_column($conexion, 'client_documents', 'descri
 $hasSharedWithProvider = client_table_has_column($conexion, 'client_documents', 'shared_with_provider');
 $hasUploadedBy = client_table_has_column($conexion, 'client_documents', 'uploaded_by');
 $hasClientUserId = client_table_has_column($conexion, 'client_documents', 'client_user_id');
+$documentTypeColumnType = (string)($existingColTypes['document_type'] ?? '');
 
 $results = [];
 $uploadedCount = 0;
@@ -568,12 +662,16 @@ foreach ($files as $index => $file) {
     }
 
     $meta = is_array($metaByIndex[$index] ?? null) ? $metaByIndex[$index] : [];
-    $documentType = strtolower(trim((string)($meta['doc_type'] ?? $meta['document_type'] ?? $documentTypeMaster)));
+    $documentType = client_doc_normalize_document_type($meta['doc_type'] ?? $meta['document_type'] ?? $documentTypeMaster);
     if (!in_array($documentType, $allowedDocTypes, true)) {
         $documentType = 'other';
     }
+    $documentTypeForStorage = client_doc_storage_document_type($documentType, $documentTypeColumnType);
     $title = trim((string)($meta['title'] ?? $titleMaster));
-    $description = trim((string)($meta['description'] ?? $descriptionMaster));
+    if ($title === '') {
+        $title = client_doc_clean_title_fallback((string)($meta['original_name'] ?? $originalFilename));
+    }
+    $description = trim((string)($meta['description'] ?? $meta['note'] ?? $meta['document_note'] ?? $descriptionMaster));
 
     $filename = uniqid('doc_' . $clientUserId . '_') . '.' . $fileExtension;
     $filePath = 'client_' . $clientUserId . '/' . $filename;
@@ -603,7 +701,7 @@ foreach ($files as $index => $file) {
         $columns[] = 'document_type';
         $placeholders[] = '?';
         $types .= 's';
-        $params[] = $documentType;
+        $params[] = $documentTypeForStorage;
     }
 
     if ($hasClientUserId) {
@@ -728,7 +826,18 @@ foreach ($files as $index => $file) {
         'ok' => true,
         'document_id' => $documentId,
         'file_path' => $filePath,
+        'filename' => $filename,
         'original_filename' => $originalFilename,
+        'title' => $title,
+        'document_type' => $documentType,
+        'description' => $description,
+        'document_note' => $description,
+        'file_size' => $fileSize,
+        'mime_type' => $mimeType,
+        'uploaded_at' => date('Y-m-d H:i:s'),
+        'download_url' => '/uploads/medical_docs/' . ltrim($filePath, '/'),
+        'uploader_role' => 'patient',
+        'source' => 'patient_chat',
     ];
     if ($firstUploaded === null) {
         $firstUploaded = $successItem;

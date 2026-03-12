@@ -679,6 +679,12 @@ if ($action === 'list_messages') {
             if (client_table_has_column($conexion, 'client_documents', 'description')) {
                 $selectCols[] = 'description';
             }
+            if (client_table_has_column($conexion, 'client_documents', 'uploaded_at')) {
+                $selectCols[] = 'uploaded_at';
+            }
+            if (client_table_has_column($conexion, 'client_documents', 'created_at')) {
+                $selectCols[] = 'created_at';
+            }
             $orderByColumn = client_table_has_column($conexion, 'client_documents', 'uploaded_at') ? 'uploaded_at' : 'id';
 
             $docSql = "SELECT " . implode(', ', $selectCols) . " FROM client_documents cd";

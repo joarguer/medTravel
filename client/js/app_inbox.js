@@ -25,9 +25,9 @@
     var preferredThread = null;
     var autoSelectItemRequestId = 0;
     var selectedFiles = [];
-    var composeFiles = [];
     var currentDocuments = [];
     var currentDocumentsThreadId = '';
+    var attachModalBusy = false;
     var composeBusy = false;
     var composeBusyMessage = '';
     var feeGateActive = !!config.feeGateActive;
@@ -50,6 +50,150 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function resetAttachDocumentModal() {
+        var $form = $('#client-attach-document-form');
+        if ($form.length && $form[0]) {
+            $form[0].reset();
+        }
+        $('#client-attach-thread-id').val('');
+        $('#client-attach-thread-type').val('');
+        $('#client-attach-request-id').val('');
+        $('#client-attach-item-id').val('');
+        $('#client-attach-context').text('Thread context not available.');
+        setAttachModalBusy(false);
+        setAttachStatus('');
+    }
+
+    function setAttachStatus(message, tone) {
+        var $status = $('#client-chat-attach-status');
+        if (!$status.length) return;
+        var text = String(message || '').trim();
+        if (!text) {
+            $status.hide().removeClass('text-danger text-success text-warning').text('');
+            return;
+        }
+        $status
+            .removeClass('text-danger text-success text-warning')
+            .addClass(tone ? ('text-' + tone) : '')
+            .text(text)
+            .show();
+    }
+
+    function setAttachModalBusy(enabled) {
+        attachModalBusy = !!enabled;
+        $('#client-attach-submit-btn').prop('disabled', attachModalBusy);
+        $('#client-attach-document-form').find('input, select, textarea').prop('disabled', attachModalBusy);
+    }
+
+    function describeUploadError(res) {
+        var code = '';
+        if (res && res.results && res.results[0] && res.results[0].message) {
+            code = String(res.results[0].message);
+        } else if (res && res.message) {
+            code = String(res.message);
+        }
+        var map = {
+            FEE_REQUIRED: 'This thread is locked until the coordination step is completed.',
+            FREE_MESSAGE_BLOCKED: 'Messaging is temporarily limited for this thread.',
+            file_required: 'Please select a file.',
+            title_required: 'Please enter a document title.',
+            upload_error: 'The uploaded file could not be processed.',
+            file_too_large: 'The file is larger than the allowed size.',
+            invalid_tmp_file: 'The uploaded temporary file could not be read.',
+            file_extension_not_allowed: 'This file extension is not allowed.',
+            file_type_not_allowed: 'This file type is not allowed.',
+            file_save_failed: 'The file could not be saved.',
+            insert_failed: 'The document metadata could not be saved.',
+            upload_failed: 'The document could not be attached. Please try again.',
+            invalid_booking_id: 'The current request could not be resolved.',
+            client_documents_scope_missing: 'The current thread context is incomplete.'
+        };
+        if (map[code]) {
+            return map[code];
+        }
+        if (code.indexOf('insert_failed:') === 0) {
+            return map.insert_failed;
+        }
+        return code || 'The document could not be attached. Please try again.';
+    }
+
+    function cleanDocumentTitleFallback(filename) {
+        var raw = String(filename || '').trim();
+        if (!raw) return 'Document';
+        var base = raw.replace(/\.[a-z0-9]{2,8}$/i, '');
+        base = base.replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+        return base || raw;
+    }
+
+    function normalizeDocumentTypeKey(type) {
+        var key = String(type || 'other').toLowerCase().trim();
+        var aliasMap = {
+            history: 'medical_history',
+            medical_history: 'medical_history',
+            'medical history': 'medical_history',
+            labs: 'lab_results',
+            lab_results: 'lab_results',
+            'lab results': 'lab_results',
+            'exam / lab result': 'lab_results',
+            imaging: 'diagnostic_imaging',
+            diagnostic_imaging: 'diagnostic_imaging',
+            'diagnostic image': 'diagnostic_imaging',
+            photos: 'photos',
+            'clinical image': 'photos',
+            quote: 'quote',
+            'quote / estimate': 'quote',
+            consent_form: 'consent_form',
+            'consent form': 'consent_form',
+            medical_order: 'medical_order',
+            'medical order': 'medical_order',
+            prescription: 'prescription',
+            'prescription / indication': 'prescription',
+            administrative_document: 'administrative_document',
+            'administrative document': 'administrative_document',
+            invoice: 'administrative_document',
+            contract: 'administrative_document',
+            insurance: 'administrative_document',
+            passport: 'administrative_document',
+            id_card: 'administrative_document',
+            other: 'other'
+        };
+        return aliasMap[key] || 'other';
+    }
+
+    function resolveCurrentRequestId() {
+        var requestIdFromThread = currentThread ? parseInt(currentThread.booking_id || 0, 10) : 0;
+        if (requestIdFromThread > 0) {
+            return requestIdFromThread;
+        }
+        var urlParams = new URLSearchParams(window.location.search || '');
+        return parseInt(urlParams.get('request_id') || '0', 10);
+    }
+
+    function populateAttachDocumentContext() {
+        var threadId = currentThread && currentThread.thread_id ? String(currentThread.thread_id) : '';
+        var threadType = currentThread && currentThread.thread_type ? String(currentThread.thread_type) : 'CARE';
+        var requestId = resolveCurrentRequestId();
+        var itemId = currentThread ? parseInt(currentThread.item_id || 0, 10) : 0;
+        $('#client-attach-thread-id').val(threadId);
+        $('#client-attach-thread-type').val(threadType);
+        $('#client-attach-request-id').val(requestId > 0 ? String(requestId) : '');
+        $('#client-attach-item-id').val(itemId > 0 ? String(itemId) : '');
+        var parts = ['Thread: ' + (threadId || 'Unavailable')];
+        if (requestId > 0) parts.push('Request #' + requestId);
+        if (itemId > 0) parts.push('Item #' + itemId);
+        $('#client-attach-context').text(parts.join(' · '));
+    }
+
+    function openAttachDocumentModal() {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread first');
+            return;
+        }
+        resetAttachDocumentModal();
+        populateAttachDocumentContext();
+        $('#clientAttachDocumentModal').modal('show');
     }
 
     function senderClass(sender) {
@@ -457,46 +601,7 @@
         renderSelectedFilesBatch();
     }
 
-    function renderComposeFilesBatch() {
-        var $list = $('#client-chat-attach-list');
-        if (!$list.length) return;
-        if (!composeFiles.length) {
-            $list.hide().html('');
-            return;
-        }
-        var html = composeFiles.map(function (file, index) {
-            var name = String((file && file.name) || ('Document ' + (index + 1)));
-            return '<span class="label label-default" style="display:inline-block;margin:0 6px 6px 0;">' +
-                esc(name) +
-                ' <a href="#" class="client-chat-attach-remove" data-index="' + index + '" style="color:inherit;text-decoration:none;">&times;</a>' +
-            '</span>';
-        }).join('');
-        $list.html('<div><strong>Attached:</strong></div><div style="margin-top:6px;">' + html + '</div>').show();
-    }
-
-    function appendComposeFiles(fileList) {
-        if (!fileList || !fileList.length) {
-            renderComposeFilesBatch();
-            return;
-        }
-        for (var i = 0; i < fileList.length; i++) {
-            if (fileList[i]) {
-                composeFiles.push(fileList[i]);
-            }
-        }
-        renderComposeFilesBatch();
-    }
-
-    function resetComposeFiles() {
-        composeFiles = [];
-        var input = document.getElementById('client-chat-attach-input');
-        if (input) {
-            input.value = '';
-        }
-        renderComposeFilesBatch();
-    }
-
-    function mergeComposeUploadDocuments(uploadRes) {
+    function mergeUploadedDocuments(uploadRes) {
         var results = uploadRes && $.isArray(uploadRes.results) ? uploadRes.results : [];
         if (!results.length) {
             return;
@@ -515,10 +620,15 @@
             currentDocuments.unshift({
                 id: docId,
                 file_path: filePath,
+                document_type: normalizeDocumentTypeKey(item.document_type || 'other'),
                 original_filename: String(item.original_filename || ''),
                 filename: String(item.filename || ''),
                 title: String(item.title || ''),
-                download_url: filePath ? buildClientDocumentUrl(filePath) : ''
+                description: String(item.description || item.document_note || ''),
+                file_size: parseInt(item.file_size || 0, 10) || 0,
+                mime_type: String(item.mime_type || ''),
+                uploaded_at: String(item.uploaded_at || ''),
+                download_url: String(item.download_url || (filePath ? buildClientDocumentUrl(filePath) : ''))
             });
         });
     }
@@ -529,48 +639,97 @@
         setComposeGateState(freeMessageAllowed, composeBusyMessage);
     }
 
-    function buildComposeAttachmentSummary(files) {
-        var names = (files || []).map(function (file) {
-            return String((file && file.name) || '').trim();
-        }).filter(function (name) {
-            return name !== '';
-        });
-        if (!names.length) {
-            return 'Shared a document.';
+    function buildSharedDocumentMessage(results) {
+        var docs = $.isArray(results) ? results.filter(function (item) {
+            return item && item.ok === true;
+        }) : [];
+        if (!docs.length) {
+            return 'Shared document';
         }
-        if (names.length === 1) {
-            return 'Shared document: ' + names[0];
-        }
-        return 'Shared ' + names.length + ' documents: ' + names.slice(0, 3).join(', ');
+        return docs.map(function (item) {
+            var title = String(item.title || cleanDocumentTitleFallback(item.original_filename || item.filename || 'Document')).trim();
+            var typeLabel = docTypeLabel(item.document_type || 'other');
+            var fileLabel = String(item.original_filename || item.filename || '').trim();
+            var note = String(item.description || item.document_note || '').trim();
+            var lines = ['Shared document: ' + title, 'Type: ' + typeLabel];
+            if (fileLabel) {
+                lines.push('File: ' + fileLabel);
+            }
+            if (note) {
+                lines.push('Observation: ' + note);
+            }
+            return lines.join('\n');
+        }).join('\n\n');
     }
 
     function parseSharedDocumentMessage(text) {
         var raw = String(text || '');
         var lines = raw.split(/\r?\n/);
-        var docNames = [];
+        var entries = [];
         var kept = [];
-        lines.forEach(function (line) {
+        var i = 0;
+        while (i < lines.length) {
+            var line = lines[i];
             var trimmedLine = String(line || '').trim();
             var singleMatch = trimmedLine.match(/^Shared document:\s*(.+)$/i);
             if (singleMatch) {
-                docNames.push(singleMatch[1].trim());
-                return;
+                var entry = {
+                    lookup_name: singleMatch[1].trim(),
+                    title: singleMatch[1].trim(),
+                    document_type: '',
+                    file_name: '',
+                    note: ''
+                };
+                i++;
+                while (i < lines.length) {
+                    var detailLine = String(lines[i] || '').trim();
+                    if (!detailLine) {
+                        i++;
+                        break;
+                    }
+                    var typeMatch = detailLine.match(/^Type:\s*(.+)$/i);
+                    if (typeMatch) {
+                        entry.document_type = normalizeDocumentTypeKey(typeMatch[1]);
+                        i++;
+                        continue;
+                    }
+                    var fileMatch = detailLine.match(/^File:\s*(.+)$/i);
+                    if (fileMatch) {
+                        entry.file_name = fileMatch[1].trim();
+                        i++;
+                        continue;
+                    }
+                    var noteMatch = detailLine.match(/^(Observation|Note):\s*(.+)$/i);
+                    if (noteMatch) {
+                        entry.note = noteMatch[2].trim();
+                        i++;
+                        continue;
+                    }
+                    break;
+                }
+                if (!entry.lookup_name && entry.file_name) {
+                    entry.lookup_name = entry.file_name;
+                }
+                entries.push(entry);
+                continue;
             }
             var multiMatch = trimmedLine.match(/^Shared\s+\d+\s+documents:\s*(.+)$/i);
             if (multiMatch) {
                 multiMatch[1].split(/\s*,\s*/).forEach(function (name) {
                     var docName = String(name || '').trim();
                     if (docName !== '') {
-                        docNames.push(docName);
+                        entries.push({ lookup_name: docName, title: '', document_type: '', file_name: '', note: '' });
                     }
                 });
-                return;
+                i++;
+                continue;
             }
             kept.push(line);
-        });
+            i++;
+        }
         return {
             body: kept.join('\n').trim(),
-            names: docNames
+            entries: entries
         };
     }
 
@@ -601,13 +760,13 @@
         return match ? match[1] : '';
     }
 
-    function resolveSharedMessageDocument(name) {
-        var target = normalizeSharedDocumentName(name);
-        var targetWithoutExt = sharedDocumentNameWithoutExtension(name);
-        var targetExt = sharedDocumentExtension(name);
+    function resolveSharedMessageDocument(ref) {
+        var reference = ref && typeof ref === 'object'
+            ? [ref.lookup_name, ref.file_name, ref.title].filter(function (value) { return String(value || '').trim() !== ''; })
+            : [ref];
         var bestDoc = null;
         var bestScore = -1;
-        if (!target || !currentDocuments || !currentDocuments.length) {
+        if (!reference.length || !currentDocuments || !currentDocuments.length) {
             return null;
         }
 
@@ -621,36 +780,44 @@
             });
             var docBestScore = -1;
 
-            candidates.forEach(function (candidate) {
-                var candidateKey = normalizeSharedDocumentName(candidate);
-                var candidateWithoutExt = sharedDocumentNameWithoutExtension(candidate);
-                var candidateExt = sharedDocumentExtension(candidate);
-                if (!candidateKey) {
+            reference.forEach(function (targetValue) {
+                var target = normalizeSharedDocumentName(targetValue);
+                var targetWithoutExt = sharedDocumentNameWithoutExtension(targetValue);
+                var targetExt = sharedDocumentExtension(targetValue);
+                if (!target) {
                     return;
                 }
-                if (candidateKey === target) {
-                    docBestScore = Math.max(docBestScore, 100);
-                    return;
-                }
-                if (candidateWithoutExt && candidateWithoutExt === targetWithoutExt) {
-                    docBestScore = Math.max(docBestScore, 95);
-                }
-                if (targetExt && candidateExt && targetExt === candidateExt && (
-                    candidateKey.indexOf(target) !== -1 || target.indexOf(candidateKey) !== -1
-                )) {
-                    docBestScore = Math.max(docBestScore, 85);
-                }
-                var targetTokens = targetWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
-                var candidateTokens = candidateWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
-                var overlap = 0;
-                targetTokens.forEach(function (token) {
-                    if (candidateTokens.indexOf(token) !== -1) {
-                        overlap++;
+                candidates.forEach(function (candidate) {
+                    var candidateKey = normalizeSharedDocumentName(candidate);
+                    var candidateWithoutExt = sharedDocumentNameWithoutExtension(candidate);
+                    var candidateExt = sharedDocumentExtension(candidate);
+                    if (!candidateKey) {
+                        return;
+                    }
+                    if (candidateKey === target) {
+                        docBestScore = Math.max(docBestScore, 100);
+                        return;
+                    }
+                    if (candidateWithoutExt && candidateWithoutExt === targetWithoutExt) {
+                        docBestScore = Math.max(docBestScore, 95);
+                    }
+                    if (targetExt && candidateExt && targetExt === candidateExt && (
+                        candidateKey.indexOf(target) !== -1 || target.indexOf(candidateKey) !== -1
+                    )) {
+                        docBestScore = Math.max(docBestScore, 85);
+                    }
+                    var targetTokens = targetWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
+                    var candidateTokens = candidateWithoutExt.split(/[^a-z0-9]+/).filter(function (token) { return token.length >= 3; });
+                    var overlap = 0;
+                    targetTokens.forEach(function (token) {
+                        if (candidateTokens.indexOf(token) !== -1) {
+                            overlap++;
+                        }
+                    });
+                    if (overlap >= 3 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
+                        docBestScore = Math.max(docBestScore, 70 + overlap);
                     }
                 });
-                if (overlap >= 3 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
-                    docBestScore = Math.max(docBestScore, 70 + overlap);
-                }
             });
 
             if (docBestScore > bestScore) {
@@ -668,8 +835,8 @@
         return null;
     }
 
-    function renderSharedDocumentsBlock(names) {
-        if (!names || !names.length) {
+    function renderSharedDocumentsBlock(entries) {
+        if (!entries || !entries.length) {
             return '';
         }
         function buildSharedDocumentHref(doc) {
@@ -686,13 +853,13 @@
             }
             return '';
         }
-        var itemsHtml = names.map(function (name) {
-            var doc = resolveSharedMessageDocument(name);
-            if (!doc && names.length === 1 && currentDocuments && currentDocuments.length) {
+        var itemsHtml = entries.map(function (entry) {
+            var doc = resolveSharedMessageDocument(entry);
+            if (!doc && entries.length === 1 && currentDocuments && currentDocuments.length) {
                 doc = currentDocuments[0];
                 if (window.console && typeof window.console.warn === 'function') {
                     window.console.warn('[inbox] shared document fallback to latest thread document', {
-                        requested_name: name,
+                        requested_name: entry,
                         fallback_document: {
                             id: doc.id || null,
                             original_filename: doc.original_filename || '',
@@ -705,17 +872,27 @@
                 }
             }
             var originalName = doc
-                ? String(doc.original_filename || doc.filename || name || ('Document #' + (doc.id || '')))
-                : String(name || '');
+                ? String(doc.original_filename || doc.filename || entry.file_name || entry.lookup_name || ('Document #' + (doc.id || '')))
+                : String(entry.file_name || entry.lookup_name || '');
+            var title = doc
+                ? String(doc.title || cleanDocumentTitleFallback(originalName))
+                : String(entry.title || cleanDocumentTitleFallback(originalName));
+            var typeKey = doc
+                ? normalizeDocumentTypeKey(doc.document_type || entry.document_type || 'other')
+                : normalizeDocumentTypeKey(entry.document_type || 'other');
+            var typeLabel = docTypeLabel(typeKey);
+            var note = doc
+                ? String(doc.description || entry.note || '').trim()
+                : String(entry.note || '').trim();
             var href = buildSharedDocumentHref(doc);
             var docIdAttr = esc(String(doc && doc.id ? doc.id : ''));
             var encodedHref = esc(href);
-            var nameHtml = href
-                ? ('<a class="mt-shared-doc-link mt-shared-doc-name" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">' + esc(originalName) + '</a>')
-                : ('<div class="mt-shared-doc-name">' + esc(originalName) + '</div>');
+            var titleHtml = href
+                ? ('<a class="mt-shared-doc-link mt-shared-doc-name" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">' + esc(title) + '</a>')
+                : ('<div class="mt-shared-doc-name">' + esc(title) + '</div>');
             if (!doc && window.console && typeof window.console.warn === 'function') {
                 window.console.warn('[inbox] shared document unresolved', {
-                    requested_name: name,
+                    requested_name: entry,
                     current_documents: (currentDocuments || []).map(function (item) {
                         return {
                             id: item.id || null,
@@ -729,7 +906,7 @@
                 });
             } else if (doc && !href && window.console && typeof window.console.warn === 'function') {
                 window.console.warn('[inbox] shared document resolved without href', {
-                    requested_name: name,
+                    requested_name: entry,
                     document: {
                         id: doc.id || null,
                         original_filename: doc.original_filename || '',
@@ -747,7 +924,10 @@
                 : '';
             return '<div class="mt-shared-doc-card">' +
                 '<div class="mt-shared-doc-label"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
-                nameHtml +
+                titleHtml +
+                '<span class="mt-shared-doc-meta">Type: ' + esc(typeLabel) + '</span>' +
+                (originalName ? '<span class="mt-shared-doc-file">File: ' + esc(originalName) + '</span>' : '') +
+                (note ? '<span class="mt-shared-doc-note">Note: ' + esc(note) + '</span>' : '') +
                 actionsHtml +
             '</div>';
         }).join('');
@@ -770,13 +950,26 @@
         if (!hasDocs) {
             innerHtml = '<p class="mt-docs-empty text-muted">No medical documents uploaded yet.</p>';
         } else {
-            var typeCls = { labs: 'label-info', imaging: 'label-primary', photos: 'label-success', medical_history: 'label-warning', other: 'label-default' };
+            var typeCls = {
+                lab_results: 'label-info',
+                diagnostic_imaging: 'label-primary',
+                photos: 'label-success',
+                medical_history: 'label-warning',
+                quote: 'label-primary',
+                consent_form: 'label-warning',
+                medical_order: 'label-info',
+                prescription: 'label-success',
+                administrative_document: 'label-default',
+                other: 'label-default'
+            };
             innerHtml = '<div class="mt-docs-list">';
             currentDocuments.forEach(function (doc) {
-                var typeKey = String(doc.document_type || 'other').toLowerCase();
+                var typeKey = normalizeDocumentTypeKey(doc.document_type || 'other');
                 var typeLabel = docTypeLabel(typeKey);
                 var cls = typeCls[typeKey] || 'label-default';
                 var originalName = String(doc.original_filename || doc.filename || ('Document #' + (doc.id || '')));
+                var title = String(doc.title || cleanDocumentTitleFallback(originalName)).trim();
+                var note = String(doc.description || '').trim();
                 var uploadedRaw = String(doc.uploaded_at || doc.created_at || '').trim();
                 var href = String(doc.download_url || '').trim();
                 if (!href) {
@@ -795,12 +988,16 @@
                 innerHtml +=
                     '<div class="mt-doc-row">' +
                         '<span class="label ' + cls + ' mt-doc-type">' + esc(typeLabel) + '</span>' +
-                        '<a href="' + esc(href) + '" class="mt-doc-name mt-doc-open" data-doc-id="' + esc(String(doc.id || '')) + '" data-url="' + esc(encodedHref) + '" title="View ' + esc(originalName) + '">' + esc(originalName) + '</a>' +
+                        '<div class="mt-doc-main">' +
+                            '<a href="' + esc(href) + '" class="mt-doc-title mt-doc-open" data-doc-id="' + esc(String(doc.id || '')) + '" data-url="' + esc(encodedHref) + '" title="View ' + esc(title) + '">' + esc(title) + '</a>' +
+                            '<span class="mt-doc-name">' + esc(originalName) + '</span>' +
+                            (note ? '<span class="mt-doc-note">Note: ' + esc(note) + '</span>' : '') +
+                        '</div>' +
                         (dateText ? '<small class="mt-doc-date text-muted"><i class="fa fa-clock-o" aria-hidden="true"></i> ' + esc(dateText) + '</small>' : '') +
                         '<button type="button" class="btn btn-xs btn-info mt-doc-view"' +
                             ' data-doc-id="' + esc(String(doc.id || '')) + '"' +
                             ' data-url="' + esc(encodedHref) + '"' +
-                            ' title="View ' + esc(originalName) + '">' +
+                            ' title="View ' + esc(title) + '">' +
                             '<i class="fa fa-eye" aria-hidden="true"></i> View' +
                         '</button>' +
                         '<a class="btn btn-xs btn-default mt-doc-download" href="' + esc(href) + '" target="_blank" rel="noopener" title="Download ' + esc(originalName) + '">' +
@@ -834,7 +1031,9 @@
 
     function openDocViewer(doc, fallbackUrl) {
         var originalName = String(doc && (doc.original_filename || doc.filename) || 'Document');
-        var typeKey = String(doc && doc.document_type || 'other').toLowerCase();
+        var title = String(doc && doc.title || cleanDocumentTitleFallback(originalName));
+        var note = String(doc && doc.description || '').trim();
+        var typeKey = normalizeDocumentTypeKey(doc && doc.document_type || 'other');
         var typeLabel = docTypeLabel(typeKey);
         var mimeType = String(doc && doc.mime_type || '').toLowerCase().trim();
         var href = String(doc && doc.download_url || fallbackUrl || '').trim();
@@ -847,9 +1046,20 @@
             url: href
         });
 
-        $('#clientDocViewerName').text(originalName);
+        $('#clientDocViewerName').text(title);
         $('#clientDocViewerType').text(typeLabel);
-        var typeCls = { labs: 'label-info', imaging: 'label-primary', photos: 'label-success', medical_history: 'label-warning', other: 'label-default' };
+        var typeCls = {
+            lab_results: 'label-info',
+            diagnostic_imaging: 'label-primary',
+            photos: 'label-success',
+            medical_history: 'label-warning',
+            quote: 'label-primary',
+            consent_form: 'label-warning',
+            medical_order: 'label-info',
+            prescription: 'label-success',
+            administrative_document: 'label-default',
+            other: 'label-default'
+        };
         $('#clientDocViewerType').attr('class', 'label ' + (typeCls[typeKey] || 'label-default') + ' mt-dv-type-badge');
 
         var metaParts = [];
@@ -862,12 +1072,18 @@
                 metaParts.push('Uploaded: ' + dd + '/' + mo + '/' + d.getFullYear());
             }
         }
+        if (originalName) {
+            metaParts.push('File: ' + originalName);
+        }
         if (doc && doc.file_size > 0) {
             var kb = (doc.file_size / 1024).toFixed(1);
             metaParts.push(kb + ' KB');
         }
         if (mimeType) {
             metaParts.push(mimeType);
+        }
+        if (note) {
+            metaParts.push('Note: ' + note);
         }
         $('#clientDocViewerMeta').text(metaParts.join(' · '));
         $('#clientDocViewerDownload').attr('href', href || '#');
@@ -1617,7 +1833,6 @@
         var $msg = $('#client-inbox-message');
         var $send = $('#client-inbox-send-btn');
         var $attach = $('#client-chat-attach-btn');
-        var $attachInput = $('#client-chat-attach-input');
         var $composerGroup = $('#client-inbox-send-form .form-group');
         var $typing = $('#client-typing-indicator');
         if ($msg.length) {
@@ -1628,9 +1843,6 @@
         }
         if ($attach.length) {
             $attach.prop('disabled', composeBlocked);
-        }
-        if ($attachInput.length) {
-            $attachInput.prop('disabled', composeBlocked);
         }
         if (permissionBlocked) {
             if ($composerGroup.length) $composerGroup.hide();
@@ -1710,11 +1922,11 @@
 
         if (!label) {
             var parsedShared = parseSharedDocumentMessage(text);
-            if (parsedShared.names.length) {
+            if (parsedShared.entries.length) {
                 var bodyHtml = parsedShared.body
                     ? '<div style="white-space:pre-wrap;">' + esc(parsedShared.body) + '</div>'
                     : '';
-                return bodyHtml + renderSharedDocumentsBlock(parsedShared.names);
+                return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries);
             }
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
@@ -1799,13 +2011,20 @@
 
     function normalizeDocTypeLabel(t) {
         var map = {
-            labs: 'Labs',
-            imaging: 'Imaging',
-            photos: 'Photos',
+            lab_results: 'Exam / lab result',
+            labs: 'Exam / lab result',
+            diagnostic_imaging: 'Diagnostic image',
+            imaging: 'Diagnostic image',
+            photos: 'Clinical image',
             medical_history: 'Medical history',
+            quote: 'Quote / estimate',
+            consent_form: 'Consent form',
+            medical_order: 'Medical order',
+            prescription: 'Prescription / indication',
+            administrative_document: 'Administrative document',
             other: 'Other'
         };
-        var key = String(t || '').toLowerCase();
+        var key = normalizeDocumentTypeKey(t || 'other');
         return map[key] || key || 'Other';
     }
 
@@ -2062,21 +2281,21 @@
         });
     }
 
-    function uploadComposeDocuments() {
+    function uploadChatDocuments(docs) {
         var deferred = $.Deferred();
         if (!currentThread || !currentThread.thread_id) {
             deferred.reject({ message: 'Select a thread before uploading' });
             return deferred.promise();
         }
-        if (!composeFiles.length) {
+        var payloadDocs = $.isArray(docs) ? docs.filter(function (doc) {
+            return doc && doc.file;
+        }) : [];
+        if (!payloadDocs.length) {
             deferred.resolve({ ok: true, uploaded_count: 0, results: [] });
             return deferred.promise();
         }
 
-        var requestIdFromThread = parseInt(currentThread.booking_id || 0, 10);
-        var urlParams = new URLSearchParams(window.location.search || '');
-        var requestIdFromUrl = parseInt(urlParams.get('request_id') || '0', 10);
-        var safeRequestId = requestIdFromThread > 0 ? requestIdFromThread : requestIdFromUrl;
+        var safeRequestId = resolveCurrentRequestId();
         if (safeRequestId <= 0) {
             deferred.reject({ message: 'Could not determine request id for upload' });
             return deferred.promise();
@@ -2084,19 +2303,19 @@
 
         var formData = new FormData();
         var metaArray = [];
-        composeFiles.forEach(function (file) {
-            formData.append('client_doc_files[]', file);
+        payloadDocs.forEach(function (doc) {
+            formData.append('client_doc_files[]', doc.file);
             metaArray.push({
-                doc_type: 'other',
-                title: '',
-                description: '',
-                original_name: String((file && file.name) || '')
+                doc_type: normalizeDocumentTypeKey(doc.document_type || 'other'),
+                title: String(doc.title || '').trim(),
+                description: String(doc.note || '').trim(),
+                original_name: String((doc.file && doc.file.name) || '')
             });
         });
         formData.append('meta_json', JSON.stringify(metaArray));
-        formData.append('document_type', 'other');
-        formData.append('title', '');
-        formData.append('description', '');
+        formData.append('document_type', (metaArray[0].doc_type || 'other').toString());
+        formData.append('title', (metaArray[0].title || '').toString());
+        formData.append('description', (metaArray[0].description || '').toString());
         formData.append('booking_request_id', safeRequestId);
         formData.append('request_id', safeRequestId);
         formData.append('item_id', currentThread.item_id || 0);
@@ -2122,9 +2341,10 @@
         return deferred.promise();
     }
 
-    function sendMessageText(text) {
+    function sendMessageText(text, opts) {
         if (!currentThread || !currentThread.thread_id) return;
         if (composeBusy) return;
+        var options = opts && typeof opts === 'object' ? opts : {};
         clearLegacyUploadStatus();
         if (!freeMessageAllowed) {
             toastr.warning(lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
@@ -2141,7 +2361,7 @@
 
         var pendingId = addPendingMessage(text);
         emitTyping('stop');
-        setComposeBusy(true, 'Sending message...');
+        setComposeBusy(true, options.busyMessage || 'Sending message...');
 
         $.ajax({
             url: '/client/ajax/inbox.php',
@@ -2171,9 +2391,10 @@
             }
             removePendingMessage(pendingId);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
-            $('#client-inbox-message').val('');
-            resetComposeFiles();
-            toastr.success('Message sent');
+            if (options.clearComposer !== false) {
+                $('#client-inbox-message').val('');
+            }
+            toastr.success(options.successToast || 'Message sent');
             setComposeBusy(false, '');
             loadMessages();
             loadThreads();
@@ -2211,29 +2432,61 @@
             return;
         }
         var text = $.trim($('#client-inbox-message').val() || '');
-        var hasAttachments = composeFiles.length > 0;
-        if (!text && !hasAttachments) {
-            toastr.warning('Write a message or attach a document before sending');
+        if (!text) {
+            toastr.warning('Write a message before sending');
             return;
         }
-        if (!hasAttachments) {
-            sendMessageText(text);
+        sendMessageText(text);
+    }
+
+    function submitAttachDocument() {
+        if (attachModalBusy || composeBusy) {
+            return;
+        }
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Select a thread first');
+            return;
+        }
+        var fileInput = document.getElementById('client-attach-file');
+        var file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+        var title = $.trim($('#client-attach-title').val() || '');
+        var type = normalizeDocumentTypeKey($('#client-attach-type').val() || 'other');
+        var note = $.trim($('#client-attach-note').val() || '');
+        if (!file) {
+            toastr.warning('Select a file');
+            return;
+        }
+        if (!title) {
+            toastr.warning('Enter the document title');
             return;
         }
 
-        var composeSnapshot = composeFiles.slice(0);
-        setComposeBusy(true, 'Uploading document...');
-        uploadComposeDocuments().done(function (uploadRes) {
-            mergeComposeUploadDocuments(uploadRes || null);
-            clearLegacyUploadStatus();
-            resetComposeFiles();
+        var docs = [{
+            file: file,
+            title: title,
+            document_type: type,
+            note: note
+        }];
+        setAttachModalBusy(true);
+        setComposeBusy(true, 'Attaching document...');
+        uploadChatDocuments(docs).done(function (uploadRes) {
+            mergeUploadedDocuments(uploadRes || null);
+            syncThreadDocumentsPanel();
+            var messageText = buildSharedDocumentMessage(uploadRes && uploadRes.results ? uploadRes.results : []);
+            setAttachStatus('Document ready to be posted in the chat.', 'success');
+            $('#clientAttachDocumentModal').modal('hide');
             setComposeBusy(false, '');
-            var attachmentSummary = buildComposeAttachmentSummary(composeSnapshot);
-            var messageText = text ? (text + '\n\n' + attachmentSummary) : attachmentSummary;
-            sendMessageText(messageText);
+            setAttachModalBusy(false);
+            sendMessageText(messageText, {
+                busyMessage: 'Posting document...',
+                successToast: 'Document attached to the chat',
+                clearComposer: false
+            });
         }).fail(function (res) {
             setComposeBusy(false, '');
-            var errorMessage = (res && res.message) ? String(res.message) : 'Upload failed. Please try again.';
+            setAttachModalBusy(false);
+            var errorMessage = describeUploadError(res);
+            setAttachStatus(errorMessage, 'danger');
             toastr.error(errorMessage);
         });
     }
@@ -2633,7 +2886,7 @@
                 thread_title: $.trim($a.find('.mt-thread-title').text() || ''),
                 thread_subtitle: $.trim($a.find('.mt-thread-location').text() || '')
             };
-            resetComposeFiles();
+            setAttachStatus('');
             $('#client-inbox-thread-list li').removeClass('active');
             $a.closest('li').addClass('active');
             loadMessages();
@@ -2643,25 +2896,27 @@
             if (this.disabled) {
                 return;
             }
-            var input = document.getElementById('client-chat-attach-input');
-            if (input) {
-                input.click();
-            }
+            openAttachDocumentModal();
         });
 
-        $('#client-chat-attach-input').on('change', function () {
-            appendComposeFiles(this.files || []);
-            $(this).val('');
-        });
-
-        $('#client-chat-attach-list').on('click', '.client-chat-attach-remove', function (e) {
-            e.preventDefault();
-            var index = parseInt($(this).data('index') || -1, 10);
-            if (index < 0 || index >= composeFiles.length) {
+        $('#client-attach-file').on('change', function () {
+            var file = this.files && this.files[0] ? this.files[0] : null;
+            if (!file) {
                 return;
             }
-            composeFiles.splice(index, 1);
-            renderComposeFilesBatch();
+            var currentTitle = $.trim($('#client-attach-title').val() || '');
+            if (!currentTitle) {
+                $('#client-attach-title').val(cleanDocumentTitleFallback(file.name || ''));
+            }
+        });
+
+        $('#client-attach-document-form').on('submit', function (e) {
+            e.preventDefault();
+            submitAttachDocument();
+        });
+
+        $('#clientAttachDocumentModal').on('hidden.bs.modal', function () {
+            resetAttachDocumentModal();
         });
 
         $('#client-inbox-send-form').on('submit', function (e) {
