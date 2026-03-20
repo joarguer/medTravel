@@ -24,7 +24,7 @@ $can_delete = $can_admin_view;
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title;?> - Calendar</title>
+    <title><?php echo $title;?> - Agenda</title>
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
@@ -44,10 +44,10 @@ $can_delete = $can_admin_view;
     <div class="container-fluid">
         <div class="page-content">
             <div class="breadcrumbs">
-                <h1>Calendar</h1>
+                <h1>Agenda</h1>
                 <ol class="breadcrumb">
-                    <li><a href="index.php">Home</a></li>
-                    <li class="active">Calendar</li>
+                    <li><a href="index.php">Inicio</a></li>
+                    <li class="active">Agenda</li>
                 </ol>
             </div>
 
