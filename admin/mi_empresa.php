@@ -186,7 +186,7 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                 <div class="breadcrumbs">
                     <h1><?php echo htmlspecialchars($company_title, ENT_QUOTES); ?></h1>
                     <ol class="breadcrumb">
-                        <li><a href="index.php">Home</a></li>
+                        <li><a href="index.php">Inicio</a></li>
                         <li class="active">Mi Empresa</li>
                     </ol>
                 </div>
@@ -368,7 +368,7 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                                     <div class="row">
                                                         <div class="col-md-12">
                                                             <div class="form-group">
-                                                                <label class="col-md-2 control-label">Simultaneous appointments capacity</label>
+                                                                <label class="col-md-2 control-label">Capacidad de citas simultáneas</label>
                                                                 <div class="col-md-10">
                                                                     <div class="input-group">
                                                                         <span class="input-group-addon"><i class="fa fa-calendar"></i></span>
@@ -376,7 +376,7 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                                                                min="1" max="50" step="1"
                                                                                value="<?php echo max(1, (int)$company['calendar_capacity']); ?>" />
                                                                     </div>
-                                                                    <span class="help-block">1 = single doctor/vehicle (no overlaps). Higher values for clinics/fleets.</span>
+                                                                    <span class="help-block">1 = un médico / sede (sin traslapes). Valores mayores para clínicas con varias citas simultáneas.</span>
                                                                 </div>
                                                             </div>
                                                         </div>

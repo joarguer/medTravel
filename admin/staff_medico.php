@@ -103,7 +103,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                             </div>
                                             <?php endif; ?>
                                             <p class="text-muted" style="max-width:840px;">
-                                                Administra el equipo clínico del prestador. Esta entidad es independiente de los datos de empresa y sirve como base para la futura asignación clínica por ítem o cita.
+                                                Registra y gestiona el equipo médico de tu empresa. Cada integrante puede tener cargo, especialidad y foto, y en el futuro podrá asignarse a citas o servicios específicos.
                                             </p>
                                             <?php if (!$can_edit_self): ?>
                                             <div class="alert alert-info">
@@ -228,7 +228,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                             </div>
                         </div>
                         <hr />
-                        <h5 class="bold">Campos complementarios / compatibilidad</h5>
+                        <h5 class="bold">Información adicional</h5>
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
@@ -246,7 +246,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                         <div class="form-group">
                             <label for="pms-service-ids">Servicios habilitados</label>
                             <select class="form-control" id="pms-service-ids" name="service_ids[]" multiple size="8"></select>
-                            <span class="help-block">Opcional. Sirve como base para futura asignación clínica por ítem.</span>
+                            <span class="help-block">Opcional. Permite vincular al médico con los servicios que ofrece.</span>
                         </div>
                         <div class="form-group">
                             <label for="pms-notes">Notas</label>
