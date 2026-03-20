@@ -880,565 +880,145 @@ $footer =  '<p class="copyright"> '.date('Y').' &copy; GRODEV Dev By
             <i class="icon-arrow-up"></i>
             </a>';
 
-$sider_bar = '<a href="javascript:;" class="page-quick-sidebar-toggler">
-                <i class="icon-login"></i>
-             </a>
-             <div class="page-quick-sidebar-wrapper" data-close-on-body-click="false">
-                <div class="page-quick-sidebar">
-                    <ul class="nav nav-tabs">
-                        <li class="active">
-                            <a href="javascript:;" data-target="#quick_sidebar_tab_1" data-toggle="tab"> Users
-                                <span class="badge badge-danger">2</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="javascript:;" data-target="#quick_sidebar_tab_2" data-toggle="tab"> Alerts
-                                <span class="badge badge-success">7</span>
-                            </a>
-                        </li>
-                        <li class="dropdown">
-                            <a href="javascript:;" class="dropdown-toggle" data-toggle="dropdown"> More
-                                <i class="fa fa-angle-down"></i>
-                            </a>
-                            <ul class="dropdown-menu pull-right">
-                                <li>
-                                    <a href="javascript:;" data-target="#quick_sidebar_tab_3" data-toggle="tab">
-                                        <i class="icon-bell"></i> Alerts </a>
-                                </li>
-                                <li>
-                                    <a href="javascript:;" data-target="#quick_sidebar_tab_3" data-toggle="tab">
-                                        <i class="icon-info"></i> Notifications </a>
-                                </li>
-                                <li>
-                                    <a href="javascript:;" data-target="#quick_sidebar_tab_3" data-toggle="tab">
-                                        <i class="icon-speech"></i> Activities </a>
-                                </li>
-                                <li class="divider"></li>
-                                <li>
-                                    <a href="javascript:;" data-target="#quick_sidebar_tab_3" data-toggle="tab">
-                                        <i class="icon-settings"></i> Settings </a>
-                                </li>
-                            </ul>
-                        </li>
-                    </ul>
-                    <div class="tab-content">
-                        <div class="tab-pane active page-quick-sidebar-chat" id="quick_sidebar_tab_1">
-                            <div class="page-quick-sidebar-chat-users" data-rail-color="#ddd" data-wrapper-class="page-quick-sidebar-list">
-                                <h3 class="list-heading">Staff</h3>
-                                <ul class="media-list list-items">
-                                    <li class="media">
-                                        <div class="media-status">
-                                            <span class="badge badge-success">8</span>
-                                        </div>
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar3.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Bob Nilson</h4>
-                                            <div class="media-heading-sub"> Project Manager </div>
-                                        </div>
-                                    </li>
-                                    <li class="media">
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar1.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Nick Larson</h4>
-                                            <div class="media-heading-sub"> Art Director </div>
-                                        </div>
-                                    </li>
-                                    <li class="media">
-                                        <div class="media-status">
-                                            <span class="badge badge-danger">3</span>
-                                        </div>
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar4.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Deon Hubert</h4>
-                                            <div class="media-heading-sub"> CTO </div>
-                                        </div>
-                                    </li>
-                                    <li class="media">
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar2.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Ella Wong</h4>
-                                            <div class="media-heading-sub"> CEO </div>
-                                        </div>
-                                    </li>
-                                </ul>
-                                <h3 class="list-heading">Customers</h3>
-                                <ul class="media-list list-items">
-                                    <li class="media">
-                                        <div class="media-status">
-                                            <span class="badge badge-warning">2</span>
-                                        </div>
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar6.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Lara Kunis</h4>
-                                            <div class="media-heading-sub"> CEO, Loop Inc </div>
-                                            <div class="media-heading-small"> Last seen 03:10 AM </div>
-                                        </div>
-                                    </li>
-                                    <li class="media">
-                                        <div class="media-status">
-                                            <span class="label label-sm label-success">new</span>
-                                        </div>
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar7.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Ernie Kyllonen</h4>
-                                            <div class="media-heading-sub"> Project Manager,
-                                                <br> SmartBizz PTL </div>
-                                        </div>
-                                    </li>
-                                    <li class="media">
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar8.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Lisa Stone</h4>
-                                            <div class="media-heading-sub"> CTO, Keort Inc </div>
-                                            <div class="media-heading-small"> Last seen 13:10 PM </div>
-                                        </div>
-                                    </li>
-                                    <li class="media">
-                                        <div class="media-status">
-                                            <span class="badge badge-success">7</span>
-                                        </div>
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar9.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Deon Portalatin</h4>
-                                            <div class="media-heading-sub"> CFO, H&D LTD </div>
-                                        </div>
-                                    </li>
-                                    <li class="media">
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar10.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Irina Savikova</h4>
-                                            <div class="media-heading-sub"> CEO, Tizda Motors Inc </div>
-                                        </div>
-                                    </li>
-                                    <li class="media">
-                                        <div class="media-status">
-                                            <span class="badge badge-danger">4</span>
-                                        </div>
-                                        <img class="media-object" src="../../assets/layouts/layout/img/avatar11.jpg" alt="...">
-                                        <div class="media-body">
-                                            <h4 class="media-heading">Maria Gomez</h4>
-                                            <div class="media-heading-sub"> Manager, Infomatic Inc </div>
-                                            <div class="media-heading-small"> Last seen 03:10 AM </div>
-                                        </div>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div class="page-quick-sidebar-item">
-                                <div class="page-quick-sidebar-chat-user">
-                                    <div class="page-quick-sidebar-nav">
-                                        <a href="javascript:;" class="page-quick-sidebar-back-to-list">
-                                            <i class="icon-arrow-left"></i>Back</a>
-                                    </div>
-                                    <div class="page-quick-sidebar-chat-user-messages">
-                                        <div class="post out">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar3.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Bob Nilson</a>
-                                                <span class="datetime">20:15</span>
-                                                <span class="body"> When could you send me the report ? </span>
-                                            </div>
-                                        </div>
-                                        <div class="post in">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar2.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Ella Wong</a>
-                                                <span class="datetime">20:15</span>
-                                                <span class="body"> Its almost done. I will be sending it shortly </span>
-                                            </div>
-                                        </div>
-                                        <div class="post out">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar3.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Bob Nilson</a>
-                                                <span class="datetime">20:15</span>
-                                                <span class="body"> Alright. Thanks! :) </span>
-                                            </div>
-                                        </div>
-                                        <div class="post in">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar2.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Ella Wong</a>
-                                                <span class="datetime">20:16</span>
-                                                <span class="body"> You are most welcome. Sorry for the delay. </span>
-                                            </div>
-                                        </div>
-                                        <div class="post out">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar3.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Bob Nilson</a>
-                                                <span class="datetime">20:17</span>
-                                                <span class="body"> No probs. Just take your time :) </span>
-                                            </div>
-                                        </div>
-                                        <div class="post in">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar2.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Ella Wong</a>
-                                                <span class="datetime">20:40</span>
-                                                <span class="body"> Alright. I just emailed it to you. </span>
-                                            </div>
-                                        </div>
-                                        <div class="post out">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar3.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Bob Nilson</a>
-                                                <span class="datetime">20:17</span>
-                                                <span class="body"> Great! Thanks. Will check it right away. </span>
-                                            </div>
-                                        </div>
-                                        <div class="post in">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar2.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Ella Wong</a>
-                                                <span class="datetime">20:40</span>
-                                                <span class="body"> Please let me know if you have any comment. </span>
-                                            </div>
-                                        </div>
-                                        <div class="post out">
-                                            <img class="avatar" alt="" src="../../assets/layouts/layout/img/avatar3.jpg" />
-                                            <div class="message">
-                                                <span class="arrow"></span>
-                                                <a href="javascript:;" class="name">Bob Nilson</a>
-                                                <span class="datetime">20:17</span>
-                                                <span class="body"> Sure. I will check and buzz you if anything needs to be corrected. </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="page-quick-sidebar-chat-user-form">
-                                        <div class="input-group">
-                                            <input type="text" class="form-control" placeholder="Type a message here...">
-                                            <div class="input-group-btn">
-                                                <button type="button" class="btn green">
-                                                    <i class="icon-paper-clip"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="tab-pane page-quick-sidebar-alerts" id="quick_sidebar_tab_2">
-                            <div class="page-quick-sidebar-alerts-list">
-                                <h3 class="list-heading">General</h3>
-                                <ul class="feeds list-items">
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-info">
-                                                        <i class="fa fa-check"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> You have 4 pending tasks.
-                                                        <span class="label label-sm label-warning "> Take action
-                                                            <i class="fa fa-share"></i>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> Just now </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <div class="col1">
-                                                <div class="cont">
-                                                    <div class="cont-col1">
-                                                        <div class="label label-sm label-success">
-                                                            <i class="fa fa-bar-chart-o"></i>
-                                                        </div>
-                                                    </div>
-                                                    <div class="cont-col2">
-                                                        <div class="desc"> Finance Report for year 2013 has been released. </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col2">
-                                                <div class="date"> 20 mins </div>
-                                            </div>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-danger">
-                                                        <i class="fa fa-user"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> You have 5 pending membership that requires a quick review. </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> 24 mins </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-info">
-                                                        <i class="fa fa-shopping-cart"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> New order received with
-                                                        <span class="label label-sm label-success"> Reference Number: DR23923 </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> 30 mins </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-success">
-                                                        <i class="fa fa-user"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> You have 5 pending membership that requires a quick review. </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> 24 mins </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-info">
-                                                        <i class="fa fa-bell-o"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> Web server hardware needs to be upgraded.
-                                                        <span class="label label-sm label-warning"> Overdue </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> 2 hours </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <div class="col1">
-                                                <div class="cont">
-                                                    <div class="cont-col1">
-                                                        <div class="label label-sm label-default">
-                                                            <i class="fa fa-briefcase"></i>
-                                                        </div>
-                                                    </div>
-                                                    <div class="cont-col2">
-                                                        <div class="desc"> IPO Report for year 2013 has been released. </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col2">
-                                                <div class="date"> 20 mins </div>
-                                            </div>
-                                        </a>
-                                    </li>
-                                </ul>
-                                <h3 class="list-heading">System</h3>
-                                <ul class="feeds list-items">
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-info">
-                                                        <i class="fa fa-check"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> You have 4 pending tasks.
-                                                        <span class="label label-sm label-warning "> Take action
-                                                            <i class="fa fa-share"></i>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> Just now </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <div class="col1">
-                                                <div class="cont">
-                                                    <div class="cont-col1">
-                                                        <div class="label label-sm label-danger">
-                                                            <i class="fa fa-bar-chart-o"></i>
-                                                        </div>
-                                                    </div>
-                                                    <div class="cont-col2">
-                                                        <div class="desc"> Finance Report for year 2013 has been released. </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col2">
-                                                <div class="date"> 20 mins </div>
-                                            </div>
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-default">
-                                                        <i class="fa fa-user"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> You have 5 pending membership that requires a quick review. </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> 24 mins </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-info">
-                                                        <i class="fa fa-shopping-cart"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> New order received with
-                                                        <span class="label label-sm label-success"> Reference Number: DR23923 </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> 30 mins </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-success">
-                                                        <i class="fa fa-user"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> You have 5 pending membership that requires a quick review. </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> 24 mins </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <div class="col1">
-                                            <div class="cont">
-                                                <div class="cont-col1">
-                                                    <div class="label label-sm label-warning">
-                                                        <i class="fa fa-bell-o"></i>
-                                                    </div>
-                                                </div>
-                                                <div class="cont-col2">
-                                                    <div class="desc"> Web server hardware needs to be upgraded.
-                                                        <span class="label label-sm label-default "> Overdue </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="col2">
-                                            <div class="date"> 2 hours </div>
-                                        </div>
-                                    </li>
-                                    <li>
-                                        <a href="javascript:;">
-                                            <div class="col1">
-                                                <div class="cont">
-                                                    <div class="cont-col1">
-                                                        <div class="label label-sm label-info">
-                                                            <i class="fa fa-briefcase"></i>
-                                                        </div>
-                                                    </div>
-                                                    <div class="cont-col2">
-                                                        <div class="desc"> IPO Report for year 2013 has been released. </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col2">
-                                                <div class="date"> 20 mins </div>
-                                            </div>
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                        <div class="tab-pane page-quick-sidebar-settings" id="quick_sidebar_tab_3">
-                            <div class="page-quick-sidebar-settings-list">
-                                <h3 class="list-heading">General Settings</h3>
-                                <ul class="list-items borderless">
-                                    <li> Enable Notifications
-                                        <input type="checkbox" class="make-switch" checked data-size="small" data-on-color="success" data-on-text="ON" data-off-color="default" data-off-text="OFF"> </li>
-                                    <li> Allow Tracking
-                                        <input type="checkbox" class="make-switch" data-size="small" data-on-color="info" data-on-text="ON" data-off-color="default" data-off-text="OFF"> </li>
-                                    <li> Log Errors
-                                        <input type="checkbox" class="make-switch" checked data-size="small" data-on-color="danger" data-on-text="ON" data-off-color="default" data-off-text="OFF"> </li>
-                                    <li> Auto Sumbit Issues
-                                        <input type="checkbox" class="make-switch" data-size="small" data-on-color="warning" data-on-text="ON" data-off-color="default" data-off-text="OFF"> </li>
-                                    <li> Enable SMS Alerts
-                                        <input type="checkbox" class="make-switch" checked data-size="small" data-on-color="success" data-on-text="ON" data-off-color="default" data-off-text="OFF"> </li>
-                                </ul>
-                                <h3 class="list-heading">System Settings</h3>
-                                <ul class="list-items borderless">
-                                    <li> Security Level
-                                        <select class="form-control input-inline input-sm input-small">
-                                            <option value="1">Normal</option>
-                                            <option value="2" selected>Medium</option>
-                                            <option value="e">High</option>
-                                        </select>
-                                    </li>
-                                    <li> Failed Email Attempts
-                                        <input class="form-control input-inline input-sm input-small" value="5" /> </li>
-                                    <li> Secondary SMTP Port
-                                        <input class="form-control input-inline input-sm input-small" value="3560" /> </li>
-                                    <li> Notify On System Error
-                                        <input type="checkbox" class="make-switch" checked data-size="small" data-on-color="danger" data-on-text="ON" data-off-color="default" data-off-text="OFF"> </li>
-                                    <li> Notify On SMTP Error
-                                        <input type="checkbox" class="make-switch" checked data-size="small" data-on-color="warning" data-on-text="ON" data-off-color="default" data-off-text="OFF"> </li>
-                                </ul>
-                                <div class="inner-content">
-                                    <button class="btn btn-success">
-                                        <i class="icon-settings"></i> Save Changes</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-             </div>';
+
+// ── Quick sidebar: pre-cargar staff del prestador médico ─────────────────────
+$_qs_staff_rows   = [];
+$_qs_staff_active = 0;
+$_qs_provider_id  = isset($provider_id) ? (int)$provider_id : 0;
+if ($es_prestador && $_qs_provider_id > 0 && isset($conexion) && $conexion
+    && function_exists('provider_staff_table_exists')
+    && provider_staff_table_exists($conexion)
+    && function_exists('provider_staff_select_columns')) {
+    $_qs_cols  = implode(', ', provider_staff_select_columns($conexion, 'pms'));
+    $_qs_sort  = function_exists('provider_staff_sort_column_name')
+        ? provider_staff_sort_column_name($conexion) : '';
+    $_qs_order = $_qs_sort !== '' ? "pms.`{$_qs_sort}` ASC, pms.full_name ASC" : 'pms.full_name ASC';
+    $_qs_sql   = "SELECT {$_qs_cols} FROM provider_medical_staff pms
+                  WHERE pms.provider_id = ? ORDER BY {$_qs_order} LIMIT 30";
+    if ($_qs_stmt = mysqli_prepare($conexion, $_qs_sql)) {
+        mysqli_stmt_bind_param($_qs_stmt, 'i', $_qs_provider_id);
+        mysqli_stmt_execute($_qs_stmt);
+        $_qs_res = mysqli_stmt_get_result($_qs_stmt);
+        while ($_qs_row = mysqli_fetch_assoc($_qs_res)) {
+            if (function_exists('provider_staff_normalize_row')) {
+                $_qs_row = provider_staff_normalize_row($_qs_row);
+            }
+            $_qs_staff_rows[] = $_qs_row;
+            if ((int)($_qs_row['is_active'] ?? 1) === 1) { $_qs_staff_active++; }
+        }
+        mysqli_stmt_close($_qs_stmt);
+    }
+}
+
+// ── Generar HTML del tab Staff médico ────────────────────────────────────────
+ob_start();
+if ($es_prestador && $_qs_provider_id > 0) {
+    if (empty($_qs_staff_rows)) {
+        echo '<div style="padding:28px 18px; text-align:center; color:#888;">';
+        echo '<i class="fa fa-user-md" style="font-size:32px; margin-bottom:12px; display:block; opacity:.4;"></i>';
+        echo '<p style="font-size:13px; line-height:1.5; margin-bottom:16px;">';
+        echo 'A&uacute;n no has registrado personal m&eacute;dico.<br>Agrega tu equipo cl&iacute;nico para organizar mejor la atenci&oacute;n.';
+        echo '</p>';
+        echo '<a href="staff_medico.php" class="btn btn-sm btn-primary btn-block">';
+        echo '<i class="fa fa-plus"></i> Agregar personal</a>';
+        echo '</div>';
+    } else {
+        foreach ($_qs_staff_rows as $_qs_m) {
+            $__name    = htmlspecialchars((string)($_qs_m['full_name'] ?? ''), ENT_QUOTES);
+            $__role    = htmlspecialchars((string)($_qs_m['role_title'] ?? ''), ENT_QUOTES);
+            $__spec    = htmlspecialchars((string)($_qs_m['specialty'] ?? ''), ENT_QUOTES);
+            $__active  = ((int)($_qs_m['is_active'] ?? 1) === 1);
+            $__primary = ((int)($_qs_m['is_primary_doctor'] ?? 0) === 1);
+            $__id      = (int)($_qs_m['id'] ?? 0);
+            $__photo   = trim((string)($_qs_m['photo'] ?? ''));
+            $__photo_src = '';
+            if ($__photo !== '') {
+                $_candidate = 'img/staff/' . $_qs_provider_id . '/' . $__photo;
+                if (file_exists(dirname(__FILE__, 2) . '/' . $_candidate)) {
+                    $__photo_src = '../' . $_candidate;
+                }
+            }
+            echo '<li class="media" style="padding:10px 15px; border-bottom:1px solid #f0f0f0; margin:0;">';
+            echo '<div style="display:flex; align-items:center; gap:10px;">';
+            echo '<div style="flex-shrink:0; width:38px; height:38px; border-radius:50%; background:#e8e8e8; overflow:hidden; display:flex; align-items:center; justify-content:center;">';
+            if ($__photo_src !== '') {
+                echo '<img src="' . htmlspecialchars($__photo_src, ENT_QUOTES) . '" alt="' . $__name . '" style="width:38px; height:38px; object-fit:cover;" />';
+            } else {
+                echo '<i class="fa fa-user-md" style="color:#aaa; font-size:16px;"></i>';
+            }
+            echo '</div>';
+            echo '<div style="flex:1; min-width:0;">';
+            echo '<div style="font-size:13px; font-weight:600; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">';
+            echo $__name;
+            if ($__primary) {
+                echo ' <span class="badge badge-primary" style="font-size:9px;">Principal</span>';
+            }
+            echo '</div>';
+            if ($__role !== '') {
+                echo '<div style="font-size:11px; color:#777; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' . $__role . '</div>';
+            }
+            if ($__spec !== '') {
+                echo '<div style="font-size:11px; color:#999; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' . $__spec . '</div>';
+            }
+            echo '</div>';
+            echo '<div style="flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:3px;">';
+            $__badge_class = $__active ? 'badge-success' : 'badge-default';
+            $__badge_label = $__active ? 'Activo' : 'Inactivo';
+            echo '<span class="badge ' . $__badge_class . '" style="font-size:9px;">' . $__badge_label . '</span>';
+            echo '<a href="staff_medico.php?edit=' . $__id . '" title="Editar ' . $__name . '" style="font-size:10px; color:#888;">';
+            echo '<i class="fa fa-pencil"></i></a>';
+            echo '</div>';
+            echo '</div>';
+            echo '</li>';
+        }
+        echo '<li style="padding:12px 15px; background:#f8f8f8; border-top:1px solid #e5e5e5;">';
+        echo '<div style="display:flex; gap:6px;">';
+        echo '<a href="staff_medico.php?action=new" class="btn btn-xs btn-primary" style="flex:1; text-align:center;"><i class="fa fa-plus"></i> Agregar</a>';
+        echo '<a href="staff_medico.php" class="btn btn-xs btn-default" style="flex:1; text-align:center;"><i class="fa fa-th-list"></i> Ver todo</a>';
+        echo '</div></li>';
+    }
+} else {
+    echo '<div style="padding:20px 15px; color:#aaa; font-size:12px; text-align:center;">';
+    echo '<i class="fa fa-user-md" style="font-size:28px; display:block; margin-bottom:8px; opacity:.3;"></i>';
+    echo 'Este panel solo est&aacute; disponible para prestadores m&eacute;dicos.';
+    echo '</div>';
+}
+$_qs_staff_html  = ob_get_clean();
+$_qs_staff_badge = $_qs_staff_active > 0
+    ? ' <span class="badge badge-success" style="font-size:9px;">' . $_qs_staff_active . '</span>'
+    : '';
+
+// ── Construir $sider_bar ──────────────────────────────────────────────────────
+ob_start();
+echo '<a href="javascript:;" class="page-quick-sidebar-toggler">';
+echo '<i class="icon-login"></i>';
+echo '</a>';
+echo '<div class="page-quick-sidebar-wrapper" data-close-on-body-click="false">';
+echo '<div class="page-quick-sidebar">';
+echo '<ul class="nav nav-tabs">';
+echo '<li class="active"><a href="javascript:;" data-target="#quick_sidebar_tab_1" data-toggle="tab">Staff' . $_qs_staff_badge . '</a></li>';
+echo '<li><a href="javascript:;" data-target="#quick_sidebar_tab_2" data-toggle="tab">Alertas</a></li>';
+echo '</ul>';
+echo '<div class="tab-content">';
+echo '<div class="tab-pane active page-quick-sidebar-chat" id="quick_sidebar_tab_1">';
+echo '<div class="page-quick-sidebar-chat-users" data-rail-color="#ddd" data-wrapper-class="page-quick-sidebar-list">';
+echo '<h3 class="list-heading">Staff m&eacute;dico</h3>';
+echo '<ul class="media-list list-items" id="qs-staff-list">';
+echo $_qs_staff_html;
+echo '</ul>';
+echo '</div>';
+echo '</div>';
+echo '<div class="tab-pane page-quick-sidebar-alerts" id="quick_sidebar_tab_2">';
+echo '<div class="page-quick-sidebar-alerts-list" style="padding:20px 15px; color:#aaa; font-size:12px; text-align:center;">';
+echo '<i class="fa fa-bell-o" style="font-size:28px; display:block; margin-bottom:8px; opacity:.3;"></i>';
+echo 'Sin alertas activas.';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+echo '</div>';
+$sider_bar = ob_get_clean();
+
 
 /*
  * BLOQUE DINÁMICO DE SERVICIOS (COMENTADO)
