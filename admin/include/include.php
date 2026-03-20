@@ -554,9 +554,10 @@ $can_view_clients = (
 );
 
 // ─── Grupos de páginas para la arquitectura de menú por dominios funcionales ──
-$operacion_pages = array('my_booking_requests.php', 'app_inbox.php', 'app_calendar.php', 'clientes.php');
-$comercial_pages = array('provider_offers.php', 'blog_edit.php');
-$empresa_pages   = array('mi_empresa.php', 'staff_medico.php', 'mis_datos.php');
+$operacion_pages  = array('my_booking_requests.php', 'app_inbox.php', 'app_calendar.php', 'clientes.php');
+$servicios_pages  = array('service_catalog.php', 'provider_offers.php');
+$presencia_pages  = array('blog_edit.php');
+$empresa_pages    = array('mi_empresa.php', 'staff_medico.php', 'mis_datos.php');
 
 $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-responsive-collapse">
                     <ul class="nav navbar-nav">
@@ -757,16 +758,29 @@ if ($es_admin) {
                         </li>';
     }
 
-    // ── 2. COMERCIAL: Mis Ofertas, Mi Blog ────────────────────────────────────
+    // ── 2. SERVICIOS: Mis Servicios (catálogo habilitado) + Mis Ofertas ─────────
     $top_header_2 .= '
-                        <li'.menu_li_class($comercial_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+                        <li'.menu_li_class($servicios_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
-                                <i class="icon-tag"></i> Comercial </a>
+                                <i class="fa fa-th-list"></i> Servicios </a>
                             <ul class="dropdown-menu dropdown-menu-fw">
+                                <li'.menu_li_class('service_catalog.php').'>
+                                    <a href="./service_catalog.php">
+                                        <i class="fa fa-th-list"></i> Mis Servicios </a>
+                                </li>
                                 <li'.menu_li_class('provider_offers.php').'>
                                     <a href="./provider_offers.php">
                                         <i class="icon-docs"></i> Mis Ofertas </a>
                                 </li>
+                            </ul>
+                        </li>';
+
+    // ── 3. PRESENCIA: Mi Blog ─────────────────────────────────────────────────
+    $top_header_2 .= '
+                        <li'.menu_li_class($presencia_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+                            <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
+                                <i class="icon-speech"></i> Presencia </a>
+                            <ul class="dropdown-menu dropdown-menu-fw">
                                 <li'.menu_li_class('blog_edit.php').'>
                                     <a href="./blog_edit.php">
                                         <i class="icon-speech"></i> Mi Blog </a>
@@ -774,7 +788,7 @@ if ($es_admin) {
                             </ul>
                         </li>';
 
-    // ── 3. MI EMPRESA / CONFIGURACIÓN: Datos empresa + Staff médico + Mi Perfil
+    // ── 4. MI EMPRESA / CONFIGURACIÓN: Datos empresa + Staff médico + Mi Perfil
     $top_header_2 .= '
                         <li'.menu_li_class($empresa_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">

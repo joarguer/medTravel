@@ -7,7 +7,7 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title;?> - Servicios del catálogo</title>
+    <title><?php echo $title;?> - Mis Servicios</title>
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
@@ -25,10 +25,10 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
         <div class="container-fluid">
             <div class="page-content">
                 <div class="breadcrumbs">
-                    <h1>Servicios del catálogo</h1>
+                    <h1>Mis Servicios</h1>
                     <ol class="breadcrumb">
-                        <li><a href="#">Site</a></li>
-                        <li class="active">Servicios</li>
+                        <li><a href="index.php">Inicio</a></li>
+                        <li class="active">Mis Servicios</li>
                     </ol>
                 </div>
 

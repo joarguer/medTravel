@@ -12,7 +12,7 @@ $n = 1;
 <html lang="es">
     <head>
         <meta charset="utf-8" />
-        <title>medTravel - Services Page Edit</title>
+        <title>medTravel - Editor Página de Servicios</title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta content="width=device-width, initial-scale=1" name="viewport" />
         <?php echo $global_first_style;?>
@@ -66,10 +66,10 @@ $n = 1;
             <div class="container-fluid">
                 <div class="page-content">
                     <div class="breadcrumbs">
-                        <h1>Services Page Edit</h1>
+                        <h1>Editor – Página de Servicios</h1>
                         <ol class="breadcrumb">
-                            <li><a href="#">Site</a></li>
-                            <li class="active">Services (services.php)</li>
+                            <li><a href="index.php">Inicio</a></li>
+                            <li class="active">Contenido Web – Servicios</li>
                         </ol>
                         <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".page-sidebar">
                             <span class="sr-only">Toggle navigation</span>
