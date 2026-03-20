@@ -35,8 +35,6 @@ if ($is_linked_medical_staff_session) {
     $can_edit_self = false;
     $can_upload_logo = false;
 }
-$hasMedicalStaffAjax = is_file(__DIR__ . '/ajax/provider_medical_staff.php');
-$hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
 
 $company = [
     'type' => '',
@@ -449,65 +447,6 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                     </div>
                                 </div>
                             </div>
-                            <?php if ($domain_type === 'medical'): ?>
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <div class="portlet light">
-                                        <div class="portlet-title">
-                                            <div class="caption">
-                                                <i class="fa fa-user-md font-dark"></i>
-                                                <span class="caption-subject font-dark bold uppercase">Staff médico</span>
-                                            </div>
-                                            <div class="actions">
-                                                <span class="text-muted" style="margin-right:12px;">
-                                                    Activos: <strong id="staff-active-counter">0</strong>
-                                                </span>
-                                                <button type="button" class="btn btn-primary btn-sm" id="btn-add-medical-staff" <?php echo $can_edit_self ? '' : 'disabled'; ?>>
-                                                    <i class="fa fa-plus"></i> Agregar staff
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="portlet-body">
-                                            <?php if (!$hasMedicalStaffAjax || !$hasMedicalStaffJs): ?>
-                                            <div class="alert alert-danger">
-                                                Faltan assets del staff médico. Verifica <code>admin/ajax/provider_medical_staff.php</code> y <code>admin/js/provider_medical_staff.js</code>.
-                                            </div>
-                                            <?php endif; ?>
-                                            <p class="text-muted" style="max-width:840px;">
-                                                La cuenta principal del prestador administra su staff médico y su orden operativo, manteniendo separada la entidad provider del médico/staff interno. Esta base prepara la futura asignación clínica por item sin activar todavía agenda compleja.
-                                            </p>
-                                            <?php if (!$can_edit_self): ?>
-                                            <div class="alert alert-info">
-                                                <i class="fa fa-info-circle"></i> Tu perfil puede consultar el staff médico, pero no administrarlo.
-                                            </div>
-                                            <?php endif; ?>
-                                            <div id="medical-staff-feedback"></div>
-                                            <div class="table-responsive">
-                                                <table class="table table-striped table-bordered table-hover" id="tbl-provider-medical-staff">
-                                                    <thead>
-                                                        <tr>
-                                                            <th style="width:72px;">Foto</th>
-                                                            <th>Nombre</th>
-                                                            <th>Cargo / rol</th>
-                                                            <th>Especialidad</th>
-                                                            <th>Principal</th>
-                                                            <th>Activo</th>
-                                                            <th>Orden</th>
-                                                            <th style="width:180px;">Acciones</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <tr>
-                                                            <td colspan="8" class="text-center text-muted" style="padding:24px 12px;">Cargando staff médico...</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -521,150 +460,6 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
     <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
     <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
     <?php echo $theme_layout_script;?>
-    <?php if ($domain_type === 'medical'): ?>
-    <div id="providerMedicalStaffModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="providerMedicalStaffModalLabel">
-        <div class="modal-dialog modal-lg" role="document">
-            <div class="modal-content">
-                <div class="modal-header" style="background:#f7f7f7; border-bottom:1px solid #ebebeb;">
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><i class="fa fa-times"></i></button>
-                    <h4 class="modal-title" id="providerMedicalStaffModalLabel"><strong>Agregar staff médico</strong></h4>
-                </div>
-                <div class="modal-body">
-                    <form id="form-provider-medical-staff">
-                        <input type="hidden" id="pms-id" name="id" value="" />
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-full-name">Nombre completo <span class="required">*</span></label>
-                                    <input type="text" class="form-control" id="pms-full-name" name="full_name" maxlength="150" required />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-role-title">Cargo / rol</label>
-                                    <input type="text" class="form-control" id="pms-role-title" name="role_title" maxlength="120" />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-specialty">Especialidad</label>
-                                    <input type="text" class="form-control" id="pms-specialty" name="specialty" maxlength="120" />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-sort-order">Orden</label>
-                                    <input type="number" class="form-control" id="pms-sort-order" name="sort_order" min="0" step="1" />
-                                    <span class="help-block">Menor número = aparece primero.</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="pms-photo">Foto (URL o ruta interna)</label>
-                            <input type="text" class="form-control" id="pms-photo" name="photo" maxlength="255" />
-                        </div>
-                        <div class="form-group">
-                            <label for="pms-bio-short">Bio corta</label>
-                            <textarea class="form-control" id="pms-bio-short" name="bio_short" rows="3"></textarea>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-email">Correo</label>
-                                    <input type="email" class="form-control" id="pms-email" name="email" maxlength="120" />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-phone">Teléfono</label>
-                                    <input type="text" class="form-control" id="pms-phone" name="phone" maxlength="60" />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <label class="mt-checkbox mt-checkbox-outline">
-                                    <input type="checkbox" id="pms-is-primary-doctor" name="is_primary_doctor" value="1" />
-                                    Marcar como médico principal
-                                    <span></span>
-                                </label>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="mt-checkbox mt-checkbox-outline">
-                                    <input type="checkbox" id="pms-is-active" name="is_active" value="1" checked />
-                                    Registro activo
-                                    <span></span>
-                                </label>
-                            </div>
-                        </div>
-                        <hr />
-                        <h5 class="bold">Campos complementarios / compatibilidad</h5>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-license">Registro profesional</label>
-                                    <input type="text" class="form-control" id="pms-license" name="professional_license" maxlength="120" />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-clinic">Clínica / sede</label>
-                                    <input type="text" class="form-control" id="pms-clinic" name="clinic_name" maxlength="180" />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="pms-service-ids">Servicios habilitados</label>
-                            <select class="form-control" id="pms-service-ids" name="service_ids[]" multiple size="8"></select>
-                            <span class="help-block">Opcional. Sirve como base para futura asignación clínica por item.</span>
-                        </div>
-                        <div class="form-group">
-                            <label for="pms-notes">Notas</label>
-                            <textarea class="form-control" id="pms-notes" name="notes" rows="4"></textarea>
-                        </div>
-                        <div id="pms-access-section" style="display:none;">
-                            <hr />
-                            <h4 class="bold" style="margin-top:0;">Acceso al sistema</h4>
-                            <p class="text-muted">Configura aquí si este médico tendrá acceso propio al admin y con qué usuario quedará vinculado.</p>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="pms-linked-user-id">Usuario vinculado</label>
-                                        <select class="form-control" id="pms-linked-user-id" name="linked_user_id">
-                                            <option value="">Sin usuario vinculado</option>
-                                        </select>
-                                        <span class="help-block">Debe pertenecer al mismo prestador y tener usuario activo en el sistema.</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group" style="padding-top:26px;">
-                                        <label class="mt-checkbox mt-checkbox-outline">
-                                            <input type="checkbox" id="pms-can-access-admin" name="can_access_admin" value="1" />
-                                            Permitir acceso al admin
-                                            <span></span>
-                                        </label>
-                                        <span class="help-block">
-                                            Estado de acceso: <strong id="pms-access-status">Sin usuario vinculado</strong>
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <span id="pms-save-msg" class="pull-left" style="display:none;"></span>
-                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="btn-save-medical-staff" <?php echo $can_edit_self ? '' : 'disabled'; ?>>
-                        <i class="fa fa-save"></i> Guardar
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
     <script>
         window.MI_EMPRESA_CTX = {
             domainType: <?php echo json_encode($domain_type); ?>,
@@ -676,8 +471,6 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
         window.PROVIDER_ID = <?php echo $domain_type === 'medical' ? (int)$scope_id : 0; ?>;
     </script>
     <script src="js/mi_empresa.js" type="text/javascript"></script>
-    <?php if ($domain_type === 'medical' && $hasMedicalStaffJs): ?>
-    <script src="js/provider_medical_staff.js" type="text/javascript"></script>
-    <?php endif; ?>
+
 </body>
 </html>

@@ -556,7 +556,7 @@ $can_view_clients = (
 // ─── Grupos de páginas para la arquitectura de menú por dominios funcionales ──
 $operacion_pages = array('my_booking_requests.php', 'app_inbox.php', 'app_calendar.php', 'clientes.php');
 $comercial_pages = array('provider_offers.php', 'blog_edit.php');
-$empresa_pages   = array('mi_empresa.php', 'mis_datos.php');
+$empresa_pages   = array('mi_empresa.php', 'staff_medico.php', 'mis_datos.php');
 
 $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-responsive-collapse">
                     <ul class="nav navbar-nav">
@@ -774,7 +774,7 @@ if ($es_admin) {
                             </ul>
                         </li>';
 
-    // ── 3. MI EMPRESA / CONFIGURACIÓN: Datos empresa + Mi Perfil ─────────────
+    // ── 3. MI EMPRESA / CONFIGURACIÓN: Datos empresa + Staff médico + Mi Perfil
     $top_header_2 .= '
                         <li'.menu_li_class($empresa_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
@@ -783,6 +783,10 @@ if ($es_admin) {
                                 <li'.menu_li_class('mi_empresa.php').'>
                                     <a href="./mi_empresa.php">
                                         <i class="icon-briefcase"></i> Datos de Empresa </a>
+                                </li>
+                                <li'.menu_li_class('staff_medico.php').'>
+                                    <a href="./staff_medico.php">
+                                        <i class="fa fa-user-md"></i> Staff médico </a>
                                 </li>
                                 <li'.menu_li_class('mis_datos.php').'>
                                     <a href="./mis_datos.php">
