@@ -89,7 +89,8 @@ if (!$es_admin_principal && $ses_rol !== '') {
                 <div class="breadcrumbs">
                     <h1>Mis Ofertas</h1>
                     <ol class="breadcrumb">
-                        <li><a href="#">Prestador</a></li>
+                        <li><a href="index.php">Inicio</a></li>
+                        <li><a href="service_catalog.php">Mis Servicios</a></li>
                         <li class="active">Mis Ofertas</li>
                     </ol>
                 </div>
@@ -111,7 +112,7 @@ if (!$es_admin_principal && $ses_rol !== '') {
                             <div class="portlet light ">
                                 <div class="portlet-title">
                                     <div class="caption">
-                                        <i class="icon-list theme-font"></i>
+                                        <i class="icon-docs theme-font"></i>
                                         <span class="caption-subject font-dark bold uppercase">Mis Ofertas</span>
                                     </div>
                                     <div class="actions">
@@ -119,6 +120,11 @@ if (!$es_admin_principal && $ses_rol !== '') {
                                     </div>
                                 </div>
                                 <div class="portlet-body">
+                                    <p class="text-muted" style="max-width:840px; margin-bottom:16px;">
+                                        Las ofertas son publicaciones comerciales que le muestras a los pacientes. 
+                                        Cada oferta toma como base un servicio de <a href="service_catalog.php">Mis Servicios</a> 
+                                        y agrega precio, título atractivo, descripción y galería de imágenes.
+                                    </p>
                                     <table class="table table-striped table-bordered" id="tbl-offers" data-show-owner="<?php echo $es_admin_principal ? '1' : '0'; ?>">
                                         <thead>
                                             <tr>
@@ -144,7 +150,7 @@ if (!$es_admin_principal && $ses_rol !== '') {
                                 </div>
                                 <div class="portlet-body">
                                     <div id="offer-gallery">
-                                        <p>Seleccione una oferta para ver sus fotos.</p>
+                                        <p class="text-muted"><i class="fa fa-images"></i> Selecciona una oferta de la tabla para gestionar su galería de imágenes.</p>
                                     </div>
                                 </div>
                             </div>
@@ -277,14 +283,14 @@ if (!$es_admin_principal && $ses_rol !== '') {
                             <div class="row">
                                 <div class="col-md-12">
                                     <div class="alert alert-info" style="border-left: 4px solid #667eea;">
-                                        <i class="fa fa-lightbulb-o"></i> <strong>Tip:</strong> 
-                                        Describa detalladamente su servicio. Incluya beneficios, procedimientos, 
-                                        duración, y cualquier información relevante para sus pacientes.
+                                        <i class="fa fa-lightbulb-o"></i> <strong>Consejo:</strong> 
+                                        Describe tu oferta de forma clara y detallada: beneficios, procedimiento, duración estimada
+                                        y cualquier información útil para el paciente.
                                     </div>
                                     
                                     <div class="form-group">
                                         <label class="control-label">
-                                            <i class="fa fa-file-text"></i> Descripción Completa del Servicio <span class="required">*</span>
+                                            <i class="fa fa-file-text"></i> Descripción de la oferta <span class="required">*</span>
                                         </label>
                                         <textarea class="form-control summernote" name="description" id="offer-desc" 
                                                   placeholder="Describa su servicio médico de manera profesional..." required></textarea>
@@ -308,7 +314,7 @@ if (!$es_admin_principal && $ses_rol !== '') {
                                     
                                     <div class="form-group">
                                         <label class="control-label">
-                                            <i class="fa fa-camera"></i> Subir Fotografías del Servicio
+                                            <i class="fa fa-camera"></i> Subir fotografías de la oferta
                                         </label>
                                         <div class="input-group" style="width: 100%;">
                                             <input type="file" id="offer-file" class="form-control" 

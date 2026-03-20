@@ -37,7 +37,7 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
                         <div class="page-sidebar">
                             <nav class="navbar" role="navigation">
                                 <ul class="nav navbar-nav">
-                                    <li class="active"><a href="service_catalog.php"><i class="icon-list"></i> Servicios del catálogo</a></li>
+                                    <li class="active"><a href="service_catalog.php"><i class="fa fa-th-list"></i> Mis Servicios</a></li>
                                 </ul>
                             </nav>
                         </div>
@@ -45,14 +45,18 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
                             <div class="portlet light ">
                                 <div class="portlet-title">
                                     <div class="caption">
-                                        <i class="icon-list theme-font"></i>
-                                        <span class="caption-subject font-dark bold uppercase">Servicios</span>
+                                        <i class="fa fa-th-list theme-font"></i>
+                                        <span class="caption-subject font-dark bold uppercase">Mis Servicios habilitados</span>
                                     </div>
                                     <div class="actions">
                                         <a id="btn-new-service" class="btn btn-primary">Nuevo servicio</a>
                                     </div>
                                 </div>
                                 <div class="portlet-body">
+                                    <p class="text-muted" style="max-width:840px; margin-bottom:16px;">
+                                        Aquí defines qué servicios médicos puede ofrecer tu empresa. Cada servicio habilitado activa la posibilidad de crear 
+                                        <a href="provider_offers.php">ofertas comerciales</a> sobre él para publicarlas a tus pacientes.
+                                    </p>
                                     <div class="form-inline margin-bottom-10">
                                         <label>Filtrar por categoría:&nbsp;</label>
                                         <select id="filter-category" class="form-control"></select>
@@ -95,7 +99,7 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
                         <div class="modal-content">
                             <div class="modal-header" style="background:#f7f7f7; border-bottom:1px solid #ebebeb;">
                                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><i class="fa fa-times"></i></button>
-                                <h4 class="modal-title"><strong>Servicio</strong></h4>
+                                <h4 class="modal-title"><strong id="service-modal-title">Nuevo servicio habilitado</strong></h4>
                             </div>
                             <div class="modal-body">
                                 <form id="form-service">
