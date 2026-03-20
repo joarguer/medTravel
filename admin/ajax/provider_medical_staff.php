@@ -587,6 +587,7 @@ function pms_fetch_linked_user($conexion, $userId, $providerId, $currentStaffId 
 
     $hasActive = pms_table_has_column($conexion, 'usuarios', 'activo');
     $hasDeleted = pms_table_has_column($conexion, 'usuarios', 'is_deleted');
+    $hasEmail = pms_table_has_column($conexion, 'usuarios', 'email');
     $hasRoleId = pms_table_has_column($conexion, 'usuarios', 'role_id');
     $hasRol = pms_table_has_column($conexion, 'usuarios', 'rol');
 
@@ -594,7 +595,7 @@ function pms_fetch_linked_user($conexion, $userId, $providerId, $currentStaffId 
         'u.id',
         "COALESCE(NULLIF(u.nombre, ''), NULLIF(u.usuario, ''), CONCAT('Usuario #', u.id)) AS nombre",
         "COALESCE(NULLIF(u.usuario, ''), CONCAT('usuario_', u.id)) AS usuario",
-        "COALESCE(NULLIF(u.email, ''), '') AS email",
+        $hasEmail ? "COALESCE(NULLIF(u.email, ''), '') AS email" : "'' AS email",
         $hasActive ? 'u.activo' : '1 AS activo',
         $hasRoleId ? 'u.role_id' : 'NULL AS role_id',
         $hasRol ? 'u.rol' : 'NULL AS rol',
@@ -702,11 +703,12 @@ function pms_staff_row($conexion, $staffId, $providerId = 0)
     $hasAccessColumns = pms_has_access_columns($conexion);
     $hasUsersTable = pms_table_has_column($conexion, 'usuarios', 'id');
     $hasUserActivo = $hasUsersTable && pms_table_has_column($conexion, 'usuarios', 'activo');
+    $hasUserEmail = $hasUsersTable && pms_table_has_column($conexion, 'usuarios', 'email');
 
     $select = provider_staff_select_columns($conexion, 'pms');
     $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.nombre AS linked_user_name' : 'NULL AS linked_user_name';
     $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.usuario AS linked_username' : 'NULL AS linked_username';
-    $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.email AS linked_user_email' : 'NULL AS linked_user_email';
+    $select[] = ($hasAccessColumns && $hasUsersTable && $hasUserEmail) ? 'u.email AS linked_user_email' : 'NULL AS linked_user_email';
     $select[] = ($hasAccessColumns && $hasUsersTable && $hasUserActivo) ? 'u.activo AS linked_user_active' : 'NULL AS linked_user_active';
 
     $sql = 'SELECT ' . implode(', ', $select) . ' FROM provider_medical_staff pms';
@@ -752,6 +754,7 @@ function pms_fetch_linkable_users($conexion, $providerId, $currentStaffId = 0)
 
     $hasDeleted = pms_table_has_column($conexion, 'usuarios', 'is_deleted');
     $hasActive = pms_table_has_column($conexion, 'usuarios', 'activo');
+    $hasEmail = pms_table_has_column($conexion, 'usuarios', 'email');
     $hasRoleId = pms_table_has_column($conexion, 'usuarios', 'role_id');
     $hasRol = pms_table_has_column($conexion, 'usuarios', 'rol');
 
@@ -759,7 +762,7 @@ function pms_fetch_linkable_users($conexion, $providerId, $currentStaffId = 0)
         'u.id',
         "COALESCE(NULLIF(u.nombre, ''), NULLIF(u.usuario, ''), CONCAT('Usuario #', u.id)) AS nombre",
         "COALESCE(NULLIF(u.usuario, ''), CONCAT('usuario_', u.id)) AS usuario",
-        "COALESCE(NULLIF(u.email, ''), '') AS email",
+        $hasEmail ? "COALESCE(NULLIF(u.email, ''), '') AS email" : "'' AS email",
         $hasActive ? 'u.activo' : '1 AS activo',
         $hasRoleId ? 'u.role_id' : 'NULL AS role_id',
         $hasRol ? 'u.rol' : 'NULL AS rol',
@@ -833,11 +836,12 @@ function pms_list_staff_rows($conexion, $providerId, $activeOnly = false)
     $hasAccessColumns = pms_has_access_columns($conexion);
     $hasUsersTable = pms_table_has_column($conexion, 'usuarios', 'id');
     $hasUserActivo = $hasUsersTable && pms_table_has_column($conexion, 'usuarios', 'activo');
+    $hasUserEmail = $hasUsersTable && pms_table_has_column($conexion, 'usuarios', 'email');
 
     $select = provider_staff_select_columns($conexion, 'pms');
     $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.nombre AS linked_user_name' : 'NULL AS linked_user_name';
     $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.usuario AS linked_username' : 'NULL AS linked_username';
-    $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.email AS linked_user_email' : 'NULL AS linked_user_email';
+    $select[] = ($hasAccessColumns && $hasUsersTable && $hasUserEmail) ? 'u.email AS linked_user_email' : 'NULL AS linked_user_email';
     $select[] = ($hasAccessColumns && $hasUsersTable && $hasUserActivo) ? 'u.activo AS linked_user_active' : 'NULL AS linked_user_active';
 
     $sql = 'SELECT ' . implode(', ', $select) . ' FROM provider_medical_staff pms';

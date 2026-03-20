@@ -24,9 +24,13 @@ Alias al backlog / pasos de ejecución canónico.
 
 ### Paso 3 — Modelo operativo del staff medico
 
-- Separar prestador de medico o staff interno
-- Definir el equivalente logico futuro para staff medico sin forzar una tabla definitiva prematura
-- Asegurar que cada item medico pueda mostrar prestador, doctor o staff, clinic y estado de cita
+- DONE MVP 2026-03-20: se materializa la separacion formal entre prestador y medico o staff interno mediante `provider_medical_staff`
+- DONE MVP 2026-03-20: existe persistencia formal, CRUD admin por prestador, activacion / desactivacion y `sort_order`
+- DONE MVP 2026-03-20: queda preparado el helper y la forma de exposicion futura para mostrar por item prestador, doctor o staff, clinica / sede y estado de cita
+- Scope MVP cerrado:
+  - sin agenda compleja
+  - sin calendar sync
+  - sin cambios al commission system fuera de compatibilidad legacy
 
 ### Paso 4 — Trazabilidad estructurada
 

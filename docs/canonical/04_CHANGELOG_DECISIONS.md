@@ -1,5 +1,25 @@
 # Changelog Decisions
 
+## 2026-03-20 — Se materializa provider_medical_staff como modelo MVP de staff interno por prestador
+
+**Rationale**
+- La separacion canónica entre prestador y medico / staff interno ya no podia seguir solo como definicion documental.
+- Operacion necesitaba persistencia formal y gestion admin del staff sin hacks en `providers` ni texto libre.
+- La evolucion debia mantener compatibilidad legacy y dejar lista la futura asignacion por item sin abrir agenda compleja.
+
+**Outcome**
+- Se adopta `provider_medical_staff` como tabla formal del staff medico interno del prestador.
+- El admin del prestador incorpora CRUD para listar, crear, editar, activar / desactivar y ordenar staff.
+- `admin/ajax/my_booking_requests.php` queda preparado para enriquecer items con staff asignado mediante helper reutilizable, sin cambiar el alcance funcional a agenda o calendar sync.
+- `admin/include/roles.php` reconoce el contexto de staff medico vinculado con tolerancia a variantes legacy de estado (`is_active` / `active`).
+- El endpoint de staff se endurece para esquemas reales donde `usuarios` no tiene columna `email`, evitando romper el runtime por asumir un schema mas amplio.
+
+**Validation**
+- La migracion `sql/2026_03_12_provider_medical_staff.sql` fue aplicada y validada sobre la BD real `bolsacar_medtravel`.
+- Se verificaron en entorno real el CRUD minimo de staff por `provider_id`: crear, listar, editar, activar / desactivar y reordenar.
+- En la BD validada no existe `booking_request_items`; por eso `admin/ajax/my_booking_requests.php` solo pudo comprobarse a nivel de compatibilidad aditiva y salida controlada `booking_request_items_not_available`, sin regresion de runtime observable en esa condicion.
+- Esta decision cierra el Paso 3 del backlog a nivel MVP y deja fuera de alcance agenda, citas complejas y commission como eje del cambio.
+
 ## 2026-03-12 — MedTravel adopta arquitectura operativa de gestion de casos
 
 **Rationale**
