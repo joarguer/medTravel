@@ -167,26 +167,26 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                                     Activos: <strong id="staff-active-counter">0</strong>
                                                 </span>
                                                 <button type="button" class="btn btn-primary btn-sm" id="btn-add-medical-staff">
-                                                    <i class="fa fa-plus"></i> Agregar médico
+                                                    <i class="fa fa-plus"></i> Agregar staff
                                                 </button>
                                             </div>
                                         </div>
                                         <div class="portlet-body">
                                             <p class="text-muted" style="max-width:840px;">
-                                                Registra médicos o staff clínico interno del prestador. Esta relación deja preparada la base para futuras asignaciones de médico al caso o al item, sin reemplazar al prestador como entidad principal.
+                                                Registra el staff médico interno del prestador y ordénalo sin confundirlo con la entidad provider. Esta base deja preparada la futura asignación de médico/staff por item o cita, sin activar todavía agenda compleja.
                                             </p>
                                             <div id="medical-staff-feedback"></div>
                                             <div class="table-responsive">
                                                 <table class="table table-striped table-bordered table-hover" id="tbl-provider-medical-staff">
                                                     <thead>
                                                         <tr>
-                                                            <th>Nombre / servicios</th>
-                                                            <th>Registro profesional</th>
-                                                            <th>Contacto</th>
-                                                            <th>Clínica / sede</th>
-                                                            <th>Usuario vinculado / acceso</th>
-                                                            <th>Estado</th>
-                                                            <th>Actualizado</th>
+                                                            <th style="width:72px;">Foto</th>
+                                                            <th>Nombre</th>
+                                                            <th>Cargo / rol</th>
+                                                            <th>Especialidad</th>
+                                                            <th>Principal</th>
+                                                            <th>Activo</th>
+                                                            <th>Orden</th>
                                                             <th style="width:180px;">Acciones</th>
                                                         </tr>
                                                     </thead>
@@ -333,7 +333,7 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
             <div class="modal-content">
                 <div class="modal-header" style="background:#f7f7f7; border-bottom:1px solid #ebebeb;">
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close"><i class="fa fa-times"></i></button>
-                    <h4 class="modal-title" id="providerMedicalStaffModalLabel"><strong>Agregar médico</strong></h4>
+                    <h4 class="modal-title" id="providerMedicalStaffModalLabel"><strong>Agregar staff médico</strong></h4>
                 </div>
                 <div class="modal-body">
                     <form id="form-provider-medical-staff">
@@ -342,22 +342,71 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="pms-full-name">Nombre completo <span class="required">*</span></label>
-                                    <input type="text" class="form-control" id="pms-full-name" name="full_name" maxlength="180" required />
+                                    <input type="text" class="form-control" id="pms-full-name" name="full_name" maxlength="150" required />
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="pms-specialty">Especialidad principal (opcional)</label>
-                                    <input type="text" class="form-control" id="pms-specialty" name="specialty" maxlength="180" />
-                                    <span class="help-block">Dato complementario / legacy. La capacidad clínica principal se define por servicios.</span>
+                                    <label for="pms-role-title">Cargo / rol</label>
+                                    <input type="text" class="form-control" id="pms-role-title" name="role_title" maxlength="120" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-specialty">Especialidad</label>
+                                    <input type="text" class="form-control" id="pms-specialty" name="specialty" maxlength="120" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-sort-order">Orden</label>
+                                    <input type="number" class="form-control" id="pms-sort-order" name="sort_order" min="0" step="1" />
+                                    <span class="help-block">Menor número = aparece primero.</span>
                                 </div>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="pms-service-ids">Servicios habilitados</label>
-                            <select class="form-control" id="pms-service-ids" name="service_ids[]" multiple size="8"></select>
-                            <span class="help-block">Selecciona los servicios activos del prestador que este médico puede atender.</span>
+                            <label for="pms-photo">Foto (URL o ruta interna)</label>
+                            <input type="text" class="form-control" id="pms-photo" name="photo" maxlength="255" />
                         </div>
+                        <div class="form-group">
+                            <label for="pms-bio-short">Bio corta</label>
+                            <textarea class="form-control" id="pms-bio-short" name="bio_short" rows="3"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-email">Correo</label>
+                                    <input type="email" class="form-control" id="pms-email" name="email" maxlength="120" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="pms-phone">Teléfono</label>
+                                    <input type="text" class="form-control" id="pms-phone" name="phone" maxlength="60" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="mt-checkbox mt-checkbox-outline">
+                                    <input type="checkbox" id="pms-is-primary-doctor" name="is_primary_doctor" value="1" />
+                                    Marcar como médico principal
+                                    <span></span>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="mt-checkbox mt-checkbox-outline">
+                                    <input type="checkbox" id="pms-is-active" name="is_active" value="1" checked />
+                                    Registro activo
+                                    <span></span>
+                                </label>
+                            </div>
+                        </div>
+                        <hr />
+                        <h5 class="bold">Campos complementarios / compatibilidad</h5>
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
@@ -372,19 +421,10 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                 </div>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-email">Correo</label>
-                                    <input type="email" class="form-control" id="pms-email" name="email" maxlength="190" />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-phone">Teléfono</label>
-                                    <input type="text" class="form-control" id="pms-phone" name="phone" maxlength="80" />
-                                </div>
-                            </div>
+                        <div class="form-group">
+                            <label for="pms-service-ids">Servicios habilitados</label>
+                            <select class="form-control" id="pms-service-ids" name="service_ids[]" multiple size="8"></select>
+                            <span class="help-block">Opcional. Sirve como base para futura asignación clínica por item.</span>
                         </div>
                         <div class="form-group">
                             <label for="pms-notes">Notas</label>
@@ -417,13 +457,6 @@ $hasMedicalStaffJs = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="mt-checkbox mt-checkbox-outline">
-                                <input type="checkbox" id="pms-active" name="active" value="1" checked />
-                                Activo
-                                <span></span>
-                            </label>
                         </div>
                     </form>
                 </div>

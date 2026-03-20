@@ -8,6 +8,7 @@
  *   - get_staff
  *   - save_staff
  *   - toggle_staff
+ *   - reorder_staff
  *
  * Nota: expone active_only para futura asignacion provider -> medical staff
  * sin acoplar aun booking_request_items a esta tabla.
@@ -15,6 +16,7 @@
 
 require_once '../include/conexion.php';
 require_once '../include/roles.php';
+require_once '../include/provider_medical_staff_helpers.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -40,6 +42,18 @@ function pms_err($message, $status = 400, $extra = [])
     http_response_code((int)$status);
     echo json_encode(array_merge(['ok' => false, 'message' => $message], $extra));
     exit;
+}
+
+function bind_stmt_params($stmt, $types, &$values)
+{
+    if ($types === '' || empty($values)) {
+        return true;
+    }
+    $bind = [$types];
+    foreach ($values as $k => &$v) {
+        $bind[] = &$v;
+    }
+    return call_user_func_array([$stmt, 'bind_param'], $bind);
 }
 
 function pms_table_ready($conexion)
@@ -109,11 +123,82 @@ function pms_clean_text($value, $max = 255)
 
 function pms_clean_email($value)
 {
-    $email = pms_clean_text($value, 190);
+    $email = pms_clean_text($value, 120);
     if ($email === '') {
         return '';
     }
     return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : false;
+}
+
+function pms_clean_long_text($value)
+{
+    return trim((string)$value);
+}
+
+function pms_requested_flag($key)
+{
+    return isset($_POST[$key]) ? 1 : 0;
+}
+
+function pms_status_select_expr($alias = 'pms')
+{
+    global $conexion;
+    return provider_staff_status_select_expr($conexion, $alias);
+}
+
+function pms_sort_select_expr($alias = 'pms')
+{
+    global $conexion;
+    return provider_staff_sort_select_expr($conexion, $alias);
+}
+
+function pms_sort_order_sql($alias = 'pms')
+{
+    global $conexion;
+    $column = provider_staff_sort_column_name($conexion);
+    if ($column === '') {
+        return $alias . '.id';
+    }
+    return $alias . '.`' . $column . '`';
+}
+
+function pms_primary_order_sql($alias = 'pms')
+{
+    global $conexion;
+    if (provider_staff_table_has_column($conexion, 'is_primary_doctor')) {
+        return $alias . '.is_primary_doctor DESC, ';
+    }
+    return '';
+}
+
+function pms_normalize_staff_row($row)
+{
+    $row = provider_staff_normalize_row($row);
+    $row['bio_short_preview'] = $row['bio_short'] !== ''
+        ? $row['bio_short']
+        : trim((string)($row['notes'] ?? ''));
+    return $row;
+}
+
+function pms_next_sort_order($conexion, $providerId)
+{
+    $sortExpr = pms_sort_select_expr('pms');
+    $stmt = mysqli_prepare(
+        $conexion,
+        'SELECT COALESCE(MAX(' . $sortExpr . '), 0) AS max_sort
+         FROM provider_medical_staff pms
+         WHERE pms.provider_id = ?'
+    );
+    if (!$stmt) {
+        return 10;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    $maxSort = isset($row['max_sort']) ? (int)$row['max_sort'] : 0;
+    return $maxSort > 0 ? ($maxSort + 10) : 10;
 }
 
 function pms_service_label($row)
@@ -618,26 +703,11 @@ function pms_staff_row($conexion, $staffId, $providerId = 0)
     $hasUsersTable = pms_table_has_column($conexion, 'usuarios', 'id');
     $hasUserActivo = $hasUsersTable && pms_table_has_column($conexion, 'usuarios', 'activo');
 
-    $select = [
-        'pms.id',
-        'pms.provider_id',
-        'pms.full_name',
-        'pms.specialty',
-        'pms.professional_license',
-        'pms.email',
-        'pms.phone',
-        'pms.clinic_name',
-        'pms.notes',
-        'pms.active',
-        'pms.created_at',
-        'pms.updated_at',
-        $hasAccessColumns ? 'pms.linked_user_id' : 'NULL AS linked_user_id',
-        $hasAccessColumns ? 'pms.can_access_admin' : '0 AS can_access_admin',
-        ($hasAccessColumns && $hasUsersTable) ? 'u.nombre AS linked_user_name' : 'NULL AS linked_user_name',
-        ($hasAccessColumns && $hasUsersTable) ? 'u.usuario AS linked_username' : 'NULL AS linked_username',
-        ($hasAccessColumns && $hasUsersTable) ? 'u.email AS linked_user_email' : 'NULL AS linked_user_email',
-        ($hasAccessColumns && $hasUsersTable && $hasUserActivo) ? 'u.activo AS linked_user_active' : 'NULL AS linked_user_active',
-    ];
+    $select = provider_staff_select_columns($conexion, 'pms');
+    $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.nombre AS linked_user_name' : 'NULL AS linked_user_name';
+    $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.usuario AS linked_username' : 'NULL AS linked_username';
+    $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.email AS linked_user_email' : 'NULL AS linked_user_email';
+    $select[] = ($hasAccessColumns && $hasUsersTable && $hasUserActivo) ? 'u.activo AS linked_user_active' : 'NULL AS linked_user_active';
 
     $sql = 'SELECT ' . implode(', ', $select) . ' FROM provider_medical_staff pms';
     if ($hasAccessColumns && $hasUsersTable) {
@@ -666,7 +736,7 @@ function pms_staff_row($conexion, $staffId, $providerId = 0)
     if (!$row) {
         return null;
     }
-    $row['active_label'] = ((int)($row['active'] ?? 0) === 1) ? 'Activo' : 'Inactivo';
+    $row = pms_normalize_staff_row($row);
     $row = array_merge($row, pms_access_status_payload($row));
     $effectiveProviderId = $providerId > 0 ? $providerId : (int)($row['provider_id'] ?? 0);
     $serviceMap = pms_fetch_staff_services_map($conexion, $effectiveProviderId, [$staffId]);
@@ -764,26 +834,11 @@ function pms_list_staff_rows($conexion, $providerId, $activeOnly = false)
     $hasUsersTable = pms_table_has_column($conexion, 'usuarios', 'id');
     $hasUserActivo = $hasUsersTable && pms_table_has_column($conexion, 'usuarios', 'activo');
 
-    $select = [
-        'pms.id',
-        'pms.provider_id',
-        'pms.full_name',
-        'pms.specialty',
-        'pms.professional_license',
-        'pms.email',
-        'pms.phone',
-        'pms.clinic_name',
-        'pms.notes',
-        'pms.active',
-        'pms.created_at',
-        'pms.updated_at',
-        $hasAccessColumns ? 'pms.linked_user_id' : 'NULL AS linked_user_id',
-        $hasAccessColumns ? 'pms.can_access_admin' : '0 AS can_access_admin',
-        ($hasAccessColumns && $hasUsersTable) ? 'u.nombre AS linked_user_name' : 'NULL AS linked_user_name',
-        ($hasAccessColumns && $hasUsersTable) ? 'u.usuario AS linked_username' : 'NULL AS linked_username',
-        ($hasAccessColumns && $hasUsersTable) ? 'u.email AS linked_user_email' : 'NULL AS linked_user_email',
-        ($hasAccessColumns && $hasUsersTable && $hasUserActivo) ? 'u.activo AS linked_user_active' : 'NULL AS linked_user_active',
-    ];
+    $select = provider_staff_select_columns($conexion, 'pms');
+    $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.nombre AS linked_user_name' : 'NULL AS linked_user_name';
+    $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.usuario AS linked_username' : 'NULL AS linked_username';
+    $select[] = ($hasAccessColumns && $hasUsersTable) ? 'u.email AS linked_user_email' : 'NULL AS linked_user_email';
+    $select[] = ($hasAccessColumns && $hasUsersTable && $hasUserActivo) ? 'u.activo AS linked_user_active' : 'NULL AS linked_user_active';
 
     $sql = 'SELECT ' . implode(', ', $select) . ' FROM provider_medical_staff pms';
     if ($hasAccessColumns && $hasUsersTable) {
@@ -791,9 +846,9 @@ function pms_list_staff_rows($conexion, $providerId, $activeOnly = false)
     }
     $sql .= ' WHERE pms.provider_id = ?';
     if ($activeOnly) {
-        $sql .= ' AND pms.active = 1';
+        $sql .= ' AND ' . pms_status_select_expr('pms') . ' = 1';
     }
-    $sql .= ' ORDER BY pms.active DESC, pms.full_name ASC, pms.id DESC';
+    $sql .= ' ORDER BY ' . pms_status_select_expr('pms') . ' DESC, ' . pms_sort_order_sql('pms') . ' ASC, ' . pms_primary_order_sql('pms') . 'pms.full_name ASC, pms.id ASC';
 
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
@@ -804,11 +859,54 @@ function pms_list_staff_rows($conexion, $providerId, $activeOnly = false)
     $res = mysqli_stmt_get_result($stmt);
     $rows = [];
     while ($res && ($row = mysqli_fetch_assoc($res))) {
-        $row['active_label'] = ((int)($row['active'] ?? 0) === 1) ? 'Activo' : 'Inactivo';
+        $row = pms_normalize_staff_row($row);
         $rows[] = array_merge($row, pms_access_status_payload($row));
     }
     mysqli_stmt_close($stmt);
     return pms_attach_service_payload($rows, pms_fetch_staff_services_map($conexion, $providerId));
+}
+
+function pms_fetch_sorted_staff_ids($conexion, $providerId)
+{
+    $rows = pms_list_staff_rows($conexion, $providerId, false);
+    return array_values(array_map('intval', array_column($rows, 'id')));
+}
+
+function pms_resequence_staff_sort_order($conexion, $providerId, $orderedIds)
+{
+    $orderedIds = array_values(array_filter(array_map('intval', (array)$orderedIds)));
+    if (empty($orderedIds)) {
+        return true;
+    }
+
+    $sortColumn = provider_staff_sort_column_name($conexion);
+    if ($sortColumn === '') {
+        return true;
+    }
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        'UPDATE provider_medical_staff
+            SET `' . $sortColumn . '` = ?, updated_at = NOW()
+          WHERE id = ? AND provider_id = ?
+          LIMIT 1'
+    );
+    if (!$stmt) {
+        return false;
+    }
+
+    $position = 10;
+    foreach ($orderedIds as $id) {
+        mysqli_stmt_bind_param($stmt, 'iii', $position, $id, $providerId);
+        if (!mysqli_stmt_execute($stmt)) {
+            mysqli_stmt_close($stmt);
+            return false;
+        }
+        $position += 10;
+    }
+
+    mysqli_stmt_close($stmt);
+    return true;
 }
 
 if (!pms_table_ready($conexion)) {
@@ -831,7 +929,7 @@ switch ($action) {
         $rows = pms_list_staff_rows($conexion, $providerId, $activeOnly);
         $activeCount = 0;
         foreach ($rows as $row) {
-            if ((int)($row['active'] ?? 0) === 1) {
+            if ((int)($row['is_active'] ?? $row['active'] ?? 0) === 1) {
                 $activeCount++;
             }
         }
@@ -910,21 +1008,34 @@ switch ($action) {
             pms_err('provider_not_found', 404);
         }
 
-        $fullName = pms_clean_text($_POST['full_name'] ?? '', 180);
+        $currentRow = $staffId > 0 ? pms_staff_row($conexion, $staffId, $providerId) : null;
+        if ($staffId > 0 && !$currentRow) {
+            pms_err('staff_not_found', 404);
+        }
+
+        $fullName = pms_clean_text($_POST['full_name'] ?? '', 150);
         if ($fullName === '') {
             pms_err('El nombre completo es obligatorio', 422);
         }
 
-        $specialty = pms_clean_text($_POST['specialty'] ?? '', 180);
+        $roleTitle = pms_clean_text($_POST['role_title'] ?? '', 120);
+        $specialty = pms_clean_text($_POST['specialty'] ?? '', 120);
+        $bioShort = pms_clean_long_text($_POST['bio_short'] ?? '');
+        $photo = pms_clean_text($_POST['photo'] ?? '', 255);
         $license = pms_clean_text($_POST['professional_license'] ?? '', 120);
         $email = pms_clean_email($_POST['email'] ?? '');
         if ($email === false) {
             pms_err('El correo no tiene un formato válido', 422);
         }
-        $phone = pms_clean_text($_POST['phone'] ?? '', 80);
+        $phone = pms_clean_text($_POST['phone'] ?? '', 60);
         $clinicName = pms_clean_text($_POST['clinic_name'] ?? '', 180);
-        $notes = trim((string)($_POST['notes'] ?? ''));
-        $active = isset($_POST['active']) ? 1 : 0;
+        $notes = pms_clean_long_text($_POST['notes'] ?? '');
+        $isPrimaryDoctor = pms_requested_flag('is_primary_doctor');
+        $isActive = isset($_POST['is_active']) ? pms_requested_flag('is_active') : pms_requested_flag('active');
+        $sortOrderRaw = trim((string)($_POST['sort_order'] ?? ''));
+        $sortOrder = ($sortOrderRaw === '')
+            ? ($currentRow ? (int)($currentRow['sort_order'] ?? 0) : pms_next_sort_order($conexion, $providerId))
+            : max(0, (int)$sortOrderRaw);
         $linkedUserId = (int)($_POST['linked_user_id'] ?? 0);
         $canAccessAdmin = isset($_POST['can_access_admin']) ? 1 : 0;
         $requestedServiceIds = pms_requested_service_ids();
@@ -935,10 +1046,6 @@ switch ($action) {
 
         if (($linkedUserId > 0 || $canAccessAdmin === 1) && !pms_has_access_columns($conexion)) {
             pms_err('provider_medical_staff_access_columns_missing — run sql/2026_03_12_provider_staff_access_and_item_assignment.sql', 503);
-        }
-
-        if ($staffId > 0 && !pms_staff_row($conexion, $staffId, $providerId)) {
-            pms_err('staff_not_found', 404);
         }
 
         $linkedUser = null;
@@ -969,142 +1076,259 @@ switch ($action) {
         mysqli_begin_transaction($conexion);
 
         try {
-        if ($staffId > 0) {
-            if (pms_has_access_columns($conexion)) {
-                $stmt = mysqli_prepare(
+            $statusColumn = provider_staff_status_column_name($conexion);
+            $legacyActiveColumn = provider_staff_has_legacy_active_column($conexion);
+            $linkedUserIdSql = $linkedUserId > 0 ? $linkedUserId : 0;
+
+            if ($staffId > 0) {
+                $fields = [];
+                $types = '';
+                $params = [];
+
+                $fields[] = 'full_name = ?';
+                $types .= 's';
+                $params[] = $fullName;
+
+                if (provider_staff_table_has_column($conexion, 'role_title')) {
+                    $fields[] = 'role_title = ?';
+                    $types .= 's';
+                    $params[] = $roleTitle;
+                }
+                if (provider_staff_table_has_column($conexion, 'specialty')) {
+                    $fields[] = 'specialty = ?';
+                    $types .= 's';
+                    $params[] = $specialty;
+                }
+                if (provider_staff_table_has_column($conexion, 'bio_short')) {
+                    $fields[] = 'bio_short = ?';
+                    $types .= 's';
+                    $params[] = $bioShort;
+                }
+                if (provider_staff_table_has_column($conexion, 'photo')) {
+                    $fields[] = 'photo = ?';
+                    $types .= 's';
+                    $params[] = $photo;
+                }
+                if (provider_staff_table_has_column($conexion, 'email')) {
+                    $fields[] = 'email = ?';
+                    $types .= 's';
+                    $params[] = $email;
+                }
+                if (provider_staff_table_has_column($conexion, 'phone')) {
+                    $fields[] = 'phone = ?';
+                    $types .= 's';
+                    $params[] = $phone;
+                }
+                if (provider_staff_table_has_column($conexion, 'is_primary_doctor')) {
+                    $fields[] = 'is_primary_doctor = ?';
+                    $types .= 'i';
+                    $params[] = $isPrimaryDoctor;
+                }
+                if (provider_staff_table_has_column($conexion, 'sort_order')) {
+                    $fields[] = 'sort_order = ?';
+                    $types .= 'i';
+                    $params[] = $sortOrder;
+                }
+                if (provider_staff_table_has_column($conexion, 'professional_license')) {
+                    $fields[] = 'professional_license = ?';
+                    $types .= 's';
+                    $params[] = $license;
+                }
+                if (provider_staff_table_has_column($conexion, 'clinic_name')) {
+                    $fields[] = 'clinic_name = ?';
+                    $types .= 's';
+                    $params[] = $clinicName;
+                }
+                if (provider_staff_table_has_column($conexion, 'notes')) {
+                    $fields[] = 'notes = ?';
+                    $types .= 's';
+                    $params[] = $notes;
+                }
+                if (pms_has_access_columns($conexion)) {
+                    $fields[] = 'linked_user_id = NULLIF(?, 0)';
+                    $types .= 'i';
+                    $params[] = $linkedUserIdSql;
+                    $fields[] = 'can_access_admin = ?';
+                    $types .= 'i';
+                    $params[] = $canAccessAdmin;
+                }
+                if ($statusColumn !== '') {
+                    $fields[] = '`' . $statusColumn . '` = ?';
+                    $types .= 'i';
+                    $params[] = $isActive;
+                }
+                if ($legacyActiveColumn && $statusColumn !== 'active') {
+                    $fields[] = 'active = ?';
+                    $types .= 'i';
+                    $params[] = $isActive;
+                }
+                if (provider_staff_table_has_column($conexion, 'updated_at')) {
+                    $fields[] = 'updated_at = NOW()';
+                }
+
+                $sql = 'UPDATE provider_medical_staff SET ' . implode(', ', $fields) . ' WHERE id = ? AND provider_id = ? LIMIT 1';
+                $stmt = mysqli_prepare($conexion, $sql);
+                if (!$stmt) {
+                    throw new Exception('db_prepare_failed');
+                }
+                $types .= 'ii';
+                $params[] = $staffId;
+                $params[] = $providerId;
+                bind_stmt_params($stmt, $types, $params);
+                $ok = mysqli_stmt_execute($stmt);
+                $err = mysqli_stmt_error($stmt);
+                mysqli_stmt_close($stmt);
+                if (!$ok) {
+                    throw new Exception('db_error: ' . $err);
+                }
+                $savedId = $staffId;
+                $message = 'Staff médico actualizado correctamente';
+            } else {
+                $columns = ['provider_id', 'full_name'];
+                $placeholders = ['?', '?'];
+                $types = 'is';
+                $params = [$providerId, $fullName];
+
+                if (provider_staff_table_has_column($conexion, 'role_title')) {
+                    $columns[] = 'role_title';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $roleTitle;
+                }
+                if (provider_staff_table_has_column($conexion, 'specialty')) {
+                    $columns[] = 'specialty';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $specialty;
+                }
+                if (provider_staff_table_has_column($conexion, 'bio_short')) {
+                    $columns[] = 'bio_short';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $bioShort;
+                }
+                if (provider_staff_table_has_column($conexion, 'photo')) {
+                    $columns[] = 'photo';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $photo;
+                }
+                if (provider_staff_table_has_column($conexion, 'email')) {
+                    $columns[] = 'email';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $email;
+                }
+                if (provider_staff_table_has_column($conexion, 'phone')) {
+                    $columns[] = 'phone';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $phone;
+                }
+                if (provider_staff_table_has_column($conexion, 'is_primary_doctor')) {
+                    $columns[] = 'is_primary_doctor';
+                    $placeholders[] = '?';
+                    $types .= 'i';
+                    $params[] = $isPrimaryDoctor;
+                }
+                if (provider_staff_table_has_column($conexion, 'sort_order')) {
+                    $columns[] = 'sort_order';
+                    $placeholders[] = '?';
+                    $types .= 'i';
+                    $params[] = $sortOrder;
+                }
+                if (provider_staff_table_has_column($conexion, 'professional_license')) {
+                    $columns[] = 'professional_license';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $license;
+                }
+                if (provider_staff_table_has_column($conexion, 'clinic_name')) {
+                    $columns[] = 'clinic_name';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $clinicName;
+                }
+                if (provider_staff_table_has_column($conexion, 'notes')) {
+                    $columns[] = 'notes';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $notes;
+                }
+                if (pms_has_access_columns($conexion)) {
+                    $columns[] = 'linked_user_id';
+                    $placeholders[] = 'NULLIF(?, 0)';
+                    $types .= 'i';
+                    $params[] = $linkedUserIdSql;
+                    $columns[] = 'can_access_admin';
+                    $placeholders[] = '?';
+                    $types .= 'i';
+                    $params[] = $canAccessAdmin;
+                }
+                if ($statusColumn !== '') {
+                    $columns[] = $statusColumn;
+                    $placeholders[] = '?';
+                    $types .= 'i';
+                    $params[] = $isActive;
+                }
+                if ($legacyActiveColumn && $statusColumn !== 'active') {
+                    $columns[] = 'active';
+                    $placeholders[] = '?';
+                    $types .= 'i';
+                    $params[] = $isActive;
+                }
+
+                $sql = 'INSERT INTO provider_medical_staff (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+                $stmt = mysqli_prepare($conexion, $sql);
+                if (!$stmt) {
+                    throw new Exception('db_prepare_failed');
+                }
+                bind_stmt_params($stmt, $types, $params);
+                $ok = mysqli_stmt_execute($stmt);
+                $err = mysqli_stmt_error($stmt);
+                $savedId = (int)mysqli_insert_id($conexion);
+                mysqli_stmt_close($stmt);
+                if (!$ok) {
+                    throw new Exception('db_error: ' . $err);
+                }
+                $message = 'Staff médico creado correctamente';
+            }
+
+            if ($isPrimaryDoctor === 1 && provider_staff_table_has_column($conexion, 'is_primary_doctor')) {
+                $stmtPrimary = mysqli_prepare(
                     $conexion,
                     'UPDATE provider_medical_staff
-                        SET full_name = ?, specialty = ?, professional_license = ?, email = ?, phone = ?, clinic_name = ?, linked_user_id = NULLIF(?, 0), can_access_admin = ?, notes = ?, active = ?, updated_at = NOW()
-                      WHERE id = ? AND provider_id = ?
-                      LIMIT 1'
+                        SET is_primary_doctor = CASE WHEN id = ? THEN 1 ELSE 0 END,
+                            updated_at = NOW()
+                      WHERE provider_id = ?'
                 );
-            } else {
-                $stmt = mysqli_prepare(
-                    $conexion,
-                    'UPDATE provider_medical_staff
-                        SET full_name = ?, specialty = ?, professional_license = ?, email = ?, phone = ?, clinic_name = ?, notes = ?, active = ?, updated_at = NOW()
-                      WHERE id = ? AND provider_id = ?
-                      LIMIT 1'
-                );
+                if (!$stmtPrimary) {
+                    throw new Exception('db_prepare_failed');
+                }
+                mysqli_stmt_bind_param($stmtPrimary, 'ii', $savedId, $providerId);
+                $okPrimary = mysqli_stmt_execute($stmtPrimary);
+                $errPrimary = mysqli_stmt_error($stmtPrimary);
+                mysqli_stmt_close($stmtPrimary);
+                if (!$okPrimary) {
+                    throw new Exception('db_error: ' . $errPrimary);
+                }
             }
-            if (!$stmt) {
-                pms_err('db_prepare_failed', 500);
-            }
-            if (pms_has_access_columns($conexion)) {
-                $linkedUserIdSql = $linkedUserId > 0 ? $linkedUserId : 0;
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    'ssssssiisiii',
-                    $fullName,
-                    $specialty,
-                    $license,
-                    $email,
-                    $phone,
-                    $clinicName,
-                    $linkedUserIdSql,
-                    $canAccessAdmin,
-                    $notes,
-                    $active,
-                    $staffId,
-                    $providerId
-                );
-            } else {
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    'sssssssiii',
-                    $fullName,
-                    $specialty,
-                    $license,
-                    $email,
-                    $phone,
-                    $clinicName,
-                    $notes,
-                    $active,
-                    $staffId,
-                    $providerId
-                );
-            }
-            $ok = mysqli_stmt_execute($stmt);
-            $err = mysqli_stmt_error($stmt);
-            mysqli_stmt_close($stmt);
-            if (!$ok) {
-                throw new Exception('db_error: ' . $err);
-            }
-            $savedId = $staffId;
-            $message = 'Staff médico actualizado correctamente';
-        } else {
-            if (pms_has_access_columns($conexion)) {
-                $stmt = mysqli_prepare(
-                    $conexion,
-                    'INSERT INTO provider_medical_staff
-                        (provider_id, full_name, specialty, professional_license, email, phone, clinic_name, linked_user_id, can_access_admin, notes, active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, NULLIF(?, 0), ?, ?, ?)'
-                );
-            } else {
-                $stmt = mysqli_prepare(
-                    $conexion,
-                    'INSERT INTO provider_medical_staff
-                        (provider_id, full_name, specialty, professional_license, email, phone, clinic_name, notes, active)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-            }
-            if (!$stmt) {
-                pms_err('db_prepare_failed', 500);
-            }
-            if (pms_has_access_columns($conexion)) {
-                $linkedUserIdSql = $linkedUserId > 0 ? $linkedUserId : 0;
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    'issssssiisi',
-                    $providerId,
-                    $fullName,
-                    $specialty,
-                    $license,
-                    $email,
-                    $phone,
-                    $clinicName,
-                    $linkedUserIdSql,
-                    $canAccessAdmin,
-                    $notes,
-                    $active
-                );
-            } else {
-                mysqli_stmt_bind_param(
-                    $stmt,
-                    'isssssssi',
-                    $providerId,
-                    $fullName,
-                    $specialty,
-                    $license,
-                    $email,
-                    $phone,
-                    $clinicName,
-                    $notes,
-                    $active
-                );
-            }
-            $ok = mysqli_stmt_execute($stmt);
-            $err = mysqli_stmt_error($stmt);
-            $savedId = (int)mysqli_insert_id($conexion);
-            mysqli_stmt_close($stmt);
-            if (!$ok) {
-                throw new Exception('db_error: ' . $err);
-            }
-            $message = 'Staff médico creado correctamente';
-        }
 
-        $replaceResult = pms_replace_staff_services($conexion, $providerId, $savedId, $requestedServiceIds);
-        if (!empty($replaceResult['error'])) {
-            if ($replaceResult['error'] === 'staff_services_table_missing') {
-                throw new Exception('provider_medical_staff_services_table_missing — run sql/2026_03_12_provider_medical_staff_services.sql');
+            $replaceResult = pms_replace_staff_services($conexion, $providerId, $savedId, $requestedServiceIds);
+            if (!empty($replaceResult['error'])) {
+                if ($replaceResult['error'] === 'staff_services_table_missing') {
+                    throw new Exception('provider_medical_staff_services_table_missing — run sql/2026_03_12_provider_medical_staff_services.sql');
+                }
+                throw new Exception(!empty($replaceResult['detail']) ? $replaceResult['detail'] : $replaceResult['error']);
             }
-            throw new Exception(!empty($replaceResult['detail']) ? $replaceResult['detail'] : $replaceResult['error']);
-        }
 
-        mysqli_commit($conexion);
+            mysqli_commit($conexion);
         } catch (Exception $e) {
             mysqli_rollback($conexion);
-            $status = (strpos($e->getMessage(), 'provider_medical_staff_services_table_missing') !== false) ? 503 : 500;
+            $status = (
+                strpos($e->getMessage(), 'provider_medical_staff_services_table_missing') !== false ||
+                strpos($e->getMessage(), 'provider_medical_staff_access_columns_missing') !== false
+            ) ? 503 : 500;
             pms_err($e->getMessage(), $status);
         }
 
@@ -1150,6 +1374,62 @@ switch ($action) {
         ]);
     }
 
+    case 'reorder_staff': {
+        $providerId = (int)($_POST['provider_id'] ?? $_GET['provider_id'] ?? 0);
+        $staffId = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+        $direction = trim((string)($_POST['direction'] ?? $_GET['direction'] ?? ''));
+        pms_assert_provider_scope($providerId);
+        if ($staffId <= 0 || !in_array($direction, ['up', 'down'], true)) {
+            pms_err('provider_id, id and direction are required');
+        }
+
+        $provider = pms_provider_exists($conexion, $providerId);
+        if (!$provider) {
+            pms_err('provider_not_found', 404);
+        }
+        if (!pms_staff_row($conexion, $staffId, $providerId)) {
+            pms_err('staff_not_found', 404);
+        }
+
+        $orderedIds = pms_fetch_sorted_staff_ids($conexion, $providerId);
+        $currentIndex = array_search($staffId, $orderedIds, true);
+        if ($currentIndex === false) {
+            pms_err('staff_not_found', 404);
+        }
+
+        $swapIndex = ($direction === 'up') ? ($currentIndex - 1) : ($currentIndex + 1);
+        if ($swapIndex < 0 || $swapIndex >= count($orderedIds)) {
+            $rows = pms_list_staff_rows($conexion, $providerId, false);
+            pms_ok([
+                'items' => $rows,
+                'provider' => $provider,
+                'message' => 'No hay más movimientos disponibles',
+            ]);
+        }
+
+        $tmp = $orderedIds[$currentIndex];
+        $orderedIds[$currentIndex] = $orderedIds[$swapIndex];
+        $orderedIds[$swapIndex] = $tmp;
+
+        mysqli_begin_transaction($conexion);
+        try {
+            if (!pms_resequence_staff_sort_order($conexion, $providerId, $orderedIds)) {
+                throw new Exception('db_error: reorder_failed');
+            }
+            mysqli_commit($conexion);
+        } catch (Exception $e) {
+            mysqli_rollback($conexion);
+            pms_err($e->getMessage(), 500);
+        }
+
+        $rows = pms_list_staff_rows($conexion, $providerId, false);
+        pms_ok([
+            'items' => $rows,
+            'provider' => $provider,
+            'message' => 'Orden del staff actualizado',
+        ]);
+    }
+
     case 'toggle_staff': {
         $providerId = (int)($_POST['provider_id'] ?? $_GET['provider_id'] ?? 0);
         $staffId = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
@@ -1167,17 +1447,42 @@ switch ($action) {
             pms_err('staff_not_found', 404);
         }
 
+        $statusColumn = provider_staff_status_column_name($conexion);
+        $legacyActiveColumn = provider_staff_has_legacy_active_column($conexion);
+        $fields = [];
+        $types = '';
+        $params = [];
+        if ($statusColumn !== '') {
+            $fields[] = '`' . $statusColumn . '` = ?';
+            $types .= 'i';
+            $params[] = $value;
+        }
+        if ($legacyActiveColumn && $statusColumn !== 'active') {
+            $fields[] = 'active = ?';
+            $types .= 'i';
+            $params[] = $value;
+        }
+        if (empty($fields)) {
+            pms_err('provider_medical_staff_status_column_missing — run sql/2026_03_12_provider_medical_staff.sql', 503);
+        }
+        if (provider_staff_table_has_column($conexion, 'updated_at')) {
+            $fields[] = 'updated_at = NOW()';
+        }
+
         $stmt = mysqli_prepare(
             $conexion,
             'UPDATE provider_medical_staff
-                SET active = ?, updated_at = NOW()
+                SET ' . implode(', ', $fields) . '
               WHERE id = ? AND provider_id = ?
               LIMIT 1'
         );
         if (!$stmt) {
             pms_err('db_prepare_failed', 500);
         }
-        mysqli_stmt_bind_param($stmt, 'iii', $value, $staffId, $providerId);
+        $types .= 'ii';
+        $params[] = $staffId;
+        $params[] = $providerId;
+        bind_stmt_params($stmt, $types, $params);
         $ok = mysqli_stmt_execute($stmt);
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);

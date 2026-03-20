@@ -302,10 +302,19 @@ function current_provider_medical_staff_context($conexion = null) {
     if (roles_table_exists($conexion, 'usuarios')) {
         $sql .= " LEFT JOIN usuarios u ON u.id = pms.linked_user_id";
     }
+    $statusColumn = '';
+    if (roles_table_has_column($conexion, 'provider_medical_staff', 'is_active')) {
+        $statusColumn = 'is_active';
+    } elseif (roles_table_has_column($conexion, 'provider_medical_staff', 'active')) {
+        $statusColumn = 'active';
+    }
+
     $sql .= " WHERE pms.provider_id = ?
-              AND pms.linked_user_id = ?
-              AND pms.active = 1
-              AND pms.can_access_admin = 1";
+              AND pms.linked_user_id = ?";
+    if ($statusColumn !== '') {
+        $sql .= " AND pms.`{$statusColumn}` = 1";
+    }
+    $sql .= " AND pms.can_access_admin = 1";
     if ($hasUserActivo) {
         $sql .= " AND COALESCE(u.activo, 0) = 1";
     }

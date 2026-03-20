@@ -1,6 +1,7 @@
 <?php
 include '../include/conexion.php';
 require_once '../include/roles.php';
+require_once '../include/provider_medical_staff_helpers.php';
 require_once '../include/email_config.php';
 require_once __DIR__ . '/../../inc/email_template.php';
 require_once __DIR__ . '/../../inc/inbox_utils.php';
@@ -629,6 +630,8 @@ function enrich_item_trace_row($conexion, $row, $calendarTraceMap)
     if ($assignedProvider === '') {
         $assignedProvider = trim((string)($providerInfo['entity_name'] ?? $serviceProviderInfo['entity_name'] ?? ''));
     }
+
+    $row = provider_staff_apply_assignment_payload($conexion, $row);
 
     $assignedDoctor = trim((string)($row['assigned_doctor'] ?? ''));
     $clinic = trim((string)($row['clinic'] ?? ''));
@@ -1328,6 +1331,7 @@ $hasRequestsSoftDelete = table_has_column($conexion, 'booking_requests', 'is_del
 $hasItemsProviderId = table_has_column($conexion, 'booking_request_items', 'provider_id');
 $hasItemsServiceProviderId = table_has_column($conexion, 'booking_request_items', 'service_provider_id');
 $hasItemStatus = table_has_column($conexion, 'booking_request_items', 'item_status');
+$hasItemAssignedStaffId = table_has_column($conexion, 'booking_request_items', 'assigned_staff_id');
 $hasItemCreatedAt = table_has_column($conexion, 'booking_request_items', 'created_at');
 $hasItemUpdatedAt = table_has_column($conexion, 'booking_request_items', 'updated_at');
 $hasItemCurrency = table_has_column($conexion, 'booking_request_items', 'currency');
@@ -1368,6 +1372,7 @@ $hasBookingUpdatedAt = table_has_column($conexion, 'booking_requests', 'updated_
 // TODO: when richer coordination columns land in DB, these optional aliases will start populating automatically.
 $itemProviderStatusCol = first_existing_column($conexion, 'booking_request_items', ['provider_status']);
 $itemMedicalCoordStatusCol = first_existing_column($conexion, 'booking_request_items', ['medical_coordination_status', 'coordination_status']);
+$itemAssignedStaffExpr = $hasItemAssignedStaffId ? 'bri.assigned_staff_id' : 'NULL';
 $itemAssignedDoctorCol = first_existing_column($conexion, 'booking_request_items', ['assigned_doctor', 'doctor_name']);
 $itemClinicCol = first_existing_column($conexion, 'booking_request_items', ['clinic', 'clinic_name']);
 $itemProposedAppointmentCol = first_existing_column($conexion, 'booking_request_items', ['proposed_appointment_date']);
@@ -1639,6 +1644,7 @@ if ($action === 'get_detail') {
                 END AS item_status,
                 {$providerStatusExpr} AS provider_status,
                 {$medicalCoordinationStatusExpr} AS medical_coordination_status,
+                {$itemAssignedStaffExpr} AS assigned_staff_id,
                 {$assignedDoctorExpr} AS assigned_doctor,
                 {$clinicExpr} AS clinic,
                 {$proposedAppointmentExpr} AS proposed_appointment_date,
@@ -1823,6 +1829,7 @@ if ($action === 'get_detail') {
                     END AS item_status,
                     {$providerStatusExpr} AS provider_status,
                     {$medicalCoordinationStatusExpr} AS medical_coordination_status,
+                    {$itemAssignedStaffExpr} AS assigned_staff_id,
                     {$assignedDoctorExpr} AS assigned_doctor,
                     {$clinicExpr} AS clinic,
                     {$proposedAppointmentExpr} AS proposed_appointment_date,
