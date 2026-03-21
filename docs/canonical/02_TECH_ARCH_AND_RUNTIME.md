@@ -22,10 +22,10 @@ Esta capa complementa el runtime existente y redefine el marco tecnico esperado 
 
 ### Separacion entre prestador y medico
 
-- `providers` o equivalente actual sigue representando al prestador responsable del item.
-- El sistema debe soportar la separacion entre prestador y medico o staff medico interno.
-- Si hoy no existe una tabla definitiva, la evolucion prevista puede materializarse como `provider_medical_staff` o equivalente logico.
-- La documentacion tecnica no debe asumir que prestador = medico en todos los casos.
+- `providers` representa al prestador responsable del item.
+- El sistema separa prestador y medico / staff interno mediante la tabla `provider_medical_staff` (operativa desde 2026-03-20).
+- La relacion de acceso es `provider_medical_staff.linked_user_id → usuarios.id`.
+- La documentacion tecnica no debe asumir que prestador = medico.
 
 ### Resultado operativo esperado por item medico
 
@@ -50,6 +50,30 @@ Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
 - El runtime actual puede seguir apoyandose en `booking_requests`, `booking_request_items`, inbox, calendar y componentes auxiliares mientras el modelo evoluciona.
 - Cuando falten campos dedicados, el sistema debe soportar derivacion segura o alias logicos sin inventar una tabla definitiva que aun no exista.
 - La separacion operativa canonica ya es obligatoria a nivel de documentacion, aunque la persistencia siga madurando por fases.
+
+## Staff medico — tablas y componentes operativos (desde 2026-03-20)
+
+**Tablas**
+- `provider_medical_staff` — entidad principal del staff interno del prestador
+- `provider_medical_staff_services` — relacion staff ↔ servicios habilitados del proveedor
+- `provider_staff_roles` — catalogo de roles/cargos por proveedor (provider_id=NULL = sistema; NOT NULL = personalizado)
+- `provider_staff_specialties` — catalogo de especialidades con la misma estructura
+
+**Paginas admin**
+- `admin/staff_medico.php` — CRUD operativo del staff por prestador
+- `admin/staff_catalogs.php` — gestion de catalogos de roles y especialidades
+
+**Helpers y endpoints**
+- `admin/include/provider_medical_staff_helpers.php`
+- `admin/ajax/provider_medical_staff.php`
+- `admin/js/provider_medical_staff.js`
+
+**Almacenamiento**
+- `uploads/staff_photos/` — fotos de profesionales subidas desde el modal de staff (JPG/PNG/WebP, validacion de MIME real via finfo)
+
+**Migraciones**
+- `sql/2026_03_12_provider_medical_staff.sql`
+- `sql/2026_03_20_provider_staff_catalogs.sql`
 
 ### Idioma del admin por rol / contexto
 

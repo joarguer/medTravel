@@ -52,8 +52,10 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 #### Medico / Staff interno
 
 - Es la persona o equipo interno del prestador que ejecuta revision, consulta, procedimiento o seguimiento.
-- Debe poder separarse logicamente del prestador aunque hoy no exista una tabla definitiva dedicada.
-- El modelo canónico debe soportar una evolucion futura tipo `provider_medical_staff` o equivalente logico.
+- Se separa formalmente del prestador mediante la tabla `provider_medical_staff` (implementada y operativa desde 2026-03-20).
+- Puede tener usuario propio vinculado mediante `provider_medical_staff.linked_user_id → usuarios.id`.
+- El staff NO debe reutilizar `ROLE_PROVIDER` ni `ROLE_PROVIDER_ADMIN` para autenticarse.
+- El acceso del staff al panel debe ser restringido por asignacion de items/casos (`booking_request_items.assigned_staff_id`), no solo por `provider_id`.
 
 ### Entidades operativas visibles
 
@@ -90,6 +92,21 @@ Las acciones de negocio oficialmente reconocidas para un item son:
 - Proponer cita
 
 Estas acciones deben reflejarse en vocabulario UI y trazabilidad, incluso si internamente algunas implementaciones actuales aun usan nombres tecnicos legacy.
+
+### Navegacion del prestador por dominios funcionales
+
+Desde 2026-03-20 la navegacion del panel para prestadores medicos esta organizada en cuatro dominios:
+
+- **Operacion**: solicitudes, inbox, agenda, clientes/pacientes.
+- **Servicios**: catalogo de servicios habilitados y publicaciones comerciales.
+- **Presencia**: blog del prestador.
+- **Mi Empresa**: datos de empresa, staff medico, catalogos del staff, perfil.
+
+Semantica canonizada:
+- **Mis Servicios** = servicios clinicos que el proveedor realmente puede atender (catalogo habilitado de `service_catalog`).
+- **Mis Ofertas** = publicaciones comerciales visibles al paciente sobre esos servicios (`provider_offers`).
+
+Esta distincion debe mantenerse consistente en UI, textos de ayuda y documentacion.
 
 ### Regla oficial de idioma por contexto
 

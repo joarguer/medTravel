@@ -1,5 +1,51 @@
 # Changelog Decisions
 
+## 2026-03-20 — Catalogos persistentes de roles y especialidades del staff por proveedor
+
+**Commits**: `0e5a97f`, `183c84d`
+
+**Outcome**
+- Se introducen las tablas `provider_staff_roles` y `provider_staff_specialties` con migracion idempotente (`sql/2026_03_20_provider_staff_catalogs.sql`).
+- `provider_id = NULL` = entrada de sistema disponible a todos los proveedores. `provider_id NOT NULL` = entrada personalizada del proveedor, gestionable desde su cuenta.
+- CRUD admin en nueva pagina `staff_catalogs.php`, accesible desde el menu Mi Empresa (solo flujo medico).
+- El AJAX `list_staff_catalogs` sirve desde BD con fallback a arrays hardcoded si las tablas no existen aun.
+- Los campos `role_title` y `specialty` de `provider_medical_staff` se mantienen como VARCHAR por compatibilidad legacy. El valor guardado es el `.name` del catalogo, sin FK todavia.
+- Las entradas de sistema no son editables ni eliminables por el proveedor desde la UI (proteccion a nivel AJAX: UPDATE/DELETE filtran por `provider_id = ?`).
+
+**Validation**
+- Pendiente smoke test funcional post-migracion: alta de entradas personalizadas, disponibilidad en modal, proteccion de entradas de sistema.
+
+---
+
+## 2026-03-20 — Navegacion del prestador reorganizada por dominios funcionales
+
+**Commits**: `b96bb3e`, `ca4c634`, `9204a82`, `8321a96`
+
+**Outcome**
+- `staff_medico.php` queda como pagina independiente separada formalmente de `mi_empresa.php`.
+- La navegacion del prestador medico se reorganiza en cuatro dominios: Operacion, Servicios, Presencia, Mi Empresa.
+- Semantica canonizada y reflejada en UI y textos de ayuda:
+  - **Mis Servicios** = servicios clinicos habilitados que el proveedor puede realmente atender.
+  - **Mis Ofertas** = publicaciones comerciales sobre esos servicios, visibles al paciente.
+- Esta distincion no debe revertirse en iteraciones futuras.
+
+---
+
+## 2026-03-20 — Decisiones sobre acceso del staff al panel admin
+
+**Rationale**
+La existencia de `linked_user_id` en `provider_medical_staff` abre la puerta al acceso del staff al panel. Antes de implementarlo, se consolidan las restricciones de diseno.
+
+**Decisiones**
+- El staff medico NO debe autenticarse con `ROLE_PROVIDER` ni `ROLE_PROVIDER_ADMIN`. Debe tener su propio rol dedicado (`provider_staff`).
+- La relacion de autenticacion es `usuarios.id -> provider_medical_staff.linked_user_id`.
+- El acceso del staff al panel debe estar restringido por asignacion de items/casos (`booking_request_items.assigned_staff_id`), no solo por pertenecer al mismo `provider_id`.
+- La landing para staff con acceso propio debe ser una vista de "Mis solicitudes asignadas", no el dashboard general del prestador.
+
+**Estado**: decisiones tomadas, implementacion no iniciada.
+
+---
+
 ## 2026-03-20 — Se materializa provider_medical_staff como modelo MVP de staff interno por prestador
 
 **Rationale**
