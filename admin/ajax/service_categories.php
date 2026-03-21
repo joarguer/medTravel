@@ -1,10 +1,17 @@
 <?php
 session_start();
 include("../include/conexion.php");
+require_once("../include/roles.php");
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 $resp = ['ok' => false];
 $tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
+
+if (!is_role_admin_session()) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'error' => 'forbidden']);
+    exit;
+}
 
 function slugify($text){
     $text = preg_replace('~[^\pL0-9]+~u', '-', $text);

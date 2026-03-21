@@ -1,12 +1,16 @@
 <?php
 include('include/include.php');
-// TODO: proteger para SUPERADMIN si se dispone de control de roles
+if (!is_role_admin_session()) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title;?> - Categorías de servicios</title>
+    <title><?php echo $title;?> - Taxonomía global de servicios</title>
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
@@ -24,10 +28,10 @@ include('include/include.php');
         <div class="container-fluid">
             <div class="page-content">
                 <div class="breadcrumbs">
-                    <h1>Categorías de servicios</h1>
+                    <h1>Taxonomía global de servicios</h1>
                     <ol class="breadcrumb">
                         <li><a href="#">Site</a></li>
-                        <li class="active">Categorías</li>
+                        <li class="active">Taxonomía global</li>
                     </ol>
                 </div>
 
@@ -36,7 +40,7 @@ include('include/include.php');
                         <div class="page-sidebar">
                             <nav class="navbar" role="navigation">
                                 <ul class="nav navbar-nav">
-                                    <li class="active"><a href="service_categories.php"><i class="icon-list"></i> Categorías de servicios</a></li>
+                                    <li class="active"><a href="service_categories.php"><i class="icon-list"></i> Taxonomía global</a></li>
                                 </ul>
                             </nav>
                         </div>
@@ -45,13 +49,18 @@ include('include/include.php');
                                 <div class="portlet-title">
                                     <div class="caption">
                                         <i class="icon-list theme-font"></i>
-                                        <span class="caption-subject font-dark bold uppercase">Categorías</span>
+                                        <span class="caption-subject font-dark bold uppercase">Categorías globales del catálogo maestro</span>
                                     </div>
                                     <div class="actions">
                                         <a id="btn-new-category" class="btn btn-primary">Nueva categoría</a>
                                     </div>
                                 </div>
                                 <div class="portlet-body">
+                                    <p class="text-muted" style="max-width:840px; margin-bottom:16px;">
+                                        Esta pantalla administra la <strong>taxonomía global</strong> del diccionario maestro de servicios clínicos.
+                                        Las categorías aquí definidas sirven para clasificar el catálogo base del sistema y para agrupar servicios en otras vistas administrativas.
+                                        <strong>No</strong> definen por sí solas la capacidad operativa de un prestador, las asignaciones de staff ni la publicación comercial de ofertas.
+                                    </p>
                                     <table class="table table-striped table-bordered" id="tbl-categories">
                                         <thead>
                                             <tr>
@@ -83,7 +92,7 @@ include('include/include.php');
                         <div class="modal-content">
                             <div class="modal-header" style="background:#f7f7f7; border-bottom:1px solid #ebebeb;">
                                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><i class="fa fa-times"></i></button>
-                                <h4 class="modal-title"><strong>Categoría</strong></h4>
+                                <h4 class="modal-title"><strong>Categoría global del catálogo maestro</strong></h4>
                             </div>
                             <div class="modal-body">
                                 <form id="form-category">
