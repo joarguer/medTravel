@@ -26,6 +26,20 @@ function cleanup_table_exists($conexion, $table)
     return ($res && mysqli_num_rows($res) > 0);
 }
 
+function cleanup_table_has_column($conexion, $table, $column)
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+    $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$key];
+}
+
 function cleanup_table_count($conexion, $table)
 {
     $sql = "SELECT COUNT(*) AS total FROM `{$table}`";
@@ -35,6 +49,387 @@ function cleanup_table_count($conexion, $table)
     }
     $row = mysqli_fetch_assoc($res);
     return (int)($row['total'] ?? 0);
+}
+
+function cleanup_collect_ints_from_query($conexion, $sql)
+{
+    $ids = [];
+    $res = mysqli_query($conexion, $sql);
+    if (!$res) {
+        return $ids;
+    }
+    while ($row = mysqli_fetch_row($res)) {
+        $ids[] = (int)($row[0] ?? 0);
+    }
+    return array_values(array_unique(array_filter($ids, function ($id) {
+        return (int)$id > 0;
+    })));
+}
+
+function cleanup_provider_users_ready($conexion)
+{
+    return cleanup_table_exists($conexion, 'provider_users')
+        && cleanup_table_has_column($conexion, 'provider_users', 'provider_id')
+        && cleanup_table_has_column($conexion, 'provider_users', 'user_id');
+}
+
+function cleanup_provider_users_has_role($conexion)
+{
+    return cleanup_provider_users_ready($conexion)
+        && cleanup_table_has_column($conexion, 'provider_users', 'role_in_provider');
+}
+
+function cleanup_provider_owner_role_priority_sql($puAlias = 'pu')
+{
+    return "CASE LOWER(COALESCE(NULLIF(TRIM({$puAlias}.role_in_provider), ''), 'owner'))
+                WHEN 'owner' THEN 0
+                WHEN 'primary' THEN 1
+                WHEN 'principal' THEN 2
+                WHEN 'admin' THEN 3
+                WHEN 'administrator' THEN 4
+                ELSE 10
+            END";
+}
+
+function cleanup_user_owner_candidate_priority_sql($conexion, $alias = 'u')
+{
+    $parts = [];
+    if (cleanup_table_has_column($conexion, 'usuarios', 'ppal')) {
+        $parts[] = "CASE WHEN COALESCE({$alias}.ppal, 0) = 1 THEN 0 ELSE 1 END";
+    }
+    if (cleanup_table_has_column($conexion, 'usuarios', 'role_id')) {
+        $parts[] = "CASE
+            WHEN {$alias}.role_id = " . (int)ROLE_PROVIDER_ADMIN . " THEN 0
+            WHEN {$alias}.role_id = " . (int)ROLE_PROVIDER . " THEN 1
+            ELSE 5
+        END";
+    } elseif (cleanup_table_has_column($conexion, 'usuarios', 'rol')) {
+        $parts[] = "CASE LOWER(TRIM(COALESCE({$alias}.rol, '')))
+            WHEN '" . mysqli_real_escape_string($conexion, (string)ROLE_PROVIDER_ADMIN) . "' THEN 0
+            WHEN 'provider_admin' THEN 0
+            WHEN 'prestador_admin' THEN 0
+            WHEN 'admin prestador' THEN 0
+            WHEN '" . mysqli_real_escape_string($conexion, (string)ROLE_PROVIDER) . "' THEN 1
+            WHEN 'provider' THEN 1
+            WHEN 'prestador' THEN 1
+            WHEN 'proveedor' THEN 1
+            ELSE 5
+        END";
+    }
+    $parts[] = "{$alias}.id ASC";
+    return implode(', ', $parts);
+}
+
+function cleanup_preview_superuser_guard_state($conexion)
+{
+    $summary = [
+        'superuser_scope_fix_needed' => 0,
+        'superuser_provider_links' => 0,
+        'superuser_staff_links' => 0,
+        'superuser_restore_needed' => 0,
+    ];
+
+    if (cleanup_table_exists($conexion, 'usuarios')) {
+        $select = [];
+        if (cleanup_table_has_column($conexion, 'usuarios', 'provider_id')) {
+            $select[] = 'provider_id';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+            $select[] = 'service_provider_id';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+            $select[] = 'is_deleted';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'activo')) {
+            $select[] = 'activo';
+        }
+        if (!empty($select)) {
+            $sql = "SELECT " . implode(', ', $select) . " FROM usuarios WHERE id = 1 LIMIT 1";
+            $res = mysqli_query($conexion, $sql);
+            if ($res && ($row = mysqli_fetch_assoc($res))) {
+                if (array_key_exists('provider_id', $row) && !empty($row['provider_id'])) {
+                    $summary['superuser_scope_fix_needed']++;
+                }
+                if (array_key_exists('service_provider_id', $row) && !empty($row['service_provider_id'])) {
+                    $summary['superuser_scope_fix_needed']++;
+                }
+                if (array_key_exists('is_deleted', $row) && (int)$row['is_deleted'] === 1) {
+                    $summary['superuser_restore_needed'] = 1;
+                }
+                if (array_key_exists('activo', $row) && (int)$row['activo'] !== 1) {
+                    $summary['superuser_restore_needed'] = 1;
+                }
+            }
+        }
+    }
+
+    if (cleanup_provider_users_ready($conexion)) {
+        $res = mysqli_query($conexion, "SELECT COUNT(*) AS total FROM provider_users WHERE user_id = 1");
+        if ($res && ($row = mysqli_fetch_assoc($res))) {
+            $summary['superuser_provider_links'] = (int)($row['total'] ?? 0);
+        }
+    }
+
+    if (cleanup_table_exists($conexion, 'provider_medical_staff') && cleanup_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')) {
+        $res = mysqli_query($conexion, "SELECT COUNT(*) AS total FROM provider_medical_staff WHERE linked_user_id = 1");
+        if ($res && ($row = mysqli_fetch_assoc($res))) {
+            $summary['superuser_staff_links'] = (int)($row['total'] ?? 0);
+        }
+    }
+
+    return $summary;
+}
+
+function cleanup_apply_superuser_guard($conexion)
+{
+    $summary = [
+        'superuser_rows_repaired' => 0,
+        'superuser_provider_links_removed' => 0,
+        'superuser_staff_links_detached' => 0,
+    ];
+
+    if (cleanup_table_exists($conexion, 'usuarios')) {
+        $set = [];
+        if (cleanup_table_has_column($conexion, 'usuarios', 'provider_id')) {
+            $set[] = 'provider_id = NULL';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+            $set[] = 'service_provider_id = NULL';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+            $set[] = 'is_deleted = 0';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'deleted_at')) {
+            $set[] = 'deleted_at = NULL';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'deleted_by')) {
+            $set[] = 'deleted_by = NULL';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'activo')) {
+            $set[] = 'activo = 1';
+        }
+        if (!empty($set)) {
+            $sql = "UPDATE usuarios SET " . implode(', ', $set) . " WHERE id = 1 LIMIT 1";
+            if (!mysqli_query($conexion, $sql)) {
+                throw new Exception('Failed to sanitize superuser row: ' . mysqli_error($conexion));
+            }
+            $summary['superuser_rows_repaired'] = mysqli_affected_rows($conexion);
+        }
+    }
+
+    if (cleanup_provider_users_ready($conexion)) {
+        if (!mysqli_query($conexion, "DELETE FROM provider_users WHERE user_id = 1")) {
+            throw new Exception('Failed to remove superuser provider links: ' . mysqli_error($conexion));
+        }
+        $summary['superuser_provider_links_removed'] = mysqli_affected_rows($conexion);
+    }
+
+    if (cleanup_table_exists($conexion, 'provider_medical_staff') && cleanup_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')) {
+        $set = ['linked_user_id = NULL'];
+        if (cleanup_table_has_column($conexion, 'provider_medical_staff', 'can_access_admin')) {
+            $set[] = 'can_access_admin = 0';
+        }
+        $sql = "UPDATE provider_medical_staff SET " . implode(', ', $set) . " WHERE linked_user_id = 1";
+        if (!mysqli_query($conexion, $sql)) {
+            throw new Exception('Failed to detach superuser from staff links: ' . mysqli_error($conexion));
+        }
+        $summary['superuser_staff_links_detached'] = mysqli_affected_rows($conexion);
+    }
+
+    return $summary;
+}
+
+function cleanup_collect_provider_domain_user_ids($conexion)
+{
+    $userIds = [];
+
+    if (cleanup_table_exists($conexion, 'usuarios')) {
+        $conditions = [];
+        if (cleanup_table_has_column($conexion, 'usuarios', 'provider_id')) {
+            $conditions[] = 'COALESCE(u.provider_id, 0) > 0';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+            $conditions[] = 'COALESCE(u.service_provider_id, 0) > 0';
+        }
+        if (cleanup_table_has_column($conexion, 'usuarios', 'role_id')) {
+            $conditions[] = 'u.role_id IN (' . (int)ROLE_PROVIDER . ', ' . (int)ROLE_PROVIDER_ADMIN . ', ' . (int)ROLE_COMPLEMENTARY_ADMIN . ')';
+        } elseif (cleanup_table_has_column($conexion, 'usuarios', 'rol')) {
+            $conditions[] = "LOWER(TRIM(COALESCE(u.rol, ''))) IN ('" . mysqli_real_escape_string($conexion, (string)ROLE_PROVIDER) . "', '" . mysqli_real_escape_string($conexion, (string)ROLE_PROVIDER_ADMIN) . "', '" . mysqli_real_escape_string($conexion, (string)ROLE_COMPLEMENTARY_ADMIN) . "', 'provider', 'prestador', 'proveedor', 'provider_admin', 'prestador_admin', 'admin prestador', 'complementary_admin')";
+        }
+        if (!empty($conditions)) {
+            $sql = "SELECT u.id FROM usuarios u WHERE u.id <> 1 AND (" . implode(' OR ', $conditions) . ")";
+            $userIds = array_merge($userIds, cleanup_collect_ints_from_query($conexion, $sql));
+        }
+    }
+
+    if (cleanup_provider_users_ready($conexion)) {
+        $userIds = array_merge($userIds, cleanup_collect_ints_from_query($conexion, "SELECT user_id FROM provider_users WHERE user_id <> 1"));
+    }
+
+    if (cleanup_table_exists($conexion, 'provider_medical_staff') && cleanup_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')) {
+        $userIds = array_merge($userIds, cleanup_collect_ints_from_query($conexion, "SELECT linked_user_id FROM provider_medical_staff WHERE linked_user_id IS NOT NULL AND linked_user_id > 0 AND linked_user_id <> 1"));
+    }
+
+    $userIds = array_values(array_unique(array_filter(array_map('intval', $userIds), function ($id) {
+        return $id > 1;
+    })));
+    sort($userIds, SORT_NUMERIC);
+    return $userIds;
+}
+
+function cleanup_delete_provider_domain_users($conexion)
+{
+    $userIds = cleanup_collect_provider_domain_user_ids($conexion);
+    $summary = [
+        'provider_domain_user_ids' => $userIds,
+        'provider_domain_users_deleted' => 0,
+        'provider_domain_user_links_removed' => 0,
+    ];
+
+    if (empty($userIds) || !cleanup_table_exists($conexion, 'usuarios')) {
+        return $summary;
+    }
+
+    $in = implode(',', array_map('intval', $userIds));
+    if (cleanup_provider_users_ready($conexion)) {
+        if (!mysqli_query($conexion, "DELETE FROM provider_users WHERE user_id IN ({$in})")) {
+            throw new Exception('Failed to delete provider ownership mappings for scoped users: ' . mysqli_error($conexion));
+        }
+        $summary['provider_domain_user_links_removed'] = mysqli_affected_rows($conexion);
+    }
+
+    if (!mysqli_query($conexion, "DELETE FROM usuarios WHERE id IN ({$in}) AND id <> 1")) {
+        throw new Exception('Failed to delete provider/service-provider/staff users: ' . mysqli_error($conexion));
+    }
+    $summary['provider_domain_users_deleted'] = mysqli_affected_rows($conexion);
+
+    return $summary;
+}
+
+function cleanup_provider_has_explicit_owner($conexion, $providerId)
+{
+    if ($providerId <= 0 || !cleanup_provider_users_ready($conexion) || !cleanup_table_exists($conexion, 'usuarios')) {
+        return false;
+    }
+
+    $sql = "SELECT u.id
+              FROM provider_users pu
+              INNER JOIN usuarios u ON u.id = pu.user_id
+             WHERE pu.provider_id = ?
+               AND u.id <> 1";
+    if (cleanup_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $sql .= " AND COALESCE(u.service_provider_id, 0) = 0";
+    }
+    if (cleanup_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= " AND COALESCE(u.is_deleted, 0) = 0";
+    }
+    if (cleanup_provider_users_has_role($conexion)) {
+        $sql .= " ORDER BY " . cleanup_provider_owner_role_priority_sql('pu') . ", u.id ASC";
+    } else {
+        $sql .= " ORDER BY u.id ASC";
+    }
+    $sql .= " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return !empty($row['id']);
+}
+
+function cleanup_find_provider_owner_candidate_user_id($conexion, $providerId)
+{
+    if ($providerId <= 0 || !cleanup_table_exists($conexion, 'usuarios') || !cleanup_table_has_column($conexion, 'usuarios', 'provider_id')) {
+        return 0;
+    }
+
+    $sql = "SELECT u.id
+              FROM usuarios u
+             WHERE u.provider_id = ?
+               AND u.id <> 1";
+    if (cleanup_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $sql .= " AND COALESCE(u.service_provider_id, 0) = 0";
+    }
+    if (cleanup_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= " AND COALESCE(u.is_deleted, 0) = 0";
+    }
+    $sql .= " ORDER BY " . cleanup_user_owner_candidate_priority_sql($conexion, 'u') . " LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return 0;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return (int)($row['id'] ?? 0);
+}
+
+function cleanup_reconcile_provider_ownership($conexion, $dryRun = false)
+{
+    $summary = [
+        'backfilled_providers' => 0,
+        'providers_without_owner_candidate' => [],
+        'provider_users_missing' => !cleanup_provider_users_ready($conexion),
+    ];
+
+    if (!cleanup_table_exists($conexion, 'providers')) {
+        return $summary;
+    }
+
+    if (!cleanup_provider_users_ready($conexion)) {
+        return $summary;
+    }
+
+    $sql = "SELECT id FROM providers WHERE 1=1";
+    if (cleanup_table_has_column($conexion, 'providers', 'kind')) {
+        $sql .= " AND kind = 'medical'";
+    }
+    if (cleanup_table_has_column($conexion, 'providers', 'is_deleted')) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " ORDER BY id ASC";
+    $providerIds = cleanup_collect_ints_from_query($conexion, $sql);
+
+    foreach ($providerIds as $providerId) {
+        if (cleanup_provider_has_explicit_owner($conexion, $providerId)) {
+            continue;
+        }
+        $candidateUserId = cleanup_find_provider_owner_candidate_user_id($conexion, $providerId);
+        if ($candidateUserId <= 0) {
+            $summary['providers_without_owner_candidate'][] = (int)$providerId;
+            continue;
+        }
+        $summary['backfilled_providers']++;
+        if (!$dryRun) {
+            $stmt = mysqli_prepare(
+                $conexion,
+                "INSERT INTO provider_users (provider_id, user_id, role_in_provider)
+                 VALUES (?,?,?)
+                 ON DUPLICATE KEY UPDATE role_in_provider = VALUES(role_in_provider)"
+            );
+            if (!$stmt) {
+                throw new Exception('Failed to prepare provider ownership backfill: ' . mysqli_error($conexion));
+            }
+            $role = 'owner';
+            mysqli_stmt_bind_param($stmt, 'iis', $providerId, $candidateUserId, $role);
+            if (!mysqli_stmt_execute($stmt)) {
+                $err = mysqli_stmt_error($stmt);
+                mysqli_stmt_close($stmt);
+                throw new Exception('Failed to backfill provider ownership: ' . $err);
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    return $summary;
 }
 
 function cleanup_collect_external_child_fk_edges($conexion, $tables)
@@ -119,13 +514,23 @@ function cleanup_delete_order_from_fk($tables, $edges)
         'commission_payments' => 60,
         'booking_request_items' => 70,
         'booking_requests' => 80,
-        // Catalog reset remains secondary to the operational flow above.
-        'provider_service_offers' => 110,
-        'provider_catalog_services' => 120,
-        'provider_categories' => 130,
-        'medtravel_services_catalog' => 140,
-        'service_providers' => 150,
-        'providers' => 160,
+        // Canonical medical provider reset: ownership/staff/docs/settings before provider roots.
+        'provider_medical_staff_services' => 100,
+        'offer_media' => 105,
+        'provider_documents' => 110,
+        'provider_verification_items' => 115,
+        'provider_medical_staff' => 120,
+        'provider_staff_roles' => 125,
+        'provider_staff_specialties' => 126,
+        'provider_users' => 130,
+        'provider_commission_settings' => 135,
+        'provider_verification' => 140,
+        'provider_service_offers' => 145,
+        'provider_catalog_services' => 150,
+        'provider_categories' => 155,
+        'medtravel_services_catalog' => 160,
+        'service_providers' => 170,
+        'providers' => 180,
     ];
     $priorityFor = function ($table) use ($priorityMap) {
         return isset($priorityMap[$table]) ? (int)$priorityMap[$table] : 999;
@@ -200,6 +605,8 @@ function cleanup_detect_attachment_dirs($rootDir)
         ['relative' => 'booking/files', 'group' => 'bookings', 'label' => 'Booking attachments'],
         // Dedicated storage used by client_documents in the current inbox/document flow.
         ['relative' => 'uploads/medical_docs', 'group' => 'bookings', 'label' => 'Shared medical documents'],
+        ['relative' => 'uploads/provider_documents', 'group' => 'full_catalog', 'label' => 'Provider verification documents'],
+        ['relative' => 'uploads/staff_photos', 'group' => 'full_catalog', 'label' => 'Staff photos'],
     ];
     $found = [];
     foreach ($candidates as $meta) {
@@ -229,6 +636,9 @@ function cleanup_filter_attachment_dirs($dirs, $include)
             continue;
         }
         if ($group === 'inbox' && empty($include['inbox'])) {
+            continue;
+        }
+        if ($group === 'full_catalog' && empty($include['full_catalog'])) {
             continue;
         }
         $selected[] = $dirMeta;
@@ -296,6 +706,16 @@ function cleanup_build_reset_plan($conexion, $include)
         'inbox' => ['inbox_email_throttle', 'inbox_thread_reads', 'inbox_messages'],
         'calendar' => ['calendar_events'],
         'full_catalog' => [
+            'provider_medical_staff_services',
+            'offer_media',
+            'provider_documents',
+            'provider_verification_items',
+            'provider_medical_staff',
+            'provider_staff_roles',
+            'provider_staff_specialties',
+            'provider_users',
+            'provider_commission_settings',
+            'provider_verification',
             'provider_catalog_services',
             'provider_categories',
             'provider_service_offers',
@@ -334,6 +754,8 @@ function cleanup_build_reset_plan($conexion, $include)
     $externalEdges = cleanup_collect_external_child_fk_edges($conexion, $existing);
     $order = cleanup_delete_order_from_fk($existing, $edges);
     $warnings = [];
+    $customCounts = [];
+    $customSteps = [];
     if (!empty($externalEdges)) {
         $warnings[] = 'External FK dependencies detected. Delete order is safe only inside the selected tables.';
     }
@@ -342,6 +764,41 @@ function cleanup_build_reset_plan($conexion, $include)
     }
     if (!empty($include['inbox']) && cleanup_table_exists($conexion, 'inbox_email_throttle')) {
         $warnings[] = 'Inbox reset includes inbox_email_throttle to remove stale notification metadata tied to thread_id.';
+    }
+    $guardPreview = cleanup_preview_superuser_guard_state($conexion);
+    if ($guardPreview['superuser_scope_fix_needed'] > 0 || $guardPreview['superuser_restore_needed'] > 0) {
+        $customCounts['superuser_guard_repairs'] = $guardPreview['superuser_scope_fix_needed'] + $guardPreview['superuser_restore_needed'];
+    }
+    if ($guardPreview['superuser_provider_links'] > 0) {
+        $customCounts['superuser_provider_links_to_remove'] = $guardPreview['superuser_provider_links'];
+    }
+    if ($guardPreview['superuser_staff_links'] > 0) {
+        $customCounts['superuser_staff_links_to_detach'] = $guardPreview['superuser_staff_links'];
+    }
+    if (!empty($customCounts)) {
+        $customSteps[] = 'Always sanitize the protected superuser (`usuarios.id = 1`) and remove contaminated provider/staff links.';
+    }
+
+    if (!empty($include['full_catalog'])) {
+        $providerDomainUserIds = cleanup_collect_provider_domain_user_ids($conexion);
+        if (!empty($providerDomainUserIds)) {
+            $customCounts['provider_domain_users_to_delete'] = count($providerDomainUserIds);
+            $customSteps[] = 'Delete provider/service-provider/staff scoped users except the global superuser.';
+        }
+    } else {
+        $ownershipPreview = cleanup_reconcile_provider_ownership($conexion, true);
+        if (!empty($ownershipPreview['provider_users_missing'])) {
+            $warnings[] = 'provider_users is missing; explicit provider ownership cannot be reconciled during cleanup.';
+        } else {
+            if ((int)$ownershipPreview['backfilled_providers'] > 0) {
+                $customCounts['providers_owner_mapping_to_backfill'] = (int)$ownershipPreview['backfilled_providers'];
+                $customSteps[] = 'Backfill explicit owner/admin mapping in provider_users for remaining medical providers.';
+            }
+            if (!empty($ownershipPreview['providers_without_owner_candidate'])) {
+                $warnings[] = 'Some remaining medical providers still have no resolvable owner/admin candidate: '
+                    . implode(', ', array_map('intval', $ownershipPreview['providers_without_owner_candidate']));
+            }
+        }
     }
 
     return [
@@ -352,6 +809,8 @@ function cleanup_build_reset_plan($conexion, $include)
         'external_fk_edges' => $externalEdges,
         'delete_order' => $order,
         'warnings' => $warnings,
+        'custom_counts' => $customCounts,
+        'custom_steps' => $customSteps,
     ];
 }
 
@@ -415,10 +874,29 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
         $startedAt = microtime(true);
         $deletedRows = [];
         $deletedFiles = [];
+        $customActions = [];
+        $postExecutionWarnings = [];
         $executedTables = $cleanupPreview['delete_order'];
 
         mysqli_begin_transaction($conexion);
         try {
+            $superuserGuard = cleanup_apply_superuser_guard($conexion);
+            foreach ($superuserGuard as $key => $value) {
+                if ((int)$value > 0) {
+                    $customActions[$key] = (int)$value;
+                }
+            }
+
+            if (!empty($includeOptions['full_catalog'])) {
+                $providerDomainUsers = cleanup_delete_provider_domain_users($conexion);
+                if (!empty($providerDomainUsers['provider_domain_users_deleted'])) {
+                    $customActions['provider_domain_users_deleted'] = (int)$providerDomainUsers['provider_domain_users_deleted'];
+                }
+                if (!empty($providerDomainUsers['provider_domain_user_links_removed'])) {
+                    $customActions['provider_domain_user_links_removed'] = (int)$providerDomainUsers['provider_domain_user_links_removed'];
+                }
+            }
+
             foreach ($executedTables as $table) {
                 if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
                     throw new Exception('Unsafe table name in delete plan: ' . $table);
@@ -435,6 +913,19 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                     }
                 }
             }
+
+            if (empty($includeOptions['full_catalog'])) {
+                $ownershipRepair = cleanup_reconcile_provider_ownership($conexion, false);
+                if ((int)$ownershipRepair['backfilled_providers'] > 0) {
+                    $customActions['providers_owner_mapping_backfilled'] = (int)$ownershipRepair['backfilled_providers'];
+                }
+                if (!empty($ownershipRepair['providers_without_owner_candidate'])) {
+                    $customActions['providers_without_owner_candidate'] = count($ownershipRepair['providers_without_owner_candidate']);
+                    $postExecutionWarnings[] = 'Warning: providers without resolvable owner/admin candidate remain: '
+                        . implode(', ', array_map('intval', $ownershipRepair['providers_without_owner_candidate']));
+                }
+            }
+
             mysqli_commit($conexion);
         } catch (Throwable $e) {
             mysqli_rollback($conexion);
@@ -452,6 +943,7 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
             $cleanupExecution = [
                 'deleted_rows' => $deletedRows,
                 'deleted_files' => $deletedFiles,
+                'custom_actions' => $customActions,
                 'elapsed_ms' => $elapsedMs,
             ];
             cleanup_log_message(
@@ -463,6 +955,9 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                 . ' elapsed_ms=' . $elapsedMs
             );
             $cleanupMessages[] = 'Reset executed successfully.';
+            foreach ($postExecutionWarnings as $warningMessage) {
+                $cleanupMessages[] = $warningMessage;
+            }
             $cleanupPreview = cleanup_build_reset_plan($conexion, $includeOptions);
         } else {
             cleanup_log_message(
@@ -487,7 +982,7 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title; ?> - Limpieza (DEV)</title>
+    <title><?php echo $title; ?> - Cleanup / Reset Seguro</title>
     <?php echo $global_first_style; ?>
     <link href="../../assets/global/plugins/datatables/datatables.min.css" rel="stylesheet" type="text/css" />
     <link href="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.css" rel="stylesheet" type="text/css" />
@@ -508,10 +1003,10 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
     <div class="container-fluid">
         <div class="page-content">
             <div class="breadcrumbs">
-                <h1>Limpieza (DEV) <small>Soft delete / restore</small></h1>
+                <h1>Cleanup / Reset Seguro <small>Reset dev + guardas del dominio medico</small></h1>
                 <ol class="breadcrumb">
                     <li><a href="index.php">Inicio</a></li>
-                    <li class="active">Limpieza (DEV)</li>
+                    <li class="active">Cleanup / Reset Seguro</li>
                 </ol>
             </div>
 
@@ -519,7 +1014,7 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                 <div class="portlet-title">
                     <div class="caption">
                         <i class="icon-refresh font-yellow-gold"></i>
-                        <span class="caption-subject font-yellow-gold bold uppercase">Environment Reset (Development)</span>
+                        <span class="caption-subject font-yellow-gold bold uppercase">Environment Reset (Development Safe Mode)</span>
                     </div>
                 </div>
                 <div class="portlet-body">
@@ -568,14 +1063,15 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                 <div class="col-md-6">
                                     <h4>Full reset (dangerous)</h4>
                                     <div class="mt-checkbox-list">
-                                        <label class="mt-checkbox mt-checkbox-outline"> Also delete providers/services demo data
+                                        <label class="mt-checkbox mt-checkbox-outline"> Also delete medical provider/staff demo domain data
                                             <input type="checkbox" name="include_full_catalog" value="1" <?php echo $includeOptions['full_catalog'] ? 'checked' : ''; ?>>
                                             <span></span>
                                         </label>
                                     </div>
+                                    <p class="help-block">This removes canonical medical provider data, explicit ownership links, staff records, staff-linked users and demo service-provider scope while preserving the protected global superuser (`usuarios.id = 1`).</p>
                                     <?php if (!empty($attachmentDirs)): ?>
                                         <div class="mt-checkbox-list">
-                                            <label class="mt-checkbox mt-checkbox-outline"> Also delete dedicated case/document upload folders
+                                            <label class="mt-checkbox mt-checkbox-outline"> Also delete dedicated case/provider/staff upload folders
                                                 <input type="checkbox" name="include_files" value="1" <?php echo $includeOptions['include_files'] ? 'checked' : ''; ?>>
                                                 <span></span>
                                             </label>
@@ -595,7 +1091,7 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                         </p>
                                         <p class="help-block">Only dedicated project folders are included here. No generic upload roots are deleted.</p>
                                     <?php else: ?>
-                                        <p class="help-block">No dedicated case/document upload folders detected in this environment.</p>
+                                        <p class="help-block">No dedicated case/provider/staff upload folders detected in this environment.</p>
                                     <?php endif; ?>
 
                                     <hr>
@@ -611,7 +1107,7 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                             <input type="checkbox" name="confirm_irreversible" value="1">
                                             <span></span>
                                         </label>
-                                        <label class="mt-checkbox mt-checkbox-outline"> I also confirm full reset of demo catalog data
+                                        <label class="mt-checkbox mt-checkbox-outline"> I also confirm full reset of the medical provider/staff demo domain
                                             <input type="checkbox" name="confirm_full_reset" value="1">
                                             <span></span>
                                         </label>
@@ -656,6 +1152,25 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                     <?php endif; ?>
                                     </tbody>
                                 </table>
+                                <?php if (!empty($cleanupPreview['custom_counts'])): ?>
+                                    <h5>Canonical guard counts</h5>
+                                    <table class="table table-bordered table-condensed">
+                                        <thead>
+                                        <tr>
+                                            <th>Operation</th>
+                                            <th>Rows</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php foreach ($cleanupPreview['custom_counts'] as $label => $count): ?>
+                                            <tr>
+                                                <td><?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></td>
+                                                <td><?php echo (int)$count; ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                <?php endif; ?>
                             </div>
                             <div class="col-md-6">
                                 <h5>Delete order (within selected tables)</h5>
@@ -665,6 +1180,16 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                                             <?php echo htmlspecialchars($warning, ENT_QUOTES, 'UTF-8'); ?>
                                         </div>
                                     <?php endforeach; ?>
+                                <?php endif; ?>
+                                <?php if (!empty($cleanupPreview['custom_steps'])): ?>
+                                    <div class="alert alert-info" style="margin-bottom:10px;">
+                                        <strong>Canonical guard steps:</strong>
+                                        <ul style="margin:8px 0 0 18px;">
+                                            <?php foreach ($cleanupPreview['custom_steps'] as $step): ?>
+                                                <li><?php echo htmlspecialchars($step, ENT_QUOTES, 'UTF-8'); ?></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
                                 <?php endif; ?>
                                 <?php if (!empty($cleanupPreview['external_fk_edges'])): ?>
                                     <div class="alert alert-warning" style="margin-bottom:10px;">
@@ -735,6 +1260,25 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                             <?php endforeach; ?>
                             </tbody>
                         </table>
+                        <?php if (!empty($cleanupExecution['custom_actions'])): ?>
+                            <h5>Canonical guard actions</h5>
+                            <table class="table table-bordered table-condensed">
+                                <thead>
+                                <tr>
+                                    <th>Action</th>
+                                    <th>Affected rows</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($cleanupExecution['custom_actions'] as $label => $count): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></td>
+                                        <td><?php echo (int)$count; ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
                         <?php if (!empty($cleanupExecution['deleted_files'])): ?>
                             <h5>Deleted files</h5>
                             <ul>
@@ -751,7 +1295,7 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
                 <div class="portlet-title">
                     <div class="caption">
                         <i class="icon-trash font-red"></i>
-                        <span class="caption-subject font-red bold uppercase">Limpieza (DEV)</span>
+                        <span class="caption-subject font-red bold uppercase">Cleanup administrativo seguro</span>
                     </div>
                 </div>
                 <div class="portlet-body">
@@ -880,10 +1424,13 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
         alert(msg);
     }
 
-    function actionButton(showDeleted, actionClass, dataId){
+    function actionButton(showDeleted, actionClass, dataId, options){
+        options = options || {};
         var text = showDeleted ? 'Restaurar' : 'Eliminar (Soft)';
         var toneClass = showDeleted ? 'btn-info' : 'btn-danger';
-        return '<button class="btn btn-xs ' + toneClass + ' ' + actionClass + '" data-id="' + dataId + '">' + text + '</button>';
+        var disabled = options.disabled ? ' disabled="disabled"' : '';
+        var title = options.title ? ' title="' + String(options.title).replace(/"/g, '&quot;') + '"' : '';
+        return '<button class="btn btn-xs ' + toneClass + ' ' + actionClass + '" data-id="' + dataId + '"' + disabled + title + '>' + text + '</button>';
     }
 
     var usersTable = $('#cleanup-users-table').DataTable({
@@ -895,7 +1442,16 @@ if ($cleanupAction === 'execute' && empty($cleanupErrors)) {
             { data: 'email' },
             { data: 'activo', render: function(v){ return parseInt(v, 10) === 1 ? 'Activo' : 'Inactivo'; } },
             { data: null, orderable: false, render: function(row){
-                return actionButton(usersShowDeleted, 'btn-soft-delete-user', row.id);
+                var protectionReason = row.cleanup_protection_reason || '';
+                var isRestore = usersShowDeleted;
+                var canAct = isRestore ? parseInt(row.can_restore || 0, 10) === 1 : parseInt(row.can_soft_delete || 0, 10) === 1;
+                if (!canAct && protectionReason) {
+                    return actionButton(isRestore, 'btn-soft-delete-user', row.id, {
+                        disabled: true,
+                        title: protectionReason
+                    }) + '<div class="text-muted small" style="margin-top:4px;">' + protectionReason + '</div>';
+                }
+                return actionButton(isRestore, 'btn-soft-delete-user', row.id);
             } }
         ],
         order: [[0, 'desc']]

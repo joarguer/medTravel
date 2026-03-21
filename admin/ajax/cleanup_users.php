@@ -30,6 +30,17 @@ function table_has_column($conexion, $table, $column) {
     return $cache[$key];
 }
 
+function table_exists($conexion, $table) {
+    static $cache = [];
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $q = mysqli_query($conexion, "SHOW TABLES LIKE '{$tableEsc}'");
+    $cache[$table] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$table];
+}
+
 function read_int_param($keys, $default = 0) {
     foreach ($keys as $key) {
         if (isset($_POST[$key])) return intval($_POST[$key]);
@@ -47,6 +58,72 @@ function usuarios_has_soft_delete($conexion) {
     return table_has_column($conexion, 'usuarios', 'is_deleted')
         && table_has_column($conexion, 'usuarios', 'deleted_at')
         && table_has_column($conexion, 'usuarios', 'deleted_by');
+}
+
+function cleanup_user_protection_reason($conexion, $userId) {
+    $userId = (int)$userId;
+    if ($userId <= 0) {
+        return '';
+    }
+    if ($userId === 1) {
+        return 'Superusuario global protegido';
+    }
+
+    if (table_exists($conexion, 'usuarios')) {
+        $select = ['id'];
+        if (table_has_column($conexion, 'usuarios', 'provider_id')) {
+            $select[] = 'provider_id';
+        }
+        if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+            $select[] = 'service_provider_id';
+        }
+        $stmt = mysqli_prepare($conexion, "SELECT " . implode(', ', $select) . " FROM usuarios WHERE id = ? LIMIT 1");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $userId);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $row = $res ? mysqli_fetch_assoc($res) : null;
+            mysqli_stmt_close($stmt);
+            if ($row) {
+                if (array_key_exists('provider_id', $row) && (int)($row['provider_id'] ?? 0) > 0) {
+                    return 'Usuario scoped a provider medico';
+                }
+                if (array_key_exists('service_provider_id', $row) && (int)($row['service_provider_id'] ?? 0) > 0) {
+                    return 'Usuario scoped a service provider';
+                }
+            }
+        }
+    }
+
+    if (table_exists($conexion, 'provider_users') && table_has_column($conexion, 'provider_users', 'user_id')) {
+        $stmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $userId);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $row = $res ? mysqli_fetch_assoc($res) : null;
+            mysqli_stmt_close($stmt);
+            if ($row && (int)($row['provider_id'] ?? 0) > 0) {
+                return 'Usuario con ownership/admin explicito de provider';
+            }
+        }
+    }
+
+    if (table_exists($conexion, 'provider_medical_staff') && table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')) {
+        $stmt = mysqli_prepare($conexion, "SELECT id FROM provider_medical_staff WHERE linked_user_id = ? LIMIT 1");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $userId);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $row = $res ? mysqli_fetch_assoc($res) : null;
+            mysqli_stmt_close($stmt);
+            if ($row && (int)($row['id'] ?? 0) > 0) {
+                return 'Usuario vinculado a staff medico';
+            }
+        }
+    }
+
+    return '';
 }
 
 if (!is_role_admin_session()) {
@@ -83,6 +160,12 @@ if ($action === 'list_users') {
 
     $rows = [];
     while ($row = mysqli_fetch_assoc($res)) {
+        $protectionReason = cleanup_user_protection_reason($conexion, (int)($row['id'] ?? 0));
+        $isProtected = $protectionReason !== '';
+        $isGlobalSuperuser = (int)($row['id'] ?? 0) === 1;
+        $row['cleanup_protection_reason'] = $protectionReason;
+        $row['can_soft_delete'] = $isProtected ? 0 : 1;
+        $row['can_restore'] = $isGlobalSuperuser ? 0 : 1;
         $rows[] = $row;
     }
 
@@ -101,6 +184,11 @@ if ($action === 'soft_delete_user') {
 
     if ($userId === $sessionUserId) {
         json_err('cannot_soft_delete_logged_user', 422);
+    }
+
+    $protectionReason = cleanup_user_protection_reason($conexion, $userId);
+    if ($protectionReason !== '') {
+        json_err('cleanup_user_protected: ' . $protectionReason, 422);
     }
 
     $stmt = mysqli_prepare(
@@ -143,6 +231,10 @@ if ($action === 'restore_user') {
     $userId = read_int_param(['user_id', 'id']);
     if ($userId <= 0) {
         json_err('invalid_user_id', 422);
+    }
+
+    if ($userId === 1) {
+        json_err('cleanup_user_protected: Superusuario global protegido', 422);
     }
 
     $stmt = mysqli_prepare(
