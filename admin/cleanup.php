@@ -502,6 +502,34 @@ function cleanup_collect_fk_edges($conexion, $tables)
     return $edges;
 }
 
+function cleanup_is_handled_external_fk_edge($edge, $include)
+{
+    $child = (string)($edge['child'] ?? '');
+    $parent = (string)($edge['parent'] ?? '');
+
+    if (empty($include['full_catalog'])) {
+        return false;
+    }
+
+    if ($child === 'usuarios' && in_array($parent, ['providers', 'service_providers'], true)) {
+        return true;
+    }
+
+    return false;
+}
+
+function cleanup_filter_external_fk_edges($edges, $include)
+{
+    $filtered = [];
+    foreach ((array)$edges as $edge) {
+        if (cleanup_is_handled_external_fk_edge($edge, $include)) {
+            continue;
+        }
+        $filtered[] = $edge;
+    }
+    return $filtered;
+}
+
 function cleanup_delete_order_from_fk($tables, $edges)
 {
     $priorityMap = [
@@ -525,12 +553,15 @@ function cleanup_delete_order_from_fk($tables, $edges)
         'provider_users' => 130,
         'provider_commission_settings' => 135,
         'provider_verification' => 140,
-        'provider_service_offers' => 145,
-        'provider_catalog_services' => 150,
-        'provider_categories' => 155,
-        'medtravel_services_catalog' => 160,
-        'service_providers' => 170,
-        'providers' => 180,
+        'appointments' => 145,
+        'google_calendar_config' => 146,
+        'provider_service_offers' => 150,
+        'provider_catalog_services' => 155,
+        'provider_categories' => 160,
+        'package_services' => 165,
+        'medtravel_services_catalog' => 170,
+        'service_providers' => 180,
+        'providers' => 190,
     ];
     $priorityFor = function ($table) use ($priorityMap) {
         return isset($priorityMap[$table]) ? (int)$priorityMap[$table] : 999;
@@ -716,9 +747,12 @@ function cleanup_build_reset_plan($conexion, $include)
             'provider_users',
             'provider_commission_settings',
             'provider_verification',
+            'appointments',
+            'google_calendar_config',
             'provider_catalog_services',
             'provider_categories',
             'provider_service_offers',
+            'package_services',
             'medtravel_services_catalog',
             'service_providers',
             'providers',
@@ -752,6 +786,7 @@ function cleanup_build_reset_plan($conexion, $include)
 
     $edges = cleanup_collect_fk_edges($conexion, $existing);
     $externalEdges = cleanup_collect_external_child_fk_edges($conexion, $existing);
+    $externalEdges = cleanup_filter_external_fk_edges($externalEdges, $include);
     $order = cleanup_delete_order_from_fk($existing, $edges);
     $warnings = [];
     $customCounts = [];
