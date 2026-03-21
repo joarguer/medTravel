@@ -961,6 +961,85 @@ switch ($action) {
         ]);
     }
 
+    // ── Catálogos base del sistema para el modal de staff ────────────────────
+    // Fuente centralizada de roles y especialidades.
+    // ESTADO: opciones servidas como catálogo del sistema (no persistidas en BD todavía).
+    // SIGUIENTE PASO: crear tablas staff_role_catalog y staff_specialty_catalog
+    // para que admin pueda ampliar/editar las opciones sin tocar código.
+    case 'list_staff_catalogs': {
+        pms_ok([
+            'roles' => [
+                'Lead Doctor', 'Specialist', 'Surgeon', 'Dentist', 'Orthodontist',
+                'Oral Surgeon', 'Cosmetic Dentist', 'General Physician', 'Nurse',
+                'Patient Coordinator', 'Medical Assistant', 'Anesthesiologist',
+                'Therapist', 'Administrative Coordinator',
+            ],
+            'specialties' => [
+                'Dentistry', 'Cosmetic Dentistry', 'Orthodontics', 'Oral Surgery',
+                'Plastic Surgery', 'Bariatric Surgery', 'Dermatology', 'Ophthalmology',
+                'Fertility', 'Orthopedics', 'General Medicine', 'Aesthetic Medicine',
+                'Rehabilitation', 'Nutrition',
+            ],
+        ]);
+    }
+
+    // ── Sedes/clínicas del provider para el modal de staff ───────────────────
+    // Fuente controlada: nombre del provider + sedes ya registradas en staff existente.
+    // ESTADO: no existe tabla provider_branches todavía.
+    // SIGUIENTE PASO: crear tabla provider_branches y reemplazar la query del historial.
+    case 'list_provider_clinics': {
+        $providerId = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
+        pms_assert_provider_scope($providerId);
+
+        $provider = pms_provider_exists($conexion, $providerId);
+        if (!$provider) {
+            pms_err('provider_not_found', 404);
+        }
+
+        // Sede principal: nombre del provider (sede raíz)
+        $clinics = [];
+        if (!empty($provider['name'])) {
+            $clinics[] = [
+                'value'  => trim($provider['name']),
+                'label'  => trim($provider['name']),
+                'source' => 'provider',
+            ];
+        }
+
+        // Sedes adicionales: valores distintos ya usados por staff del mismo provider
+        $additionalQuery = mysqli_prepare(
+            $conexion,
+            "SELECT DISTINCT TRIM(clinic_name) AS cn
+             FROM provider_medical_staff
+             WHERE provider_id = ?
+               AND TRIM(IFNULL(clinic_name, '')) != ''
+             ORDER BY cn ASC
+             LIMIT 50"
+        );
+        if ($additionalQuery) {
+            mysqli_stmt_bind_param($additionalQuery, 'i', $providerId);
+            mysqli_stmt_execute($additionalQuery);
+            $additionalRes = mysqli_stmt_get_result($additionalQuery);
+            while ($additionalRow = mysqli_fetch_assoc($additionalRes)) {
+                $cn = $additionalRow['cn'];
+                // No duplicar la sede principal
+                $isDuplicate = false;
+                foreach ($clinics as $existing) {
+                    if (mb_strtolower($existing['value']) === mb_strtolower($cn)) {
+                        $isDuplicate = true;
+                        break;
+                    }
+                }
+                if (!$isDuplicate) {
+                    $clinics[] = ['value' => $cn, 'label' => $cn, 'source' => 'history'];
+                }
+            }
+            mysqli_stmt_close($additionalQuery);
+        }
+
+        pms_ok(['clinics' => $clinics]);
+    }
+
     case 'list_linkable_users': {
         $providerId = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
         $currentStaffId = (int)($_GET['staff_id'] ?? $_POST['staff_id'] ?? 0);

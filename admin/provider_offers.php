@@ -121,9 +121,9 @@ if (!$es_admin_principal && $ses_rol !== '') {
                                 </div>
                                 <div class="portlet-body">
                                     <p class="text-muted" style="max-width:840px; margin-bottom:16px;">
-                                        Las ofertas son publicaciones comerciales que le muestras a los pacientes. 
-                                        Cada oferta toma como base un servicio de <a href="service_catalog.php">Mis Servicios</a> 
-                                        y agrega precio, título atractivo, descripción y galería de imágenes.
+                                        <strong>Mis Ofertas</strong> son las publicaciones comerciales que le muestras a los pacientes: precio, título atractivo, descripción y galería de imágenes.
+                                        Cada oferta toma como base un servicio clínico de <a href="service_catalog.php">Mis Servicios</a>;
+                                        si un servicio no está habilitado en esa lista, no aparecerá como opción aquí.
                                     </p>
                                     <table class="table table-striped table-bordered" id="tbl-offers" data-show-owner="<?php echo $es_admin_principal ? '1' : '0'; ?>">
                                         <thead>

@@ -54,8 +54,9 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
                                 </div>
                                 <div class="portlet-body">
                                     <p class="text-muted" style="max-width:840px; margin-bottom:16px;">
-                                        Aquí defines qué servicios médicos puede ofrecer tu empresa. Cada servicio habilitado activa la posibilidad de crear 
-                                        <a href="provider_offers.php">ofertas comerciales</a> sobre él para publicarlas a tus pacientes.
+                                        <strong>Mis Servicios</strong> son los servicios clínicos reales que tu empresa puede atender.
+                                        Habilitarlos aquí es el primer paso: hasta que un servicio esté activo en esta lista, no podrá ser base de ninguna publicación ni asignarse a ningún miembro del staff.
+                                        Una vez habilitado, podrás crear <a href="provider_offers.php">Mis Ofertas</a> &mdash; las publicaciones comerciales que verán los pacientes.
                                     </p>
                                     <div class="form-inline margin-bottom-10">
                                         <label>Filtrar por categoría:&nbsp;</label>

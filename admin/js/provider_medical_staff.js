@@ -7,6 +7,8 @@
     var ENDPOINT = 'ajax/provider_medical_staff.php';
     var linkableUsers = [];
     var providerServices = [];
+    var staffCatalogs = { roles: [], specialties: [] };
+    var providerClinics = [];
     var currentItems = [];
     var MANAGE_DISABLED_BY_CONTEXT = false;
 
@@ -214,6 +216,93 @@
         $('#pms-linked-user-id').html(options.join(''));
     }
 
+    // ── render y load: catálogos de roles, especialidades y sedes ──────────────
+
+    function renderSelectOptions(selectId, items, selectedValue, emptyLabel) {
+        var opts = ['<option value="">' + emptyLabel + '</option>'];
+        items.forEach(function (item) {
+            var val = typeof item === 'object' ? (item.value || '') : String(item);
+            var lbl = typeof item === 'object' ? (item.label || val) : val;
+            var sel = val === selectedValue ? ' selected' : '';
+            opts.push('<option value="' + escapeHtml(val) + '"' + sel + '>' + escapeHtml(lbl) + '</option>');
+        });
+        $('#' + selectId).html(opts.join(''));
+    }
+
+    function renderRoleOptions(roles, selectedValue) {
+        renderSelectOptions('pms-role-title', roles || staffCatalogs.roles, selectedValue || '',
+            '— Seleccionar cargo —');
+        // Compatibilidad legacy: si el valor no está en las opciones, añadirlo
+        if (selectedValue) { ensureSelectOption('pms-role-title', selectedValue); }
+    }
+
+    function renderSpecialtyOptions(specialties, selectedValue) {
+        renderSelectOptions('pms-specialty', specialties || staffCatalogs.specialties, selectedValue || '',
+            '— Seleccionar especialidad —');
+        if (selectedValue) { ensureSelectOption('pms-specialty', selectedValue); }
+    }
+
+    function renderClinicOptions(clinics, selectedValue) {
+        var opts = ['<option value="">— Sin sede específica —</option>'];
+        (clinics || providerClinics).forEach(function (item) {
+            var val = typeof item === 'object' ? (item.value || '') : String(item);
+            var lbl = typeof item === 'object' ? (item.label || val) : val;
+            if (!val) { return; }
+            var sel = val === selectedValue ? ' selected' : '';
+            opts.push('<option value="' + escapeHtml(val) + '"' + sel + '>' + escapeHtml(lbl) + '</option>');
+        });
+        opts.push('<option value="__other__">Otra sede (escribir)…</option>');
+        $('#pms-clinic').html(opts.join(''));
+        // Toggle companion input
+        if (selectedValue) {
+            var found = (clinics || providerClinics).some(function (c) {
+                var v = typeof c === 'object' ? c.value : c;
+                return v === selectedValue;
+            });
+            if (found) {
+                $('#pms-clinic').val(selectedValue);
+                $('#pms-clinic-other').val('').hide();
+            } else {
+                $('#pms-clinic').val('__other__');
+                $('#pms-clinic-other').val(selectedValue).show();
+            }
+        } else {
+            $('#pms-clinic-other').val('').hide();
+        }
+    }
+
+    function loadStaffCatalogs() {
+        return $.ajax({
+            url: ENDPOINT,
+            method: 'GET',
+            dataType: 'json',
+            data: { action: 'list_staff_catalogs' }
+        }).done(function (res) {
+            staffCatalogs.roles = (res && Array.isArray(res.roles)) ? res.roles : [];
+            staffCatalogs.specialties = (res && Array.isArray(res.specialties)) ? res.specialties : [];
+            renderRoleOptions(staffCatalogs.roles, '');
+            renderSpecialtyOptions(staffCatalogs.specialties, '');
+        }).fail(function () {
+            $('#pms-role-title').html('<option value="">No disponible</option>');
+            $('#pms-specialty').html('<option value="">No disponible</option>');
+        });
+    }
+
+    function loadProviderClinics(selectedValue) {
+        return $.ajax({
+            url: ENDPOINT,
+            method: 'GET',
+            dataType: 'json',
+            data: { action: 'list_provider_clinics', provider_id: PROVIDER_ID }
+        }).done(function (res) {
+            providerClinics = (res && Array.isArray(res.clinics)) ? res.clinics : [];
+            renderClinicOptions(providerClinics, selectedValue || '');
+        }).fail(function () {
+            providerClinics = [];
+            $('#pms-clinic').html('<option value="">No disponible</option>');
+        });
+    }
+
     function loadProviderServices(selectedIds) {
         return $.ajax({
             url: ENDPOINT,
@@ -272,10 +361,10 @@
         $('#pms-access-status').text('Sin usuario vinculado');
         $('#providerMedicalStaffModalLabel').text('Agregar staff médico');
         $('#pms-save-msg').hide().empty();
-        // Reset selects controlados
-        $('#pms-role-title').val('');
-        $('#pms-specialty').val('');
-        $('#pms-clinic').val('');
+        // Signaling de carga para selects dinámicos
+        $('#pms-role-title').html('<option value="">Cargando...</option>');
+        $('#pms-specialty').html('<option value="">Cargando...</option>');
+        $('#pms-clinic').html('<option value="">Cargando...</option>');
         $('#pms-clinic-other').val('').hide();
         providerServices = [];
         renderServiceOptions([], []);
@@ -299,31 +388,17 @@
     function fillForm(item) {
         $('#pms-id').val(item.id || '');
         $('#pms-full-name').val(item.full_name || '');
-        // Selects controlados con compatibilidad legacy
-        ensureSelectOption('pms-role-title', item.role_title || '');
-        ensureSelectOption('pms-specialty', item.specialty || '');
+        // Selects dinámicos (catálogos ya cargados antes de llegar aquí)
+        renderRoleOptions(staffCatalogs.roles, item.role_title || '');
+        renderSpecialtyOptions(staffCatalogs.specialties, item.specialty || '');
         $('#pms-sort-order').val(item.sort_order != null ? item.sort_order : '');
         $('#pms-photo').val(item.photo || '');
         $('#pms-bio-short').val(item.bio_short || '');
         $('#pms-email').val(item.email || '');
         $('#pms-phone').val(item.phone || '');
         $('#pms-license').val(item.professional_license || '');
-        // clinic_name: si está en el select OK; si no, usar __other__ + companion
-        var clinicVal = item.clinic_name || '';
-        if (clinicVal) {
-            var $csel = $('#pms-clinic');
-            var found = $csel.find('option').filter(function () { return $(this).val() === clinicVal; }).length > 0;
-            if (found) {
-                $csel.val(clinicVal);
-                $('#pms-clinic-other').val('').hide();
-            } else {
-                $csel.val('__other__');
-                $('#pms-clinic-other').val(clinicVal).show();
-            }
-        } else {
-            $('#pms-clinic').val('');
-            $('#pms-clinic-other').val('').hide();
-        }
+        // clinic_name: renderClinicOptions gestiona la lógica __other__
+        renderClinicOptions(providerClinics, item.clinic_name || '');
         $('#pms-notes').val(item.notes || '');
         $('#pms-is-active').prop('checked', parseInt(item.is_active || item.active, 10) === 1);
         $('#pms-is-primary-doctor').prop('checked', parseInt(item.is_primary_doctor, 10) === 1);
@@ -371,7 +446,11 @@
 
     function openCreateModal() {
         resetForm();
-        loadProviderServices([]).always(function () {
+        $.when(
+            loadStaffCatalogs(),
+            loadProviderClinics(''),
+            loadProviderServices([])
+        ).always(function () {
             $('#providerMedicalStaffModal').modal('show');
         });
     }
@@ -394,7 +473,9 @@
             }
             $.when(
                 loadLinkableUsers(res.item.linked_user_id || 0, res.item.id || 0),
-                loadProviderServices(res.item.service_ids || [])
+                loadProviderServices(res.item.service_ids || []),
+                loadStaffCatalogs(),
+                loadProviderClinics(res.item.clinic_name || '')
             ).always(function () {
                 fillForm(res.item);
                 $('#pms-linked-user-id').val(res.item.linked_user_id || '');
