@@ -2,12 +2,14 @@
 include('include/include.php');
 $is_admin = is_role_admin_session();
 $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
+$catalog_heading = $is_admin ? 'Servicios habilitados por prestador' : 'Mis Servicios';
+$catalog_caption = $is_admin ? 'Servicios habilitados del prestador seleccionado' : 'Mis Servicios habilitados';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title;?> - Mis Servicios</title>
+    <title><?php echo $title;?> - <?php echo $catalog_heading; ?></title>
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
@@ -25,10 +27,10 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
         <div class="container-fluid">
             <div class="page-content">
                 <div class="breadcrumbs">
-                    <h1>Mis Servicios</h1>
+                    <h1><?php echo $catalog_heading; ?></h1>
                     <ol class="breadcrumb">
                         <li><a href="index.php">Inicio</a></li>
-                        <li class="active">Mis Servicios</li>
+                        <li class="active"><?php echo $catalog_heading; ?></li>
                     </ol>
                 </div>
 
@@ -37,7 +39,7 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
                         <div class="page-sidebar">
                             <nav class="navbar" role="navigation">
                                 <ul class="nav navbar-nav">
-                                    <li class="active"><a href="service_catalog.php"><i class="fa fa-th-list"></i> Mis Servicios</a></li>
+                                    <li class="active"><a href="service_catalog.php"><i class="fa fa-th-list"></i> <?php echo $catalog_heading; ?></a></li>
                                 </ul>
                             </nav>
                         </div>
@@ -46,7 +48,7 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
                                 <div class="portlet-title">
                                     <div class="caption">
                                         <i class="fa fa-th-list theme-font"></i>
-                                        <span class="caption-subject font-dark bold uppercase">Mis Servicios habilitados</span>
+                                        <span class="caption-subject font-dark bold uppercase"><?php echo $catalog_caption; ?></span>
                                     </div>
                                     <div class="actions">
                                         <a id="btn-new-service" class="btn btn-primary">Nuevo servicio</a>
@@ -54,14 +56,24 @@ $provider_session_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
                                 </div>
                                 <div class="portlet-body">
                                     <p class="text-muted" style="max-width:840px; margin-bottom:16px;">
-                                        <strong>Mis Servicios</strong> son los servicios clínicos reales que tu empresa puede atender.
-                                        Habilitarlos aquí es el primer paso: hasta que un servicio esté activo en esta lista, no podrá ser base de ninguna publicación ni asignarse a ningún miembro del staff.
-                                        Una vez habilitado, podrás crear <a href="provider_offers.php">Mis Ofertas</a> &mdash; las publicaciones comerciales que verán los pacientes.
+                                        <strong>Este módulo opera los servicios habilitados del prestador</strong> sobre la base del catálogo clínico general del sistema.
+                                        Mientras el modelo sigue en transición, crear o editar aquí impacta la definición base del servicio y su habilitación para el prestador en contexto.
+                                        Un servicio activo en esta lista podrá usarse como base de <a href="provider_offers.php">Mis Ofertas</a> y asignarse al staff médico del mismo prestador.
                                     </p>
                                     <div class="form-inline margin-bottom-10">
+                                        <?php if ($is_admin): ?>
+                                        <label>Prestador médico:&nbsp;</label>
+                                        <select id="filter-provider" class="form-control" style="min-width:260px;"></select>
+                                        &nbsp;&nbsp;
+                                        <?php endif; ?>
                                         <label>Filtrar por categoría:&nbsp;</label>
                                         <select id="filter-category" class="form-control"></select>
                                     </div>
+                                    <?php if ($is_admin): ?>
+                                    <div class="alert alert-info" id="service-catalog-admin-context-help" style="margin-bottom:16px;">
+                                        Selecciona un prestador médico para listar y administrar sus servicios habilitados. Esta vista no muestra todos los servicios mezclados sin contexto.
+                                    </div>
+                                    <?php endif; ?>
                                     <table class="table table-striped table-bordered" id="tbl-services">
                                         <thead>
                                             <tr>

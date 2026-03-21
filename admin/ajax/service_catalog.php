@@ -114,8 +114,35 @@ try{
     if ($tipo === 'list') {
         $rows = [];
         $categoryFilter = isset($_REQUEST['category_id']) ? intval($_REQUEST['category_id']) : 0;
+        $targetProviderId = 0;
+        $targetProviderName = '';
 
-        $sql = "SELECT 
+        if ($isAdminPrincipal) {
+            $targetProviderId = isset($_REQUEST['provider_id']) ? intval($_REQUEST['provider_id']) : 0;
+            if ($targetProviderId <= 0) {
+                json_ok([
+                    'data' => [],
+                    'require_provider_context' => true,
+                    'provider_id' => null,
+                    'provider_name' => '',
+                ]);
+            }
+            validate_active_medical_provider($conexion, $targetProviderId);
+
+            $providerStmt = mysqli_prepare($conexion, "SELECT id, name FROM providers WHERE id = ? LIMIT 1");
+            if (!$providerStmt) json_err('db_prepare');
+            mysqli_stmt_bind_param($providerStmt, 'i', $targetProviderId);
+            mysqli_stmt_execute($providerStmt);
+            $providerRes = mysqli_stmt_get_result($providerStmt);
+            $providerRow = $providerRes ? mysqli_fetch_assoc($providerRes) : null;
+            mysqli_stmt_close($providerStmt);
+            if (!$providerRow) json_err('invalid_or_inactive_provider', 422);
+            $targetProviderName = trim((string)($providerRow['name'] ?? ''));
+        } else {
+            $targetProviderId = $scopedProviderId;
+        }
+
+        $sql = "SELECT DISTINCT
                     sc.id,
                     sc.category_id,
                     c.name AS category_name,
@@ -125,36 +152,22 @@ try{
                     sc.sort_order,
                     sc.is_active,
                     sc.created_at,
-                    sp.provider_id,
+                    pcs.provider_id,
                     p.name AS provider_name
                 FROM service_catalog sc
+                INNER JOIN provider_catalog_services pcs
+                    ON pcs.service_id = sc.id
                 LEFT JOIN service_categories c ON sc.category_id = c.id
-                LEFT JOIN (
-                    SELECT service_id, MIN(provider_id) AS provider_id
-                    FROM provider_catalog_services
-                    GROUP BY service_id
-                ) sp ON sp.service_id = sc.id
-                LEFT JOIN providers p ON p.id = sp.provider_id
-                WHERE 1=1";
+                LEFT JOIN providers p ON p.id = pcs.provider_id
+                WHERE pcs.provider_id = ?";
 
-        $types = '';
-        $params = [];
+        $types = 'i';
+        $params = [$targetProviderId];
 
         if ($categoryFilter > 0) {
             $sql .= " AND sc.category_id = ?";
             $types .= 'i';
             $params[] = $categoryFilter;
-        }
-
-        if (!$isAdminPrincipal) {
-            $sql .= " AND EXISTS (
-                        SELECT 1
-                        FROM provider_catalog_services pcs
-                        WHERE pcs.service_id = sc.id
-                          AND pcs.provider_id = ?
-                    )";
-            $types .= 'i';
-            $params[] = $scopedProviderId;
         }
 
         $sql .= " ORDER BY sc.sort_order ASC, sc.id DESC";
@@ -177,7 +190,12 @@ try{
         }
         mysqli_stmt_close($stmt);
 
-        json_ok(['data' => $rows]);
+        json_ok([
+            'data' => $rows,
+            'require_provider_context' => false,
+            'provider_id' => $targetProviderId > 0 ? $targetProviderId : null,
+            'provider_name' => $targetProviderName,
+        ]);
     }
 
     if ($tipo === 'create') {

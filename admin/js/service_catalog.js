@@ -5,8 +5,45 @@ $(document).ready(function(){
     const catalogCtx = window.SERVICE_CATALOG_CTX || {};
     const isAdminMedical = !!catalogCtx.isAdmin;
     const scopedMedicalProviderId = catalogCtx.providerId ? parseInt(catalogCtx.providerId, 10) : 0;
+    let adminSelectedProviderId = 0;
 
     function escapeHtml(text){ if(!text) return ''; return $('<div>').text(text).html(); }
+
+    function renderEmptyState(message){
+        $('#tbl-services tbody').html(
+            '<tr><td colspan="6" class="text-center text-muted" style="padding:24px 12px;">'
+            + escapeHtml(message)
+            + '</td></tr>'
+        );
+    }
+
+    function getActiveProviderContextId(){
+        return isAdminMedical ? adminSelectedProviderId : scopedMedicalProviderId;
+    }
+
+    function hasProviderContext(){
+        return getActiveProviderContextId() > 0;
+    }
+
+    function updateAdminContextState(providerName){
+        if(!isAdminMedical){
+            return;
+        }
+        var hasContext = hasProviderContext();
+        $('#btn-new-service').prop('disabled', !hasContext);
+        if(!hasContext){
+            $('#service-catalog-admin-context-help')
+                .removeClass('alert-warning')
+                .addClass('alert-info')
+                .text('Selecciona un prestador médico para listar y administrar sus servicios habilitados. Esta vista no muestra todos los servicios mezclados sin contexto.');
+            return;
+        }
+        var suffix = providerName ? (' Prestador en contexto: ' + providerName + '.') : '';
+        $('#service-catalog-admin-context-help')
+            .removeClass('alert-warning')
+            .addClass('alert-info')
+            .text('Administrando los servicios habilitados del prestador seleccionado.' + suffix);
+    }
 
     function applyProviderScopeUI(){
         if(isAdminMedical){
@@ -35,25 +72,45 @@ $(document).ready(function(){
         }
         $.post(urlProviders, { tipo: 'list', kind: 'medical' }, function(res){
             if(!res || !res.ok) return;
+            let filterOpts = '<option value="">Seleccione un prestador...</option>';
             let opts = '<option value="">Seleccionar prestador...</option>';
             res.data.forEach(function(p){
                 if(parseInt(p.is_active, 10) === 1){
+                    filterOpts += '<option value="'+p.id+'">'+escapeHtml(p.name)+'</option>';
                     opts += '<option value="'+p.id+'">'+escapeHtml(p.name)+'</option>';
                 }
             });
+            $('#filter-provider').html(filterOpts);
             $('#svc-provider').html(opts);
+            updateAdminContextState('');
         }, 'json');
     }
 
     function loadList(){
+        let providerId = getActiveProviderContextId();
+        if(isAdminMedical && providerId <= 0){
+            renderEmptyState('Seleccione un prestador médico para ver sus servicios habilitados.');
+            updateAdminContextState('');
+            return;
+        }
         let cat = $('#filter-category').val() || '';
-        $.post(url, { tipo: 'list', category_id: cat }, function(res){
+        let data = { tipo: 'list', category_id: cat };
+        if(providerId > 0){
+            data.provider_id = providerId;
+        }
+        $.post(url, data, function(res){
             if(!res || !res.ok) return;
+            if(res.require_provider_context){
+                renderEmptyState('Seleccione un prestador médico para ver sus servicios habilitados.');
+                updateAdminContextState('');
+                return;
+            }
+            updateAdminContextState(res.provider_name || '');
             let tbody = '';
             res.data.forEach(function(r){
                 const categoryId = r.category_id ? parseInt(r.category_id, 10) : 0;
-                const providerId = r.provider_id ? parseInt(r.provider_id, 10) : '';
-                tbody += '<tr data-id="'+r.id+'" data-category-id="'+categoryId+'" data-provider-id="'+providerId+'">';
+                const rowProviderId = r.provider_id ? parseInt(r.provider_id, 10) : providerId;
+                tbody += '<tr data-id="'+r.id+'" data-category-id="'+categoryId+'" data-provider-id="'+rowProviderId+'">';
                 tbody += '<td>'+escapeHtml(r.category_name || '')+'</td>';
                 tbody += '<td>'+escapeHtml(r.name)+'</td>';
                 tbody += '<td>'+escapeHtml(r.slug)+'</td>';
@@ -62,7 +119,7 @@ $(document).ready(function(){
                 tbody += '<td><button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Eliminar</button></td>';
                 tbody += '</tr>';
             });
-            $('#tbl-services tbody').html(tbody);
+            $('#tbl-services tbody').html(tbody || '<tr><td colspan="6" class="text-center text-muted" style="padding:24px 12px;">No hay servicios habilitados para el prestador seleccionado.</td></tr>');
         }, 'json');
     }
 
@@ -72,7 +129,7 @@ $(document).ready(function(){
         $('#svc-order').val(1);
         $('#svc-active').prop('checked', true);
         if(isAdminMedical){
-            $('#svc-provider').val('');
+            $('#svc-provider').val(adminSelectedProviderId > 0 ? String(adminSelectedProviderId) : '');
         } else if(scopedMedicalProviderId > 0){
             $('#svc-provider').val(String(scopedMedicalProviderId));
         }
@@ -86,7 +143,17 @@ $(document).ready(function(){
 
     $('#filter-category').change(function(){ loadList(); });
 
+    $('#filter-provider').change(function(){
+        adminSelectedProviderId = parseInt($(this).val(), 10) || 0;
+        $('#svc-provider').val(adminSelectedProviderId > 0 ? String(adminSelectedProviderId) : '');
+        loadList();
+    });
+
     $('#btn-new-service').click(function(){
+        if(isAdminMedical && !hasProviderContext()){
+            alert('Seleccione un prestador médico antes de crear o editar servicios en esta vista.');
+            return;
+        }
         resetFormDefaults();
         $('#serviceModal').modal('show');
     });
@@ -134,7 +201,7 @@ $(document).ready(function(){
         let tr = $(this).closest('tr');
         let id = tr.data('id');
         let categoryId = parseInt(tr.attr('data-category-id'), 10) || 0;
-        let providerId = parseInt(tr.attr('data-provider-id'), 10) || 0;
+        let providerId = parseInt(tr.attr('data-provider-id'), 10) || getActiveProviderContextId();
         let name = tr.find('td').eq(1).text();
         let order = tr.find('td').eq(3).text();
         let activeText = tr.find('td').eq(4).text();
