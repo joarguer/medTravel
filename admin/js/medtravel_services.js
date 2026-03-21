@@ -4,6 +4,7 @@ var serviceModal = $('#serviceModal');
 var serviceForm = $('#serviceForm');
 var medtravelCtx = window.MEDTRAVEL_SERVICES_CTX || {};
 var canListProviders = !!medtravelCtx.canListProviders;
+var isAdminMode = !!medtravelCtx.isAdmin;
 var scopedComplementaryProviderId = (medtravelCtx.isComplementary && medtravelCtx.serviceProviderId)
     ? parseInt(medtravelCtx.serviceProviderId, 10)
     : 0;
@@ -25,6 +26,27 @@ function applyProviderScopeUI() {
     $('#provider_scope_hint').show();
 }
 
+function normalizeServerMessage(message) {
+    var mapped = {
+        'Service created successfully': 'Servicio complementario creado correctamente',
+        'Service updated successfully': 'Servicio complementario actualizado correctamente',
+        'Service deleted (soft) successfully': 'Servicio complementario eliminado correctamente',
+        'Status updated': 'Estado actualizado correctamente',
+        'Service type and name are required': 'Debes completar el tipo y el nombre del servicio',
+        'provider_required': 'Debes seleccionar un proveedor complementario',
+        'invalid_or_inactive_provider': 'El proveedor complementario seleccionado no existe o está inactivo',
+        'Image file is required': 'Debes seleccionar una imagen para subir',
+        'Invalid file type. Use JPG, PNG, GIF or WEBP.': 'Tipo de archivo inválido. Usa JPG, PNG, GIF o WEBP.',
+        'forbidden': 'No tienes permisos para realizar esta acción',
+        'invalid_action': 'La acción solicitada no es válida',
+        'server_error': 'Ocurrió un error interno al procesar la solicitud',
+        'not_found': 'No se encontró el servicio solicitado',
+        'registro eliminado': 'El servicio solicitado ya fue eliminado',
+        'db_prepare_error': 'No se pudo preparar la operación en la base de datos'
+    };
+    return mapped[message] || message;
+}
+
 // ===================================================================
 // DATATABLE
 // ===================================================================
@@ -40,12 +62,12 @@ function initDataTable() {
                 data: 'service_type',
                 render: function(data, type, row) {
                     var badges = {
-                        'flight': '<span class="service-type-badge badge-flight">✈️ Flight</span>',
-                        'accommodation': '<span class="service-type-badge badge-accommodation">🏨 Hotel</span>',
-                        'transport': '<span class="service-type-badge badge-transport">🚗 Transport</span>',
-                        'meals': '<span class="service-type-badge badge-meals">🍽️ Meals</span>',
-                        'support': '<span class="service-type-badge badge-support">🎧 Support</span>',
-                        'other': '<span class="service-type-badge badge-other">📦 Other</span>'
+                        'flight': '<span class="service-type-badge badge-flight">✈️ Vuelo</span>',
+                        'accommodation': '<span class="service-type-badge badge-accommodation">🏨 Alojamiento</span>',
+                        'transport': '<span class="service-type-badge badge-transport">🚗 Transporte</span>',
+                        'meals': '<span class="service-type-badge badge-meals">🍽️ Alimentación</span>',
+                        'support': '<span class="service-type-badge badge-support">🎧 Apoyo</span>',
+                        'other': '<span class="service-type-badge badge-other">📦 Otro</span>'
                     };
                     return badges[data] || data;
                 }
@@ -53,11 +75,11 @@ function initDataTable() {
             { 
                 data: 'service_name',
                 render: function(data, type, row) {
-                    var featured = row.featured == 1 ? ' <i class="fa fa-star text-warning" title="Featured"></i>' : '';
+                    var featured = row.featured == 1 ? ' <i class="fa fa-star text-warning" title="Servicio destacado"></i>' : '';
                     return '<strong>' + data + '</strong>' + featured;
                 }
             },
-            { data: 'provider_name', defaultContent: '<em>N/A</em>' },
+            { data: 'provider_name', defaultContent: '<em>Sin proveedor vinculado</em>' },
             { 
                 data: 'cost_price',
                 render: function(data, type, row) {
@@ -96,10 +118,10 @@ function initDataTable() {
                 data: 'availability_status',
                 render: function(data, type, row) {
                     var statuses = {
-                        'available': '<span class="status-available">● Available</span>',
-                        'limited': '<span class="status-limited">● Limited</span>',
-                        'unavailable': '<span class="status-unavailable">● Unavailable</span>',
-                        'seasonal': '<span class="status-seasonal">● Seasonal</span>'
+                        'available': '<span class="status-available">● Disponible</span>',
+                        'limited': '<span class="status-limited">● Limitado</span>',
+                        'unavailable': '<span class="status-unavailable">● No disponible</span>',
+                        'seasonal': '<span class="status-seasonal">● Estacional</span>'
                     };
                     return statuses[data] || data;
                 }
@@ -110,12 +132,12 @@ function initDataTable() {
                 render: function(data, type, row) {
                     var isActive = parseInt(row.is_active, 10) === 1;
                     var nextVal = isActive ? 0 : 1;
-                    var toggleLabel = isActive ? 'DESACTIVAR' : 'ACTIVAR';
+                    var toggleLabel = isActive ? 'Desactivar' : 'Activar';
                     var toggleClass = isActive ? 'btn-warning' : 'btn-success';
-                    return '<button class="btn btn-xs btn-primary" onclick="editService(' + row.id + ')" title="Edit">' +
+                    return '<button class="btn btn-xs btn-primary" onclick="editService(' + row.id + ')" title="Editar servicio">' +
                            '<i class="fa fa-edit"></i></button> ' +
                            '<button class="btn btn-xs ' + toggleClass + '" onclick="toggleStatus(' + row.id + ', ' + nextVal + ')" title="' + toggleLabel + '">' + toggleLabel + '</button> ' +
-                           '<button class="btn btn-xs btn-danger" onclick="deleteService(' + row.id + ')" title="Delete">' +
+                           '<button class="btn btn-xs btn-danger" onclick="deleteService(' + row.id + ')" title="Eliminar servicio">' +
                            '<i class="fa fa-trash"></i></button>';
                 }
             }
@@ -123,7 +145,7 @@ function initDataTable() {
         order: [[1, 'asc'], [7, 'desc'], [2, 'asc']],
         pageLength: 25,
         language: {
-            url: '//cdn.datatables.net/plug-ins/1.10.25/i18n/English.json'
+            url: '//cdn.datatables.net/plug-ins/1.10.25/i18n/Spanish.json'
         }
     });
 }
@@ -205,7 +227,7 @@ function applyFilters() {
 function openCreateModal() {
     serviceForm[0].reset();
     $('#service_id').val('');
-    $('#serviceModalTitle').text('Nuevo Servicio');
+    $('#serviceModalTitle').text(isAdminMode ? 'Nuevo servicio complementario' : 'Nuevo servicio');
     $('#is_active').prop('checked', true);
     $('#image_url').val('');
     updateImagePreview('');
@@ -247,14 +269,14 @@ function editService(id) {
         success: function(response) {
             if(response.ok) {
                 populateForm(response.data);
-                $('#serviceModalTitle').text('Edit Service');
+                $('#serviceModalTitle').text('Editar servicio complementario');
                 serviceModal.modal('show');
             } else {
-                toastr.error(response.message || 'Error loading service');
+                toastr.error(normalizeServerMessage(response.message) || 'No se pudo cargar el servicio');
             }
         },
         error: function() {
-            toastr.error('Server communication error');
+            toastr.error('Error de comunicación con el servidor');
         }
     });
 }
@@ -400,61 +422,60 @@ function validateServiceForm() {
     $('.has-error').removeClass('has-error');
     $('.nav-tabs li').removeClass('tab-error');
     
-    // TAB 1: Basic Info - Campos obligatorios
+    // TAB 1: Información básica - Campos obligatorios
     var serviceType = $('#service_type').val();
     var serviceName = $('#service_name').val().trim();
     
     if(!serviceType) {
-        errors.push({tab: 'Basic Info', field: 'Service Type is required', element: '#service_type'});
+        errors.push({tab: 'Información básica', field: 'Debes seleccionar el tipo de servicio', element: '#service_type'});
     }
     
     if(!serviceName) {
-        errors.push({tab: 'Basic Info', field: 'Service Name is required', element: '#service_name'});
+        errors.push({tab: 'Información básica', field: 'Debes ingresar el nombre del servicio', element: '#service_name'});
     }
 
-    // TAB 2: Provider - requerido para admin/global. Usuarios scoped se fuerzan server-side.
+    // TAB 2: Proveedor - requerido para admin/global. Usuarios scoped se fuerzan server-side.
     var selectedProviderId = parseInt($('#provider_id').val(), 10) || 0;
     if(!scopedComplementaryProviderId && selectedProviderId <= 0) {
-        errors.push({tab: 'Provider', field: 'Provider is required', element: '#provider_id'});
+        errors.push({tab: 'Proveedor', field: 'Debes seleccionar un proveedor complementario', element: '#provider_id'});
     }
     
-    // TAB 3: Pricing - Validaciones de precios y tasa de cambio
+    // TAB 3: Precios - Validaciones de precios y tasa de cambio
     var exchangeRate = parseFloat($('#exchange_rate').val()) || 0;
     var costCOP = parseFloat($('#cost_price_cop').val()) || 0;
     var salePrice = parseFloat($('#sale_price').val()) || 0;
     
     if(exchangeRate <= 0) {
-        errors.push({tab: 'Pricing', field: 'Exchange Rate must be greater than 0', element: '#exchange_rate'});
+        errors.push({tab: 'Precios', field: 'La tasa de cambio debe ser mayor a 0', element: '#exchange_rate'});
     }
     
     if(costCOP < 0) {
-        errors.push({tab: 'Pricing', field: 'Cost in COP cannot be negative', element: '#cost_price_cop'});
+        errors.push({tab: 'Precios', field: 'El costo en COP no puede ser negativo', element: '#cost_price_cop'});
     }
     
     if(salePrice <= 0) {
-        errors.push({tab: 'Pricing', field: 'Sale Price USD must be greater than 0', element: '#sale_price'});
+        errors.push({tab: 'Precios', field: 'El precio de venta en USD debe ser mayor a 0', element: '#sale_price'});
     }
     
-    // Advertencia si la comisión es negativa (no bloquea el guardado)
+    // Advertencia si el margen es negativo (no bloquea el guardado)
     var costUSD = parseFloat($('#cost_price').val()) || 0;
     if(salePrice < costUSD && salePrice > 0) {
-        // No agregar a errors para no bloquear, solo mostrar warning visual
-        toastr.warning('Warning: Sale Price is lower than Cost Price (negative commission)', 'Commission Alert', {
+        toastr.warning('El precio de venta es menor al costo estimado. El margen sería negativo.', 'Alerta de margen', {
             timeOut: 3000,
             preventDuplicates: true
         });
     }
     
-    // TAB 4: Details - Validaciones de números
+    // TAB 4: Detalles - Validaciones de números
     var stockQuantity = $('#stock_quantity').val();
     var leadTime = $('#booking_lead_time').val();
     
     if(stockQuantity && (isNaN(stockQuantity) || parseInt(stockQuantity) < 0)) {
-        errors.push({tab: 'Details', field: 'Stock Quantity must be a positive number', element: '#stock_quantity'});
+        errors.push({tab: 'Detalles', field: 'El cupo disponible debe ser un número positivo', element: '#stock_quantity'});
     }
     
     if(leadTime && (isNaN(leadTime) || parseInt(leadTime) < 0)) {
-        errors.push({tab: 'Details', field: 'Booking Lead Time must be a positive number', element: '#booking_lead_time'});
+        errors.push({tab: 'Detalles', field: 'La anticipación mínima de reserva debe ser un número positivo', element: '#booking_lead_time'});
     }
     
     // Validación de email del proveedor (si se proporciona)
@@ -463,7 +484,7 @@ function validateServiceForm() {
     if(providerEmailVal) {
         var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if(!emailRegex.test(providerEmailVal)) {
-            errors.push({tab: 'Provider', field: 'Provider Email format is invalid', element: '#provider_email'});
+            errors.push({tab: 'Proveedor', field: 'El formato del email del proveedor no es válido', element: '#provider_email'});
         }
     }
     
@@ -475,16 +496,16 @@ function validateServiceForm() {
     });
     
     // Marcar tabs con errores
-    if(errors.some(e => e.tab === 'Basic Info')) {
+    if(errors.some(function(e) { return e.tab === 'Información básica'; })) {
         $('.nav-tabs a[href="#tab_basic"]').parent().addClass('tab-error');
     }
-    if(errors.some(e => e.tab === 'Provider')) {
+    if(errors.some(function(e) { return e.tab === 'Proveedor'; })) {
         $('.nav-tabs a[href="#tab_provider"]').parent().addClass('tab-error');
     }
-    if(errors.some(e => e.tab === 'Pricing')) {
+    if(errors.some(function(e) { return e.tab === 'Precios'; })) {
         $('.nav-tabs a[href="#tab_pricing"]').parent().addClass('tab-error');
     }
-    if(errors.some(e => e.tab === 'Details')) {
+    if(errors.some(function(e) { return e.tab === 'Detalles'; })) {
         $('.nav-tabs a[href="#tab_details"]').parent().addClass('tab-error');
     }
     
@@ -495,7 +516,7 @@ function validateServiceForm() {
 // MOSTRAR ERRORES DE VALIDACIÓN
 // ===================================================================
 function showValidationErrors(errors) {
-    var message = '<strong>Please correct the following errors:</strong><br><ul style="margin: 10px 0; padding-left: 20px;">';
+    var message = '<strong>Corrige los siguientes campos antes de guardar:</strong><br><ul style="margin: 10px 0; padding-left: 20px;">';
     
     errors.forEach(function(error) {
         message += '<li><strong>' + error.tab + ':</strong> ' + error.field + '</li>';
@@ -503,7 +524,7 @@ function showValidationErrors(errors) {
     
     message += '</ul>';
     
-    toastr.error(message, 'Validation Error', {
+    toastr.error(message, 'Validación pendiente', {
         timeOut: 0,
         extendedTimeOut: 0,
         closeButton: true,
@@ -540,16 +561,16 @@ function saveService() {
         dataType: 'json',
         success: function(response) {
             if(response.ok) {
-                toastr.success(response.message || 'Service saved successfully');
+                toastr.success(normalizeServerMessage(response.message) || 'Servicio guardado correctamente');
                 serviceModal.modal('hide');
                 servicesTable.ajax.reload(null, false);
             } else {
-                toastr.error(response.message || 'Error saving service');
+                toastr.error(normalizeServerMessage(response.message) || 'No se pudo guardar el servicio');
             }
         },
         error: function(xhr) {
             console.error('Error:', xhr.responseText);
-            toastr.error('Server communication error');
+            toastr.error('Error de comunicación con el servidor');
         }
     });
 }
@@ -558,7 +579,7 @@ function saveService() {
 // ELIMINAR SERVICIO
 // ===================================================================
 function deleteService(id) {
-    if(!confirm('¿Deseas eliminar (soft)?')) {
+    if(!confirm('¿Deseas eliminar este servicio complementario?')) {
         return;
     }
     
@@ -569,14 +590,14 @@ function deleteService(id) {
         dataType: 'json',
         success: function(response) {
             if(response.ok) {
-                toastr.success(response.message || 'Servicio eliminado (soft)');
+                toastr.success(normalizeServerMessage(response.message) || 'Servicio complementario eliminado correctamente');
                 servicesTable.ajax.reload(null, false);
             } else {
-                toastr.error(response.message || 'Error eliminando servicio');
+                toastr.error(normalizeServerMessage(response.message) || 'No se pudo eliminar el servicio');
             }
         },
         error: function() {
-            toastr.error('Server communication error');
+            toastr.error('Error de comunicación con el servidor');
         }
     });
 }
@@ -607,15 +628,15 @@ function toggleStatus(id, val) {
         success: function(response) {
             if(response.ok) {
                 var statusText = response.is_active == 1 ? 'activado' : 'desactivado';
-                toastr.success('Servicio ' + statusText);
+                toastr.success('Servicio complementario ' + statusText);
                 servicesTable.ajax.reload(null, false);
             } else {
-                toastr.error(response.message || 'Error updating status');
+                toastr.error(normalizeServerMessage(response.message) || 'No se pudo actualizar el estado');
                 servicesTable.ajax.reload(null, false);
             }
         },
         error: function() {
-            toastr.error('Server communication error');
+            toastr.error('Error de comunicación con el servidor');
             servicesTable.ajax.reload(null, false);
         }
     });
@@ -647,9 +668,9 @@ function updateImagePreview(path) {
     if(path) {
         var isAbsolute = /^https?:\/\//i.test(path);
         var src = isAbsolute ? path : '../../' + path;
-        preview.html('<img src="' + src + '" alt="Service image">');
+        preview.html('<img src="' + src + '" alt="Imagen del servicio">');
     } else {
-        preview.text('No image selected');
+        preview.text('No hay imagen seleccionada');
     }
 }
 
@@ -676,13 +697,13 @@ function openImagePicker() {
                 if(response.ok) {
                     $('#image_url').val(response.path);
                     updateImagePreview(response.path);
-                    toastr.success('Image uploaded. Remember to save the service.');
+                    toastr.success('Imagen subida correctamente. Guarda el servicio para conservar el cambio.');
                 } else {
-                    toastr.error(response.message || 'Error uploading image');
+                    toastr.error(normalizeServerMessage(response.message) || 'No se pudo subir la imagen');
                 }
             },
             error: function() {
-                toastr.error('Server communication error');
+                toastr.error('Error de comunicación con el servidor');
             }
         });
     };
@@ -709,7 +730,7 @@ function loadProviders() {
         success: function(response) {
             if(response.ok) {
                 var select = $('#provider_id');
-                select.html('<option value="">Seleccionar proveedor...</option>');
+                select.html('<option value="">Seleccionar proveedor complementario...</option>');
                 
                 $.each(response.data, function(i, provider) {
                     var typeIcon = getProviderTypeIcon(provider.provider_type);
@@ -787,6 +808,7 @@ function getProviderTypeIcon(type) {
         'hotel': '🏨',
         'transport': '🚗',
         'restaurant': '🍽️',
+        'support': '🎧',
         'tour_operator': '🎯',
         'other': '📦'
     };
@@ -819,8 +841,5 @@ function onProviderSelect() {
 // ABRIR MODAL DE NUEVO PROVEEDOR
 // ===================================================================
 function openProviderModal() {
-    toastr.info('Funcionalidad de creación rápida de proveedor próximamente.<br>' + 
-                'Por ahora, crea proveedores en el menú <strong>Proveedores</strong>.', 
-                'Información', {timeOut: 5000, enableHtml: true});
-    // TODO: Implementar modal inline o redirigir a página de proveedores
+    window.location.href = 'providers_complementary.php';
 }
