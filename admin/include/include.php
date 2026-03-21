@@ -557,7 +557,7 @@ $can_view_clients = (
 $operacion_pages  = array('my_booking_requests.php', 'app_inbox.php', 'app_calendar.php', 'clientes.php');
 $servicios_pages  = array('service_catalog.php', 'provider_offers.php');
 $presencia_pages  = array('blog_edit.php');
-$empresa_pages    = array('mi_empresa.php', 'staff_medico.php', 'mis_datos.php');
+$empresa_pages    = array('mi_empresa.php', 'staff_medico.php', 'staff_catalogs.php', 'mis_datos.php');
 
 $top_header_2 = '<div class="nav-collapse collapse navbar-collapse navbar-responsive-collapse">
                     <ul class="nav navbar-nav">
@@ -801,6 +801,10 @@ if ($es_admin) {
                                 <li'.menu_li_class('staff_medico.php').'>
                                     <a href="./staff_medico.php">
                                         <i class="fa fa-user-md"></i> Staff médico </a>
+                                </li>
+                                <li'.menu_li_class('staff_catalogs.php').'>
+                                    <a href="./staff_catalogs.php">
+                                        <i class="fa fa-tags"></i> Catálogos del staff </a>
                                 </li>
                                 <li'.menu_li_class('mis_datos.php').'>
                                     <a href="./mis_datos.php">

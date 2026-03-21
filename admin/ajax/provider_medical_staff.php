@@ -78,6 +78,18 @@ function pms_staff_services_table_ready($conexion)
     return $ready;
 }
 
+function pms_catalog_table_ready($conexion, $table)
+{
+    static $cache = [];
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+    $escaped = mysqli_real_escape_string($conexion, $table);
+    $q = mysqli_query($conexion, "SHOW TABLES LIKE '{$escaped}'");
+    $cache[$table] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$table];
+}
+
 function pms_table_has_column($conexion, $table, $column)
 {
     static $cache = [];
@@ -961,26 +973,267 @@ switch ($action) {
         ]);
     }
 
-    // ── Catálogos base del sistema para el modal de staff ────────────────────
-    // Fuente centralizada de roles y especialidades.
-    // ESTADO: opciones servidas como catálogo del sistema (no persistidas en BD todavía).
-    // SIGUIENTE PASO: crear tablas staff_role_catalog y staff_specialty_catalog
-    // para que admin pueda ampliar/editar las opciones sin tocar código.
+    // ── Catálogos de roles y especialidades para el modal de staff ──────────
+    // Sirve entradas del sistema (provider_id IS NULL) + entradas propias del provider.
+    // Fallback a arrays hardcoded si las tablas todavía no existen (antes de migrar).
     case 'list_staff_catalogs': {
-        pms_ok([
-            'roles' => [
-                'Lead Doctor', 'Specialist', 'Surgeon', 'Dentist', 'Orthodontist',
-                'Oral Surgeon', 'Cosmetic Dentist', 'General Physician', 'Nurse',
-                'Patient Coordinator', 'Medical Assistant', 'Anesthesiologist',
-                'Therapist', 'Administrative Coordinator',
-            ],
-            'specialties' => [
-                'Dentistry', 'Cosmetic Dentistry', 'Orthodontics', 'Oral Surgery',
-                'Plastic Surgery', 'Bariatric Surgery', 'Dermatology', 'Ophthalmology',
-                'Fertility', 'Orthopedics', 'General Medicine', 'Aesthetic Medicine',
-                'Rehabilitation', 'Nutrition',
-            ],
-        ]);
+        $providerId = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
+
+        $fallbackRoles = [
+            'Lead Doctor', 'Specialist', 'Surgeon', 'Dentist', 'Orthodontist',
+            'Oral Surgeon', 'Cosmetic Dentist', 'General Physician', 'Nurse',
+            'Patient Coordinator', 'Medical Assistant', 'Anesthesiologist',
+            'Therapist', 'Administrative Coordinator',
+        ];
+        $fallbackSpecialties = [
+            'Dentistry', 'Cosmetic Dentistry', 'Orthodontics', 'Oral Surgery',
+            'Plastic Surgery', 'Bariatric Surgery', 'Dermatology', 'Ophthalmology',
+            'Fertility', 'Orthopedics', 'General Medicine', 'Aesthetic Medicine',
+            'Rehabilitation', 'Nutrition',
+        ];
+
+        $roles        = [];
+        $specialties  = [];
+
+        if (pms_catalog_table_ready($conexion, 'provider_staff_roles')) {
+            $stmt = mysqli_prepare(
+                $conexion,
+                "SELECT name FROM provider_staff_roles
+                 WHERE (provider_id IS NULL OR provider_id = ?)
+                   AND is_active = 1
+                 ORDER BY (provider_id IS NULL) DESC, sort_order ASC, name ASC"
+            );
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, 'i', $providerId);
+                mysqli_stmt_execute($stmt);
+                $res = mysqli_stmt_get_result($stmt);
+                while ($row = mysqli_fetch_assoc($res)) {
+                    $roles[] = $row['name'];
+                }
+                mysqli_stmt_close($stmt);
+            }
+        }
+        if (empty($roles)) {
+            $roles = $fallbackRoles;
+        }
+
+        if (pms_catalog_table_ready($conexion, 'provider_staff_specialties')) {
+            $stmt = mysqli_prepare(
+                $conexion,
+                "SELECT name FROM provider_staff_specialties
+                 WHERE (provider_id IS NULL OR provider_id = ?)
+                   AND is_active = 1
+                 ORDER BY (provider_id IS NULL) DESC, sort_order ASC, name ASC"
+            );
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, 'i', $providerId);
+                mysqli_stmt_execute($stmt);
+                $res = mysqli_stmt_get_result($stmt);
+                while ($row = mysqli_fetch_assoc($res)) {
+                    $specialties[] = $row['name'];
+                }
+                mysqli_stmt_close($stmt);
+            }
+        }
+        if (empty($specialties)) {
+            $specialties = $fallbackSpecialties;
+        }
+
+        pms_ok(['roles' => $roles, 'specialties' => $specialties]);
+    }
+
+    // ── CRUD: listar items de un catálogo (con id para gestión) ──────────────
+    case 'list_staff_catalog_items': {
+        $providerId  = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
+        $catalogType = trim($_GET['catalog_type'] ?? $_POST['catalog_type'] ?? '');
+        pms_assert_provider_scope($providerId);
+
+        if (!in_array($catalogType, ['roles', 'specialties'], true)) {
+            pms_err('invalid_catalog_type');
+        }
+        $tableName = ($catalogType === 'roles') ? 'provider_staff_roles' : 'provider_staff_specialties';
+
+        if (!pms_catalog_table_ready($conexion, $tableName)) {
+            pms_ok(['items' => []]);
+        }
+
+        $stmt = mysqli_prepare(
+            $conexion,
+            "SELECT id, name, is_active, sort_order,
+                    (provider_id IS NULL) AS is_system
+             FROM `{$tableName}`
+             WHERE provider_id IS NULL OR provider_id = ?
+             ORDER BY (provider_id IS NULL) DESC, sort_order ASC, name ASC"
+        );
+        if (!$stmt) {
+            pms_err('db_error', 500);
+        }
+        mysqli_stmt_bind_param($stmt, 'i', $providerId);
+        mysqli_stmt_execute($stmt);
+        $res  = mysqli_stmt_get_result($stmt);
+        $items = [];
+        while ($row = mysqli_fetch_assoc($res)) {
+            $items[] = [
+                'id'        => (int)$row['id'],
+                'name'      => $row['name'],
+                'is_active' => (bool)$row['is_active'],
+                'sort_order'=> (int)$row['sort_order'],
+                'is_system' => (bool)$row['is_system'],
+            ];
+        }
+        mysqli_stmt_close($stmt);
+        pms_ok(['items' => $items]);
+    }
+
+    // ── CRUD: crear o actualizar un item del catálogo ─────────────────────────
+    case 'save_staff_catalog_item': {
+        $providerId  = (int)($_POST['provider_id'] ?? 0);
+        $catalogType = trim($_POST['catalog_type'] ?? '');
+        $itemId      = (int)($_POST['item_id'] ?? 0);
+        $name        = pms_clean_text($_POST['name'] ?? '', 120);
+        pms_assert_provider_scope($providerId);
+
+        if (!in_array($catalogType, ['roles', 'specialties'], true)) {
+            pms_err('invalid_catalog_type');
+        }
+        if ($name === '') {
+            pms_err('name_required');
+        }
+
+        $tableName = ($catalogType === 'roles') ? 'provider_staff_roles' : 'provider_staff_specialties';
+
+        if (!pms_catalog_table_ready($conexion, $tableName)) {
+            pms_err('catalog_table_not_ready', 503);
+        }
+
+        if ($itemId > 0) {
+            // Actualizar: solo permite editar entradas propias del provider (no sistema)
+            $stmt = mysqli_prepare(
+                $conexion,
+                "UPDATE `{$tableName}` SET name = ? WHERE id = ? AND provider_id = ?"
+            );
+            if (!$stmt) {
+                pms_err('db_error', 500);
+            }
+            mysqli_stmt_bind_param($stmt, 'sii', $name, $itemId, $providerId);
+            mysqli_stmt_execute($stmt);
+            $affected = mysqli_stmt_affected_rows($stmt);
+            mysqli_stmt_close($stmt);
+            if ($affected === 0) {
+                pms_err('item_not_found_or_not_editable', 404);
+            }
+            pms_ok(['item_id' => $itemId, 'action' => 'updated']);
+        } else {
+            // Insertar nueva entrada del provider
+            $sortStmt = mysqli_prepare(
+                $conexion,
+                "SELECT COALESCE(MAX(sort_order), 0) + 10 AS next_sort
+                 FROM `{$tableName}` WHERE provider_id = ?"
+            );
+            $nextSort = 10;
+            if ($sortStmt) {
+                mysqli_stmt_bind_param($sortStmt, 'i', $providerId);
+                mysqli_stmt_execute($sortStmt);
+                $sortRes = mysqli_stmt_get_result($sortStmt);
+                $sortRow = mysqli_fetch_assoc($sortRes);
+                $nextSort = isset($sortRow['next_sort']) ? (int)$sortRow['next_sort'] : 10;
+                mysqli_stmt_close($sortStmt);
+            }
+
+            $stmt = mysqli_prepare(
+                $conexion,
+                "INSERT INTO `{$tableName}` (provider_id, name, sort_order)
+                 VALUES (?, ?, ?)"
+            );
+            if (!$stmt) {
+                pms_err('db_error', 500);
+            }
+            mysqli_stmt_bind_param($stmt, 'isi', $providerId, $name, $nextSort);
+            mysqli_stmt_execute($stmt);
+            $newId    = (int)mysqli_stmt_insert_id($stmt);
+            $affected = mysqli_stmt_affected_rows($stmt);
+            mysqli_stmt_close($stmt);
+            if ($affected === 0) {
+                pms_err('insert_failed', 500);
+            }
+            pms_ok(['item_id' => $newId, 'action' => 'created']);
+        }
+    }
+
+    // ── CRUD: activar/desactivar un item del catálogo del provider ───────────
+    case 'toggle_staff_catalog_item': {
+        $providerId  = (int)($_POST['provider_id'] ?? 0);
+        $catalogType = trim($_POST['catalog_type'] ?? '');
+        $itemId      = (int)($_POST['item_id'] ?? 0);
+        pms_assert_provider_scope($providerId);
+
+        if (!in_array($catalogType, ['roles', 'specialties'], true)) {
+            pms_err('invalid_catalog_type');
+        }
+        if ($itemId <= 0) {
+            pms_err('item_id_required');
+        }
+
+        $tableName = ($catalogType === 'roles') ? 'provider_staff_roles' : 'provider_staff_specialties';
+
+        if (!pms_catalog_table_ready($conexion, $tableName)) {
+            pms_err('catalog_table_not_ready', 503);
+        }
+
+        // Solo el propio provider puede activar/desactivar sus entradas (no las del sistema)
+        $stmt = mysqli_prepare(
+            $conexion,
+            "UPDATE `{$tableName}` SET is_active = NOT is_active WHERE id = ? AND provider_id = ?"
+        );
+        if (!$stmt) {
+            pms_err('db_error', 500);
+        }
+        mysqli_stmt_bind_param($stmt, 'ii', $itemId, $providerId);
+        mysqli_stmt_execute($stmt);
+        $affected = mysqli_stmt_affected_rows($stmt);
+        mysqli_stmt_close($stmt);
+        if ($affected === 0) {
+            pms_err('item_not_found_or_not_editable', 404);
+        }
+        pms_ok(['item_id' => $itemId, 'action' => 'toggled']);
+    }
+
+    // ── CRUD: eliminar un item del catálogo del provider ──────────────────────
+    case 'delete_staff_catalog_item': {
+        $providerId  = (int)($_POST['provider_id'] ?? 0);
+        $catalogType = trim($_POST['catalog_type'] ?? '');
+        $itemId      = (int)($_POST['item_id'] ?? 0);
+        pms_assert_provider_scope($providerId);
+
+        if (!in_array($catalogType, ['roles', 'specialties'], true)) {
+            pms_err('invalid_catalog_type');
+        }
+        if ($itemId <= 0) {
+            pms_err('item_id_required');
+        }
+
+        $tableName = ($catalogType === 'roles') ? 'provider_staff_roles' : 'provider_staff_specialties';
+
+        if (!pms_catalog_table_ready($conexion, $tableName)) {
+            pms_err('catalog_table_not_ready', 503);
+        }
+
+        // Solo se pueden eliminar entradas propias del provider (nunca entradas del sistema)
+        $stmt = mysqli_prepare(
+            $conexion,
+            "DELETE FROM `{$tableName}` WHERE id = ? AND provider_id = ?"
+        );
+        if (!$stmt) {
+            pms_err('db_error', 500);
+        }
+        mysqli_stmt_bind_param($stmt, 'ii', $itemId, $providerId);
+        mysqli_stmt_execute($stmt);
+        $affected = mysqli_stmt_affected_rows($stmt);
+        mysqli_stmt_close($stmt);
+        if ($affected === 0) {
+            pms_err('item_not_found_or_not_deletable', 404);
+        }
+        pms_ok(['item_id' => $itemId, 'action' => 'deleted']);
     }
 
     // ── Sedes/clínicas del provider para el modal de staff ───────────────────

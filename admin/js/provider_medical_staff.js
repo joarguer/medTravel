@@ -276,7 +276,7 @@
             url: ENDPOINT,
             method: 'GET',
             dataType: 'json',
-            data: { action: 'list_staff_catalogs' }
+            data: { action: 'list_staff_catalogs', provider_id: PROVIDER_ID }
         }).done(function (res) {
             staffCatalogs.roles = (res && Array.isArray(res.roles)) ? res.roles : [];
             staffCatalogs.specialties = (res && Array.isArray(res.specialties)) ? res.specialties : [];
