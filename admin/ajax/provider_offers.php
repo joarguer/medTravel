@@ -26,28 +26,9 @@ set_exception_handler(function($e) use ($devlog) {
     echo json_encode(['ok'=>false,'error'=>'server_exception']);
     exit();
 });
-$provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
+$session_provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
 $is_admin = function_exists('is_role_admin_session') ? is_role_admin_session() : false;
-if (!$provider_id && !($is_admin && $tipo === 'delete_media')) {
-    // debug log: provider_id missing in session
-    $sid = session_id();
-    $possible = [
-        'id_usuario' => isset($_SESSION['id_usuario'])?$_SESSION['id_usuario']:null,
-        'id' => isset($_SESSION['id'])?$_SESSION['id']:null,
-        'user_id' => isset($_SESSION['user_id'])?$_SESSION['user_id']:null,
-        'usuario' => isset($_SESSION['usuario'])?$_SESSION['usuario']:null
-    ];
-    error_log('provider_offers: FORBIDDEN - no provider_id; session_id=' . $sid . ' keys=' . json_encode($possible));
-    // adicional: escribir en log local para depuración en entorno dev
-    if (defined('APP_ENV') && APP_ENV === 'dev') {
-        $devlog = __DIR__ . '/../logs/dev.log';
-        @file_put_contents($devlog, date('Y-m-d H:i:s') . " - FORBIDDEN no provider_id; session_id={$sid}; keys=" . json_encode($possible) . "\n", FILE_APPEND | LOCK_EX);
-    }
-    http_response_code(403);
-    echo json_encode(['ok' => false, 'error' => 'FORBIDDEN']);
-    exit();
-}
 
 function json_error($msg, $code = 400){ http_response_code($code); echo json_encode(['ok'=>false,'error'=>$msg]); exit(); }
 
@@ -81,6 +62,78 @@ function bind_stmt_params($stmt, $types, array &$params){
         $refs[] = &$params[$idx];
     }
     call_user_func_array([$stmt, 'bind_param'], $refs);
+}
+
+function provider_offers_provider_is_medical($conexion, $providerId){
+    $providerId = (int)$providerId;
+    if ($providerId <= 0) {
+        return false;
+    }
+
+    $sql = 'SELECT id FROM providers WHERE id = ?';
+    if (table_has_column($conexion, 'providers', 'kind')) {
+        $sql .= " AND kind = 'medical'";
+    }
+    if (table_has_column($conexion, 'providers', 'is_deleted')) {
+        $sql .= ' AND is_deleted = 0';
+    }
+    $sql .= ' LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return (bool)$row;
+}
+
+function provider_offers_fetch_provider_name($conexion, $providerId){
+    $providerId = (int)$providerId;
+    if ($providerId <= 0) {
+        return '';
+    }
+
+    $stmt = mysqli_prepare($conexion, 'SELECT name FROM providers WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return '';
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row && isset($row['name']) ? (string)$row['name'] : '';
+}
+
+function provider_offers_resolve_context_provider_id($conexion, $isAdmin, $sessionProviderId, $requestedProviderId, $requireExplicitForAdmin = true){
+    $requestedProviderId = (int)$requestedProviderId;
+    $sessionProviderId = (int)$sessionProviderId;
+
+    if ($isAdmin) {
+        if ($requestedProviderId <= 0) {
+            return [0, $requireExplicitForAdmin ? 'REQUIRE_PROVIDER_CONTEXT' : null];
+        }
+        if (!provider_offers_provider_is_medical($conexion, $requestedProviderId)) {
+            return [0, 'INVALID_PROVIDER_CONTEXT'];
+        }
+        return [$requestedProviderId, null];
+    }
+
+    if ($sessionProviderId <= 0) {
+        return [0, 'FORBIDDEN'];
+    }
+    if (!provider_offers_provider_is_medical($conexion, $sessionProviderId)) {
+        return [0, 'INVALID_PROVIDER_CONTEXT'];
+    }
+    return [$sessionProviderId, null];
+}
+
+function provider_offers_context_error_status($error){
+    return $error === 'FORBIDDEN' ? 403 : 400;
 }
 
 function provider_offers_find_provider_service($conexion, $providerId, $providerCatalogServiceId = 0, $serviceId = 0, $activeOnly = true){
@@ -343,6 +396,22 @@ function resolve_offer_media_file_path($stored_path){
 }
 
 if ($tipo === 'list') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        if ($is_admin && $contextError === 'REQUIRE_PROVIDER_CONTEXT') {
+            echo json_encode(['ok' => true, 'data' => [], 'require_provider_context' => true]);
+            exit();
+        }
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
     $hasOfferProviderCatalogServiceId = table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id');
     $selectProviderCatalogServiceId = $hasOfferProviderCatalogServiceId ? 'o.provider_catalog_service_id,' : 'NULL AS provider_catalog_service_id,';
     $sql = "SELECT o.id, o.title, o.price_from, o.currency, o.is_active, o.service_id, {$selectProviderCatalogServiceId} sc.name AS service_name, IFNULL(p.name,'') AS provider_name FROM provider_service_offers o LEFT JOIN service_catalog sc ON sc.id = o.service_id LEFT JOIN providers p ON p.id = o.provider_id WHERE o.provider_id = ? ORDER BY o.created_at DESC";
@@ -355,11 +424,27 @@ if ($tipo === 'list') {
         $row = provider_offers_hydrate_offer_service($conexion, $provider_id, $row);
         $data[] = $row;
     }
-    echo json_encode(['ok'=>true,'data'=>$data]);
+    echo json_encode(['ok'=>true,'data'=>$data, 'provider_name' => provider_offers_fetch_provider_name($conexion, $provider_id)]);
     exit();
 }
 
 if ($tipo === 'list_provider_services') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        if ($is_admin && $contextError === 'REQUIRE_PROVIDER_CONTEXT') {
+            echo json_encode(['ok' => true, 'data' => [], 'require_provider_context' => true]);
+            exit();
+        }
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
     if (
         !table_has_column($conexion, 'provider_catalog_services', 'id') ||
         !table_has_column($conexion, 'provider_catalog_services', 'provider_id') ||
@@ -420,6 +505,18 @@ if ($tipo === 'list_provider_services') {
 }
 
 if ($tipo === 'get') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
     $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
     if (!$id) json_error('INVALID_ID');
     $hasOfferProviderCatalogServiceId = table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id');
@@ -445,6 +542,18 @@ if ($tipo === 'get') {
 }
 
 if ($tipo === 'create' || $tipo === 'update') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
     $allowed = ['provider_catalog_service_id','service_id','title','description','price_from','currency','is_active'];
     $data = [];
     foreach ($allowed as $k) {
@@ -537,6 +646,18 @@ if ($tipo === 'create' || $tipo === 'update') {
 }
 
 if ($tipo === 'toggle') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
     $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
     if (!$id) json_error('INVALID_ID');
     $chk = mysqli_prepare($conexion, "SELECT is_active FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1");
@@ -554,6 +675,18 @@ if ($tipo === 'toggle') {
 }
 
 if ($tipo === 'upload_media') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
     $offer_id = isset($_REQUEST['offer_id']) ? (int)$_REQUEST['offer_id'] : 0;
     if (!$offer_id) json_error('INVALID_OFFER');
     // check ownership
@@ -598,6 +731,18 @@ if ($tipo === 'upload_media') {
 }
 
 if ($tipo === 'delete_media') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
     $media_id = isset($_REQUEST['image_id']) ? (int)$_REQUEST['image_id'] : 0;
     if (!$media_id && isset($_REQUEST['offer_image_id'])) $media_id = (int)$_REQUEST['offer_image_id'];
     if (!$media_id) json_error('INVALID_IMAGE');
@@ -618,7 +763,9 @@ if ($tipo === 'delete_media') {
     if (!$media) json_error('NOT_FOUND',404);
 
     if ($offer_id && (int)$media['offer_id'] !== $offer_id) json_error('INVALID_OFFER');
-    if (!$is_admin && (int)$media['provider_id'] !== $provider_id) json_error('FORBIDDEN',403);
+    if ((int)$media['provider_id'] !== $provider_id) {
+        json_error($is_admin ? 'INVALID_PROVIDER_CONTEXT' : 'FORBIDDEN', $is_admin ? 400 : 403);
+    }
 
     $del = mysqli_prepare($conexion, "DELETE FROM offer_media WHERE id = ? LIMIT 1");
     mysqli_stmt_bind_param($del, 'i', $media_id);

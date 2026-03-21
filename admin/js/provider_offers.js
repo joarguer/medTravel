@@ -1,6 +1,102 @@
 $(function(){
-    var showOwnerColumn = Number($('#tbl-offers').data('show-owner')) === 1;
+    var offersCtx = window.PROVIDER_OFFERS_CTX || {};
+    var isAdminMedical = !!offersCtx.isAdmin;
+    var scopedMedicalProviderId = offersCtx.providerId ? parseInt(offersCtx.providerId, 10) : 0;
+    var adminSelectedProviderId = 0;
     var defaultServiceHelp = 'La oferta comercial se construye sobre un servicio ya habilitado en Mis Servicios.';
+
+    function escapeHtml(text){
+        if (text === null || typeof text === 'undefined') return '';
+        return $('<div>').text(String(text)).html();
+    }
+
+    function getActiveProviderContextId(){
+        return isAdminMedical ? adminSelectedProviderId : scopedMedicalProviderId;
+    }
+
+    function hasProviderContext(){
+        return getActiveProviderContextId() > 0;
+    }
+
+    function getSelectedProviderName(){
+        if(!isAdminMedical){
+            return '';
+        }
+        var selected = $('#filter-provider option:selected').text() || '';
+        return selected && selected.indexOf('Seleccione') === -1 ? selected : '';
+    }
+
+    function renderEmptyState(message){
+        $('#tbl-offers tbody').html(
+            '<tr><td colspan="5" class="text-center text-muted" style="padding:24px 12px;">'
+            + escapeHtml(message)
+            + '</td></tr>'
+        );
+    }
+
+    function renderGalleryPlaceholder(message){
+        $('#offer-gallery').html(
+            '<p class="text-muted"><i class="fa fa-images"></i> '
+            + escapeHtml(message)
+            + '</p>'
+        );
+    }
+
+    function updateAdminContextState(){
+        if(!isAdminMedical){
+            return;
+        }
+        var hasContext = hasProviderContext();
+        $('#btn-new-offer').prop('disabled', !hasContext);
+        if(!hasContext){
+            $('#provider-offers-admin-context-help')
+                .removeClass('alert-warning')
+                .addClass('alert-info')
+                .text('Selecciona un prestador médico para listar y administrar sus ofertas comerciales. Esta vista no muestra ofertas de todos los prestadores mezcladas sin contexto.');
+            renderEmptyState('Seleccione un prestador médico para ver sus ofertas comerciales.');
+            renderGalleryPlaceholder('Selecciona una oferta del prestador en contexto para gestionar su galería de imágenes.');
+            return;
+        }
+
+        var providerName = getSelectedProviderName();
+        var suffix = providerName ? (' Prestador en contexto: ' + providerName + '.') : '';
+        $('#provider-offers-admin-context-help')
+            .removeClass('alert-warning')
+            .addClass('alert-info')
+            .text('Administrando las ofertas comerciales del prestador médico seleccionado.' + suffix);
+    }
+
+    function updateOfferContextNote(isEditing){
+        var note = $('#offer-context-note');
+        if(!isAdminMedical){
+            note.hide().empty();
+            return;
+        }
+        if(!hasProviderContext()){
+            note.hide().empty();
+            return;
+        }
+
+        var providerName = getSelectedProviderName();
+        var actionLabel = isEditing ? 'editando' : 'creando';
+        note
+            .html(
+                'Estás ' + actionLabel + ' una oferta comercial del prestador médico '
+                + '<strong>' + escapeHtml(providerName || ('#' + getActiveProviderContextId())) + '</strong>. '
+                + 'Esta publicación se apoya en un servicio ya habilitado del prestador y no modifica el catálogo maestro ni el staff.'
+            )
+            .show();
+    }
+
+    function withProviderContext(data){
+        var payload = $.extend({}, data || {});
+        var providerId = getActiveProviderContextId();
+        if(providerId > 0){
+            payload.provider_id = providerId;
+        }
+        return payload;
+    }
+
     // Inicializar Summernote
     function initSummernote(){
         if ($.fn.summernote) {
@@ -31,12 +127,12 @@ $(function(){
         $.ajax({
             url: 'ajax/provider_offers.php',
             method: 'POST',
-            data: data,
+            data: withProviderContext(data),
             dataType: 'json',
             success: function(res, status, xhr){
-                if(res && res.ok) return cb(null, res.data);
+                if(res && res.ok) return cb(null, res.data, res);
                 var err = (res && res.error) ? res.error : 'UNKNOWN_ERROR';
-                cb(err);
+                cb(err, null, res);
             },
             error: function(xhr, status, err){
                 var msg = 'NETWORK';
@@ -45,7 +141,7 @@ $(function(){
                     else if (xhr && xhr.responseText) msg = xhr.responseText.substring(0, 500);
                 } catch(e){ /* ignore */ }
                 console.error('api error', status, err, xhr);
-                cb(msg);
+                cb(msg, null, null);
             }
         });
     }
@@ -102,9 +198,17 @@ $(function(){
     }
 
     function loadServices(cb){
-        $.getJSON('ajax/provider_offers.php?tipo=list_provider_services', function(res){
+        var sel = $('#offer-service');
+        sel.empty();
+        sel.append($('<option>').val('').text('Seleccione un servicio habilitado'));
+
+        if(isAdminMedical && !hasProviderContext()){
+            if(cb) cb([]);
+            return;
+        }
+
+        $.getJSON('ajax/provider_offers.php', withProviderContext({tipo:'list_provider_services'}), function(res){
             if(res && res.ok){
-                var sel = $('#offer-service');
                 sel.empty();
                 sel.append($('<option>').val('').text('Seleccione un servicio habilitado'));
                 $.each(res.data || [], function(i, r){
@@ -134,16 +238,36 @@ $(function(){
     }
 
     function listOffers(){
-        api({tipo:'list'}, function(err,data){
+        if(isAdminMedical && !hasProviderContext()){
+            updateAdminContextState();
+            return;
+        }
+
+        api({tipo:'list'}, function(err,data,res){
             if(err) return alert(err);
+            if(res && res.require_provider_context){
+                updateAdminContextState();
+                return;
+            }
+
+            if(isAdminMedical){
+                updateAdminContextState();
+            }
+
             var tbody = $('#tbl-offers tbody').empty();
+            if(!data || !data.length){
+                renderEmptyState(
+                    isAdminMedical
+                        ? 'No hay ofertas comerciales registradas para el prestador seleccionado.'
+                        : 'No hay ofertas comerciales registradas todavía.'
+                );
+                renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
+                return;
+            }
             $.each(data, function(i,row){
                 var tr = $('<tr>');
                 tr.append($('<td>').text(row.service_name));
                 tr.append($('<td>').text(row.title));
-                if (showOwnerColumn) {
-                    tr.append($('<td>').text(row.provider_name || '-'));
-                }
                 tr.append($('<td>').text(row.price_from));
                 tr.append($('<td>').text(row.is_active==1? 'Sí':'No'));
                 var actions = $('<td>');
@@ -162,9 +286,10 @@ $(function(){
             $('#form-offer')[0].reset(); 
             $('#offer-id').val(''); 
             $('#offer-active').prop('checked',true);
-            $('#modal-title-text').text('Nueva Oferta de Servicio');
+            $('#modal-title-text').text('Nueva oferta comercial');
             setServiceSelectLocked(false);
             setServiceSelectValue('', '');
+            updateOfferContextNote(false);
             // Limpiar Summernote
             if ($.fn.summernote) {
                 $('#offer-desc').summernote('code', '');
@@ -175,14 +300,15 @@ $(function(){
             $('#offerModal').modal('show'); 
             return;
         }
-        $('#modal-title-text').text('Editar Oferta de Servicio');
+        $('#modal-title-text').text('Editar oferta comercial');
         loadServices(function(){
-            $.getJSON('ajax/provider_offers.php?tipo=get&id='+id, function(res){
+            $.getJSON('ajax/provider_offers.php', withProviderContext({tipo:'get', id:id}), function(res){
                 if(!res.ok) return alert(res.error);
                 var d = res.data;
                 $('#offer-id').val(d.id);
                 setServiceSelectValue(d.provider_catalog_service_id, d.service_id);
                 setServiceSelectLocked(true);
+                updateOfferContextNote(true);
                 $('#offer-title').val(d.title);
                 // Cargar HTML en Summernote
                 if ($.fn.summernote) {
@@ -262,7 +388,7 @@ $(function(){
     }
 
     function refreshOfferMedia(offerId, cb){
-        $.getJSON('ajax/provider_offers.php?tipo=get&id='+offerId, function(res){
+        $.getJSON('ajax/provider_offers.php', withProviderContext({tipo:'get', id: offerId}), function(res){
             if (!res || !res.ok) return cb((res && res.error) ? res.error : 'UNKNOWN_ERROR');
             var media = (res.data && res.data.media) ? res.data.media : [];
             renderGalleryInModal(media, offerId);
@@ -277,6 +403,9 @@ $(function(){
         var fd = new FormData();
         fd.append('tipo', 'upload_media');
         fd.append('offer_id', offerId);
+        if (hasProviderContext()) {
+            fd.append('provider_id', getActiveProviderContextId());
+        }
         fd.append('file', file);
         $.ajax({
             url: 'ajax/provider_offers.php',
@@ -303,7 +432,7 @@ $(function(){
     }
 
     function loadGallery(offer_id){
-        $.getJSON('ajax/provider_offers.php?tipo=get&id='+offer_id, function(res){ if(!res.ok) return alert(res.error); renderGallery(res.data.media||[], offer_id); });
+        $.getJSON('ajax/provider_offers.php', withProviderContext({tipo:'get', id: offer_id}), function(res){ if(!res.ok) return alert(res.error); renderGallery(res.data.media||[], offer_id); });
     }
 
     function renderGalleryInModal(list, offerId){
@@ -365,6 +494,10 @@ $(function(){
     }
 
     $('#btn-new-offer').click(function(){ 
+        if(isAdminMedical && !hasProviderContext()){
+            alert('Seleccione un prestador médico antes de crear una oferta comercial.');
+            return;
+        }
         loadServices(function(){
             initSummernote(); // Inicializar antes de abrir
             openEdit(0); 
@@ -373,8 +506,37 @@ $(function(){
     $('#offer-save').click(save);
     $('#offer-upload').click(upload);
 
-    // init
-    loadServices(listOffers);
+    function loadMedicalProviders(){
+        if(!isAdminMedical){
+            return;
+        }
+        $.post('ajax/providers.php', { tipo: 'list', kind: 'medical' }, function(res){
+            if(!res || !res.ok){
+                return;
+            }
+            var opts = '<option value="">Seleccione un prestador...</option>';
+            $.each(res.data || [], function(i, p){
+                if(parseInt(p.is_active, 10) === 1){
+                    opts += '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>';
+                }
+            });
+            $('#filter-provider').html(opts);
+            updateAdminContextState();
+        }, 'json');
+    }
+
+    if(isAdminMedical){
+        loadMedicalProviders();
+        updateAdminContextState();
+    } else {
+        loadServices(listOffers);
+    }
+
+    $('#filter-provider').change(function(){
+        adminSelectedProviderId = parseInt($(this).val(), 10) || 0;
+        loadServices();
+        listOffers();
+    });
     
     // Inicializar Summernote al abrir modal de edición
     $('#offerModal').on('shown.bs.modal', function(){

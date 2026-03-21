@@ -6,26 +6,17 @@ if (!user_can(PERM_SERVICES_MEDICAL_MANAGE)) {
     echo 'Acceso denegado';
     exit;
 }
+$is_admin = is_role_admin_session();
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
-$ses_ppal = isset($_SESSION['ppal']) ? trim(strval($_SESSION['ppal'])) : '';
-$ses_rol = isset($_SESSION['rol']) ? trim(strval($_SESSION['rol'])) : '';
-$es_admin_principal = false;
-if ($ses_ppal !== '') {
-    if ($ses_ppal === '1' || intval($ses_ppal) === 1 || strcasecmp($ses_ppal, 'ppal') === 0) {
-        $es_admin_principal = true;
-    }
-}
-if (!$es_admin_principal && $ses_rol !== '') {
-    if (intval($ses_rol) === 1 || stripos($ses_rol, 'admin') !== false || stripos($ses_rol, 'administrador') !== false) {
-        $es_admin_principal = true;
-    }
-}
+$page_heading = $is_admin ? 'Ofertas comerciales por prestador médico' : 'Mis Ofertas';
+$page_caption = $is_admin ? 'Ofertas comerciales del prestador seleccionado' : 'Mis Ofertas';
+$new_offer_label = $is_admin ? 'Nueva oferta comercial' : 'Nueva oferta';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title;?> - Mis Ofertas</title>
+    <title><?php echo $title;?> - <?php echo $page_heading; ?></title>
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
@@ -87,11 +78,15 @@ if (!$es_admin_principal && $ses_rol !== '') {
         <div class="container-fluid">
             <div class="page-content">
                 <div class="breadcrumbs">
-                    <h1>Mis Ofertas</h1>
+                    <h1><?php echo $page_heading; ?></h1>
                     <ol class="breadcrumb">
                         <li><a href="index.php">Inicio</a></li>
+                        <?php if ($is_admin): ?>
+                        <li class="active"><?php echo $page_heading; ?></li>
+                        <?php else: ?>
                         <li><a href="service_catalog.php">Mis Servicios</a></li>
                         <li class="active">Mis Ofertas</li>
+                        <?php endif; ?>
                     </ol>
                 </div>
 
@@ -100,45 +95,65 @@ if (!$es_admin_principal && $ses_rol !== '') {
                         <div class="page-sidebar">
                             <nav class="navbar" role="navigation">
                                 <ul class="nav navbar-nav">
-                                    <li class="active"><a href="provider_offers.php"><i class="icon-list"></i> Mis Ofertas</a></li>
+                                    <li class="active"><a href="provider_offers.php"><i class="icon-list"></i> <?php echo $page_heading; ?></a></li>
                                 </ul>
                             </nav>
                         </div>
                         <div class="page-content-col">
 
-<?php if (!$provider_id): ?>
+<?php if (!$is_admin && !$provider_id): ?>
     <div class="alert alert-danger">Este usuario no está asignado a un prestador</div>
 <?php else: ?>
                             <div class="portlet light ">
                                 <div class="portlet-title">
                                     <div class="caption">
                                         <i class="icon-docs theme-font"></i>
-                                        <span class="caption-subject font-dark bold uppercase">Mis Ofertas</span>
+                                        <span class="caption-subject font-dark bold uppercase"><?php echo $page_caption; ?></span>
                                     </div>
                                     <div class="actions">
-                                        <a id="btn-new-offer" class="btn btn-primary">Nueva oferta</a>
+                                        <a id="btn-new-offer" class="btn btn-primary" <?php echo $is_admin ? 'disabled="disabled"' : ''; ?>><?php echo $new_offer_label; ?></a>
                                     </div>
                                 </div>
                                 <div class="portlet-body">
                                     <p class="text-muted" style="max-width:840px; margin-bottom:16px;">
+                                        <?php if ($is_admin): ?>
+                                        <strong>Este módulo administra las ofertas comerciales/publicadas del prestador médico seleccionado.</strong>
+                                        Cada oferta se construye sobre un servicio ya habilitado para ese prestador.
+                                        Esta consola <strong>no</strong> opera el catálogo maestro, <strong>no</strong> administra el staff y <strong>no</strong> define la capacidad clínica base del provider.
+                                        <?php else: ?>
                                         <strong>Mis Ofertas</strong> son las publicaciones comerciales que le muestras a los pacientes: precio, título atractivo, descripción y galería de imágenes.
                                         Cada oferta toma como base un servicio clínico de <a href="service_catalog.php">Mis Servicios</a>;
                                         si un servicio no está habilitado en esa lista, no aparecerá como opción aquí.
+                                        <?php endif; ?>
                                     </p>
-                                    <table class="table table-striped table-bordered" id="tbl-offers" data-show-owner="<?php echo $es_admin_principal ? '1' : '0'; ?>">
+                                    <?php if ($is_admin): ?>
+                                    <div class="form-inline margin-bottom-10">
+                                        <label>Prestador médico:&nbsp;</label>
+                                        <select id="filter-provider" class="form-control" style="min-width:260px;">
+                                            <option value="">Seleccione un prestador...</option>
+                                        </select>
+                                    </div>
+                                    <div class="alert alert-info" id="provider-offers-admin-context-help" style="margin-bottom:16px;">
+                                        Selecciona un prestador médico para listar y administrar sus ofertas comerciales. Esta vista no muestra ofertas de todos los prestadores mezcladas sin contexto.
+                                    </div>
+                                    <?php endif; ?>
+                                    <table class="table table-striped table-bordered" id="tbl-offers">
                                         <thead>
                                             <tr>
                                                 <th>Servicio</th>
                                                 <th>Título</th>
-                                                <?php if ($es_admin_principal): ?>
-                                                    <th>Empresa propietaria</th>
-                                                <?php endif; ?>
                                                 <th>Precio desde</th>
                                                 <th>Activo</th>
                                                 <th>Acciones</th>
                                             </tr>
                                         </thead>
-                                        <tbody></tbody>
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted" style="padding:24px 12px;">
+                                                    <?php echo $is_admin ? 'Seleccione un prestador médico para ver sus ofertas comerciales.' : 'Cargando ofertas...'; ?>
+                                                </td>
+                                            </tr>
+                                        </tbody>
                                     </table>
                                 </div>
                             </div>
@@ -165,6 +180,12 @@ if (!$es_admin_principal && $ses_rol !== '') {
         </div>
         <?php echo $sider_bar;?>
         <?php echo $theme_layout_script;?>
+        <script>
+            window.PROVIDER_OFFERS_CTX = {
+                isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,
+                providerId: <?php echo $provider_id > 0 ? $provider_id : 'null'; ?>
+            };
+        </script>
         <!-- Summernote JS -->
         <script src="../../assets/global/plugins/bootstrap-summernote/summernote.min.js" type="text/javascript"></script>
         <script src="js/provider_offers.js" type="text/javascript"></script>
@@ -178,7 +199,7 @@ if (!$es_admin_principal && $ses_rol !== '') {
                     <i class="fa fa-times"></i>
                 </button>
                 <h4 class="modal-title" style="color: white; font-weight: 600; font-size: 20px;">
-                    <i class="fa fa-file-medical"></i> <span id="modal-title-text">Nueva Oferta de Servicio</span>
+                    <i class="fa fa-file-medical"></i> <span id="modal-title-text">Nueva oferta comercial</span>
                 </h4>
               </div>
               <div class="modal-body" style="padding: 0;">
@@ -209,6 +230,7 @@ if (!$es_admin_principal && $ses_rol !== '') {
                         
                         <!-- TAB 1: Información General -->
                         <div role="tabpanel" class="tab-pane active" id="tab-general">
+                            <div class="alert alert-info" id="offer-context-note" style="display:none; margin-bottom:16px;"></div>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
@@ -224,7 +246,7 @@ if (!$es_admin_principal && $ses_rol !== '') {
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label class="control-label">
-                                            <i class="fa fa-tag text-success"></i> Título de la Oferta <span class="required">*</span>
+                                            <i class="fa fa-tag text-success"></i> Título comercial de la oferta <span class="required">*</span>
                                         </label>
                                         <input type="text" class="form-control" name="title" id="offer-title" 
                                                placeholder="Ej: Limpieza Dental Profesional con Fluorización" required />
