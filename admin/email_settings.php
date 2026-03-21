@@ -12,7 +12,7 @@ $id_usuario = $_SESSION['id_usuario'];
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>MedTravel - Configuración de Email SMTP</title>
+    <title>MedTravel - Configuración operativa de correo saliente</title>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta content="width=device-width, initial-scale=1" name="viewport" />
     <?php echo $global_first_style;?>
@@ -66,6 +66,27 @@ $id_usuario = $_SESSION['id_usuario'];
             border-radius: 8px;
             margin: 15px 0;
         }
+        .caption-helper {
+            display: block;
+            margin-top: 4px;
+            color: #7b8a97;
+            font-size: 13px;
+            font-weight: 400;
+        }
+        .settings-context-note {
+            margin: 0;
+            color: #6c7a89;
+            max-width: 980px;
+        }
+        .section-kicker {
+            display: block;
+            margin-bottom: 6px;
+            color: #0f766e;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -86,17 +107,20 @@ $id_usuario = $_SESSION['id_usuario'];
             <div class="page-content">
                 <!-- BEGIN BREADCRUMBS -->
                 <div class="breadcrumbs">
-                    <h1>Configuración de Email SMTP
-                        <small>Administrar cuentas de correo</small>
+                    <h1>Configuración operativa del correo saliente
+                        <small>Consola central para cuentas remitentes y validación operativa del sistema</small>
                     </h1>
                     <ol class="breadcrumb">
                         <li>
-                            <a href="index.php">Home</a>
+                            <a href="index.php">Inicio</a>
                         </li>
                         <li>
-                            <a href="#">Administrativo</a>
+                            <a href="#">Administración</a>
                         </li>
-                        <li class="active">Configuración Email</li>
+                        <li>
+                            <a href="#">Configuración Operativa</a>
+                        </li>
+                        <li class="active">Correo saliente</li>
                     </ol>
                 </div>
                 <!-- END BREADCRUMBS -->
@@ -114,28 +138,66 @@ $id_usuario = $_SESSION['id_usuario'];
                             <div class="portlet-title">
                                 <div class="caption">
                                     <i class="fa fa-cog"></i>
-                                    <span class="caption-subject bold">Configuración del Servidor SMTP</span>
+                                    <span class="caption-subject bold">Consola global del correo saliente</span>
+                                    <span class="caption-helper">Administra cuentas remitentes del sistema y valida su disponibilidad operativa desde administración central</span>
                                 </div>
                                 <div class="actions">
                                     <button class="btn btn-sm btn-primary" onclick="testAllAccounts()">
-                                        <i class="fa fa-check-circle"></i> Probar Todas las Cuentas
+                                        <i class="fa fa-check-circle"></i> Validar cuentas activas
                                     </button>
                                 </div>
                             </div>
                             <div class="portlet-body">
+                                <div class="alert alert-info">
+                                    <strong>Alcance del módulo:</strong> esta pantalla administra la <strong>configuración operativa global del correo saliente</strong> y las <strong>cuentas remitentes</strong> utilizadas por flujos críticos del sistema.
+                                    <br>
+                                    <span class="small">Su uso corresponde a <strong>administración central</strong>. No es una consola de envío masivo ni un panel de pruebas aislado.</span>
+                                </div>
+                                <div class="alert alert-warning">
+                                    <strong>Impacto transversal:</strong> cambios en cuentas activas, credenciales o estado pueden afectar comunicaciones de reservas, accesos, paquetes, interacciones operativas y otros envíos automáticos.
+                                    <br>
+                                    <span class="small">Antes de guardar o validar cuentas, revisa el alcance del cambio y confirma que la cuenta correcta siga operativa para los flujos dependientes.</span>
+                                </div>
+                                <div class="alert alert-danger">
+                                    <strong>Recurso sensible:</strong> este módulo gestiona configuraciones globales de correo y debe operarse con criterio de continuidad y control.
+                                    <br>
+                                    <span class="small">Aquí se mantienen remitentes del sistema y su validación operativa. No reemplaza herramientas de diagnóstico técnico profundo ni de auditoría SMTP avanzada.</span>
+                                </div>
+                                <div class="row" style="margin-bottom:15px;">
+                                    <div class="col-md-12">
+                                        <p class="settings-context-note">
+                                            Usa esta consola para gobernar la disponibilidad del correo saliente del sistema. El foco está en <strong>cuentas remitentes</strong>, su configuración operativa y su validación básica, no en campañas de envío ni en pruebas técnicas exhaustivas de infraestructura.
+                                        </p>
+                                    </div>
+                                </div>
                                 <div class="config-section">
+                                    <span class="section-kicker">Configuración base del servicio</span>
                                     <div class="row">
                                         <div class="col-md-4">
-                                            <label><i class="fa fa-server"></i> Servidor SMTP:</label>
+                                            <label><i class="fa fa-server"></i> Servidor de salida:</label>
                                             <p class="form-control-static"><strong>mail.medtravel.com.co</strong></p>
                                         </div>
                                         <div class="col-md-4">
-                                            <label><i class="fa fa-plug"></i> Puerto:</label>
+                                            <label><i class="fa fa-plug"></i> Puerto operativo:</label>
                                             <p class="form-control-static"><strong>465 (SSL)</strong></p>
                                         </div>
                                         <div class="col-md-4">
-                                            <label><i class="fa fa-lock"></i> Seguridad:</label>
+                                            <label><i class="fa fa-lock"></i> Capa de seguridad:</label>
                                             <p class="form-control-static"><strong>SSL/TLS</strong></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="config-section" style="background:#fcfcfc; border:1px solid #e8ecef;">
+                                    <span class="section-kicker">Qué administra esta consola</span>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <p class="mb-0"><strong>Cuentas remitentes</strong><br><small class="text-muted">Identidad de envío, credenciales, reply-to y estado operativo.</small></p>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <p class="mb-0"><strong>Validación operativa</strong><br><small class="text-muted">Pruebas de conexión y envío de prueba para verificar disponibilidad básica.</small></p>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <p class="mb-0"><strong>Continuidad del sistema</strong><br><small class="text-muted">Impacta comunicaciones automáticas y operativas dependientes del correo saliente.</small></p>
                                         </div>
                                     </div>
                                 </div>
@@ -143,8 +205,24 @@ $id_usuario = $_SESSION['id_usuario'];
                         </div>
 
                         <!-- Cuentas de Email -->
-                        <div class="row" id="accounts-container">
-                            <!-- Cargadas vía AJAX -->
+                        <div class="portlet light bordered">
+                            <div class="portlet-title">
+                                <div class="caption">
+                                    <i class="fa fa-envelope"></i>
+                                    <span class="caption-subject bold">Cuentas remitentes del sistema</span>
+                                    <span class="caption-helper">Cada tarjeta representa una cuenta operativa, su rol funcional y sus acciones de validación disponibles</span>
+                                </div>
+                            </div>
+                            <div class="portlet-body" style="padding-top:0;">
+                                <div class="alert alert-info" style="margin-bottom:20px;">
+                                    <strong>Diferenciación interna:</strong> esta sección combina mantenimiento de cuentas remitentes con acciones de validación básica.
+                                    <br>
+                                    <span class="small">Editar cambia configuración activa. Validar conexión comprueba disponibilidad. Enviar correo de prueba confirma el comportamiento de salida con una cuenta concreta.</span>
+                                </div>
+                                <div class="row" id="accounts-container">
+                                    <!-- Cargadas vía AJAX -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -159,75 +237,80 @@ $id_usuario = $_SESSION['id_usuario'];
                     <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal">&times;</button>
                         <h4 class="modal-title">
-                            <i class="fa fa-edit"></i> <span id="modal-title-text">Editar Cuenta</span>
+                            <i class="fa fa-edit"></i> <span id="modal-title-text">Editar cuenta remitente</span>
                         </h4>
                     </div>
                     <div class="modal-body">
+                        <div class="alert alert-info" style="margin-bottom:20px;">
+                            Estás modificando una <strong>cuenta remitente operativa</strong> del sistema.
+                            <br>
+                            <span class="small">Revisa con cuidado credenciales, dirección remitente, reply-to y estado antes de guardar. Estos cambios pueden impactar envíos automáticos y operativos.</span>
+                        </div>
                         <form id="form-account" class="form-horizontal">
                             <input type="hidden" id="account_id" name="account_id">
                             <input type="hidden" id="account_type" name="account_type">
 
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Tipo de Cuenta:</label>
+                                <label class="col-md-3 control-label">Rol de la cuenta:</label>
                                 <div class="col-md-9">
                                     <p class="form-control-static" id="display_account_type"></p>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Dirección Email: *</label>
+                                <label class="col-md-3 control-label">Dirección remitente: *</label>
                                 <div class="col-md-9">
                                     <input type="email" class="form-control" id="email_address" name="email_address" required>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Nombre para Mostrar: *</label>
+                                <label class="col-md-3 control-label">Nombre visible del remitente: *</label>
                                 <div class="col-md-9">
                                     <input type="text" class="form-control" id="display_name" name="display_name" required>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Usuario SMTP: *</label>
+                                <label class="col-md-3 control-label">Usuario de autenticación: *</label>
                                 <div class="col-md-9">
                                     <input type="text" class="form-control" id="smtp_username" name="smtp_username" required>
-                                    <span class="help-block">Generalmente es la dirección de email completa</span>
+                                    <span class="help-block">Generalmente coincide con la dirección remitente completa usada para autenticarse.</span>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Contraseña SMTP: *</label>
+                                <label class="col-md-3 control-label">Contraseña operativa: *</label>
                                 <div class="col-md-9">
                                     <div style="position: relative;">
                                         <input type="password" class="form-control" id="smtp_password" name="smtp_password" required>
                                         <i class="fa fa-eye password-toggle" onclick="togglePassword()"></i>
                                     </div>
-                                    <span class="help-block">Se guardará encriptada en la base de datos</span>
+                                    <span class="help-block">Se guardará encriptada en la base de datos. Si la dejas vacía, se conserva la actual.</span>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Responder A:</label>
+                                <label class="col-md-3 control-label">Dirección de respuesta:</label>
                                 <div class="col-md-9">
                                     <input type="email" class="form-control" id="reply_to" name="reply_to">
-                                    <span class="help-block">Dirección de respuesta (opcional)</span>
+                                    <span class="help-block">Dirección a la que se dirigirán las respuestas del destinatario.</span>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Descripción:</label>
+                                <label class="col-md-3 control-label">Descripción funcional:</label>
                                 <div class="col-md-9">
                                     <textarea class="form-control" id="description" name="description" rows="3"></textarea>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Estado:</label>
+                                <label class="col-md-3 control-label">Estado operativo:</label>
                                 <div class="col-md-9">
                                     <label class="mt-checkbox">
                                         <input type="checkbox" id="is_active" name="is_active" value="1" checked>
-                                        Cuenta activa
+                                        Cuenta habilitada para uso operativo
                                         <span></span>
                                     </label>
                                 </div>
@@ -239,7 +322,7 @@ $id_usuario = $_SESSION['id_usuario'];
                             <i class="fa fa-times"></i> Cancelar
                         </button>
                         <button type="button" class="btn btn-primary" onclick="saveAccount()">
-                            <i class="fa fa-save"></i> Guardar Cambios
+                            <i class="fa fa-save"></i> Guardar configuración
                         </button>
                     </div>
                 </div>
@@ -252,17 +335,20 @@ $id_usuario = $_SESSION['id_usuario'];
     </div>
 
     <!-- Scripts -->
-    <!-- BEGIN CORE PLUGINS -->
-    <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
-    <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
-    <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
-    <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-    <!-- END CORE PLUGINS -->
-    
-    <!-- BEGIN THEME GLOBAL SCRIPTS -->
-    <?php echo $theme_global_script;?>
-    <?php echo $theme_layout_script;?>
-    <!-- END THEME GLOBAL SCRIPTS -->
+    <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+    <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+    <?php echo $theme_global_js;?>
+    <?php echo $theme_layout_js;?>
+    <script type="text/javascript">
+    window.MT_REALTIME = {
+        baseUrl: <?php echo json_encode($realtime_base_url); ?>,
+        socketPath: <?php echo json_encode($realtime_socket_path); ?>,
+        adminTokenUrl: <?php echo json_encode($realtime_admin_token_url); ?>,
+        isAdmin: <?php echo json_encode($es_admin ? 1 : 0); ?>
+    };
+    </script>
+    <script src="https://medtravel.com.co/realtime/socket.io/socket.io.js" type="text/javascript"></script>
+    <script src="js/header_notifications.js" type="text/javascript"></script>
     
     <script>
     $(document).ready(function() {
@@ -285,17 +371,17 @@ $id_usuario = $_SESSION['id_usuario'];
                         <div class="portlet light bordered">
                             <div class="portlet-body">
                                 <div class="alert alert-danger">
-                                    <h4><i class="fa fa-exclamation-triangle"></i> Tabla no encontrada</h4>
+                                    <h4><i class="fa fa-exclamation-triangle"></i> Configuración de correo no disponible</h4>
                                     <p>${response.message}</p>
                                     <hr>
-                                    <p><strong>Pasos para solucionar:</strong></p>
+                                    <p><strong>Pasos para habilitar el módulo:</strong></p>
                                     <ol>
                                         <li>Abre phpMyAdmin o tu gestor de base de datos</li>
                                         <li>Selecciona la base de datos <code>bolsacar_medtravel</code></li>
                                         <li>Ve a la pestaña "SQL"</li>
                                         <li>Copia y pega el contenido del archivo: <code>sql/email_settings_table.sql</code></li>
                                         <li>Ejecuta la consulta</li>
-                                        <li>Recarga esta página</li>
+                                        <li>Recarga esta consola</li>
                                     </ol>
                                     <p class="margin-top-20">
                                         <a href="sql/email_settings_table.sql" target="_blank" class="btn btn-primary">
@@ -318,6 +404,11 @@ $id_usuario = $_SESSION['id_usuario'];
     }
 
     function renderAccounts(accounts) {
+        if(!accounts || !accounts.length) {
+            $('#accounts-container').html('<div class="col-md-12"><div class="alert alert-info">No hay cuentas remitentes configuradas para esta consola.</div></div>');
+            return;
+        }
+
         let html = '';
         const icons = {
             'patientcare': 'fa-heart',
@@ -356,10 +447,10 @@ $id_usuario = $_SESSION['id_usuario'];
                         </div>
                     </div>
                     <div class="portlet-body">
-                        <p>${account.description || ''}</p>
+                        <p>${account.description || 'Cuenta remitente sin descripción funcional registrada.'}</p>
                         <div class="row">
                             <div class="col-xs-6">
-                                <small class="text-muted">Usuario SMTP:</small><br>
+                                <small class="text-muted">Usuario de autenticación:</small><br>
                                 <strong>${account.smtp_username}</strong>
                             </div>
                             <div class="col-xs-6">
@@ -373,13 +464,13 @@ $id_usuario = $_SESSION['id_usuario'];
                         <div class="test-result" id="test-result-${account.id}"></div>
                         <div class="margin-top-10">
                             <button class="btn btn-sm btn-info" onclick="editAccount(${account.id})">
-                                <i class="fa fa-edit"></i> Editar
+                                <i class="fa fa-edit"></i> Editar cuenta
                             </button>
                             <button class="btn btn-sm btn-success" onclick="testAccount(${account.id})">
-                                <i class="fa fa-check-circle"></i> Probar Conexión
+                                <i class="fa fa-check-circle"></i> Validar conexión
                             </button>
                             <button class="btn btn-sm btn-primary" onclick="sendTestEmail(${account.id})">
-                                <i class="fa fa-paper-plane"></i> Enviar Test
+                                <i class="fa fa-paper-plane"></i> Enviar prueba
                             </button>
                         </div>
                     </div>
@@ -427,7 +518,7 @@ $id_usuario = $_SESSION['id_usuario'];
             dataType: 'json',
             success: function(response) {
                 if(response.ok) {
-                    showAlert('success', 'Cuenta actualizada exitosamente');
+                    showAlert('success', 'Configuración de la cuenta actualizada exitosamente');
                     $('#editModal').modal('hide');
                     loadAccounts();
                 } else {
@@ -435,7 +526,7 @@ $id_usuario = $_SESSION['id_usuario'];
                 }
             },
             error: function() {
-                showAlert('error', 'Error al guardar los cambios');
+                showAlert('error', 'Error al guardar la configuración');
             }
         });
     }
@@ -443,7 +534,7 @@ $id_usuario = $_SESSION['id_usuario'];
     function testAccount(id) {
         const $btn = event.target;
         const originalHtml = $btn.innerHTML;
-        $btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Probando...';
+        $btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Validando...';
         $btn.disabled = true;
 
         $.ajax({
@@ -474,12 +565,12 @@ $id_usuario = $_SESSION['id_usuario'];
     }
 
     function sendTestEmail(id) {
-        const email = prompt('Ingresa el email de destino para la prueba:');
+        const email = prompt('Ingresa el email de destino para la validación de salida:');
         if(!email) return;
 
         const $btn = event.target;
         const originalHtml = $btn.innerHTML;
-        $btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Enviando...';
+        $btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Enviando prueba...';
         $btn.disabled = true;
 
         $.ajax({
@@ -493,7 +584,7 @@ $id_usuario = $_SESSION['id_usuario'];
             dataType: 'json',
             success: function(response) {
                 if(response.ok) {
-                    showAlert('success', 'Email de prueba enviado exitosamente a ' + email);
+                    showAlert('success', 'Correo de prueba enviado exitosamente a ' + email);
                 } else {
                     showAlert('error', response.message);
                 }
@@ -506,7 +597,7 @@ $id_usuario = $_SESSION['id_usuario'];
     }
 
     function testAllAccounts() {
-        showAlert('info', 'Probando todas las cuentas...');
+        showAlert('info', 'Validando todas las cuentas activas...');
         
         $.ajax({
             url: 'ajax/email_settings.php',
@@ -515,7 +606,7 @@ $id_usuario = $_SESSION['id_usuario'];
             dataType: 'json',
             success: function(response) {
                 if(response.ok) {
-                    let message = `Resultados:<br>
+                    let message = `Resultados de validación:<br>
                         ✅ Exitosas: ${response.data.success}<br>
                         ❌ Fallidas: ${response.data.failed}`;
                     showAlert(response.data.failed == 0 ? 'success' : 'warning', message);
