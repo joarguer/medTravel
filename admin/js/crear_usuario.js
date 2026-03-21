@@ -19,6 +19,71 @@ $(document).ready(function(){
             }
         }
     });
+
+    function getActorScopeCopy(){
+        let ctx = window.CREAR_USUARIO_CTX || {};
+        if (ctx.isAdmin) {
+            return {
+                sidebar: 'Operas como administración central. Aquí puedes crear cuentas manuales globales o cuentas de dominio, según el rol seleccionado.',
+                title: ctx.scopeTitle || 'Administración central',
+                text: ctx.scopeText || 'Puedes crear cuentas manuales adicionales dentro del sistema según el rol y el alcance permitido.'
+            };
+        }
+        if (ctx.serviceProviderId) {
+            return {
+                sidebar: 'Operas dentro de tu proveedor complementario. Toda cuenta creada aquí quedará subordinada a ese proveedor complementario.',
+                title: ctx.scopeTitle || 'Scope actual: proveedor complementario',
+                text: ctx.scopeText || 'Tu sesión está limitada al dominio complementario. Este flujo crea cuentas adicionales de ese scope.'
+            };
+        }
+        if (ctx.providerId) {
+            return {
+                sidebar: 'Operas dentro de tu prestador médico. Toda cuenta creada aquí quedará subordinada a ese prestador médico.',
+                title: ctx.scopeTitle || 'Scope actual: prestador médico',
+                text: ctx.scopeText || 'Tu sesión está limitada al dominio médico. Este flujo crea cuentas adicionales de ese scope.'
+            };
+        }
+        return {
+            sidebar: 'Este flujo crea cuentas manuales adicionales dentro del sistema.',
+            title: ctx.scopeTitle || 'Alta manual de cuentas',
+            text: ctx.scopeText || 'El rol seleccionado define el alcance final de la cuenta.'
+        };
+    }
+
+    function buildRoleSummary(){
+        let ctx = window.CREAR_USUARIO_CTX || {};
+        let roleMap = window.ROLES_HELP || {};
+        let rol = String($('#user_role').val() || '');
+        let roleHelp = roleMap[rol] || null;
+        let providerRole = String(ctx.roleProvider || 4);
+        let providerAdminRole = String(ctx.roleProviderAdmin || 12);
+        let complementaryRole = String(ctx.roleComplementary || 13);
+        let actorCopy = getActorScopeCopy();
+        let summary = actorCopy.text;
+
+        if (rol === providerRole || rol === providerAdminRole) {
+            summary = 'Vas a crear una cuenta adicional del dominio médico. Debe quedar asociada a un prestador médico y no reemplaza el owner/admin inicial del onboarding canónico.';
+        } else if (rol === complementaryRole) {
+            summary = 'Vas a crear una cuenta adicional del dominio complementario. Debe quedar asociada a un proveedor complementario activo dentro del scope actual.';
+        } else if (ctx.isAdmin) {
+            summary = 'Vas a crear una cuenta manual global o interna. Revisa el rol seleccionado para confirmar el alcance operativo que tendrá en el sistema.';
+        }
+
+        if (roleHelp && roleHelp.menu_summary) {
+            summary += ' Acceso principal esperado: ' + roleHelp.menu_summary;
+        }
+
+        return summary;
+    }
+
+    function applyScopeCopy(){
+        let actorCopy = getActorScopeCopy();
+        $('#manual-account-sidebar-scope').text(actorCopy.sidebar);
+        $('#manual-account-sidebar-job').text('Alta manual de cuenta adicional');
+        $('#current-scope-title').text(actorCopy.title);
+        $('#current-scope-text').text(actorCopy.text);
+        $('#wizard-role-summary').html('<strong>Tipo de cuenta y scope:</strong> ' + buildRoleSummary());
+    }
     
     // Detectar cambio en el select de rol (reemplaza radios)
     function applyRoleVisibility(){
@@ -72,40 +137,63 @@ $(document).ready(function(){
     }
     function applyRoleHelp(){
         let roleMap = window.ROLES_HELP || {};
+        let ctx = window.CREAR_USUARIO_CTX || {};
         let currentRole = String($('#user_role').val() || '');
         let roleHelp = roleMap[currentRole] || null;
         let defaultHelp = 'Selecciona un rol para ver qué scope/empresa requiere.';
         let helpText = roleHelp && roleHelp.hint ? roleHelp.hint : defaultHelp;
         $('#role-scope-help').text(helpText);
+        if (ctx.isAdmin) {
+            $('#role-actor-help').text('Como administración central, puedes cambiar el rol para definir el alcance de la cuenta manual que se creará.');
+        } else if (ctx.serviceProviderId) {
+            $('#role-actor-help').text('Tu sesión fija el alta al proveedor complementario actual. El rol visible es informativo dentro de ese scope.');
+        } else if (ctx.providerId) {
+            $('#role-actor-help').text('Tu sesión fija el alta al prestador médico actual. El rol visible solo aplica dentro de ese scope.');
+        } else {
+            $('#role-actor-help').text('El rol seleccionado define el alcance general de esta cuenta nueva.');
+        }
     }
     $('#user_role').on('change', function(){
         applyRoleVisibility();
         applyRoleHelp();
+        applyScopeCopy();
     });
     applyRoleVisibility();
     applyRoleHelp();
+    applyScopeCopy();
 });
+
+function validateCreateForm(){
+    let ctx = window.CREAR_USUARIO_CTX || {};
+    let rolVal = $('#user_role').val();
+    let providerRole = String(ctx.roleProvider || 4);
+    let providerAdminRole = String(ctx.roleProviderAdmin || 12);
+    let complementaryRole = String(ctx.roleComplementary || 13);
+    let isMedicalRole = (rolVal === providerRole || rolVal === providerAdminRole);
+    let isComplementaryRole = (rolVal === complementaryRole);
+
+    if ($('#nombre').val() === '' || $('#apellido').val() === '' || $('#email').val() === '' || $('#telefono').val() === '' || $('#direccion').val() === '' || $('#ciudad').val() === '') {
+        return 'Completa los campos obligatorios para crear la cuenta manual.';
+    }
+    if (isMedicalRole && !ctx.providerId && $('#provider_id').val() === '') {
+        return 'Selecciona el prestador médico al que quedará asociada la cuenta.';
+    }
+    if (isComplementaryRole && !ctx.serviceProviderId && $('#service_provider_id').val() === '') {
+        return 'Selecciona el proveedor complementario al que quedará asociada la cuenta.';
+    }
+    return '';
+}
 
 $('#btn-crea-usuario').click(function(e){
     e.preventDefault();
-    if( $('#nombre').val() == "" || $('#apellido').val() == "" || $('#email').val() == "" || $('#telefono').val() == "" || $('#direccion').val() == "" || $('#ciudad').val() == "" || $('#pass').val() == "" || $('#pass2').val() == "" ){
-        let text = "Todos los campos son obligatorios";
-        let title = "Creación Usuario";
+    let validationError = validateCreateForm();
+    if (validationError !== '') {
+        let text = validationError;
+        let title = 'Alta manual de cuenta';
         let status = "error";
         notification(text,title,status);
         App.unblockUI();
         return;
-    }
-    let creaEmpresa = $('#creaEmpresa').val();
-    if(creaEmpresa == 1){
-        if( $('#rasocial').val() == "" || $('#nit_e').val() == "" || $('#telefono_e').val() == "" || $('#celular_e').val() == "" || $('#direccion_e').val() == "" || $('#ciudad_e').val() == "" || $('#email_e').val() == "" || $('#url_e').val() == "" ){
-            let text = "Todos los campos son obligatorios";
-            let title = "Creación Usuario";
-            let status = "error";
-            notification(text,title,status);
-            App.unblockUI();
-            return;
-        }
     }
     //obtenemos los valores del formulario serialize
     var datos = $("#form-crear-usuario").serialize();
@@ -154,16 +242,17 @@ $('#btn-crea-usuario').click(function(e){
             let nombre_usuario = $('#nombre').val() + " " + $('#apellido').val();
             $('.profile-usertitle-name').html(nombre_usuario);
             let cargo = $('#cargo').val();
-            $('.profile-usertitle-job').html(cargo);
+            $('.profile-usertitle-job').html(cargo !== '' ? cargo : 'Cuenta manual creada');
             $('.switch-radio1').bootstrapSwitch('readonly', false);
-            let text = "El usuario se ha creado correctamente";
-            let title = "Creación Usuario";
+            $('#wizard-role-summary').html('<strong>Siguiente paso:</strong> la cuenta ya fue creada. Ahora puedes cargar un avatar opcional y definir la contraseña inicial para entregar el acceso.');
+            let text = 'La cuenta manual se creó correctamente. Continúa con el avatar opcional o define la contraseña inicial.';
+            let title = 'Alta manual de cuenta';
             let status = "success";
             notification(text,title,status);
             console.log(respuesta);
         }else{
-            let text = "El usuario no se ha creado correctamente";
-            let title = "Creación Usuario";
+            let text = 'No fue posible crear la cuenta manual con los datos enviados.';
+            let title = 'Alta manual de cuenta';
             let status = "error";
             notification(text,title,status);
         }
@@ -195,13 +284,13 @@ $('.switch-radio1').on('switchChange.bootstrapSwitch', function(event, state) {
     $.post(archivoValidacion, { usuario: usuario, id_usuario: id_usuario, rol: rol, tipo: 'rol' }, function (respuesta) {
         respuesta = JSON.parse(respuesta);
         if (respuesta.status == true) {
-                let text = "El rol se ha actualizado correctamente";
-                let title = "Actualización Rol";
+            let text = 'El rol de la cuenta creada se actualizó correctamente.';
+            let title = 'Actualización de rol';
                 let status = "success";
                 notification(text,title,status);
         } else {
-                let text = "El rol no se ha actualizado correctamente";
-                let title = "Actualización Rol";
+            let text = 'No fue posible actualizar el rol de la cuenta creada.';
+            let title = 'Actualización de rol';
                 let status = "error";
                 notification(text,title,status);
         }
@@ -227,8 +316,8 @@ function crearAvatar(){
     App.blockUI();
     //validamos que los campos no esten vacios
     if( $('#img-avatar').val() == "" ){
-        let text = "Todos los campos son obligatorios";
-        let title = "Creación Avatar";
+        let text = 'Selecciona una imagen si deseas asignar un avatar a esta cuenta.';
+        let title = 'Avatar de la cuenta';
         let status = "error";
         notification(text,title,status);
         App.unblockUI();
@@ -259,18 +348,18 @@ function crearAvatar(){
                     $('#tab_href_1_2').removeAttr('href').removeAttr('data-toggle');
                     let username = $('#usuario').val();
                     $('#username').val(username);
-                    let text = "La imagen se ha actualizado correctamente";
-                    let title = "Actualización Imagen";
+                    let text = 'El avatar de la cuenta se actualizó correctamente.';
+                    let title = 'Avatar de la cuenta';
                     let status = "success";
                     notification(text,title,status);
                 } else  if (respuesta.status == false) {
-                    let text = "La imagen no se ha actualizado correctamente";
-                    let title = "Actualización Imagen";
+                    let text = 'No fue posible guardar el avatar de la cuenta.';
+                    let title = 'Avatar de la cuenta';
                     let status = "error";
                     notification(text,title,status);
                 } else{
-                    let text = "La imagen no se ha actualizado correctamente";
-                    let title = "Actualización Imagen";
+                    let text = 'No fue posible guardar el avatar de la cuenta.';
+                    let title = 'Avatar de la cuenta';
                     let status = "error";
                     notification(text,title,status);
                 }
@@ -285,11 +374,11 @@ $('#password_2').keyup(function(){
     var pass1 = $("#password_1").val();
     var pass2 = $("#password_2").val();
     if(pass1 === pass2){
-        $("#comparaTexto").html('<span class="font-green-jungle">correcto!</span>');
+        $("#comparaTexto").html('<span class="font-green-jungle">Las contraseñas coinciden.</span>');
         $("#btnSubmitPass").attr("disabled", false);
         $("#btnSubmitPass").attr("onClick", 'changePass()');
     } else{
-        $("#comparaTexto").html('<span class="font-red-thunderbird">incorrecto!</span>');
+        $("#comparaTexto").html('<span class="font-red-thunderbird">Las contraseñas no coinciden.</span>');
         $("#btnSubmitPass").attr("disabled", true);
         $("#btnSubmitPass").attr("onClick", '');
     }
@@ -306,14 +395,14 @@ function changePass() {
     $.post( archivoValidacion, { pass1: pass1, tipo: 'crear_password', id_usuario: id_usuario }, function (respuesta) {
         respuesta = JSON.parse(respuesta);
         if(respuesta.status == true){
-            let text = "El password se han actualizado correctamente";
-            let title = "Actualización Password";
+            let text = 'La contraseña inicial se guardó correctamente.';
+            let title = 'Contraseña inicial';
             let status = "success";
             notification(text,title,status);  
             restartForm();
         } else {
-            let text = "El password no se han actualizado correctamente";
-            let title = "Actualización Password";
+            let text = 'No fue posible guardar la contraseña inicial de la cuenta.';
+            let title = 'Contraseña inicial';
             let status = "error";
             notification(text,title,status);
         }
@@ -329,14 +418,15 @@ function restartForm(){
     $('#tab_href_1_3').removeAttr('data-toggle').removeAttr('href');
     $('#tab_href_1_4').removeAttr('data-toggle').removeAttr('href');
     $('.switch-radio1').bootstrapSwitch('readonly', true);
-    let text = "El usuario se ha creado correctamente";
-    let title = "Creación Usuario";
+    $('#wizard-role-summary').html('<strong>Flujo completado:</strong> la cuenta manual ya fue creada y configurada. Puedes iniciar otra alta manual desde este mismo formulario.');
+    let text = 'La cuenta manual quedó lista correctamente.';
+    let title = 'Alta manual de cuenta';
     let status = "success";
     notification(text,title,status);
     let id_usuario  = $('#id_usuario').val();
     let email       = $('#usuario').val();
     let nombreUsuario = ($('#nombre').val() + ' ' + $('#apellido').val()).trim();
-    let asunto      = "Creación Cuenta Administrativa";
+    let asunto      = 'Nueva cuenta MedTravel';
     enviarCorreo({
         id_usuario: id_usuario,
         to: email,
@@ -359,12 +449,12 @@ function enviarCorreo(payload){
         dataType: 'json'
     }).done(function (respuesta) {
         if(respuesta && (respuesta.ok === true || respuesta.status === true)){
-            notification("Usuario creado, correo enviado", "Envío Correo", "success");
+            notification('Cuenta creada, correo enviado', 'Envío de correo', 'success');
         } else {
-            notification("Usuario creado, correo pendiente", "Envío Correo", "error");
+            notification('Cuenta creada, correo pendiente', 'Envío de correo', 'error');
         }
     }).fail(function () {
-        notification("Usuario creado, correo pendiente", "Envío Correo", "error");
+        notification('Cuenta creada, correo pendiente', 'Envío de correo', 'error');
     }).always(function(){
         App.unblockUI();
     });

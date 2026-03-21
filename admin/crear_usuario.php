@@ -105,13 +105,27 @@ $roles_help_json = json_encode($roles_help_map, JSON_UNESCAPED_UNICODE | JSON_UN
 if ($roles_help_json === false) {
     $roles_help_json = '{}';
 }
+
+$current_scope_title = 'Administración central';
+$current_scope_text = 'Puedes crear cuentas nuevas manuales de distintos tipos dentro del sistema. El rol seleccionado define el alcance final de la cuenta y los permisos vigentes del entorno siguen aplicando.';
+$sidebar_scope_text = 'Operas como administración central. Este flujo sirve para altas manuales adicionales y no reemplaza onboarding, staff, mantenimiento ni perfil propio.';
+
+if (!$is_admin && $service_provider_session_id) {
+    $current_scope_title = 'Scope actual: proveedor complementario';
+    $current_scope_text = 'Las cuentas creadas aquí quedarán dentro de tu proveedor complementario actual. El rol y el scope quedan acotados a este dominio y no sustituyen el alta del proveedor ni la gestión de cuentas existentes.';
+    $sidebar_scope_text = 'Operas dentro de tu proveedor complementario. Este flujo crea cuentas adicionales subordinadas a ese scope.';
+} elseif (!$is_admin && $provider_session_id) {
+    $current_scope_title = 'Scope actual: prestador médico';
+    $current_scope_text = 'Las cuentas creadas aquí quedarán dentro de tu prestador médico actual. Este flujo crea cuentas adicionales del dominio médico y no reemplaza el onboarding del prestador ni la gestión transversal de accesos.';
+    $sidebar_scope_text = 'Operas dentro de tu prestador médico. Este flujo crea cuentas adicionales subordinadas a ese scope.';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
     <!-- BEGIN HEAD -->
     <head>
         <meta charset="utf-8" />
-        <title><?php echo $title;?> - Mis Datos</title>
+        <title><?php echo $title;?> - Crear Usuarios</title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta content="width=device-width, initial-scale=1" name="viewport" />
         <meta content="" name="description" />
@@ -135,7 +149,10 @@ if ($roles_help_json === false) {
                 serviceProviderId: <?php echo $service_provider_session_id ? $service_provider_session_id : 'null'; ?>,
                 roleProvider: <?php echo ROLE_PROVIDER; ?>,
                 roleProviderAdmin: <?php echo ROLE_PROVIDER_ADMIN; ?>,
-                roleComplementary: <?php echo ROLE_COMPLEMENTARY_ADMIN; ?>
+                roleComplementary: <?php echo ROLE_COMPLEMENTARY_ADMIN; ?>,
+                scopeTitle: <?php echo json_encode($current_scope_title, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+                scopeText: <?php echo json_encode($current_scope_text, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>,
+                sidebarScopeText: <?php echo json_encode($sidebar_scope_text, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>
             };
             window.ROLES_HELP = <?php echo $roles_help_json; ?>;
         </script>
@@ -162,16 +179,16 @@ if ($roles_help_json === false) {
                 <div class="page-content">
                     <!-- BEGIN BREADCRUMBS -->
                     <div class="breadcrumbs">
-                        <h1>Registro nuevo usuario | Cuenta
-                        <small>pagina cuenta de usuario</small></h1>
+                        <h1>Alta manual de cuentas
+                        <small>Crea cuentas nuevas adicionales dentro del scope permitido por tu sesión</small></h1>
                         <ol class="breadcrumb">
                             <li>
-                                <a href="#">Home</a>
+                                <a href="index.php">Inicio</a>
                             </li>
                             <li>
-                                <a href="#">Administrativo</a>
+                                <a href="#">Usuarios y Accesos</a>
                             </li>
-                            <li class="active">Crear Usuario</li>
+                            <li class="active">Alta manual de cuentas</li>
                         </ol>
                         <!-- Sidebar Toggle Button -->
                         <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".page-sidebar">
@@ -198,21 +215,26 @@ if ($roles_help_json === false) {
                                     <!-- END SIDEBAR USERPIC -->
                                     <!-- SIDEBAR USER TITLE -->
                                     <div class="profile-usertitle">
-                                        <div class="profile-usertitle-name"> Pepito Perez </div>
-                                        <div class="profile-usertitle-job">  </div>
+                                        <div class="profile-usertitle-name"> Cuenta manual pendiente </div>
+                                        <div class="profile-usertitle-job" id="manual-account-sidebar-job">Alta adicional dentro del sistema</div>
                                     </div>
                                     <!-- END SIDEBAR USER TITLE -->
                                     <!-- SIDEBAR BUTTONS -->
+                                    <div class="alert alert-info" style="margin:0 15px 15px;">
+                                        <strong>Alcance actual</strong>
+                                        <div id="manual-account-sidebar-scope" class="small"><?php echo htmlspecialchars($sidebar_scope_text, ENT_QUOTES, 'UTF-8'); ?></div>
+                                    </div>
                                     <div class="form-group" id="div-group-role">
                                         <div class="col-md-12">
-                                            <label class="control-label">Rol</label>
+                                            <label class="control-label">Tipo de cuenta / rol</label>
                                             <select id="user_role" name="role" class="form-control" <?php echo $is_admin ? '' : 'disabled'; ?>>
                                                 <?php foreach (get_available_roles() as $rid => $rlabel): ?>
                                                     <option value="<?php echo $rid; ?>" <?php echo ((int)$rid === (int)$default_role_id ? 'selected' : ''); ?>><?php echo htmlspecialchars($rlabel); ?></option>
                                                 <?php endforeach; ?>
                                             </select>
                                             <span class="help-block" id="role-scope-help"></span>
-                                            <?php if(!$is_admin): ?><span class="help-block"><?php echo $service_provider_session_id ? 'Tu rol está fijado como Proveedor Complementario' : 'Tu rol está fijado como Proveedor'; ?></span><?php endif; ?>
+                                            <span class="help-block" id="role-actor-help"></span>
+                                            <?php if(!$is_admin): ?><span class="help-block"><?php echo $service_provider_session_id ? 'Tu scope de creación está fijado como Proveedor Complementario.' : 'Tu scope de creación está fijado como Prestador médico.'; ?></span><?php endif; ?>
                                         </div>
                                     </div>
                                     <script>
@@ -247,6 +269,16 @@ if ($roles_help_json === false) {
                             <div class="profile-content">
                                 <div class="row">
                                     <div class="col-md-12">
+                                        <div class="alert alert-info">
+                                            <strong>Qué crea este flujo:</strong> cuentas <strong>nuevas</strong>, <strong>manuales</strong> y <strong>adicionales</strong> dentro del sistema. Pueden ser cuentas globales o cuentas asociadas a un dominio médico o complementario, según tu scope actual y el rol seleccionado.
+                                        </div>
+                                        <div class="alert alert-warning">
+                                            <strong>Qué no crea este flujo:</strong> no reemplaza el onboarding médico canónico de <strong>Prestadores Médicos</strong>, no da de alta <strong>staff médico</strong>, no sirve para administrar <strong>cuentas ya existentes</strong> y no modifica <strong>tu perfil propio</strong>.
+                                        </div>
+                                        <div class="alert alert-success" id="current-scope-alert">
+                                            <strong id="current-scope-title"><?php echo htmlspecialchars($current_scope_title, ENT_QUOTES, 'UTF-8'); ?></strong>
+                                            <div id="current-scope-text" class="small"><?php echo htmlspecialchars($current_scope_text, ENT_QUOTES, 'UTF-8'); ?></div>
+                                        </div>
                                         <?php if ($can_view_roles_help && !empty($roles_help_rows)): ?>
                                         <div class="alert alert-info">
                                             <h4 class="block">Roles y accesos</h4>
@@ -275,7 +307,7 @@ if ($roles_help_json === false) {
                                                 </table>
                                             </div>
                                             <p class="mb-0">
-                                                <strong>Nota:</strong> Si asignas rol médico, debes seleccionar Prestador médico. Si asignas <code>complementary_admin</code>, debes seleccionar Proveedor Complementario activo. <code>client</code> es acceso mínimo.
+                                                <strong>Nota:</strong> Si asignas rol médico, debes seleccionar Prestador médico. Si asignas <code>complementary_admin</code>, debes seleccionar Proveedor Complementario activo. <code>client</code> es acceso mínimo. Esta tabla orienta el alta manual, pero no sustituye los módulos especializados del sistema.
                                             </p>
                                         </div>
                                         <?php endif; ?>
@@ -283,17 +315,17 @@ if ($roles_help_json === false) {
                                             <div class="portlet-title tabbable-line">
                                                 <div class="caption caption-md">
                                                     <i class="icon-globe theme-font hide"></i>
-                                                    <span class="caption-subject font-blue-madison bold uppercase">Profile Account</span>
+                                                    <span class="caption-subject font-blue-madison bold uppercase">Alta manual de cuentas adicionales</span>
                                                 </div>
                                                 <ul class="nav nav-tabs">
                                                     <li class="active">
-                                                        <a href="#tab_1_1" id="tab_href_1_1" data-toggle="tab">Información Personal</a>
+                                                        <a href="#tab_1_1" id="tab_href_1_1" data-toggle="tab">1. Datos de cuenta</a>
                                                     </li>
                                                     <li>
-                                                        <a href="#tab_1_2" id="tab_href_1_2" data-toggle="tab">Avatar</a>
+                                                        <a href="#tab_1_2" id="tab_href_1_2" data-toggle="tab">2. Avatar opcional</a>
                                                     </li>
                                                     <li>
-                                                        <a href="#tab_1_3" id="tab_href_1_3" data-toggle="tab">Usuario y Password</a>
+                                                        <a href="#tab_1_3" id="tab_href_1_3" data-toggle="tab">3. Contraseña inicial</a>
                                                     </li>
                                                     <!--
                                                     <li>
@@ -305,10 +337,19 @@ if ($roles_help_json === false) {
                                             <div class="portlet-body">
                                                 <input type="hidden" id="id_usuario" name="id_usuario">
                                                 <input type="hidden" id="usuario" name="usuario">
+                                                <div class="alert alert-info" id="wizard-intro-alert">
+                                                    <strong>Resultado esperado:</strong> este flujo crea una cuenta nueva de acceso. Después podrás cargar un avatar opcional y definir la contraseña inicial para entregar el acceso.
+                                                </div>
+                                                <div class="alert alert-warning" id="wizard-role-summary">
+                                                    El rol elegido y tu scope actual determinan qué tipo de cuenta se crea y a qué empresa o dominio quedará vinculada.
+                                                </div>
                                                 <div class="tab-content">
                                                     <!-- PERSONAL INFO TAB -->
                                                     <div class="tab-pane active" id="tab_1_1">
                                                         <form role="form" action="#" id="form-crear-usuario" name="form-crear-usuario">
+                                                            <p class="text-muted" style="margin-bottom:20px; max-width:900px;">
+                                                                Completa los datos base de la nueva cuenta. Si tu sesión está limitada a un prestador médico o a un proveedor complementario, el alta quedará automáticamente subordinada a ese scope.
+                                                            </p>
                                                             <div class="form-group">
                                                                 <label class="control-label">Nombre</label>
                                                                 <input type="text" placeholder="John" class="form-control" id="nombre" name="nombre" /> </div>
@@ -319,10 +360,10 @@ if ($roles_help_json === false) {
                                                                 <label class="control-label">Cedula</label>
                                                                 <input type="text" placeholder="813912390128" class="form-control" id="cedula" name="cedula" /> </div>
                                                             <div class="form-group" id="div-empresa">
-                                                                <label class="control-label">Empresa (cliente interno)</label>
+                                                                <label class="control-label">Empresa interna / cliente interno</label>
                                                                 <select id="empresa" name="empresa" placeholder="Razón Social Empresa" class="form-control"></select></div>
                                                             <div class="form-group" id="div-provider" style="display:none;">
-                                                                <label class="control-label">Prestador / Empresa <span class="required">*</span></label>
+                                                                <label class="control-label">Prestador médico asociado <span class="required">*</span></label>
                                                                 <select id="provider_id" name="provider_id" class="form-control">
                                                                     <option value="">-- Seleccione un prestador --</option>
                                                                     <?php
@@ -338,7 +379,7 @@ if ($roles_help_json === false) {
                                                                     }
                                                                     ?>
                                                                 </select>
-                                                                <span class="help-block">Selecciona el prestador al que se asocia este usuario (solo rol Proveedor)</span>
+                                                                <span class="help-block">La cuenta quedará vinculada a este prestador médico. Usa este campo para cuentas adicionales del dominio médico, no para crear el owner canónico del prestador.</span>
                                                             </div>
                                                             <div class="form-group" id="div-service-provider" style="display:none;">
                                                                 <label class="control-label">Proveedor Complementario <span class="required">*</span></label>
@@ -360,7 +401,7 @@ if ($roles_help_json === false) {
                                                                     }
                                                                     ?>
                                                                 </select>
-                                                                <span class="help-block">Selecciona el proveedor complementario dueño del catálogo para este usuario.</span>
+                                                                <span class="help-block">La cuenta quedará vinculada a este proveedor complementario dentro del dominio actual.</span>
                                                             </div>
                                                             <div class="form-group">
                                                                 <label class="control-label">Número Celular</label>
@@ -376,24 +417,24 @@ if ($roles_help_json === false) {
                                                                 <input type="text" placeholder="Dirección" class="form-control" id="direccion" name="direccion" /> </div>
                                                             <div class="form-group">
                                                                 <label class="control-label">Email</label>
-                                                                <input type="text" placeholder="Email" class="form-control" id="email" name="email" /> </div>
+                                                                <input type="text" placeholder="Email de acceso" class="form-control" id="email" name="email" /> </div>
                                                             <div class="form-group">
-                                                                <label class="control-label">Sobre ti</label>
-                                                                <textarea class="form-control" rows="3" placeholder="Somos proveedores de servicios turisticos" id="about" name="about"></textarea>
+                                                                <label class="control-label">Descripción breve</label>
+                                                                <textarea class="form-control" rows="3" placeholder="Descripción breve o contexto operativo de la cuenta" id="about" name="about"></textarea>
                                                             </div>
                                                             <div class="form-group">
-                                                                <label class="control-label">Cargo</label>
-                                                                <input type="text" placeholder="Cargo" class="form-control" id="cargo" name="cargo" /> </div>
+                                                                <label class="control-label">Cargo / referencia interna</label>
+                                                                <input type="text" placeholder="Cargo o referencia interna" class="form-control" id="cargo" name="cargo" /> </div>
                                                             <div class="margiv-top-10">
-                                                                <button href="javascript:;" class="btn green" id="btn-crea-usuario"> Guardar y continuar </button>
-                                                                <a href="javascript:;" class="btn default"> Cancel </a>
+                                                                <button href="javascript:;" class="btn green" id="btn-crea-usuario"> Guardar datos de la cuenta y continuar </button>
+                                                                <a href="javascript:;" class="btn default"> Cancelar </a>
                                                             </div>
                                                         </form>
                                                     </div>
                                                     <!-- END PERSONAL INFO TAB -->
                                                     <!-- CHANGE AVATAR TAB -->
                                                     <div class="tab-pane" id="tab_1_2">
-                                                        <p> Suba la imagen del nuevo usuario </p>
+                                                        <p> Paso opcional: carga un avatar para identificar visualmente esta cuenta dentro del sistema. </p>
                                                         <form action="#" role="form" id="form-avatar-usuario" name="form-avatar-usuario">
                                                             <div class="form-group">
                                                                 <div class="fileinput fileinput-new" data-provides="fileinput">
@@ -402,10 +443,10 @@ if ($roles_help_json === false) {
                                                                     <div class="fileinput-preview fileinput-exists thumbnail" style="max-width: 200px; max-height: 150px;"> </div>
                                                                     <div>
                                                                         <span class="btn default btn-file">
-                                                                            <span class="fileinput-new"> Seleccione la imagen </span>
+                                                                            <span class="fileinput-new"> Seleccionar imagen </span>
                                                                             <span class="fileinput-exists"> Cambiar </span>
                                                                             <input type="file" name="img-avatar" id="img-avatar"> </span>
-                                                                        <a href="javascript:;" class="btn default fileinput-exists" data-dismiss="fileinput"> Remove </a>
+                                                                        <a href="javascript:;" class="btn default fileinput-exists" data-dismiss="fileinput"> Quitar </a>
                                                                     </div>
                                                                 </div>
                                                                 <!--<div class="clearfix margin-top-10">
@@ -414,7 +455,7 @@ if ($roles_help_json === false) {
                                                                 </div>-->
                                                             </div>
                                                             <div class="margin-top-10">
-                                                                <a href="javascript:;" class="btn green" onclick="crearAvatar();"> Continuar </a>
+                                                                <a href="javascript:;" class="btn green" onclick="crearAvatar();"> Guardar avatar y continuar </a>
                                                             </div>
                                                         </form>
                                                     </div>
@@ -422,19 +463,20 @@ if ($roles_help_json === false) {
                                                     <!-- CHANGE PASSWORD TAB -->
                                                     <div class="tab-pane" id="tab_1_3">
                                                         <form action="#" id="form-password-usuario" name="form-password-usuario">
+                                                            <p class="text-muted">Define la contraseña inicial que recibirá esta cuenta nueva para su primer acceso.</p>
                                                             <div class="form-group">
-                                                                <label class="control-label">Usuario</label>
+                                                                <label class="control-label">Usuario de acceso</label>
                                                                 <input type="text" class="form-control" id="username" readonly/> </div>
                                                             <div class="form-group">
-                                                                <label class="control-label">New Password</label>
+                                                                <label class="control-label">Contraseña inicial</label>
                                                                 <input type="password" class="form-control" id="password_1"/> </div>
                                                             <div class="form-group">
-                                                                <label class="control-label">Re-type New Password</label>
+                                                                <label class="control-label">Confirmar contraseña inicial</label>
                                                                 <input type="password" class="form-control" id="password_2"/> 
                                                                 <span id="comparaTexto"></span>
                                                             </div>
                                                             <div class="margin-top-10">
-                                                                <a href="javascript:;" class="btn green" id="btnSubmitPass" disabled> Crear Password y Continuar </a>
+                                                                <a href="javascript:;" class="btn green" id="btnSubmitPass" disabled> Guardar contraseña inicial y finalizar </a>
                                                             </div>
                                                         </form>
                                                     </div>
