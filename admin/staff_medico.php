@@ -41,6 +41,25 @@ $can_edit_self = !$is_admin && !$is_linked_medical_staff_session;
 
 $hasMedicalStaffAjax = is_file(__DIR__ . '/ajax/provider_medical_staff.php');
 $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
+
+// Sedes existentes del provider (para select clinic_name)
+$_pms_clinics_existing = [];
+if (isset($conexion) && $conexion && $scope_id > 0) {
+    $_pms_clinics_res = mysqli_query(
+        $conexion,
+        "SELECT DISTINCT TRIM(clinic_name) AS cn
+         FROM provider_medical_staff
+         WHERE provider_id = " . (int)$scope_id . "
+           AND TRIM(IFNULL(clinic_name,'')) != ''
+         ORDER BY cn ASC"
+    );
+    if ($_pms_clinics_res) {
+        while ($_pms_cn_row = mysqli_fetch_assoc($_pms_clinics_res)) {
+            $_pms_clinics_existing[] = $_pms_cn_row['cn'];
+        }
+        mysqli_free_result($_pms_clinics_res);
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -169,16 +188,50 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="pms-role-title">Cargo / rol</label>
-                                    <input type="text" class="form-control" id="pms-role-title" name="role_title" maxlength="120" />
+                                    <label for="pms-role-title">Cargo / rol <small class="text-muted">(en inglés)</small></label>
+                                    <select class="form-control" id="pms-role-title" name="role_title">
+                                        <option value="">— Seleccionar cargo —</option>
+                                        <option value="Lead Doctor">Lead Doctor</option>
+                                        <option value="Specialist">Specialist</option>
+                                        <option value="Surgeon">Surgeon</option>
+                                        <option value="Dentist">Dentist</option>
+                                        <option value="Orthodontist">Orthodontist</option>
+                                        <option value="Oral Surgeon">Oral Surgeon</option>
+                                        <option value="Cosmetic Dentist">Cosmetic Dentist</option>
+                                        <option value="General Physician">General Physician</option>
+                                        <option value="Nurse">Nurse</option>
+                                        <option value="Patient Coordinator">Patient Coordinator</option>
+                                        <option value="Medical Assistant">Medical Assistant</option>
+                                        <option value="Anesthesiologist">Anesthesiologist</option>
+                                        <option value="Therapist">Therapist</option>
+                                        <option value="Administrative Coordinator">Administrative Coordinator</option>
+                                    </select>
+                                    <span class="help-block"><i class="fa fa-globe"></i> Write in English — this label may be visible to patients.</span>
                                 </div>
                             </div>
                         </div>
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="pms-specialty">Especialidad</label>
-                                    <input type="text" class="form-control" id="pms-specialty" name="specialty" maxlength="120" />
+                                    <label for="pms-specialty">Especialidad <small class="text-muted">(en inglés)</small></label>
+                                    <select class="form-control" id="pms-specialty" name="specialty">
+                                        <option value="">— Seleccionar especialidad —</option>
+                                        <option value="Dentistry">Dentistry</option>
+                                        <option value="Cosmetic Dentistry">Cosmetic Dentistry</option>
+                                        <option value="Orthodontics">Orthodontics</option>
+                                        <option value="Oral Surgery">Oral Surgery</option>
+                                        <option value="Plastic Surgery">Plastic Surgery</option>
+                                        <option value="Bariatric Surgery">Bariatric Surgery</option>
+                                        <option value="Dermatology">Dermatology</option>
+                                        <option value="Ophthalmology">Ophthalmology</option>
+                                        <option value="Fertility">Fertility</option>
+                                        <option value="Orthopedics">Orthopedics</option>
+                                        <option value="General Medicine">General Medicine</option>
+                                        <option value="Aesthetic Medicine">Aesthetic Medicine</option>
+                                        <option value="Rehabilitation">Rehabilitation</option>
+                                        <option value="Nutrition">Nutrition</option>
+                                    </select>
+                                    <span class="help-block"><i class="fa fa-globe"></i> Write in English — this label may be visible to patients.</span>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -194,8 +247,9 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                             <input type="text" class="form-control" id="pms-photo" name="photo" maxlength="255" />
                         </div>
                         <div class="form-group">
-                            <label for="pms-bio-short">Bio corta</label>
+                            <label for="pms-bio-short">Bio corta <small class="text-muted">(en inglés)</small></label>
                             <textarea class="form-control" id="pms-bio-short" name="bio_short" rows="3"></textarea>
+                            <span class="help-block"><i class="fa fa-globe"></i> Write in English — this text may be shown to patients on the platform.</span>
                         </div>
                         <div class="row">
                             <div class="col-md-6">
@@ -239,14 +293,21 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="pms-clinic">Clínica / sede</label>
-                                    <input type="text" class="form-control" id="pms-clinic" name="clinic_name" maxlength="180" />
+                                    <select class="form-control" id="pms-clinic" name="clinic_name">
+                                        <option value="">— Sin sede específica —</option>
+                                        <?php foreach ($_pms_clinics_existing as $_pms_cn): ?>
+                                        <option value="<?php echo htmlspecialchars($_pms_cn, ENT_QUOTES); ?>"><?php echo htmlspecialchars($_pms_cn, ENT_QUOTES); ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="__other__">Otra sede (escribir)...</option>
+                                    </select>
+                                    <input type="text" class="form-control" id="pms-clinic-other" name="" maxlength="180" placeholder="Escribir nombre de sede" style="margin-top:6px; display:none;" />
                                 </div>
                             </div>
                         </div>
                         <div class="form-group">
                             <label for="pms-service-ids">Servicios habilitados</label>
                             <select class="form-control" id="pms-service-ids" name="service_ids[]" multiple size="8"></select>
-                            <span class="help-block">Opcional. Permite vincular al médico con los servicios que ofrece.</span>
+                            <span class="help-block">Opcional. Solo se listan los servicios activos de este prestador. Mantén <kbd>Ctrl</kbd> (o <kbd>⌘</kbd>) para selección múltiple.</span>
                         </div>
                         <div class="form-group">
                             <label for="pms-notes">Notas</label>

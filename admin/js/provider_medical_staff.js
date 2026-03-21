@@ -272,24 +272,58 @@
         $('#pms-access-status').text('Sin usuario vinculado');
         $('#providerMedicalStaffModalLabel').text('Agregar staff médico');
         $('#pms-save-msg').hide().empty();
+        // Reset selects controlados
+        $('#pms-role-title').val('');
+        $('#pms-specialty').val('');
+        $('#pms-clinic').val('');
+        $('#pms-clinic-other').val('').hide();
         providerServices = [];
         renderServiceOptions([], []);
         renderLinkedUserOptions([], 0);
         setAccessSectionMode('create');
     }
 
+    // Garantiza que un valor legacy exista como option en el select
+    function ensureSelectOption(selectId, value) {
+        if (!value) {
+            $('#' + selectId).val('');
+            return;
+        }
+        var $sel = $('#' + selectId);
+        if ($sel.find('option').filter(function () { return $(this).val() === value; }).length === 0) {
+            $sel.append($('<option>').val(value).text(value + ' ✓'));
+        }
+        $sel.val(value);
+    }
+
     function fillForm(item) {
         $('#pms-id').val(item.id || '');
         $('#pms-full-name').val(item.full_name || '');
-        $('#pms-role-title').val(item.role_title || '');
-        $('#pms-specialty').val(item.specialty || '');
+        // Selects controlados con compatibilidad legacy
+        ensureSelectOption('pms-role-title', item.role_title || '');
+        ensureSelectOption('pms-specialty', item.specialty || '');
         $('#pms-sort-order').val(item.sort_order != null ? item.sort_order : '');
         $('#pms-photo').val(item.photo || '');
         $('#pms-bio-short').val(item.bio_short || '');
         $('#pms-email').val(item.email || '');
         $('#pms-phone').val(item.phone || '');
         $('#pms-license').val(item.professional_license || '');
-        $('#pms-clinic').val(item.clinic_name || '');
+        // clinic_name: si está en el select OK; si no, usar __other__ + companion
+        var clinicVal = item.clinic_name || '';
+        if (clinicVal) {
+            var $csel = $('#pms-clinic');
+            var found = $csel.find('option').filter(function () { return $(this).val() === clinicVal; }).length > 0;
+            if (found) {
+                $csel.val(clinicVal);
+                $('#pms-clinic-other').val('').hide();
+            } else {
+                $csel.val('__other__');
+                $('#pms-clinic-other').val(clinicVal).show();
+            }
+        } else {
+            $('#pms-clinic').val('');
+            $('#pms-clinic-other').val('').hide();
+        }
         $('#pms-notes').val(item.notes || '');
         $('#pms-is-active').prop('checked', parseInt(item.is_active || item.active, 10) === 1);
         $('#pms-is-primary-doctor').prop('checked', parseInt(item.is_primary_doctor, 10) === 1);
@@ -401,7 +435,9 @@
             professional_license: $.trim($('#pms-license').val() || ''),
             email: $.trim($('#pms-email').val() || ''),
             phone: $.trim($('#pms-phone').val() || ''),
-            clinic_name: $.trim($('#pms-clinic').val() || ''),
+            clinic_name: ($.trim($('#pms-clinic').val() || '') === '__other__')
+                ? $.trim($('#pms-clinic-other').val() || '')
+                : $.trim($('#pms-clinic').val() || ''),
             linked_user_id: $('#pms-linked-user-id').val() || '',
             notes: $.trim($('#pms-notes').val() || '')
         };
@@ -526,6 +562,14 @@
         });
         $('#form-provider-medical-staff').on('submit', saveStaff);
         $('#providerMedicalStaffModal').on('hidden.bs.modal', resetForm);
+        // Toggle companion input para "Otra sede..."
+        $(document).on('change', '#pms-clinic', function () {
+            if ($(this).val() === '__other__') {
+                $('#pms-clinic-other').show().focus();
+            } else {
+                $('#pms-clinic-other').val('').hide();
+            }
+        });
 
         $('#pms-linked-user-id').on('change', function () {
             if ($(this).val()) {
