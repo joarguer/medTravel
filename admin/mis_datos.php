@@ -47,15 +47,15 @@ $rst   = mysqli_fetch_array($busca);
                 <div class="page-content">
                     <!-- BEGIN BREADCRUMBS -->
                     <div class="breadcrumbs">
-                        <h1>New User Profile | Account</h1>
+                        <h1>Mi Perfil</h1>
                         <ol class="breadcrumb">
                             <li>
-                                <a href="#">Home</a>
+                                <a href="index.php">Inicio</a>
                             </li>
                             <li>
-                                <a href="#">Pages</a>
+                                <a href="#">Administración</a>
                             </li>
-                            <li class="active">User</li>
+                            <li class="active">Mi Perfil</li>
                         </ol>
                         <!-- Sidebar Toggle Button -->
                         <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".page-sidebar">
@@ -159,7 +159,7 @@ $rst   = mysqli_fetch_array($busca);
                                                         <div class="portlet-title tabbable-line">
                                                             <div class="caption caption-md">
                                                                 <i class="icon-globe theme-font hide"></i>
-                                                                <span class="caption-subject font-blue-madison bold uppercase">Profile Account</span>
+                                                                <span class="caption-subject font-blue-madison bold uppercase">Mi Perfil</span>
                                                             </div>
                                                             <ul class="nav nav-tabs">
                                                                 <li class="active">
@@ -199,8 +199,8 @@ $rst   = mysqli_fetch_array($busca);
                                                                                 <span class="nombre-help-block help-block">Ingrese el nombre</span>
                                                                             </div>
                                                                             <div class="form-group form-md-line-input">
-                                                                                <input type="text" class="form-control form-control-actualiza-data" id="email" name="email" placeholder="Enter your email" value="<?php echo $rst["email"];?>" onchange="actualizarDatos(this)">
-                                                                                <span class="email-help-block help-block">Please enter your email...</span>
+                                                                                <input type="text" class="form-control form-control-actualiza-data" id="email" name="email" placeholder="Ingrese su email" value="<?php echo $rst["email"];?>" onchange="actualizarDatos(this)">
+                                                                                <span class="email-help-block help-block">Ingrese su email</span>
                                                                                 <label for="form_control_1">Email
                                                                                     <span class="required">*</span>
                                                                                 </label>
@@ -222,7 +222,7 @@ $rst   = mysqli_fetch_array($busca);
                                                                                     <div class="fileinput-preview fileinput-exists thumbnail" style="max-width: 200px; max-height: 150px;"> </div>
                                                                                     <div>
                                                                                         <span class="btn default btn-file">
-                                                                                            <span class="fileinput-new"> Cambiar imagen perfil </span>
+                                                                                            <span class="fileinput-new"> Cambiar imagen de perfil </span>
                                                                                             <span class="fileinput-exists"> Cambiar </span>
                                                                                             <input type="file" name="..." id="img-avatar" onchange="subirImg(<?php echo $id;?>)"> </span>
                                                                                         <a href="javascript:;" class="btn default fileinput-exists" data-dismiss="fileinput"> Remover </a>
@@ -236,22 +236,24 @@ $rst   = mysqli_fetch_array($busca);
                                                                 <div class="tab-pane" id="tab_1_3">
                                                                     <form action="#">
                                                                         <div class="form-group">
-                                                                            <label class="control-label"> Password Actual</label>
+                                                                            <label class="control-label"> Contraseña actual</label>
                                                                             <input type="password" class="form-control" id="password_actual"> 
-                                                                            <span class="password-a-validate-block help-block" id="passTexto"></span></div>
+                                                                            <span class="password-a-validate-block help-block" id="passTexto"></span>
+                                                                            <p class="help-block">Para cambiar su nombre de usuario o contraseña primero ingrese su contraseña actual. Al validarla los campos se habilitarán.</p>
+                                                                        </div>
                                                                         <div class="form-group has-warning">
-                                                                            <label class="control-label">Nuevo Nombre de Usuario</label>
-                                                                            <input type="text" class="form-control" id="usuario_edit" disabled placeholder="Dejar en blanco si no quiere cambiar el nombre de usuario actual"/> </div>
+                                                                            <label class="control-label">Nuevo nombre de usuario</label>
+                                                                            <input type="text" class="form-control" id="usuario_edit" disabled placeholder="Dejar en blanco si no desea cambiar el nombre de usuario"/> </div>
                                                                         <hr>
                                                                         <div class="form-group">
-                                                                            <label class="control-label">Nuevo Password</label>
+                                                                            <label class="control-label">Nueva contraseña</label>
                                                                             <input type="password" class="form-control" id="password" disabled/> </div>
                                                                         <div class="form-group">
-                                                                            <label class="control-label">Repita el nuevo password</label>
+                                                                            <label class="control-label">Repita la nueva contraseña</label>
                                                                             <input type="password" class="form-control" id="rpassword" disabled onchange="comparaPass()"/> </div>
                                                                             <span class="rpassword-validate-block help-block" id="comparaTexto"></span>
                                                                         <div class="margin-top-10">
-                                                                            <a class="btn green" id="cambiar_password" disabled> Cambiar Password </a>
+                                                                            <a class="btn green" id="cambiar_password" disabled> Cambiar contraseña </a>
                                                                         </div>
                                                                     </form>
                                                                 </div>
@@ -323,8 +325,8 @@ $rst   = mysqli_fetch_array($busca);
                                                                         </table>
                                                                         <!--end profile-settings-->
                                                                         <div class="margin-top-10">
-                                                                            <a href="javascript:;" class="btn red"> Save Changes </a>
-                                                                            <a href="javascript:;" class="btn default"> Cancel </a>
+                                                                            <a href="javascript:;" class="btn red"> Guardar cambios </a>
+                                                                            <a href="javascript:;" class="btn default"> Cancelar </a>
                                                                         </div>
                                                                     </form>
                                                                 </div>
