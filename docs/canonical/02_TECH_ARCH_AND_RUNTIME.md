@@ -27,6 +27,65 @@ Esta capa complementa el runtime existente y redefine el marco tecnico esperado 
 - La relacion de acceso es `provider_medical_staff.linked_user_id → usuarios.id`.
 - La documentacion tecnica no debe asumir que prestador = medico.
 
+## Arquitectura de identidad y onboarding administrativo del dominio medico
+
+Este frente queda documentado distinguiendo explicitamente estado actual real, decision canónica, deuda tecnica y transicion esperada.
+
+### Estado actual real del runtime
+
+- `admin/providers.php` y `admin/ajax/providers.php` ya funcionan de facto como alta inicial del provider medico y de una cuenta administrativa inicial asociada.
+- Ese flujo hoy crea:
+  - `providers`
+  - `provider_verification`
+  - una cuenta en `usuarios` scoped por `provider_id`
+- `admin/crear_usuario.php` y `admin/ajax/crear_usuario.php` crean usuarios scoped del sistema, incluyendo usuarios medicos asociados a un `provider_id` existente.
+- `admin/staff_medico.php` y su stack asociado ya asumen que el staff medico puede aprovisionar su propio acceso mediante `provider_medical_staff.linked_user_id`.
+- El runtime actual mezcla tres mecanismos para identidad / ownership medico:
+  - `usuarios.provider_id`
+  - `provider_users`
+  - inferencias legacy sobre "primer usuario del provider"
+- La sesion y varios componentes operativos hoy leen primero `usuarios.provider_id` y dejan `provider_users` como fallback legacy.
+
+### Incoherencias actuales reconocidas
+
+- Existen multiples puertas de entrada para identidad medica administrativa.
+- `providers.php` y `crear_usuario.php` no responden a una sola fuente de verdad para el owner/admin del provider medico.
+- `providers.php` crea provider + cuenta inicial, pero no formaliza todavia una relacion canónica explicita de ownership.
+- `crear_usuario.php` puede seguir creando usuarios medicos scoped y por tanto competir semanticamente con el onboarding canónico del owner/admin del provider.
+- `staff_medico.php` ya inicio un camino canónico distinto para el staff, lo cual hace todavia mas evidente que `crear_usuario.php` no debe seguir siendo puerta general del dominio medico principal.
+- `provider_users` sigue existiendo, pero hoy no es fuente de verdad consistente para ownership medico.
+
+### Decision canónica / target tecnico
+
+- `providers.php` queda declarado como origen canónico del onboarding del provider medico y de su owner/admin inicial.
+- `staff_medico.php` queda declarado como origen canónico del onboarding del staff medico y de su acceso al panel cuando aplique.
+- `crear_usuario.php` deja de ser flujo canónico para onboarding medico principal.
+- La relacion owner/admin del provider medico debe ser explicita y consistente.
+- El superusuario global `usuarios.id = 1` queda fuera de cualquier logica de reciclaje, reutilizacion o scope medico.
+- El sistema no debe seguir inferiendo ownership por:
+  - `LIMIT 1`
+  - "primer usuario encontrado"
+  - heuristicas ambiguas entre tablas legacy y nuevas
+
+### Fuente de verdad objetivo
+
+- `providers` = entidad canónica del prestador medico
+- mecanismo explicito de ownership = relacion canónica entre provider y owner/admin inicial
+- `usuarios` = identidad/autenticacion del usuario
+- `provider_medical_staff` = entidad canónica del staff
+- `provider_medical_staff.linked_user_id` = vinculacion canónica entre staff y usuario con acceso
+
+Nota de gobernanza:
+- esta decision no declara aun la forma final de persistencia del ownership explicito
+- solo fija que el canon ya no admite ownership inferido o ambiguo
+
+### Transicion esperada
+
+- Reducir `crear_usuario.php` a flujo restringido de usuarios adicionales / auxiliares o mantenerlo como legacy controlado.
+- Alinear `providers.php` con un modelo explicito de owner/admin inicial del provider.
+- Revisar y normalizar la convivencia entre `usuarios.provider_id` y `provider_users`.
+- Mantener compatibilidad transitoria mientras el runtime deja de depender de inferencias legacy.
+
 ### Resultado operativo esperado por item medico
 
 Cada item medico debe poder exponer, por columna nativa o por derivacion segura:

@@ -68,6 +68,36 @@ Alias al backlog / pasos de ejecución canónico.
 - [ ] Revisar labels, ayudas y mensajes de validacion en `providers`, `Mis Servicios`, `Mis Ofertas` y `Staff`
 - [ ] Alinear textos de ayuda con la clasificacion futura por nivel de atencion y tipo asistencial
 
+### Frente especifico — Onboarding medico, ownership e identidad administrativa
+
+#### Canon cerrado
+
+- DONE 2026-03-21: `providers.php` queda declarado canónicamente como alta inicial del provider medico y de su owner/admin inicial
+- DONE 2026-03-21: `staff_medico.php` queda declarado canónicamente como alta de staff medico y de su acceso al panel cuando aplique
+- DONE 2026-03-21: `crear_usuario.php` deja de ser flujo canónico para onboarding del dominio medico principal
+- DONE 2026-03-21: `usuarios.id = 1` queda protegido como superusuario global fuera de flujos de reciclaje / reutilizacion
+
+#### Deuda de modelo
+
+- [ ] Formalizar tecnicamente la relacion explicita provider -> owner/admin inicial
+- [ ] Eliminar dependencia de ownership inferido por `LIMIT 1` o por "primer usuario encontrado"
+- [ ] Resolver de forma canónica la convivencia entre `usuarios.provider_id` y `provider_users`
+- [ ] Unificar el modelo de alta de identidad medica administrativa para que no existan dos puertas principales compitiendo
+
+#### Tareas de transicion
+
+- [ ] Alinear `providers.php` con mecanismo explicito de ownership del provider medico
+- [ ] Restringir, deprecatear o marcar como legacy `crear_usuario.php` para el dominio medico principal
+- [ ] Mantener `crear_usuario.php` solo para usuarios adicionales / auxiliares mientras exista necesidad operativa
+- [ ] Revisar el flujo de lectura de sesion / scope para que el owner/admin del provider deje de depender de heuristicas legacy ambiguas
+- [ ] Preparar capa posterior de RBAC / scope fino una vez quede resuelta la fuente de verdad del ownership
+
+#### Tareas de integridad
+
+- [ ] Impedir que el superusuario global entre en flujos de reutilizacion de cuentas para staff
+- [ ] Impedir que el owner/admin inicial del provider pueda quedar desalineado entre tablas de identidad / ownership
+- [ ] Garantizar que el alta canónica del staff siga naciendo solo desde `staff_medico.php`
+
 ### Paso 2 — Ajuste de vocabulario UI
 
 - Estandarizar estados visibles de negocio para operacion

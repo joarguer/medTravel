@@ -57,6 +57,64 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - El staff NO debe reutilizar `ROLE_PROVIDER` ni `ROLE_PROVIDER_ADMIN` para autenticarse.
 - El acceso del staff al panel debe ser restringido por asignacion de items/casos (`booking_request_items.assigned_staff_id`), no solo por `provider_id`.
 
+## Actores oficiales con acceso al sistema
+
+### Superusuario MedTravel
+
+- Corresponde al superusuario global del sistema.
+- `usuarios.id = 1` queda protegido como cuenta raiz con acceso total.
+- No depende de `provider`, `staff` ni relaciones de scope medico.
+- No debe ser reciclable ni reutilizable desde flujos de aprovisionamiento de staff o de prestadores.
+
+### Provider / medico principal
+
+- Es la cuenta owner/admin inicial del prestador medico.
+- Representa la identidad administrativa primaria del provider frente al sistema.
+- Su onboarding canónico nace desde el alta del provider medico.
+- No debe inferirse por "primer usuario encontrado" ni por consultas `LIMIT 1`.
+
+### Staff / medico
+
+- Es personal interno del provider, distinto del owner/admin inicial.
+- Su alta canónica nace desde `staff_medico.php`.
+- Si necesita acceso al panel, ese acceso debe aprovisionarse desde el flujo de staff.
+- Su relacion de identidad se formaliza por `provider_medical_staff.linked_user_id`.
+
+### Cliente / paciente
+
+- Mantiene flujo propio y separado del onboarding medico.
+- No debe mezclarse con ownership del provider ni con alta de staff.
+
+### Provider / servicios suplementarios
+
+- Mantiene flujo propio y separado del provider medico principal.
+- No debe compartir onboarding canónico con el dominio medico principal.
+
+## Canon oficial de onboarding e identidad administrativa
+
+### Flujo canónico por dominio
+
+- `providers.php` es el flujo canónico para alta inicial del provider medico.
+- `providers.php` debe crear o dejar explicitada la cuenta owner/admin inicial del provider medico.
+- `staff_medico.php` es el flujo canónico para alta de staff medico, asignacion de servicios del staff y aprovisionamiento de acceso del staff cuando aplique.
+- `crear_usuario.php` NO es onboarding canónico del dominio medico principal.
+
+### Rol de `crear_usuario.php`
+
+- Puede seguir existiendo como flujo de usuarios adicionales / auxiliares.
+- Puede mantenerse como flujo restringido o legacy mientras se completa la transicion.
+- No debe competir con `providers.php` para el alta del owner/admin inicial del provider medico.
+- No debe competir con `staff_medico.php` para el alta de staff medico ni para su acceso al panel.
+
+### Ownership oficial del provider
+
+- El sistema necesita una relacion explicita y consistente entre `provider` y su owner/admin inicial.
+- Esa relacion no debe seguir dependiendo de inferencias como:
+  - `usuarios.provider_id` interpretado implicitamente
+  - `provider_users` usado solo de forma parcial
+  - "primer usuario del provider"
+- El canon exige ownership explicito; la forma tecnica final se define en capa de arquitectura / backlog y no debe volver a quedar ambigua.
+
 ### Entidades operativas visibles
 
 - Caso

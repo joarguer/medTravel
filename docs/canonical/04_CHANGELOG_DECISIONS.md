@@ -1,5 +1,40 @@
 # Changelog Decisions
 
+## 2026-03-21 — Formalizacion oficial del onboarding medico, ownership del provider e identidad administrativa
+
+**Outcome**
+- `providers.php` queda declarado oficialmente como flujo canónico para alta inicial del provider medico.
+- `providers.php` queda declarado oficialmente como origen canónico de la cuenta owner/admin inicial del provider medico.
+- `staff_medico.php` queda declarado oficialmente como flujo canónico para alta de staff medico y aprovisionamiento de acceso del staff cuando aplique.
+- `crear_usuario.php` deja de ser flujo canónico para onboarding del dominio medico principal.
+- `usuarios.id = 1` queda protegido oficialmente como superusuario global del sistema.
+
+**Decision**
+- El dominio medico principal ya no debe tener multiples puertas canónicas de onboarding para identidad administrativa.
+- La relacion owner/admin del provider debe existir de forma explicita y consistente.
+- El canon ya no admite ownership inferido por:
+  - `LIMIT 1`
+  - "primer usuario del provider"
+  - coexistencia ambigua entre `usuarios.provider_id` y `provider_users`
+- `crear_usuario.php` puede seguir existiendo solo como flujo restringido / adicional / legacy mientras se completa la transicion.
+- El staff medico no debe volver a nacer desde `crear_usuario.php`; su alta canónica pertenece a `staff_medico.php`.
+- El superusuario global debe permanecer aislado de cualquier logica de reciclaje o reutilizacion de usuarios del dominio provider / staff.
+
+**Transition note**
+- Esta decision fija el norte canónico, no declara aun que el runtime ya este completamente alineado.
+- El estado actual sigue mezclando:
+  - `providers.php` como alta de provider + cuenta inicial
+  - `crear_usuario.php` como alta de usuarios scoped todavia utilizable en dominio medico
+  - `staff_medico.php` como flujo ya orientado a provisión propia del staff
+- La forma tecnica final de ownership explicito queda como deuda / siguiente transicion documentada en backlog.
+
+**Operational effect**
+- Las futuras implementaciones deben tratar `providers.php` como onboarding canónico del provider medico y su owner/admin inicial.
+- Las futuras implementaciones deben tratar `staff_medico.php` como onboarding canónico del staff medico.
+- Las futuras decisiones tecnicas no deben volver a reabrir `crear_usuario.php` como flujo principal del dominio medico.
+
+---
+
 ## 2026-03-21 — Redefinicion oficial de Mis Servicios, Staff y Mis Ofertas
 
 **Outcome**
