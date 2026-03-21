@@ -541,7 +541,7 @@ $medical_group_pages = array('service_categories.php','service_catalog.php','pro
 $complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $complementary_scope_pages = array('providers_complementary.php','medtravel_services.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $clients_booking_pages = array('clientes.php','booking_requests.php','app_inbox.php','app_calendar.php','testimonials.php');
-$admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','informes.php','email_settings.php','data_deletion_requests.php','cleanup.php');
+$admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','email_settings.php','data_deletion_requests.php','cleanup.php');
 $admin_users_pages = array('mis_datos.php','usuarios.php','crear_usuario.php','roles.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','booking_header_edit.php','contact_header_edit.php','blog_edit.php','wizard_header_edit.php');
 $profile_pages = array('mis_datos.php');
@@ -655,10 +655,6 @@ if ($es_admin) {
                                             <a href="./roles.php">Roles</a>
                                         </li>
                                     </ul>
-                                </li>
-                                <li'.menu_li_class('informes.php').'>
-                                    <a href="./informes.php">
-                                        <i class="icon-bar-chart"></i> Informes </a>
                                 </li>
                                 <li'.menu_li_class('data_deletion_requests.php').'>
                                     <a href="./data_deletion_requests.php">

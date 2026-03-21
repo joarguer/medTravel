@@ -1,144 +1,102 @@
 <?php
 include("include/include.php");
-// RBAC explícito para reportes.
 if (!user_can(PERM_REPORTS_VIEW)) {
     http_response_code(403);
     echo 'Acceso denegado';
     exit;
 }
-$id_usuario = $_SESSION['id_usuario'];
-$busca = mysqli_query($conexion,"SELECT * FROM usuarios WHERE id = '".$id_usuario."'");
-$rst   = mysqli_fetch_array($busca);
-$busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
-$busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 ?>
 <!DOCTYPE html>
 <html lang="es">
-    <!-- BEGIN HEAD -->
-    <head>
-        <meta charset="utf-8" />
-        <title>medTravel - Reports</title>
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta content="width=device-width, initial-scale=1" name="viewport" />
-        <meta content="" name="description" />
-        <meta content="" name="author" />
-        <?php echo $global_first_style;?>
-        <!-- BEGIN PAGE LEVEL PLUGINS -->
-        <link href="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.css" rel="stylesheet" type="text/css" />
-        <link href="../../assets/global/plugins/bootstrap-wysihtml5/bootstrap-wysihtml5.css" rel="stylesheet" type="text/css" />
-        <!-- END PAGE LEVEL PLUGINS -->
-        <?php echo $theme_global_style;?>
-        <!-- BEGIN PAGE LEVEL STYLES -->
-        <link href="../assets/pages/css/about.css" rel="stylesheet" type="text/css" />
-        <!-- END PAGE LEVEL STYLES -->
-        <?php echo $theme_layout_style;?>
-        </head>
-    <!-- END HEAD -->
+<head>
+    <meta charset="utf-8" />
+    <title><?php echo $title; ?> - Módulo Legacy</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <?php echo $global_first_style;?>
+    <?php echo $theme_global_style;?>
+    <?php echo $theme_layout_style;?>
+</head>
 
-    <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
-        <!-- BEGIN CONTAINER -->
-        <div class="wrapper">
-            <!-- BEGIN HEADER -->
-            <header class="page-header">
-                <nav class="navbar mega-menu" role="navigation">
-                    <div class="container-fluid">
-                        <?php echo $top_header;?>
-                        <!-- BEGIN HEADER MENU -->
-                        <?php echo $top_header_2;?>
-                        <!-- END HEADER MENU -->
-                    </div>
-                    <!--/container-->
-                </nav>
-            </header>
-            <!-- END HEADER -->
-            
-            <div class="container-fluid">
-                <div class="page-content">
-                    <!-- BEGIN BREADCRUMBS -->
-                    <div class="breadcrumbs">
-                        <h1>Reports</h1>
-                        <ol class="breadcrumb">
-                            <li>
-                                <a href="#">Home</a>
-                            </li>
-                            <li>
-                                <a href="#">Pages</a>
-                            </li>
-                            <li class="active">reports</li>
-                        </ol>
-                        <!-- Sidebar Toggle Button -->
-                        <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".page-sidebar">
-                            <span class="sr-only">Toggle navigation</span>
-                            <span class="toggle-icon">
-                                <span class="icon-bar"></span>
-                                <span class="icon-bar"></span>
-                                <span class="icon-bar"></span>
-                            </span>
-                        </button>
-                        <!-- Sidebar Toggle Button -->
-                    </div>
-                    <!-- END BREADCRUMBS -->
-                    <!-- BEGIN SIDEBAR CONTENT LAYOUT -->
-                    <div class="page-content-container">
-                        <div class="page-content-row">
-                            <!-- BEGIN PAGE SIDEBAR -->
-                            <div class="page-sidebar">
-                                <nav class="navbar" role="navigation">
-                                    <!-- Brand and toggle get grouped for better mobile display -->
-                                    <!-- Collect the nav links, forms, and other content for toggling -->
-                                    <ul class="nav navbar-nav margin-bottom-35">
-                                        <li class="btn-carrucel active" id="cotizacion">
-                                            <a onclick="carga('cotizacion_window')">
-                                                <i class="icon-mail"></i> Cotización 
-                                            </a>
-                                        </li>
-                                        <li class="btn-carrucel" id="informes">
-                                            <a onclick="carga('informes_window')">
-                                                <i class="icon-mail"></i> Informes 
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </nav>
-                            </div>
-                            <!-- END PAGE SIDEBAR -->
-                            <div class="page-content-col" id="cotizacion_window">
-                                <h1 class="page-title">Cotización</h1>
-                                <div class="form-group">
-                                    <textarea class="wysihtml5 form-control margin-top-10" rows="10" placeholder="Escribe aquí tu cotización"></textarea>
+<body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
+    <div class="wrapper">
+        <header class="page-header">
+            <nav class="navbar mega-menu" role="navigation">
+                <div class="container-fluid">
+                    <?php echo $top_header;?>
+                    <?php echo $top_header_2;?>
+                </div>
+            </nav>
+        </header>
+
+        <div class="container-fluid">
+            <div class="page-content">
+                <div class="breadcrumbs">
+                    <h1>Módulo legacy en transición
+                        <small>Informes ya no forma parte de la operación activa del panel</small></h1>
+                    <ol class="breadcrumb">
+                        <li><a href="index.php">Inicio</a></li>
+                        <li><a href="#">Administración</a></li>
+                        <li class="active">Legacy / transición</li>
+                    </ol>
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".page-sidebar">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="toggle-icon">
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                        </span>
+                    </button>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="portlet light">
+                            <div class="portlet-title">
+                                <div class="caption">
+                                    <span class="caption-subject font-dark bold">Informes retirado de navegación</span>
+                                    <span class="caption-helper" style="display:block; margin-top:4px; color:#7b8a97; font-size:13px; font-weight:400;">Esta ruta se conserva temporalmente solo por compatibilidad y transición controlada.</span>
                                 </div>
                             </div>
-                            <div class="page-content-col hide" id="informes_window">
-                                <h1 class="page-title">Informe</h1>
-                                <div class="form-group">
-                                    <textarea class="wysihtml5 form-control margin-top-10" rows="10" placeholder="Escribe aquí tu cotización"></textarea>
+                            <div class="portlet-body">
+                                <div class="alert alert-warning">
+                                    <strong>Estado del módulo:</strong> esta pantalla ya no forma parte del flujo operativo activo de MedTravel y fue retirada de la navegación visible del panel.
+                                </div>
+                                <div class="alert alert-info">
+                                    <strong>Motivo:</strong> el recurso se mantiene temporalmente para evitar cortes bruscos durante el retiro controlado del módulo legacy.
+                                    <br>
+                                    <span class="small">No debe utilizarse como consola activa de reportes, edición o gestión operativa.</span>
+                                </div>
+                                <div class="alert alert-danger">
+                                    <strong>Compatibilidad transitoria:</strong> el acceso directo por URL sigue disponible solo mientras se completa la retirada segura del módulo y su limpieza posterior.
+                                </div>
+
+                                <div class="row" style="margin-top:20px;">
+                                    <div class="col-md-8">
+                                        <h4 style="margin-top:0;">Qué significa esta pantalla</h4>
+                                        <p class="text-muted" style="max-width:880px;">
+                                            Informes no se rescatará como módulo activo en esta fase. Si necesitas operar cuentas, contenidos, prestadores, servicios, paquetes o flujos de booking, debes hacerlo desde sus módulos vigentes dentro del panel.
+                                        </p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="well" style="margin-bottom:0;">
+                                            <strong>Siguiente referencia operativa</strong>
+                                            <p class="small" style="margin:10px 0 0;">
+                                                Usa los módulos activos del menú para operar dominios vigentes. Esta página no procesa reportes ni acciones funcionales.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <!-- END SIDEBAR CONTENT LAYOUT -->
                 </div>
-                <!-- BEGIN FOOTER -->
-                <?php echo $footer;?>
-                <!-- END FOOTER -->
             </div>
+            <?php echo $footer;?>
         </div>
-        <!-- END CONTAINER -->
-        <!-- BEGIN QUICK SIDEBAR -->
         <?php echo $sider_bar;?>
-        <!-- THEME (loads jQuery) -->
-        <?php echo $theme_layout_script;?>
-        <!-- CORE PLUGINS (after jQuery) -->
-        <script src="../../assets/global/plugins/js.cookie.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery-slimscroll/jquery.slimscroll.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery.blockui.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/bootstrap-switch/js/bootstrap-switch.min.js" type="text/javascript"></script>
-        <!-- PAGE LEVEL PLUGINS -->
-        <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/jquery.sparkline.min.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/bootstrap-wysihtml5/wysihtml5-0.3.0.js" type="text/javascript"></script>
-        <script src="../../assets/global/plugins/bootstrap-wysihtml5/bootstrap-wysihtml5.js" type="text/javascript"></script>
-        <!-- PAGE LEVEL SCRIPTS -->
-        <script src="../../assets/pages/scripts/profile.min.js" type="text/javascript"></script>
-        <script src="js/informes.js" type="text/javascript"></script>
-    </body>
+    </div>
+
+    <?php echo $theme_layout_script;?>
+</body>
 </html>
