@@ -241,6 +241,197 @@ function current_admin_user_id() {
     return 0;
 }
 
+function is_medical_provider_role_id($roleId) {
+    return in_array((int)$roleId, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
+}
+
+function provider_user_membership_role($conexion, $providerId, $userId) {
+    if (
+        !$conexion ||
+        $providerId <= 0 ||
+        $userId <= 0 ||
+        !roles_table_exists($conexion, 'provider_users') ||
+        !roles_table_has_column($conexion, 'provider_users', 'provider_id') ||
+        !roles_table_has_column($conexion, 'provider_users', 'user_id')
+    ) {
+        return '';
+    }
+
+    $selectRole = roles_table_has_column($conexion, 'provider_users', 'role_in_provider')
+        ? 'pu.role_in_provider'
+        : "'owner' AS role_in_provider";
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        'SELECT ' . $selectRole . '
+           FROM provider_users pu
+          WHERE pu.provider_id = ? AND pu.user_id = ?
+          LIMIT 1'
+    );
+    if (!$stmt) {
+        return '';
+    }
+
+    mysqli_stmt_bind_param($stmt, 'ii', $providerId, $userId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    if (!$row) {
+        return '';
+    }
+
+    return strtolower(trim((string)($row['role_in_provider'] ?? 'owner')));
+}
+
+function is_canonical_provider_owner_session($conexion, $providerId, $sessionUserId) {
+    if (
+        !$conexion ||
+        $providerId <= 0 ||
+        $sessionUserId <= 0 ||
+        !roles_table_exists($conexion, 'usuarios') ||
+        !roles_table_has_column($conexion, 'usuarios', 'provider_id')
+    ) {
+        return false;
+    }
+
+    $select = ['u.id'];
+    $select[] = roles_table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id';
+    $select[] = roles_table_has_column($conexion, 'usuarios', 'rol') ? 'u.rol' : 'NULL AS rol';
+
+    $sql = 'SELECT ' . implode(', ', $select) . '
+              FROM usuarios u
+             WHERE u.provider_id = ?';
+    if (roles_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
+    }
+    if (roles_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
+    }
+    $sql .= ' ORDER BY u.id ASC';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return false;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $ownerUserId = 0;
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $resolvedRoleId = null;
+        if (isset($row['role_id']) && $row['role_id'] !== null && $row['role_id'] !== '') {
+            $resolvedRoleId = (int)$row['role_id'];
+        } elseif (isset($row['rol'])) {
+            $resolvedRoleId = normalize_role_value($row['rol']);
+        }
+
+        if (is_medical_provider_role_id($resolvedRoleId)) {
+            $ownerUserId = (int)($row['id'] ?? 0);
+            break;
+        }
+    }
+
+    mysqli_stmt_close($stmt);
+    return $ownerUserId > 0 && $ownerUserId === $sessionUserId;
+}
+
+function is_provider_owner_or_admin_session($conexion = null) {
+    if (is_role_admin_session()) {
+        return true;
+    }
+
+    $providerId = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
+    if ($providerId <= 0) {
+        return false;
+    }
+
+    $sessionRoleId = current_role_id();
+    if ($sessionRoleId === ROLE_PROVIDER_ADMIN) {
+        return true;
+    }
+
+    if (isset($_SESSION['ppal'])) {
+        $ppalValue = strtolower(trim((string)$_SESSION['ppal']));
+        if ($ppalValue === '1' || $ppalValue === 'ppal') {
+            return true;
+        }
+    }
+
+    if ($conexion === null) {
+        global $conexion;
+    }
+    if (!$conexion || !roles_table_exists($conexion, 'usuarios')) {
+        return false;
+    }
+
+    $sessionUserId = current_admin_user_id();
+    if ($sessionUserId <= 0) {
+        return false;
+    }
+
+    $hasRoleId = roles_table_has_column($conexion, 'usuarios', 'role_id');
+    $hasRol = roles_table_has_column($conexion, 'usuarios', 'rol');
+    $hasPpal = roles_table_has_column($conexion, 'usuarios', 'ppal');
+    $hasProviderId = roles_table_has_column($conexion, 'usuarios', 'provider_id');
+    if (!$hasRoleId && !$hasRol && !$hasPpal && !$hasProviderId) {
+        return false;
+    }
+
+    $select = ['u.id'];
+    $select[] = $hasRoleId ? 'u.role_id' : 'NULL AS role_id';
+    $select[] = $hasRol ? 'u.rol' : 'NULL AS rol';
+    $select[] = $hasPpal ? 'u.ppal' : '0 AS ppal';
+    $select[] = $hasProviderId ? 'u.provider_id' : 'NULL AS provider_id';
+
+    $sql = 'SELECT ' . implode(', ', $select) . ' FROM usuarios u WHERE u.id = ? LIMIT 1';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $sessionUserId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    if (!$row) {
+        return false;
+    }
+
+    if (isset($row['ppal']) && (int)$row['ppal'] === 1) {
+        return true;
+    }
+
+    $resolvedRoleId = null;
+    if (isset($row['role_id']) && $row['role_id'] !== null && $row['role_id'] !== '') {
+        $resolvedRoleId = (int)$row['role_id'];
+    } elseif (isset($row['rol'])) {
+        $resolvedRoleId = normalize_role_value($row['rol']);
+    }
+
+    if ((int)$resolvedRoleId === ROLE_PROVIDER_ADMIN) {
+        return true;
+    }
+
+    $membershipRole = provider_user_membership_role($conexion, $providerId, $sessionUserId);
+    if ($membershipRole !== '' && in_array($membershipRole, ['owner', 'admin', 'administrator', 'principal', 'primary'], true)) {
+        return true;
+    }
+
+    if (
+        (int)$resolvedRoleId === ROLE_PROVIDER &&
+        isset($row['provider_id']) &&
+        (int)$row['provider_id'] === $providerId &&
+        $membershipRole === ''
+    ) {
+        return is_canonical_provider_owner_session($conexion, $providerId, $sessionUserId);
+    }
+
+    return false;
+}
+
 function roles_table_exists($conexion, $table) {
     static $cache = [];
     if (!$conexion) return false;
@@ -283,6 +474,10 @@ function current_provider_medical_staff_context($conexion = null) {
     $sessionUserId = current_admin_user_id();
     $providerId = isset($_SESSION['provider_id']) ? intval($_SESSION['provider_id']) : 0;
     if ($sessionUserId <= 0 || $providerId <= 0) {
+        return null;
+    }
+
+    if (is_provider_owner_or_admin_session($conexion)) {
         return null;
     }
 

@@ -225,6 +225,7 @@ function pms_find_user_by_identity($conexion, $identity)
         pms_users_has_column($conexion, 'usuario') ? 'u.usuario' : 'NULL AS usuario',
         pms_users_has_column($conexion, 'email') ? 'u.email' : 'NULL AS email',
         pms_users_has_column($conexion, 'activo') ? 'u.activo' : '1 AS activo',
+        pms_users_has_column($conexion, 'ppal') ? 'u.ppal' : '0 AS ppal',
         pms_users_has_column($conexion, 'role_id') ? 'u.role_id' : 'NULL AS role_id',
         pms_users_has_column($conexion, 'rol') ? 'u.rol' : 'NULL AS rol',
         pms_users_has_column($conexion, 'token') ? 'u.token' : 'NULL AS token',
@@ -275,6 +276,126 @@ function pms_validate_user_not_linked_elsewhere($conexion, $userId, $currentStaf
         return ['error' => 'user_already_linked_to_other_staff', 'linked_staff' => $row];
     }
     return null;
+}
+
+function pms_user_is_sensitive_owner_account($row)
+{
+    return isset($row['ppal']) && (int)$row['ppal'] === 1;
+}
+
+function pms_user_reuse_public_message($status)
+{
+    switch ((string)$status) {
+        case 'new_user_allowed':
+            return 'Este email puede usarse para crear el acceso del staff.';
+        case 'reusable_existing_staff_user':
+            return 'Ya existe un usuario con este email dentro del mismo prestador; se reutilizará para este staff.';
+        case 'invalid_email':
+            return 'Ingresa un email válido para aprovisionar acceso al staff.';
+        default:
+            return 'Este email ya pertenece a una cuenta existente que no puede vincularse como staff. Usa otro email.';
+    }
+}
+
+function pms_evaluate_staff_access_user($conexion, $providerId, $userRow, $currentStaffId = 0)
+{
+    if (empty($userRow) || empty($userRow['id'])) {
+        return [
+            'ok' => true,
+            'reusable' => false,
+            'status' => 'new_user_allowed',
+            'message' => pms_user_reuse_public_message('new_user_allowed'),
+        ];
+    }
+
+    $userId = (int)$userRow['id'];
+    $userProviderId = isset($userRow['provider_id']) && $userRow['provider_id'] !== null ? (int)$userRow['provider_id'] : 0;
+    $serviceProviderId = isset($userRow['service_provider_id']) && $userRow['service_provider_id'] !== null ? (int)$userRow['service_provider_id'] : 0;
+    $roleId = pms_resolve_user_role_id($userRow);
+    $linkedElsewhere = pms_validate_user_not_linked_elsewhere($conexion, $userId, $currentStaffId);
+
+    if ($userProviderId <= 0 || $userProviderId !== (int)$providerId) {
+        return [
+            'ok' => false,
+            'status' => 'existing_user_belongs_to_other_provider',
+            'message' => pms_user_reuse_public_message('existing_user_belongs_to_other_provider'),
+        ];
+    }
+
+    if ($serviceProviderId > 0) {
+        return [
+            'ok' => false,
+            'status' => 'existing_user_not_staff_eligible',
+            'message' => pms_user_reuse_public_message('existing_user_not_staff_eligible'),
+        ];
+    }
+
+    if (pms_user_is_sensitive_owner_account($userRow)) {
+        return [
+            'ok' => false,
+            'status' => 'existing_user_sensitive_account',
+            'message' => pms_user_reuse_public_message('existing_user_sensitive_account'),
+        ];
+    }
+
+    if ($roleId !== ROLE_PROVIDER) {
+        return [
+            'ok' => false,
+            'status' => 'existing_user_privileged_or_incompatible_role',
+            'message' => pms_user_reuse_public_message('existing_user_privileged_or_incompatible_role'),
+        ];
+    }
+
+    if ($linkedElsewhere && !empty($linkedElsewhere['error'])) {
+        if (($linkedElsewhere['error'] ?? '') === 'user_already_linked_to_other_staff') {
+            return [
+                'ok' => false,
+                'status' => 'user_already_linked_to_other_staff',
+                'message' => pms_user_reuse_public_message('user_already_linked_to_other_staff'),
+                'linked_staff' => $linkedElsewhere['linked_staff'] ?? null,
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'status' => (string)($linkedElsewhere['error'] ?? 'staff_access_resolution_failed'),
+            'message' => pms_user_reuse_public_message('staff_access_resolution_failed'),
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reusable' => true,
+        'status' => 'reusable_existing_staff_user',
+        'message' => pms_user_reuse_public_message('reusable_existing_staff_user'),
+        'user' => $userRow,
+        'role_id' => $roleId,
+    ];
+}
+
+function pms_validate_staff_access_email($conexion, $providerId, $email, $currentStaffId = 0)
+{
+    $email = pms_clean_email($email);
+    if ($email === false || $email === '') {
+        return [
+            'ok' => false,
+            'valid' => false,
+            'status' => 'invalid_email',
+            'message' => pms_user_reuse_public_message('invalid_email'),
+        ];
+    }
+
+    $existingUser = pms_find_user_by_identity($conexion, $email);
+    $evaluation = pms_evaluate_staff_access_user($conexion, $providerId, $existingUser, $currentStaffId);
+
+    return [
+        'ok' => true,
+        'valid' => !empty($evaluation['ok']),
+        'status' => (string)($evaluation['status'] ?? 'new_user_allowed'),
+        'message' => (string)($evaluation['message'] ?? pms_user_reuse_public_message('existing_user_not_staff_eligible')),
+        'mode' => !empty($evaluation['reusable']) ? 'reuse' : (!empty($existingUser) ? 'blocked' : 'create'),
+        'exists' => !empty($existingUser),
+    ];
 }
 
 function pms_create_staff_user($conexion, $providerId, $providerName, $staffName, $staffEmail)
@@ -425,13 +546,13 @@ function pms_resolve_staff_access_user($conexion, $providerId, $providerName, $s
 
     $existingUser = pms_find_user_by_identity($conexion, $staffEmail);
     if ($existingUser) {
-        $existingProviderId = isset($existingUser['provider_id']) && $existingUser['provider_id'] !== null ? (int)$existingUser['provider_id'] : 0;
-        if ($existingProviderId > 0 && $existingProviderId !== $providerId) {
-            return ['error' => 'existing_user_belongs_to_other_provider'];
-        }
-        $linkedElsewhere = pms_validate_user_not_linked_elsewhere($conexion, (int)$existingUser['id'], $currentStaffId);
-        if ($linkedElsewhere && !empty($linkedElsewhere['error'])) {
-            return $linkedElsewhere;
+        $evaluation = pms_evaluate_staff_access_user($conexion, $providerId, $existingUser, $currentStaffId);
+        if (empty($evaluation['ok'])) {
+            $result = ['error' => $evaluation['status'] ?? 'staff_access_resolution_failed'];
+            if (!empty($evaluation['linked_staff'])) {
+                $result['linked_staff'] = $evaluation['linked_staff'];
+            }
+            return $result;
         }
         return ['ok' => true, 'user' => $existingUser, 'provision_status' => 'linked_existing_user'];
     }
@@ -1258,6 +1379,9 @@ function pms_fetch_linked_user($conexion, $userId, $providerId, $currentStaffId 
         "COALESCE(NULLIF(u.usuario, ''), CONCAT('usuario_', u.id)) AS usuario",
         $hasEmail ? "COALESCE(NULLIF(u.email, ''), '') AS email" : "'' AS email",
         $hasActive ? 'u.activo' : '1 AS activo',
+        pms_table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
+        pms_table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
+        pms_table_has_column($conexion, 'usuarios', 'ppal') ? 'u.ppal' : '0 AS ppal',
         $hasRoleId ? 'u.role_id' : 'NULL AS role_id',
         $hasRol ? 'u.rol' : 'NULL AS rol',
     ];
@@ -1280,35 +1404,16 @@ function pms_fetch_linked_user($conexion, $userId, $providerId, $currentStaffId 
         return null;
     }
 
-    $roleId = pms_resolve_user_role_id($row);
-    if (!pms_is_medical_user_role($roleId)) {
-        return ['error' => 'linked_user_must_be_medical_provider_role'];
+    $evaluation = pms_evaluate_staff_access_user($conexion, $providerId, $row, $currentStaffId);
+    if (empty($evaluation['ok'])) {
+        $status = (string)($evaluation['status'] ?? 'linked_user_not_allowed_for_staff');
+        if ($status === 'user_already_linked_to_other_staff') {
+            return ['error' => 'linked_user_already_assigned', 'linked_staff' => $evaluation['linked_staff'] ?? null];
+        }
+        return ['error' => $status];
     }
 
-    if (pms_has_access_columns($conexion)) {
-        $sqlLink = 'SELECT id, full_name FROM provider_medical_staff WHERE linked_user_id = ?';
-        if ($currentStaffId > 0) {
-            $sqlLink .= ' AND id <> ?';
-        }
-        $sqlLink .= ' LIMIT 1';
-        $stmtLink = mysqli_prepare($conexion, $sqlLink);
-        if ($stmtLink) {
-            if ($currentStaffId > 0) {
-                mysqli_stmt_bind_param($stmtLink, 'ii', $userId, $currentStaffId);
-            } else {
-                mysqli_stmt_bind_param($stmtLink, 'i', $userId);
-            }
-            mysqli_stmt_execute($stmtLink);
-            $resLink = mysqli_stmt_get_result($stmtLink);
-            $rowLink = $resLink ? mysqli_fetch_assoc($resLink) : null;
-            mysqli_stmt_close($stmtLink);
-            if ($rowLink) {
-                return ['error' => 'linked_user_already_assigned', 'linked_staff' => $rowLink];
-            }
-        }
-    }
-
-    $row['role_id_resolved'] = $roleId;
+    $row['role_id_resolved'] = (int)($evaluation['role_id'] ?? pms_resolve_user_role_id($row));
     return $row;
 }
 
@@ -1357,6 +1462,33 @@ function pms_access_status_payload($row)
     $payload['access_status'] = 'enabled';
     $payload['access_status_label'] = 'Médico con acceso propio';
     return $payload;
+}
+
+function pms_sync_linked_user_access_state($conexion, $linkedUserId, $enabled)
+{
+    $linkedUserId = (int)$linkedUserId;
+    if ($linkedUserId <= 0 || !pms_users_table_ready($conexion)) {
+        return ['ok' => true];
+    }
+
+    if (!pms_users_has_column($conexion, 'activo')) {
+        return ['ok' => true];
+    }
+
+    $activeValue = $enabled ? 1 : 0;
+    $stmt = mysqli_prepare($conexion, 'UPDATE usuarios SET activo = ? WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return ['error' => 'db_prepare_failed'];
+    }
+    mysqli_stmt_bind_param($stmt, 'ii', $activeValue, $linkedUserId);
+    $ok = mysqli_stmt_execute($stmt);
+    $err = mysqli_stmt_error($stmt);
+    mysqli_stmt_close($stmt);
+    if (!$ok) {
+        return ['error' => 'db_error', 'detail' => $err];
+    }
+
+    return ['ok' => true];
 }
 
 function pms_staff_row($conexion, $staffId, $providerId = 0)
@@ -1418,6 +1550,8 @@ function pms_fetch_linkable_users($conexion, $providerId, $currentStaffId = 0)
     $hasEmail = pms_table_has_column($conexion, 'usuarios', 'email');
     $hasRoleId = pms_table_has_column($conexion, 'usuarios', 'role_id');
     $hasRol = pms_table_has_column($conexion, 'usuarios', 'rol');
+    $hasServiceProviderId = pms_table_has_column($conexion, 'usuarios', 'service_provider_id');
+    $hasPpal = pms_table_has_column($conexion, 'usuarios', 'ppal');
 
     $select = [
         'u.id',
@@ -1425,6 +1559,9 @@ function pms_fetch_linkable_users($conexion, $providerId, $currentStaffId = 0)
         "COALESCE(NULLIF(u.usuario, ''), CONCAT('usuario_', u.id)) AS usuario",
         $hasEmail ? "COALESCE(NULLIF(u.email, ''), '') AS email" : "'' AS email",
         $hasActive ? 'u.activo' : '1 AS activo',
+        'u.provider_id',
+        $hasServiceProviderId ? 'u.service_provider_id' : 'NULL AS service_provider_id',
+        $hasPpal ? 'u.ppal' : '0 AS ppal',
         $hasRoleId ? 'u.role_id' : 'NULL AS role_id',
         $hasRol ? 'u.rol' : 'NULL AS rol',
     ];
@@ -1463,7 +1600,8 @@ function pms_fetch_linkable_users($conexion, $providerId, $currentStaffId = 0)
     $rows = [];
     while ($res && ($row = mysqli_fetch_assoc($res))) {
         $roleId = pms_resolve_user_role_id($row);
-        $available = pms_is_medical_user_role($roleId) && empty($row['linked_staff_id']);
+        $evaluation = pms_evaluate_staff_access_user($conexion, $providerId, $row, $currentStaffId);
+        $available = !empty($evaluation['ok']) && !empty($evaluation['reusable']);
         $labelParts = [];
         if (!empty($row['nombre'])) {
             $labelParts[] = $row['nombre'];
@@ -1485,6 +1623,7 @@ function pms_fetch_linkable_users($conexion, $providerId, $currentStaffId = 0)
             'linked_staff_id' => isset($row['linked_staff_id']) && $row['linked_staff_id'] !== null ? (int)$row['linked_staff_id'] : null,
             'linked_staff_name' => (string)($row['linked_staff_name'] ?? ''),
             'available' => $available,
+            'validation_status' => (string)($evaluation['status'] ?? ''),
             'label' => implode(' · ', array_filter($labelParts)),
         ];
     }
@@ -1958,6 +2097,30 @@ switch ($action) {
         ]);
     }
 
+    case 'validate_staff_access_email': {
+        $providerId = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
+        $currentStaffId = (int)($_GET['staff_id'] ?? $_POST['staff_id'] ?? 0);
+        pms_assert_provider_scope($providerId);
+
+        $provider = pms_provider_exists($conexion, $providerId);
+        if (!$provider) {
+            pms_err('provider_not_found', 404);
+        }
+
+        $validation = pms_validate_staff_access_email(
+            $conexion,
+            $providerId,
+            (string)($_GET['email'] ?? $_POST['email'] ?? ''),
+            $currentStaffId
+        );
+
+        if (empty($validation['ok']) && ($validation['status'] ?? '') === 'invalid_email') {
+            pms_err($validation['message'] ?? 'Ingresa un email válido para aprovisionar acceso al staff.', 422, ['status' => 'invalid_email']);
+        }
+
+        pms_ok(array_merge(['provider' => $provider], $validation));
+    }
+
     case 'get_staff': {
         $providerId = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
         $staffId = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
@@ -2033,6 +2196,7 @@ switch ($action) {
             : max(0, (int)$sortOrderRaw);
         $linkedUserId = (int)($_POST['linked_user_id'] ?? 0);
         $canAccessAdmin = isset($_POST['can_access_admin']) ? 1 : 0;
+        $currentLinkedUserId = $currentRow ? (int)($currentRow['linked_user_id'] ?? 0) : 0;
 
         if (($linkedUserId > 0 || $canAccessAdmin === 1) && !pms_has_access_columns($conexion)) {
             pms_err('provider_medical_staff_access_columns_missing — run sql/2026_03_12_provider_staff_access_and_item_assignment.sql', 503);
@@ -2062,6 +2226,9 @@ switch ($action) {
                 if ($error === 'existing_user_belongs_to_other_provider') {
                     pms_err('El email indicado ya pertenece a un usuario de otro prestador. Usa otro email o vincula un usuario válido de este prestador.', 422, ['status' => 'existing_user_belongs_to_other_provider']);
                 }
+                if ($error === 'existing_user_sensitive_account' || $error === 'existing_user_privileged_or_incompatible_role' || $error === 'existing_user_not_staff_eligible') {
+                    pms_err('Este email ya pertenece a una cuenta existente que no puede vincularse como staff. Usa otro email.', 422, ['status' => $error]);
+                }
                 if ($error === 'user_already_linked_to_other_staff') {
                     $linkedStaffName = trim((string)($accessProvision['linked_staff']['full_name'] ?? ''));
                     $message = 'El usuario seleccionado ya está vinculado a otro miembro del staff.';
@@ -2076,13 +2243,18 @@ switch ($action) {
                 if ($error === 'linked_user_not_found_for_provider') {
                     pms_err('El usuario vinculado no pertenece a este prestador o no está disponible para este staff.', 422);
                 }
+                if ($error === 'linked_user_not_allowed_for_staff') {
+                    pms_err('El usuario vinculado no está habilitado para usarse como cuenta de staff.', 422, ['status' => 'linked_user_not_allowed_for_staff']);
+                }
                 pms_err($error, 422);
             }
             $linkedUserId = (int)($accessProvision['user']['id'] ?? 0);
             $accessProvision['enabled'] = true;
             $accessProvision['linked_user_id'] = $linkedUserId;
         } else {
-            $linkedUserId = 0;
+            if ($linkedUserId <= 0 && $currentLinkedUserId > 0) {
+                $linkedUserId = $currentLinkedUserId;
+            }
         }
         $linkedUserIdSql = $linkedUserId > 0 ? $linkedUserId : 0;
 
@@ -2345,6 +2517,13 @@ switch ($action) {
                 throw new Exception(!empty($replaceResult['detail']) ? $replaceResult['detail'] : $replaceResult['error']);
             }
 
+            if ($linkedUserId > 0) {
+                $syncAccess = pms_sync_linked_user_access_state($conexion, $linkedUserId, $canAccessAdmin === 1);
+                if (!empty($syncAccess['error'])) {
+                    throw new Exception(!empty($syncAccess['detail']) ? $syncAccess['detail'] : $syncAccess['error']);
+                }
+            }
+
             mysqli_commit($conexion);
         } catch (Exception $e) {
             mysqli_rollback($conexion);
@@ -2574,6 +2753,82 @@ switch ($action) {
         pms_ok([
             'item' => $row,
             'message' => ($value === 1) ? 'Registro activado' : 'Registro desactivado',
+            'provider' => $provider,
+        ]);
+    }
+
+    case 'toggle_staff_access': {
+        $providerId = (int)($_POST['provider_id'] ?? $_GET['provider_id'] ?? 0);
+        $staffId = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+        $value = (int)($_POST['value'] ?? $_GET['value'] ?? -1);
+        pms_assert_provider_scope($providerId);
+        if ($staffId <= 0 || ($value !== 0 && $value !== 1)) {
+            pms_err('provider_id, id and value are required');
+        }
+        if (!pms_has_access_columns($conexion)) {
+            pms_err('provider_medical_staff_access_columns_missing — run sql/2026_03_12_provider_staff_access_and_item_assignment.sql', 503);
+        }
+
+        $provider = pms_provider_exists($conexion, $providerId);
+        if (!$provider) {
+            pms_err('provider_not_found', 404);
+        }
+
+        $currentRow = pms_staff_row($conexion, $staffId, $providerId);
+        if (!$currentRow) {
+            pms_err('staff_not_found', 404);
+        }
+
+        $linkedUserId = (int)($currentRow['linked_user_id'] ?? 0);
+        if ($linkedUserId <= 0) {
+            pms_err('Este staff no tiene un usuario vinculado para gestionar acceso al panel.', 422, ['status' => 'staff_linked_user_required']);
+        }
+
+        mysqli_begin_transaction($conexion);
+        try {
+            $fields = ['can_access_admin = ?'];
+            $types = 'i';
+            $params = [$value];
+            if (provider_staff_table_has_column($conexion, 'updated_at')) {
+                $fields[] = 'updated_at = NOW()';
+            }
+
+            $stmt = mysqli_prepare(
+                $conexion,
+                'UPDATE provider_medical_staff
+                    SET ' . implode(', ', $fields) . '
+                  WHERE id = ? AND provider_id = ?
+                  LIMIT 1'
+            );
+            if (!$stmt) {
+                throw new Exception('db_prepare_failed');
+            }
+            $types .= 'ii';
+            $params[] = $staffId;
+            $params[] = $providerId;
+            bind_stmt_params($stmt, $types, $params);
+            $ok = mysqli_stmt_execute($stmt);
+            $err = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            if (!$ok) {
+                throw new Exception('db_error: ' . $err);
+            }
+
+            $syncAccess = pms_sync_linked_user_access_state($conexion, $linkedUserId, $value === 1);
+            if (!empty($syncAccess['error'])) {
+                throw new Exception(!empty($syncAccess['detail']) ? $syncAccess['detail'] : $syncAccess['error']);
+            }
+
+            mysqli_commit($conexion);
+        } catch (Exception $e) {
+            mysqli_rollback($conexion);
+            pms_err($e->getMessage(), 500);
+        }
+
+        $row = pms_staff_row($conexion, $staffId, $providerId);
+        pms_ok([
+            'item' => $row,
+            'message' => ($value === 1) ? 'Acceso al panel activado' : 'Acceso al panel desactivado',
             'provider' => $provider,
         ]);
     }

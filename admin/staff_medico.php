@@ -37,7 +37,7 @@ if (!$provider_check || (isset($provider_check['is_active']) && intval($provider
 }
 
 $is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
-$can_edit_self = !$is_admin && !$is_linked_medical_staff_session;
+$can_manage_staff = !$is_linked_medical_staff_session;
 
 $hasMedicalStaffAjax = is_file(__DIR__ . '/ajax/provider_medical_staff.php');
 $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
@@ -188,7 +188,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                                 <span class="text-muted" style="margin-right:12px;">
                                                     Activos: <strong id="staff-active-counter">0</strong>
                                                 </span>
-                                                <button type="button" class="btn btn-primary btn-sm" id="btn-add-medical-staff" <?php echo $can_edit_self ? '' : 'disabled'; ?>>
+                                                <button type="button" class="btn btn-primary btn-sm" id="btn-add-medical-staff" <?php echo $can_manage_staff ? '' : 'disabled'; ?>>
                                                     <i class="fa fa-plus"></i> Agregar staff
                                                 </button>
                                             </div>
@@ -202,7 +202,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                             <p class="text-muted" style="max-width:840px;">
                                                 Registra y gestiona el equipo médico de tu empresa. Cada integrante puede tener cargo, especialidad y foto, y en el futuro podrá asignarse a citas o servicios específicos.
                                             </p>
-                                            <?php if (!$can_edit_self): ?>
+                                            <?php if (!$can_manage_staff): ?>
                                             <div class="alert alert-info">
                                                 <i class="fa fa-info-circle"></i> Tu perfil puede consultar el staff médico, pero no administrarlo.
                                             </div>
@@ -323,7 +323,8 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                     <div class="form-group">
                                         <label for="pms-email" id="pms-email-label">Email del profesional</label>
                                         <input type="email" class="form-control" id="pms-email" name="email" maxlength="120" />
-                                        <span class="help-block" id="pms-email-help">Opcional. Úsalo para contacto del profesional y para su acceso al panel si necesita ingresar.</span>
+                                        <span class="help-block" id="pms-email-help">Se requiere un email válido para aprovisionar acceso al panel. El correo de bienvenida se envía tanto para perfiles de solo asignaciones como para perfiles con permisos administrativos.</span>
+                                        <div id="pms-email-validation" class="small" style="display:none; margin-top:6px;"></div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -365,24 +366,34 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
 
                         <div id="pms-access-section" class="staff-form-section" style="display:none;">
                             <h5 class="staff-form-section-title">Acceso y permisos</h5>
-                            <p class="staff-form-section-help">Define el nivel de acceso del staff dentro del panel según sus responsabilidades.</p>
+                            <p class="staff-form-section-help">Define el nivel de acceso del staff dentro del panel según sus responsabilidades. Para aprovisionar acceso al panel se requiere un email válido y el correo de bienvenida se envía con cualquiera de los niveles.</p>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label class="mt-checkbox mt-checkbox-outline" style="margin-bottom:6px;">
+                                    <input type="checkbox" id="pms-enable-user-access" value="1" checked />
+                                    Habilitar acceso al panel para este staff
+                                    <span></span>
+                                </label>
+                                <div class="small text-muted" id="pms-access-toggle-help">Actívalo si este profesional debe poder ingresar al panel. Desactívalo si solo debe quedar registrado como staff sin acceso.</div>
+                            </div>
                             <div class="form-group" style="margin-bottom:14px;">
                                 <label>Nivel de acceso del staff</label>
+                                <div id="pms-access-level-options">
                                 <label class="staff-permission-option" data-access-level="scoped">
                                     <input type="radio" name="pms_access_level" value="scoped" checked />
                                     <strong>Solo sus asignaciones</strong>
-                                    <span>Puede ingresar al panel para gestionar únicamente la información y tareas que le correspondan.</span>
+                                    <span>Puede ingresar al panel para gestionar únicamente la información y tareas que le correspondan. También recibirá su correo de bienvenida/acceso.</span>
                                 </label>
                                 <label class="staff-permission-option" data-access-level="admin">
                                     <input type="radio" name="pms_access_level" value="admin" />
                                     <strong>Permisos administrativos</strong>
-                                    <span>Además de sus asignaciones, tendrá permisos ampliados dentro del panel según el modelo interno del prestador.</span>
+                                    <span>Además de sus asignaciones, tendrá permisos ampliados dentro del panel según el modelo interno del prestador. También recibirá su correo de bienvenida/acceso.</span>
                                 </label>
+                                </div>
                             </div>
                             <div class="alert alert-info" id="pms-access-summary" style="margin-bottom:12px;">
-                                Este profesional tendrá un acceso estándar orientado a sus asignaciones.
+                                Se requiere un email válido para aprovisionar acceso al panel. El correo de bienvenida se enviará tanto para perfiles de solo asignaciones como para perfiles con permisos administrativos.
                             </div>
-                            <div class="small text-muted">Estado del acceso: <strong id="pms-access-status">Solo sus asignaciones</strong></div>
+                            <div class="small text-muted">Estado del acceso: <strong id="pms-access-status">Acceso al panel: solo sus asignaciones</strong></div>
                             <input type="checkbox" id="pms-can-access-admin" name="can_access_admin" value="1" style="display:none;" />
                             <div id="pms-linked-user-id-wrap">
                                 <select class="form-control" id="pms-linked-user-id" name="linked_user_id">
@@ -422,7 +433,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                 <div class="modal-footer">
                     <span id="pms-save-msg" class="pull-left" style="display:none;"></span>
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="btn-save-medical-staff" <?php echo $can_edit_self ? '' : 'disabled'; ?>>
+                    <button type="button" class="btn btn-primary" id="btn-save-medical-staff" <?php echo $can_manage_staff ? '' : 'disabled'; ?>>
                         <i class="fa fa-save"></i> Guardar
                     </button>
                 </div>
@@ -432,6 +443,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
 
     <script>
         window.PROVIDER_ID = <?php echo (int)$scope_id; ?>;
+        window.CAN_MANAGE_STAFF = <?php echo $can_manage_staff ? 'true' : 'false'; ?>;
     </script>
     <?php if ($hasMedicalStaffJs): ?>
     <script src="js/provider_medical_staff.js" type="text/javascript"></script>

@@ -4,6 +4,9 @@
     var PROVIDER_ID = (typeof window !== 'undefined' && typeof window.PROVIDER_ID !== 'undefined')
         ? parseInt(window.PROVIDER_ID, 10)
         : 0;
+    var CAN_MANAGE_STAFF = (typeof window !== 'undefined' && typeof window.CAN_MANAGE_STAFF !== 'undefined')
+        ? !!window.CAN_MANAGE_STAFF
+        : false;
     var ENDPOINT = 'ajax/provider_medical_staff.php';
     var linkableUsers = [];
     var providerServices = [];
@@ -12,6 +15,17 @@
     var currentItems = [];
     var MANAGE_DISABLED_BY_CONTEXT = false;
     var serviceMultiSelectNeedsInit = false;
+    var emailValidationRequest = null;
+    var emailValidationTimer = null;
+    var emailValidationState = {
+        checkedEmail: '',
+        staffId: 0,
+        valid: false,
+        pending: false,
+        status: 'empty',
+        mode: 'empty',
+        message: ''
+    };
 
     function serviceMultiSelectContainerSelector() {
         return '#ms-pms-service-ids';
@@ -22,7 +36,7 @@
     }
 
     function canManageStaff() {
-        return !MANAGE_DISABLED_BY_CONTEXT && !$('#btn-add-medical-staff').prop('disabled');
+        return !!CAN_MANAGE_STAFF;
     }
 
     function escapeHtml(value) {
@@ -32,6 +46,206 @@
     function withFallback(value, fallback) {
         var text = $.trim(value || '');
         return text !== '' ? text : (fallback || 'Sin definir');
+    }
+
+    function normalizeEmail(value) {
+        return $.trim(value || '').toLowerCase();
+    }
+
+    function isValidEmailFormat(value) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test($.trim(value || ''));
+    }
+
+    function getCurrentStaffId() {
+        return parseInt($('#pms-id').val() || 0, 10) || 0;
+    }
+
+    function isAccessEnabledRequested() {
+        return $('#pms-enable-user-access').is(':checked');
+    }
+
+    function getCurrentEmailValidation() {
+        var currentEmail = normalizeEmail($('#pms-email').val() || '');
+        if (!currentEmail || emailValidationState.checkedEmail !== currentEmail || emailValidationState.staffId !== getCurrentStaffId()) {
+            return null;
+        }
+        return emailValidationState;
+    }
+
+    function renderEmailValidationState() {
+        var currentEmail = $.trim($('#pms-email').val() || '');
+        var state = getCurrentEmailValidation();
+        var $feedback = $('#pms-email-validation');
+        var $group = $('#pms-email').closest('.form-group');
+
+        $group.removeClass('has-error has-success');
+        $feedback.hide().removeClass('text-danger text-success text-info text-warning').text('');
+
+        if (!isAccessEnabledRequested()) {
+            return;
+        }
+
+        if (!currentEmail) {
+            return;
+        }
+
+        if (state && state.pending) {
+            $feedback.addClass('text-info').text('Validando disponibilidad segura del email...').show();
+            return;
+        }
+
+        if (!isValidEmailFormat(currentEmail)) {
+            $group.addClass('has-error');
+            $feedback.addClass('text-danger').text('Ingresa un email válido para aprovisionar acceso al staff.').show();
+            return;
+        }
+
+        if (!state) {
+            $feedback.addClass('text-warning').text('Verifica este email antes de guardar el acceso del staff.').show();
+            return;
+        }
+
+        if (state.valid) {
+            $group.addClass('has-success');
+            $feedback.addClass(state.mode === 'reuse' ? 'text-info' : 'text-success').text(state.message || 'Este email puede usarse para crear el acceso del staff.').show();
+            return;
+        }
+
+        $group.addClass('has-error');
+        $feedback.addClass('text-danger').text(state.message || 'Este email no puede usarse para aprovisionar acceso al staff.').show();
+    }
+
+    function setEmailValidationState(nextState) {
+        emailValidationState = $.extend({}, emailValidationState, nextState || {});
+        renderEmailValidationState();
+        syncAccessUi();
+    }
+
+    function requestAccessEmailValidation(force) {
+        var deferred = $.Deferred();
+        var email = $.trim($('#pms-email').val() || '');
+        var normalizedEmail = normalizeEmail(email);
+        var staffId = getCurrentStaffId();
+
+        if (!isAccessEnabledRequested()) {
+            setEmailValidationState({
+                checkedEmail: '',
+                staffId: staffId,
+                valid: false,
+                pending: false,
+                status: 'disabled',
+                mode: 'disabled',
+                message: ''
+            });
+            deferred.resolve(emailValidationState);
+            return deferred.promise();
+        }
+
+        if (!email) {
+            setEmailValidationState({
+                checkedEmail: '',
+                staffId: staffId,
+                valid: false,
+                pending: false,
+                status: 'empty',
+                mode: 'empty',
+                message: ''
+            });
+            deferred.resolve(emailValidationState);
+            return deferred.promise();
+        }
+
+        if (!isValidEmailFormat(email)) {
+            setEmailValidationState({
+                checkedEmail: normalizedEmail,
+                staffId: staffId,
+                valid: false,
+                pending: false,
+                status: 'invalid_email',
+                mode: 'blocked',
+                message: 'Ingresa un email válido para aprovisionar acceso al staff.'
+            });
+            deferred.resolve(emailValidationState);
+            return deferred.promise();
+        }
+
+        if (!force && !emailValidationState.pending && emailValidationState.checkedEmail === normalizedEmail && emailValidationState.staffId === staffId) {
+            deferred.resolve(emailValidationState);
+            return deferred.promise();
+        }
+
+        if (emailValidationRequest && typeof emailValidationRequest.abort === 'function') {
+            emailValidationRequest.abort();
+        }
+
+        setEmailValidationState({
+            checkedEmail: normalizedEmail,
+            staffId: staffId,
+            pending: true,
+            message: 'Validando disponibilidad segura del email...'
+        });
+
+        emailValidationRequest = $.ajax({
+            url: ENDPOINT,
+            method: 'GET',
+            dataType: 'json',
+            data: {
+                action: 'validate_staff_access_email',
+                provider_id: PROVIDER_ID,
+                staff_id: staffId || '',
+                email: email
+            }
+        }).done(function (res) {
+            setEmailValidationState({
+                checkedEmail: normalizedEmail,
+                staffId: staffId,
+                valid: !!(res && res.valid),
+                pending: false,
+                status: (res && res.status) || 'validation_failed',
+                mode: (res && res.mode) || 'blocked',
+                message: (res && res.message) || 'No fue posible validar este email para acceso de staff.'
+            });
+        }).fail(function (xhr, textStatus) {
+            if (textStatus === 'abort') {
+                deferred.reject();
+                return;
+            }
+
+            var message = 'No fue posible validar este email para acceso de staff. Inténtalo de nuevo antes de guardar.';
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                message = xhr.responseJSON.message;
+            }
+            setEmailValidationState({
+                checkedEmail: normalizedEmail,
+                staffId: staffId,
+                valid: false,
+                pending: false,
+                status: (xhr && xhr.responseJSON && xhr.responseJSON.status) || 'validation_failed',
+                mode: 'blocked',
+                message: message
+            });
+        }).always(function () {
+            emailValidationRequest = null;
+            deferred.resolve(emailValidationState);
+        });
+
+        return deferred.promise();
+    }
+
+    function scheduleAccessEmailValidation(immediate) {
+        if (emailValidationTimer) {
+            window.clearTimeout(emailValidationTimer);
+            emailValidationTimer = null;
+        }
+
+        if (immediate) {
+            return requestAccessEmailValidation(true);
+        }
+
+        emailValidationTimer = window.setTimeout(function () {
+            requestAccessEmailValidation(true);
+        }, 350);
+        return $.Deferred().resolve(emailValidationState).promise();
     }
 
     function toast(message, type) {
@@ -146,7 +360,10 @@
             return 'Para configurar acceso al panel debes registrar un email válido del profesional.';
         }
         if (status === 'existing_user_belongs_to_other_provider') {
-            return 'El email ingresado ya está asociado a otro prestador. Usa otro correo para este profesional.';
+            return 'Este email ya pertenece a una cuenta existente que no puede vincularse como staff. Usa otro email.';
+        }
+        if (status === 'existing_user_sensitive_account' || status === 'existing_user_privileged_or_incompatible_role' || status === 'existing_user_not_staff_eligible' || status === 'linked_user_not_allowed_for_staff') {
+            return 'Este email ya pertenece a una cuenta existente que no puede vincularse como staff. Usa otro email.';
         }
         if (status === 'user_already_linked_to_other_staff') {
             return 'No fue posible configurar el acceso porque ese usuario ya está asociado a otro miembro del staff.';
@@ -238,6 +455,15 @@
             var toggleValue = active ? 0 : 1;
             var serviceSummary = withFallback(item.service_summary, 'Sin servicios asignados');
             var linkedUser = $.trim(item.linked_user_label || '');
+            var linkedUserId = parseInt(item.linked_user_id || 0, 10) || 0;
+            var linkedUserActive = parseInt(item.linked_user_active || 0, 10) === 1;
+            var accessEnabled = parseInt(item.can_access_admin || 0, 10) === 1;
+            var accessOperational = linkedUserId > 0 && accessEnabled && linkedUserActive;
+            var accessStatusText = linkedUserId > 0
+                ? (item.access_status_label || (accessOperational ? 'Acceso al panel activo' : 'Acceso al panel desactivado'))
+                : 'Sin acceso al panel';
+            var accessToggleLabel = accessOperational ? 'Desactivar acceso' : 'Activar acceso';
+            var accessToggleValue = accessOperational ? 0 : 1;
             var bio = shortText(item.bio_short_preview || item.bio_short || '', 110);
             var actionsHtml;
 
@@ -250,6 +476,11 @@
                     + '<i class="fa fa-arrow-down"></i></button> '
                     + '<button type="button" class="btn btn-xs ' + (active ? 'btn-warning' : 'btn-success') + ' staff-toggle" data-value="' + toggleValue + '">'
                     + '<i class="fa ' + (active ? 'fa-pause' : 'fa-check') + '"></i> ' + toggleLabel + '</button>';
+                if (linkedUserId > 0) {
+                    actionsHtml += ' '
+                        + '<button type="button" class="btn btn-xs ' + (accessOperational ? 'btn-danger' : 'btn-info') + ' staff-toggle-access" data-value="' + accessToggleValue + '">'
+                        + '<i class="fa ' + (accessOperational ? 'fa-lock' : 'fa-unlock') + '"></i> ' + accessToggleLabel + '</button>';
+                }
             } else {
                 actionsHtml = '<span class="text-muted">Solo lectura</span>';
             }
@@ -265,6 +496,7 @@
                 + '<td>'
                 + '<div>' + escapeHtml(roleTitle) + '</div>'
                 + '<div class="text-muted small">' + escapeHtml(linkedUser || 'Sin usuario vinculado') + '</div>'
+                + '<div class="small"><span class="label ' + (accessOperational ? 'label-success' : 'label-default') + '">' + escapeHtml(accessStatusText) + '</span></div>'
                 + '</td>'
                 + '<td>'
                 + '<div>' + escapeHtml(specialty) + '</div>'
@@ -532,10 +764,28 @@
         $('#pms-sort-order').val('');
         $('#pms-is-active').prop('checked', true);
         $('#pms-is-primary-doctor').prop('checked', false);
+        $('#pms-enable-user-access').prop('checked', true);
         $('#pms-can-access-admin').prop('checked', false);
         $('input[name="pms_access_level"][value="scoped"]').prop('checked', true);
         $('input[name="pms_access_level"][value="admin"]').prop('checked', false);
         $('#pms-access-status').text('Solo sus asignaciones');
+        if (emailValidationTimer) {
+            window.clearTimeout(emailValidationTimer);
+            emailValidationTimer = null;
+        }
+        if (emailValidationRequest && typeof emailValidationRequest.abort === 'function') {
+            emailValidationRequest.abort();
+        }
+        emailValidationRequest = null;
+        emailValidationState = {
+            checkedEmail: '',
+            staffId: 0,
+            valid: false,
+            pending: false,
+            status: 'empty',
+            mode: 'empty',
+            message: ''
+        };
         $('#providerMedicalStaffModalLabel').text('Agregar staff médico');
         $('#pms-save-msg').hide().empty();
         // Foto: limpiar preview y campo hidden
@@ -553,6 +803,7 @@
         renderServiceOptions([], [], []);
         renderLinkedUserOptions([], 0);
         setAccessSectionMode('create');
+        renderEmailValidationState();
     }
 
     // Garantiza que un valor legacy exista como option en el select
@@ -596,13 +847,15 @@
         $('#pms-notes').val(item.notes || '');
         $('#pms-is-active').prop('checked', parseInt(item.is_active || item.active, 10) === 1);
         $('#pms-is-primary-doctor').prop('checked', parseInt(item.is_primary_doctor, 10) === 1);
+        $('#pms-enable-user-access').prop('checked', parseInt(item.can_access_admin, 10) === 1);
         $('#pms-can-access-admin').prop('checked', parseInt(item.can_access_admin, 10) === 1);
-        $('input[name="pms_access_level"][value="admin"]').prop('checked', parseInt(item.can_access_admin, 10) === 1);
-        $('input[name="pms_access_level"][value="scoped"]').prop('checked', parseInt(item.can_access_admin, 10) !== 1);
+        $('input[name="pms_access_level"][value="scoped"]').prop('checked', true);
+        $('input[name="pms_access_level"][value="admin"]').prop('checked', false);
         renderServiceOptions(providerServices, item.provider_catalog_service_ids || [], item.service_ids || []);
         $('#providerMedicalStaffModalLabel').text('Editar staff médico');
         setAccessSectionMode('edit');
         syncAccessUi(item.access_status_label || '');
+        scheduleAccessEmailValidation(true);
     }
 
     function findSelectedLinkedUser() {
@@ -619,43 +872,77 @@
     }
 
     function resolveAccessStatusText(fallbackText) {
-        var allowAccess = $('#pms-can-access-admin').is(':checked');
+        var accessLevel = $('input[name="pms_access_level"]:checked').val() || 'scoped';
         var email = $.trim($('#pms-email').val() || '');
+        var validation = getCurrentEmailValidation();
 
-        if (!allowAccess) {
-            return 'Solo sus asignaciones';
+        if (!isAccessEnabledRequested()) {
+            return 'Acceso al panel desactivado';
         }
 
         if (!email) {
             return 'Pendiente de completar email';
         }
 
-        return fallbackText || 'Permisos administrativos';
+        if (validation && validation.pending) {
+            return 'Validando email para acceso';
+        }
+
+        if (validation && !validation.valid) {
+            return 'Acceso bloqueado por email no apto';
+        }
+
+        if (accessLevel === 'admin') {
+            return fallbackText || 'Acceso al panel: permisos administrativos';
+        }
+        return fallbackText || 'Acceso al panel: solo sus asignaciones';
     }
 
     function syncAccessUi(fallbackStatusText) {
-        var allowAccess = $('#pms-can-access-admin').is(':checked');
+        var accessLevel = $('input[name="pms_access_level"]:checked').val() || 'scoped';
+        var accessEnabled = isAccessEnabledRequested();
         var email = $.trim($('#pms-email').val() || '');
-        var summaryClass = 'alert alert-info';
-        var summaryText = 'Este profesional tendrá un acceso estándar orientado a sus asignaciones.';
+        var validation = getCurrentEmailValidation();
+        var summaryClass = email ? 'alert alert-info' : 'alert alert-warning';
+        var summaryText = 'Se requiere un email válido para aprovisionar acceso al panel. El correo de bienvenida se enviará con cualquiera de los niveles de acceso.';
 
         $('.staff-permission-option').removeClass('is-active');
-        $('.staff-permission-option[data-access-level="' + (allowAccess ? 'admin' : 'scoped') + '"]').addClass('is-active');
+        if (accessEnabled) {
+            $('.staff-permission-option[data-access-level="' + accessLevel + '"]').addClass('is-active');
+        }
+        $('#pms-can-access-admin').prop('checked', accessEnabled);
+        $('#pms-access-level-options').toggleClass('text-muted', !accessEnabled).css('opacity', accessEnabled ? 1 : 0.55);
+        $('#pms-access-level-options input').prop('disabled', !accessEnabled);
 
-        if (allowAccess) {
-            $('#pms-email-label').text('Email del profesional');
-            $('#pms-email-help').text('Se usará para el acceso al panel y para las notificaciones relacionadas con su cuenta.');
-            summaryClass = email ? 'alert alert-success' : 'alert alert-warning';
-            summaryText = email
-                ? 'Este profesional tendrá permisos administrativos en el panel.'
-                : 'Para asignar permisos administrativos debes registrar un email válido del profesional.';
-        } else {
-            $('#pms-email-label').text('Email del profesional');
-            $('#pms-email-help').text('Opcional. Úsalo para contacto del profesional y para su acceso al panel si necesita ingresar.');
+        $('#pms-email-label').text('Email del profesional');
+        $('#pms-email-help').text(accessEnabled
+            ? 'Se requiere un email válido para aprovisionar acceso al panel. El correo de bienvenida se envía tanto para perfiles de solo asignaciones como para perfiles con permisos administrativos.'
+            : 'Puedes guardar este staff sin acceso al panel. Si más adelante habilitas acceso, se validará el email antes de aprovisionarlo.');
+
+        if (!accessEnabled) {
+            summaryClass = 'alert alert-warning';
+            summaryText = 'Este staff quedará registrado sin acceso al panel. Podrás activarlo más adelante sin perder el vínculo del usuario.';
+        } else if (!email) {
+            summaryText = 'Se requiere un email válido para aprovisionar acceso al panel y enviar el correo de bienvenida, tanto en solo asignaciones como en permisos administrativos.';
+        } else if (validation && validation.pending) {
+            summaryClass = 'alert alert-info';
+            summaryText = 'Validando si este email puede usarse de forma segura para el acceso del staff.';
+        } else if (validation && !validation.valid) {
+            summaryClass = 'alert alert-danger';
+            summaryText = validation.message || 'Este email no puede usarse para aprovisionar acceso al staff.';
+        } else if (validation && validation.valid && validation.mode === 'reuse') {
+            summaryClass = accessLevel === 'admin' ? 'alert alert-success' : 'alert alert-info';
+            summaryText = validation.message || 'Ya existe un usuario reutilizable para este staff dentro del mismo prestador.';
+        } else if (email) {
+            summaryClass = accessLevel === 'admin' ? 'alert alert-success' : 'alert alert-info';
+            summaryText = accessLevel === 'admin'
+                ? 'Este profesional tendrá acceso al panel con permisos administrativos. Se enviará su correo de bienvenida.'
+                : 'Este profesional tendrá acceso al panel para gestionar sus asignaciones. Se enviará su correo de bienvenida.';
         }
 
         $('#pms-access-summary').attr('class', summaryClass).text(summaryText);
         $('#pms-access-status').text(resolveAccessStatusText(fallbackStatusText));
+        renderEmailValidationState();
     }
 
     function loadStaffList() {
@@ -746,94 +1033,99 @@
         e.preventDefault();
 
         var fullName = $.trim($('#pms-full-name').val() || '');
+        var $msg = $('#pms-save-msg');
+        var accessEnabled = isAccessEnabledRequested();
         if (!fullName) {
-            $('#pms-save-msg').html('<span class="text-danger">El nombre completo es obligatorio.</span>').show();
+            $msg.html('<span class="text-danger">El nombre completo es obligatorio.</span>').show();
             return;
         }
-        if ($('#pms-can-access-admin').is(':checked')) {
+        $msg.hide().empty();
+
+        var validationPromise = accessEnabled
+            ? requestAccessEmailValidation(true)
+            : $.Deferred().resolve({ valid: true, message: '' }).promise();
+
+        validationPromise.done(function (validation) {
             var email = $.trim($('#pms-email').val() || '');
-            if (!email) {
-                $('#pms-save-msg').html('<span class="text-danger">Para asignar permisos administrativos debes registrar un email válido del profesional.</span>').show();
+            if (accessEnabled && (!email || !validation || !validation.valid)) {
+                $msg.html('<span class="text-danger">' + escapeHtml((validation && validation.message) || 'Se requiere un email válido y apto para aprovisionar acceso al staff.') + '</span>').show();
                 $('#pms-email').focus();
                 return;
             }
-        }
 
-        var fd = new FormData();
-        fd.append('action',      'save_staff');
-        fd.append('provider_id', PROVIDER_ID);
-        fd.append('id',          $('#pms-id').val() || '');
-        fd.append('full_name',   fullName);
-        fd.append('role_title',  $.trim($('#pms-role-title').val() || ''));
-        fd.append('specialty',   $.trim($('#pms-specialty').val() || ''));
-        fd.append('sort_order',  $.trim($('#pms-sort-order').val() || ''));
-        fd.append('photo',       $.trim($('#pms-photo').val() || ''));
-        fd.append('bio_short',   $.trim($('#pms-bio-short').val() || ''));
-        fd.append('professional_license', $.trim($('#pms-license').val() || ''));
-        fd.append('email',       $.trim($('#pms-email').val() || ''));
-        fd.append('phone',       $.trim($('#pms-phone').val() || ''));
-        var clinicVal = $.trim($('#pms-clinic').val() || '') === '__other__'
-            ? $.trim($('#pms-clinic-other').val() || '')
-            : $.trim($('#pms-clinic').val() || '');
-        fd.append('clinic_name', clinicVal);
-        fd.append('linked_user_id', $('#pms-linked-user-id').val() || '');
-        fd.append('notes',       $.trim($('#pms-notes').val() || ''));
+            var fd = new FormData();
+            fd.append('action',      'save_staff');
+            fd.append('provider_id', PROVIDER_ID);
+            fd.append('id',          $('#pms-id').val() || '');
+            fd.append('full_name',   fullName);
+            fd.append('role_title',  $.trim($('#pms-role-title').val() || ''));
+            fd.append('specialty',   $.trim($('#pms-specialty').val() || ''));
+            fd.append('sort_order',  $.trim($('#pms-sort-order').val() || ''));
+            fd.append('photo',       $.trim($('#pms-photo').val() || ''));
+            fd.append('bio_short',   $.trim($('#pms-bio-short').val() || ''));
+            fd.append('professional_license', $.trim($('#pms-license').val() || ''));
+            fd.append('email',       email);
+            fd.append('phone',       $.trim($('#pms-phone').val() || ''));
+            var clinicVal = $.trim($('#pms-clinic').val() || '') === '__other__'
+                ? $.trim($('#pms-clinic-other').val() || '')
+                : $.trim($('#pms-clinic').val() || '');
+            fd.append('clinic_name', clinicVal);
+            fd.append('linked_user_id', $('#pms-linked-user-id').val() || '');
+            fd.append('notes',       $.trim($('#pms-notes').val() || ''));
 
-        // Archivo de foto (si el usuario eligió uno)
-        var photoFileInput = document.getElementById('pms-photo-file');
-        if (photoFileInput && photoFileInput.files && photoFileInput.files[0]) {
-            fd.append('photo_file', photoFileInput.files[0]);
-        }
-
-        ($('#pms-service-ids').val() || []).forEach(function (providerCatalogServiceId) {
-            var $option = $('#pms-service-ids option[value="' + providerCatalogServiceId + '"]');
-            var serviceId = parseInt($option.attr('data-service-id') || 0, 10);
-            fd.append('provider_catalog_service_ids[]', providerCatalogServiceId);
-            if (serviceId > 0) {
-                fd.append('service_ids[]', serviceId);
+            var photoFileInput = document.getElementById('pms-photo-file');
+            if (photoFileInput && photoFileInput.files && photoFileInput.files[0]) {
+                fd.append('photo_file', photoFileInput.files[0]);
             }
-        });
 
-        if ($('#pms-is-active').is(':checked'))        { fd.append('is_active', 1); }
-        if ($('#pms-is-primary-doctor').is(':checked')) { fd.append('is_primary_doctor', 1); }
-        if ($('#pms-can-access-admin').is(':checked'))  { fd.append('can_access_admin', 1); }
+            ($('#pms-service-ids').val() || []).forEach(function (providerCatalogServiceId) {
+                var $option = $('#pms-service-ids option[value="' + providerCatalogServiceId + '"]');
+                var serviceId = parseInt($option.attr('data-service-id') || 0, 10);
+                fd.append('provider_catalog_service_ids[]', providerCatalogServiceId);
+                if (serviceId > 0) {
+                    fd.append('service_ids[]', serviceId);
+                }
+            });
 
-        var $btn = $('#btn-save-medical-staff');
-        var $msg = $('#pms-save-msg');
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Guardando...');
-        $msg.hide().empty();
+            if ($('#pms-is-active').is(':checked'))        { fd.append('is_active', 1); }
+            if ($('#pms-is-primary-doctor').is(':checked')) { fd.append('is_primary_doctor', 1); }
+            if (accessEnabled) { fd.append('can_access_admin', 1); }
 
-        $.ajax({
-            url:         ENDPOINT,
-            method:      'POST',
-            dataType:    'json',
-            data:        fd,
-            processData: false,
-            contentType: false
-        }).done(function (res) {
-            if (!res || !res.ok) {
-                $msg.html('<span class="text-danger">' + escapeHtml((res && res.message) || 'No fue posible guardar.') + '</span>').show();
-                return;
-            }
-            var feedback = accessFeedbackMessage(res);
-            if (Array.isArray(res.warnings) && res.warnings.length) {
-                $msg.html('<span class="text-warning">' + escapeHtml(res.warnings.join(' ')) + '</span>').show();
-            }
-            toast(feedback, (res.status && res.status.indexOf('mail_failed') !== -1) ? 'error' : 'success');
-            $('#providerMedicalStaffModal').modal('hide');
-            loadStaffList();
-        }).fail(function (xhr) {
-            var message = 'No fue posible guardar el registro.';
-            var status = '';
-            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
-                message = xhr.responseJSON.message;
-            }
-            if (xhr && xhr.responseJSON && xhr.responseJSON.status) {
-                status = xhr.responseJSON.status;
-            }
-            $msg.html('<span class="text-danger">' + escapeHtml(normalizeAccessError(message, status)) + '</span>').show();
-        }).always(function () {
-            $btn.prop('disabled', false).html('<i class="fa fa-save"></i> Guardar');
+            var $btn = $('#btn-save-medical-staff');
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Guardando...');
+
+            $.ajax({
+                url:         ENDPOINT,
+                method:      'POST',
+                dataType:    'json',
+                data:        fd,
+                processData: false,
+                contentType: false
+            }).done(function (res) {
+                if (!res || !res.ok) {
+                    $msg.html('<span class="text-danger">' + escapeHtml((res && res.message) || 'No fue posible guardar.') + '</span>').show();
+                    return;
+                }
+                var feedback = accessFeedbackMessage(res);
+                if (Array.isArray(res.warnings) && res.warnings.length) {
+                    $msg.html('<span class="text-warning">' + escapeHtml(res.warnings.join(' ')) + '</span>').show();
+                }
+                toast(feedback, (res.status && res.status.indexOf('mail_failed') !== -1) ? 'error' : 'success');
+                $('#providerMedicalStaffModal').modal('hide');
+                loadStaffList();
+            }).fail(function (xhr) {
+                var message = 'No fue posible guardar el registro.';
+                var status = '';
+                if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                    message = xhr.responseJSON.message;
+                }
+                if (xhr && xhr.responseJSON && xhr.responseJSON.status) {
+                    status = xhr.responseJSON.status;
+                }
+                $msg.html('<span class="text-danger">' + escapeHtml(normalizeAccessError(message, status)) + '</span>').show();
+            }).always(function () {
+                $btn.prop('disabled', false).html('<i class="fa fa-save"></i> Guardar');
+            });
         });
     }
 
@@ -857,6 +1149,33 @@
             loadStaffList();
         }).fail(function (xhr) {
             var message = 'No fue posible actualizar el estado.';
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                message = xhr.responseJSON.message;
+            }
+            toast(message, 'error');
+        });
+    }
+
+    function toggleStaffAccess(staffId, nextValue) {
+        $.ajax({
+            url: ENDPOINT,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'toggle_staff_access',
+                provider_id: PROVIDER_ID,
+                id: staffId,
+                value: nextValue
+            }
+        }).done(function (res) {
+            if (!res || !res.ok) {
+                toast((res && res.message) || 'No fue posible actualizar el acceso del usuario vinculado.', 'error');
+                return;
+            }
+            toast(res.message || 'Acceso actualizado', 'success');
+            loadStaffList();
+        }).fail(function (xhr) {
+            var message = 'No fue posible actualizar el acceso del usuario vinculado.';
             if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
                 message = xhr.responseJSON.message;
             }
@@ -903,7 +1222,7 @@
             return;
         }
 
-        MANAGE_DISABLED_BY_CONTEXT = $('#btn-add-medical-staff').prop('disabled');
+        MANAGE_DISABLED_BY_CONTEXT = !CAN_MANAGE_STAFF;
 
         loadStaffList();
 
@@ -949,12 +1268,21 @@
         });
 
         $('input[name="pms_access_level"]').on('change', function () {
-            $('#pms-can-access-admin').prop('checked', $(this).val() === 'admin');
             syncAccessUi();
+        });
+
+        $('#pms-enable-user-access').on('change', function () {
+            syncAccessUi();
+            if ($(this).is(':checked')) {
+                scheduleAccessEmailValidation(true);
+            }
         });
 
         $('#pms-email').on('input blur', function () {
             syncAccessUi();
+            if (isAccessEnabledRequested()) {
+                scheduleAccessEmailValidation($(this).is(':focus') ? false : true);
+            }
         });
 
         $('#pms-service-ids').on('change', function () {
@@ -987,6 +1315,24 @@
                 return;
             }
             toggleStaff(staffId, nextValue);
+        });
+
+        $('#tbl-provider-medical-staff').on('click', '.staff-toggle-access', function () {
+            if (!canManageStaff()) {
+                return;
+            }
+            var staffId = parseInt($(this).closest('tr').data('id'), 10) || 0;
+            var nextValue = parseInt($(this).data('value'), 10);
+            if (staffId <= 0 || (nextValue !== 0 && nextValue !== 1)) {
+                return;
+            }
+            var question = nextValue === 1
+                ? '¿Deseas activar el acceso al panel para el usuario vinculado de este staff?'
+                : '¿Deseas desactivar el acceso al panel para el usuario vinculado de este staff?';
+            if (!window.confirm(question)) {
+                return;
+            }
+            toggleStaffAccess(staffId, nextValue);
         });
 
         $('#tbl-provider-medical-staff').on('click', '.staff-move', function () {
