@@ -7,8 +7,41 @@ header('Content-Type: application/json; charset=utf-8');
 $tipo = isset($_POST['tipo']) ? $_POST['tipo'] : '';
 $id_usuario = $_SESSION['id_usuario'];
 
+function pv_table_has_column($conexion, $table, $column) {
+    static $cache = array();
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+    $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$key];
+}
+
+function pv_provider_is_medical($conexion, $provider_id) {
+    $provider_id = (int)$provider_id;
+    if ($provider_id <= 0) {
+        return false;
+    }
+
+    $sql = "SELECT id FROM providers WHERE id = {$provider_id}";
+    if (pv_table_has_column($conexion, 'providers', 'is_deleted')) {
+        $sql .= " AND is_deleted = 0";
+    }
+    if (pv_table_has_column($conexion, 'providers', 'kind')) {
+        $sql .= " AND kind = 'medical'";
+    }
+    $sql .= " LIMIT 1";
+
+    $res = mysqli_query($conexion, $sql);
+    return ($res && mysqli_num_rows($res) > 0);
+}
+
 // GET: Obtener lista de proveedores con su estado de verificación
 if ($tipo == 'get') {
+    $provider_id_filter = isset($_POST['provider_id']) ? (int)$_POST['provider_id'] : 0;
     $sql = "SELECT 
                 p.id,
                 p.name AS provider_name,
@@ -29,7 +62,17 @@ if ($tipo == 'get') {
             FROM providers p
             LEFT JOIN provider_verification pv ON p.id = pv.provider_id
             LEFT JOIN provider_verification_items pvi ON p.id = pvi.provider_id
-            GROUP BY p.id, p.name, p.email, p.phone, pv.status, pv.verification_level, pv.trust_score, pv.verified_at, pv.expires_at
+            WHERE 1=1";
+    if (pv_table_has_column($conexion, 'providers', 'is_deleted')) {
+        $sql .= " AND p.is_deleted = 0";
+    }
+    if (pv_table_has_column($conexion, 'providers', 'kind')) {
+        $sql .= " AND p.kind = 'medical'";
+    }
+    if ($provider_id_filter > 0) {
+        $sql .= " AND p.id = " . (int)$provider_id_filter;
+    }
+    $sql .= " GROUP BY p.id, p.name, p.email, p.phone, pv.status, pv.verification_level, pv.trust_score, pv.verified_at, pv.expires_at
             ORDER BY p.id DESC";
     
     $resultado = mysqli_query($conexion, $sql);
@@ -47,7 +90,12 @@ if ($tipo == 'get') {
 
 // GET_VERIFICATION: Obtener detalles de verificación de un proveedor
 elseif ($tipo == 'get_verification') {
-    $provider_id = mysqli_real_escape_string($conexion, $_POST['provider_id']);
+    $provider_id = isset($_POST['provider_id']) ? (int)$_POST['provider_id'] : 0;
+    if (!pv_provider_is_medical($conexion, $provider_id)) {
+        echo json_encode(['success' => false, 'message' => 'El prestador solicitado no pertenece al dominio médico.']);
+        exit;
+    }
+    $provider_id = mysqli_real_escape_string($conexion, (string)$provider_id);
     
     // Obtener o crear registro de verificación
     $sql = "SELECT * FROM provider_verification WHERE provider_id = '$provider_id'";
@@ -93,7 +141,12 @@ elseif ($tipo == 'get_verification') {
 
 // UPDATE_STATUS: Actualizar estado de verificación
 elseif ($tipo == 'update_status') {
-    $provider_id = mysqli_real_escape_string($conexion, $_POST['provider_id']);
+    $provider_id = isset($_POST['provider_id']) ? (int)$_POST['provider_id'] : 0;
+    if (!pv_provider_is_medical($conexion, $provider_id)) {
+        echo json_encode(['success' => false, 'message' => 'El prestador solicitado no pertenece al dominio médico.']);
+        exit;
+    }
+    $provider_id = mysqli_real_escape_string($conexion, (string)$provider_id);
     $status = mysqli_real_escape_string($conexion, $_POST['status']);
     $verification_level = mysqli_real_escape_string($conexion, $_POST['verification_level']);
     $admin_notes = mysqli_real_escape_string($conexion, $_POST['admin_notes']);
@@ -133,7 +186,12 @@ elseif ($tipo == 'update_status') {
 
 // INITIALIZE_CHECKLIST: Crear checklist estándar para un proveedor
 elseif ($tipo == 'initialize_checklist') {
-    $provider_id = mysqli_real_escape_string($conexion, $_POST['provider_id']);
+    $provider_id = isset($_POST['provider_id']) ? (int)$_POST['provider_id'] : 0;
+    if (!pv_provider_is_medical($conexion, $provider_id)) {
+        echo json_encode(['success' => false, 'message' => 'El prestador solicitado no pertenece al dominio médico.']);
+        exit;
+    }
+    $provider_id = mysqli_real_escape_string($conexion, (string)$provider_id);
     
     // Verificar si ya existen items
     $check_sql = "SELECT COUNT(*) as count FROM provider_verification_items WHERE provider_id = '$provider_id'";

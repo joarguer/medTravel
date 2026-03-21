@@ -1,12 +1,13 @@
 <?php
 include("include/include.php");
 $id_usuario = $_SESSION['id_usuario'];
+$initial_provider_id = isset($_GET['provider_id']) ? (int)$_GET['provider_id'] : 0;
 ?>
 <!DOCTYPE html>
 <html lang="es">
     <head>
         <meta charset="utf-8" />
-        <title>MedTravel - Verificación de Proveedores</title>
+        <title><?php echo $title; ?> - Verificación de Prestadores Médicos</title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta content="width=device-width, initial-scale=1" name="viewport" />
         <?php echo $global_first_style;?>
@@ -69,54 +70,68 @@ $id_usuario = $_SESSION['id_usuario'];
             
             <div class="container-fluid">
                 <div class="page-content">
-                    <!-- BEGIN BREADCRUMBS -->
                     <div class="breadcrumbs">
-                        <h1>Verificación de Proveedores</h1>
+                        <h1>Verificación de Prestadores Médicos</h1>
                         <ol class="breadcrumb">
-                            <li><a href="index.php">Home</a></li>
-                            <li><a href="#">Administrativo</a></li>
-                            <li class="active">Verificación</li>
+                            <li><a href="index.php">Inicio</a></li>
+                            <li class="active">Verificación de Prestadores Médicos</li>
                         </ol>
                     </div>
-                    <!-- END BREADCRUMBS -->
-                    
-                    <!-- BEGIN CONTENT -->
-                    <div class="row">
-                        <div class="col-md-12">
-                            <!-- BEGIN PORTLET -->
-                            <div class="portlet light bordered">
-                                <div class="portlet-title">
-                                    <div class="caption">
-                                        <i class="fa fa-shield font-dark"></i>
-                                        <span class="caption-subject font-dark bold uppercase">Estado de Verificación</span>
-                                        <span class="caption-helper">Control de calidad y confianza</span>
+
+                    <div class="page-content-container">
+                        <div class="page-content-row">
+                            <div class="page-sidebar">
+                                <nav class="navbar" role="navigation">
+                                    <ul class="nav navbar-nav">
+                                        <li class="active"><a href="provider_verification.php"><i class="fa fa-shield"></i> Verificación médica</a></li>
+                                    </ul>
+                                </nav>
+                            </div>
+                            <div class="page-content-col">
+                                <div class="portlet light bordered">
+                                    <div class="portlet-title">
+                                        <div class="caption">
+                                            <i class="fa fa-shield font-dark"></i>
+                                            <span class="caption-subject font-dark bold uppercase">Compliance y confianza del prestador médico</span>
+                                            <span class="caption-helper">Consola administrativa posterior al alta del provider</span>
+                                        </div>
+                                    </div>
+                                    <div class="portlet-body">
+                                        <div class="alert alert-info" style="margin-bottom:16px;">
+                                            <strong>Recurso de administración central:</strong> esta consola gestiona la verificación documental y el nivel de confianza del prestador médico después de su alta en <strong>Prestadores Médicos</strong>.
+                                            <br>
+                                            <span class="small">No es el onboarding primario del provider ni una vista operativa del prestador. Aquí se administra compliance, checklist y evidencia documental del dominio médico.</span>
+                                        </div>
+                                        <?php if ($initial_provider_id > 0): ?>
+                                        <div class="alert alert-success" id="verification-context-alert" style="margin-bottom:16px;">
+                                            Se abrió esta consola desde el flujo de <strong>Prestadores Médicos</strong> para revisar un prestador específico.
+                                        </div>
+                                        <?php endif; ?>
+                                        <table class="table table-striped table-bordered table-hover" id="tabla_verificacion">
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>Prestador médico</th>
+                                                    <th>Email</th>
+                                                    <th>Teléfono</th>
+                                                    <th>Estado</th>
+                                                    <th>Trust score</th>
+                                                    <th>Progreso checklist</th>
+                                                    <th>Verificado</th>
+                                                    <th>Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <!-- Se llena vía AJAX -->
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
-                                <div class="portlet-body">
-                                    <table class="table table-striped table-bordered table-hover" id="tabla_verificacion">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Proveedor</th>
-                                                <th>Email</th>
-                                                <th>Teléfono</th>
-                                                <th>Estado</th>
-                                                <th>Score</th>
-                                                <th>Progreso</th>
-                                                <th>Verificado</th>
-                                                <th>Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <!-- Se llena vía AJAX -->
-                                        </tbody>
-                                    </table>
-                                </div>
                             </div>
-                            <!-- END PORTLET -->
                         </div>
                     </div>
-                    <!-- END CONTENT -->
+
+                    <?php echo $footer;?>
                 </div>
             </div>
         </div>
@@ -133,11 +148,14 @@ $id_usuario = $_SESSION['id_usuario'];
                         <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
                         <h4 class="modal-title">
                             <i class="fa fa-shield"></i> 
-                            Verificación: <span id="provider_name"></span>
+                            Verificación médica: <span id="provider_name"></span>
                         </h4>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" id="provider_id">
+                        <div class="alert alert-info" id="verification-modal-intro">
+                            Esta vista registra la verificación administrativa, documental y de confianza del prestador médico seleccionado.
+                        </div>
                         
                         <!-- Resumen de Verificación -->
                         <div class="row">
@@ -199,7 +217,7 @@ $id_usuario = $_SESSION['id_usuario'];
                         <hr>
                         
                         <!-- Checklist de Items -->
-                        <h5><i class="fa fa-list"></i> Checklist de Verificación</h5>
+                        <h5><i class="fa fa-list"></i> Checklist de compliance documental</h5>
                         <div id="checklist_container">
                             <!-- Se llena dinámicamente con items -->
                         </div>
@@ -209,7 +227,7 @@ $id_usuario = $_SESSION['id_usuario'];
                             <!-- Se llena dinámicamente con loadProviderDocuments() -->
                         </div>
                         
-                        <button type="button" class="btn btn-success btn-block" onclick="initializeChecklist()">
+                        <button type="button" class="btn btn-success btn-block" id="btnInitializeChecklist" onclick="initializeChecklist()">
                             <i class="fa fa-plus"></i> Inicializar Checklist Estándar
                         </button>
                     </div>
@@ -289,6 +307,11 @@ $id_usuario = $_SESSION['id_usuario'];
         <script src="../../assets/global/plugins/datatables/datatables.min.js" type="text/javascript"></script>
         <script src="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>
         <!-- END PAGE LEVEL PLUGINS -->
+        <script>
+            window.PROVIDER_VERIFICATION_CTX = {
+                providerId: <?php echo $initial_provider_id > 0 ? $initial_provider_id : 'null'; ?>
+            };
+        </script>
         <script src="js/provider_verification.js" type="text/javascript"></script>
     </body>
 </html>

@@ -82,7 +82,7 @@ $(document).ready(function(){
                 tbody += '<td>' + escapeHtml(p.type) + '</td>';
                 tbody += '<td>' + escapeHtml(humanizeKind(p.kind || 'medical')) + '</td>';
                 tbody += '<td>' + escapeHtml(p.city || '') + '</td>';
-                tbody += '<td><span class="' + st.cls + '">' + st.text + '</span>' + completion + ' <a href="provider_verification.php" class="ml10">Gestionar</a></td>';
+                tbody += '<td><span class="' + st.cls + '">' + st.text + '</span>' + completion + ' <a href="provider_verification.php?provider_id=' + p.id + '" class="ml10">Gestionar</a></td>';
                 tbody += '<td>' + (p.is_active == 1 ? '<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>' : '<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>') + '</td>';
                 tbody += '<td>'
                     + '<button class="btn btn-sm btn-primary edit">Editar</button> '

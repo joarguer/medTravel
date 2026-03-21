@@ -1,5 +1,7 @@
 // Variables globales
 var tablaVerificacion;
+var verificationCtx = window.PROVIDER_VERIFICATION_CTX || {};
+var initialProviderOpened = false;
 
 // Inicializar cuando el documento esté listo
 $(document).ready(function() {
@@ -23,9 +25,20 @@ function initDataTable() {
         "ajax": {
             "url": "ajax/provider_verification.php",
             "type": "POST",
-            "data": { tipo: 'get' },
+            "data": function(d) {
+                d.tipo = 'get';
+                if (verificationCtx.providerId) {
+                    d.provider_id = verificationCtx.providerId;
+                }
+            },
             "dataSrc": function(json) {
                 if (json.success) {
+                    if (verificationCtx.providerId && !initialProviderOpened && json.data && json.data.length > 0) {
+                        initialProviderOpened = true;
+                        setTimeout(function() {
+                            openVerificationModal(json.data[0].id, json.data[0].provider_name);
+                        }, 0);
+                    }
                     return json.data;
                 } else {
                     toastr.error(json.message || 'Error al cargar datos');
@@ -81,9 +94,10 @@ function initDataTable() {
                 "data": null,
                 "orderable": false,
                 "render": function(data, type, row) {
+                    var providerName = JSON.stringify(String(row.provider_name || ''));
                     return `
-                        <button class="btn btn-xs btn-primary" onclick="openVerificationModal(${row.id}, '${row.provider_name}')" title="Verificar">
-                            <i class="fa fa-shield"></i> Verificar
+                        <button class="btn btn-xs btn-primary" onclick='openVerificationModal(${row.id}, ${providerName})' title="Gestionar compliance">
+                            <i class="fa fa-shield"></i> Gestionar
                         </button>
                     `;
                 }
@@ -95,6 +109,23 @@ function initDataTable() {
         "order": [[5, "desc"]],
         "pageLength": 25
     });
+}
+
+function updateChecklistInitState(items) {
+    var btn = $('#btnInitializeChecklist');
+    if (!btn.length) return;
+
+    if (items.length > 0) {
+        btn.prop('disabled', true)
+            .removeClass('btn-success')
+            .addClass('btn-default')
+            .html('<i class="fa fa-check"></i> Checklist estándar ya inicializado');
+    } else {
+        btn.prop('disabled', false)
+            .removeClass('btn-default')
+            .addClass('btn-success')
+            .html('<i class="fa fa-plus"></i> Inicializar checklist estándar');
+    }
 }
 
 // Obtener badge de status
@@ -169,6 +200,7 @@ function openVerificationModal(providerId, providerName) {
                 
                 // Renderizar checklist
                 renderChecklist(items);
+                updateChecklistInitState(items);
                 
                 // Cargar documentos del proveedor
                 loadProviderDocuments(providerId);
@@ -189,7 +221,7 @@ function renderChecklist(items) {
     var html = '';
     
     if (items.length === 0) {
-        html = '<div class="alert alert-info">No hay items en el checklist. Inicialice el checklist estándar.</div>';
+        html = '<div class="alert alert-info">Este prestador médico aún no tiene checklist de compliance inicializado.</div>';
     } else {
         var categories = {
             'legal': 'Legal',
