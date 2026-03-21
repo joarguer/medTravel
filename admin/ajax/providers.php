@@ -198,6 +198,35 @@ function fetch_provider_owner_user($conexion, $provider_id, $allowLegacyFallback
     return fetch_provider_owner_user_legacy($conexion, $provider_id);
 }
 
+function build_provider_owner_ux($user_data){
+    $owner_source = ($user_data && isset($user_data['owner_source'])) ? (string)$user_data['owner_source'] : '';
+
+    if (!$user_data) {
+        return [
+            'owner_state' => 'missing',
+            'requires_owner_password' => true,
+            'owner_source' => '',
+            'owner_notice' => 'No existe una cuenta owner/admin inicial visible para este prestador medico.'
+        ];
+    }
+
+    if ($owner_source === 'legacy_fallback') {
+        return [
+            'owner_state' => 'legacy_fallback',
+            'requires_owner_password' => false,
+            'owner_source' => $owner_source,
+            'owner_notice' => 'Se detecto una cuenta owner/admin por compatibilidad legacy. Al guardar se formalizara el ownership explicito.'
+        ];
+    }
+
+    return [
+        'owner_state' => 'explicit',
+        'requires_owner_password' => false,
+        'owner_source' => $owner_source ?: 'provider_users',
+        'owner_notice' => 'La cuenta owner/admin inicial ya esta vinculada de forma explicita al prestador medico.'
+    ];
+}
+
 function create_provider_owner_user($conexion, $provider_id, $username, $password_plain, $display_name){
     $password_hash = password_hash($password_plain, PASSWORD_DEFAULT);
     $fields = array('usuario', 'password', 'nombre', 'rol', 'provider_id');
@@ -312,6 +341,9 @@ try{
         $kind_filter = isset($_REQUEST['kind']) ? $_REQUEST['kind'] : '';
         $kinds = array('medical','partner');
         if($kind_filter && !in_array($kind_filter, $kinds)) $kind_filter = '';
+        if($kind_filter === ''){
+            $kind_filter = 'medical';
+        }
         // permiso: vista general si no hay filtro, o específica por tipo
         $can_view_any = user_can('providers.view');
         $can_view_med = user_can('providers.medical.view');
@@ -343,7 +375,15 @@ try{
         $sql .= " ORDER BY p.created_at DESC";
         $res = mysqli_query($conexion, $sql);
         if(mysqli_errno($conexion)){ error_log('providers list error: '.mysqli_error($conexion)); echo json_encode(['ok'=>false,'error'=>'db']); exit; }
-        while($r = mysqli_fetch_assoc($res)) $rows[] = $r;
+        while($r = mysqli_fetch_assoc($res)) {
+            $owner = fetch_provider_owner_user($conexion, (int)$r['id'], true);
+            $ownerUx = build_provider_owner_ux($owner);
+            $r['owner_admin_username'] = $owner && isset($owner['usuario']) ? (string)$owner['usuario'] : '';
+            $r['owner_admin_name'] = $owner && isset($owner['nombre']) ? (string)$owner['nombre'] : '';
+            $r['owner_source'] = $ownerUx['owner_source'];
+            $r['owner_state'] = $ownerUx['owner_state'];
+            $rows[] = $r;
+        }
         // filtrar según permisos específicos si no tiene permiso general
         if(!$can_view_any){
             $rows = array_filter($rows, function($r) use ($can_view_med, $can_view_partner){
@@ -369,6 +409,13 @@ try{
             $row = mysqli_fetch_assoc($res);
             mysqli_stmt_close($st);
             if(!$row){ echo json_encode(['ok'=>false,'error'=>'not_found']); exit; }
+            if((isset($row['kind']) ? $row['kind'] : 'medical') !== 'medical'){
+                echo json_encode([
+                    'ok'=>false,
+                    'error'=>'wrong_domain',
+                    'message'=>'Este registro pertenece al dominio complementario y debe administrarse desde providers_complementary.php.'
+                ]); exit;
+            }
             // permiso según tipo
             $kind = isset($row['kind']) ? $row['kind'] : 'medical';
             if(!user_can('providers.view') && !user_can('providers.'.$kind.'.view')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
@@ -388,7 +435,18 @@ try{
             // owner/admin inicial canónico del provider
             $user_data = fetch_provider_owner_user($conexion, $id, true);
 
-            echo json_encode(['ok'=>true,'data'=>['provider'=>$row,'category_ids'=>$cats,'service_ids'=>$sv,'user'=>$user_data]]); exit;
+            $owner_ux = build_provider_owner_ux($user_data);
+
+            echo json_encode([
+                'ok'=>true,
+                'data'=>[
+                    'provider'=>$row,
+                    'category_ids'=>$cats,
+                    'service_ids'=>$sv,
+                    'user'=>$user_data,
+                    'ux'=>$owner_ux
+                ]
+            ]); exit;
         } else { error_log('providers get prepare error: '.mysqli_error($conexion)); echo json_encode(['ok'=>false,'error'=>'db_prepare']); exit; }
     }
 
@@ -397,16 +455,13 @@ try{
         $name = isset($_REQUEST['name']) ? trim($_REQUEST['name']) : '';
         $username = isset($_REQUEST['username']) ? trim($_REQUEST['username']) : '';
         $password = isset($_REQUEST['password']) ? trim($_REQUEST['password']) : '';
-        $kind = isset($_REQUEST['kind']) ? trim($_REQUEST['kind']) : 'medical';
-        if(!in_array($kind, ['medical','partner'])) $kind = 'medical';
-
-        // Legacy freeze: no permitir nuevas altas de kind=partner.
-        if($kind === 'partner'){
+        $kind = 'medical';
+        if(isset($_REQUEST['kind']) && trim((string)$_REQUEST['kind']) !== '' && trim((string)$_REQUEST['kind']) !== 'medical'){
             http_response_code(422);
             echo json_encode([
                 'ok'=>false,
-                'error'=>'legacy_partner_frozen',
-                'message'=>'Legacy complementario — usar service_providers'
+                'error'=>'wrong_domain',
+                'message'=>'Los prestadores complementarios deben crearse desde providers_complementary.php.'
             ]);
             exit;
         }
@@ -519,25 +574,19 @@ try{
         if($hasSoftDelete && !$providerFound){
             echo json_encode(['ok'=>false,'error'=>'record_deleted','message'=>'registro eliminado']); exit;
         }
-        if($kind === '' || !in_array($kind, ['medical','partner'])) $kind = $kind_db;
-
-        // Legacy freeze: no permitir convertir de medical -> partner.
-        if($kind === 'partner' && $kind_db !== 'partner'){
+        if($kind_db !== 'medical'){
             http_response_code(422);
             echo json_encode([
                 'ok'=>false,
-                'error'=>'legacy_partner_frozen',
-                'message'=>'Legacy complementario — usar service_providers'
+                'error'=>'wrong_domain',
+                'message'=>'Este registro pertenece al dominio complementario y debe administrarse desde providers_complementary.php.'
             ]);
             exit;
         }
+        $kind = 'medical';
 
         // permisos por tipo
-        if($kind === 'partner'){
-            if(!user_can('providers.partner.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
-        } else {
-            if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
-        }
+        if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
         
         if($username === ''){ 
             echo json_encode(['ok'=>false,'error'=>'invalid_username','message'=>'Usuario es requerido']); exit; 

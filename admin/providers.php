@@ -6,7 +6,7 @@ include('include/include.php');
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title;?> - Prestadores</title>
+    <title><?php echo $title;?> - Prestadores Médicos</title>
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
@@ -24,10 +24,10 @@ include('include/include.php');
         <div class="container-fluid">
             <div class="page-content">
                 <div class="breadcrumbs">
-                    <h1>Prestadores</h1>
+                    <h1>Prestadores Médicos</h1>
                     <ol class="breadcrumb">
                         <li><a href="#">Site</a></li>
-                        <li class="active">Prestadores</li>
+                        <li class="active">Prestadores Médicos</li>
                     </ol>
                 </div>
 
@@ -36,7 +36,7 @@ include('include/include.php');
                         <div class="page-sidebar">
                             <nav class="navbar" role="navigation">
                                 <ul class="nav navbar-nav">
-                                    <li class="active"><a href="providers.php"><i class="icon-list"></i> Prestadores</a></li>
+                                    <li class="active"><a href="providers.php"><i class="icon-list"></i> Prestadores Médicos</a></li>
                                 </ul>
                             </nav>
                         </div>
@@ -45,25 +45,22 @@ include('include/include.php');
                                 <div class="portlet-title">
                                     <div class="caption">
                                         <i class="icon-list theme-font"></i>
-                                        <span class="caption-subject font-dark bold uppercase">Prestadores</span>
+                                        <span class="caption-subject font-dark bold uppercase">Prestadores Médicos</span>
                                     </div>
                                     <div class="actions">
-                                        <select id="filter-kind" class="form-control input-sm" style="width:auto; display:inline-block;">
-                                            <option value="">Todos</option>
-                                            <option value="medical">Médicos</option>
-                                            <option value="partner">Partners</option>
-                                        </select>
-                                        <a id="btn-new-provider" class="btn btn-primary">Nuevo prestador</a>
+                                        <a id="btn-new-provider" class="btn btn-primary">Nuevo prestador médico</a>
                                     </div>
                                 </div>
                                 <div class="portlet-body">
-                                    <div class="alert alert-warning">
-                                        Legacy complementario — usar <strong>service_providers</strong> en el módulo de Proveedores Complementarios.
+                                    <div class="alert alert-info">
+                                        <strong>Onboarding médico canónico:</strong> aquí se crea el prestador médico y su cuenta owner/admin inicial.
+                                        <br>
+                                        <span class="small">Los prestadores complementarios se administran en <strong>Proveedores Complementarios</strong>; esta pantalla queda reservada al dominio médico.</span>
                                     </div>
                                     <table class="table table-striped table-bordered" id="tbl-providers">
                                         <thead>
                                             <tr>
-                                                <th>Nombre</th>
+                                                <th>Prestador / Owner admin</th>
                                                 <th>Tipo</th>
                                                 <th>Clasificación</th>
                                                 <th>Ciudad</th>
@@ -93,11 +90,20 @@ include('include/include.php');
             <div class="modal-content">
               <div class="modal-header" style="background:#f7f7f7; border-bottom:1px solid #ebebeb;">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><i class="fa fa-times"></i></button>
-                <h4 class="modal-title"><strong>Prestador</strong></h4>
+                <h4 class="modal-title"><strong id="provider-modal-title">Alta de prestador médico</strong></h4>
               </div>
               <div class="modal-body">
                 <form id="form-provider">
                     <input type="hidden" name="id" id="prov-id" />
+                    <div class="alert alert-info" id="provider-modal-intro">
+                        Este flujo crea o actualiza el <strong>prestador médico</strong> y su <strong>cuenta owner/admin inicial</strong>.
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h4 class="bold"><i class="fa fa-hospital-o"></i> A. Datos del prestador médico</h4>
+                            <p class="text-muted">Información institucional y operativa del provider médico dentro de MedTravel.</p>
+                        </div>
+                    </div>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
@@ -105,16 +111,14 @@ include('include/include.php');
                                 <select id="prov-type" name="type" class="form-control select2me"><option value="medico">Médico</option><option value="clinica">Clínica</option></select>
                             </div>
                             <div class="form-group">
-                                <label>Clasificación</label>
-                                <select id="prov-kind" name="kind" class="form-control select2me">
-                                    <option value="medical">Prestador médico</option>
-                                    <option value="partner">Servicio complementario (LEGACY - congelado)</option>
-                                </select>
-                                <span class="help-block">Nuevos complementarios deben crearse en service_providers.</span>
+                                <label>Dominio</label>
+                                <input type="text" class="form-control" value="Prestador médico" disabled />
+                                <input type="hidden" name="kind" id="prov-kind" value="medical" />
+                                <span class="help-block" id="prov-kind-help">Esta pantalla administra exclusivamente prestadores médicos.</span>
                             </div>
                             <div class="form-group">
-                                <label>Nombre</label>
-                                <input type="text" class="form-control" name="name" id="prov-name" placeholder="Nombre del prestador" required />
+                                <label>Nombre del prestador médico</label>
+                                <input type="text" class="form-control" name="name" id="prov-name" placeholder="Nombre comercial o visible del prestador" required />
                             </div>
                             <div class="form-group">
                                 <label>Razón Social</label>
@@ -162,24 +166,28 @@ include('include/include.php');
                     <hr>
                     <div class="row">
                         <div class="col-md-12">
-                            <h4 class="bold"><i class="fa fa-user-circle"></i> Acceso al Panel Administrativo</h4>
-                            <p class="text-muted">Credenciales para que el prestador pueda ingresar al sistema</p>
+                            <h4 class="bold"><i class="fa fa-user-circle"></i> B. Cuenta owner/admin inicial</h4>
+                            <p class="text-muted">Esta cuenta queda vinculada como owner/admin inicial del prestador médico y es la identidad administrativa principal del provider.</p>
+                            <div class="alert alert-info" id="owner-summary">
+                                <strong id="owner-summary-title">Cuenta owner/admin inicial</strong>
+                                <div id="owner-summary-text" class="small">Al guardar este alta se creará también la cuenta owner/admin inicial del prestador médico.</div>
+                            </div>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label>Usuario <span class="required">*</span></label>
+                                <label>Username owner/admin inicial <span class="required">*</span></label>
                                 <div class="input-group">
                                     <span class="input-group-addon"><i class="fa fa-user"></i></span>
-                                    <input type="text" class="form-control" name="username" id="prov-username" placeholder="Usuario para login" required />
+                                    <input type="text" class="form-control" name="username" id="prov-username" placeholder="Username de acceso del owner/admin inicial" required />
                                 </div>
-                                <span class="help-block">El prestador usará este usuario para iniciar sesión</span>
+                                <span class="help-block" id="username-help">Esta será la cuenta principal de acceso administrativo del prestador médico.</span>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label>Contraseña <span class="required" id="password-required">*</span></label>
+                                <label>Contraseña owner/admin inicial <span class="required" id="password-required">*</span></label>
                                 <div class="input-group">
                                     <span class="input-group-addon"><i class="fa fa-lock"></i></span>
                                     <input type="password" class="form-control" name="password" id="prov-password" placeholder="Contraseña" />
