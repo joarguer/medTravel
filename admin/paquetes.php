@@ -7,6 +7,10 @@ if (!user_can(PERM_PACKAGES_MANAGE)) {
     exit;
 }
 $id_usuario = $_SESSION['id_usuario'];
+$page_heading = 'Paquetes y Cotizaciones Integrales';
+$page_caption = 'Consola central de propuestas integrales para cliente final';
+$page_helper = 'Aquí MedTravel arma propuestas compuestas para cliente usando componentes médicos, complementarios y comerciales dentro de un mismo flujo de cotización.';
+$page_cta_label = 'Nueva cotización integral';
 // Etapa 2: activación automática del catálogo mediante ping query real.
 // Evita dependency de information_schema en hosting compartido.
 $packages_catalog_schema_ready = false;
@@ -22,7 +26,7 @@ if (isset($conexion) && $conexion) {
 <html lang="es">
     <head>
         <meta charset="utf-8" />
-        <title>MedTravel - Travel Packages Management</title>
+        <title>MedTravel - <?php echo $page_heading; ?></title>
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta content="width=device-width, initial-scale=1" name="viewport" />
         <?php echo $global_first_style;?>
@@ -91,6 +95,10 @@ if (isset($conexion) && $conexion) {
                 width: 60px;
                 text-align: center;
             }
+            .module-intro {
+                max-width: 980px;
+                margin-bottom: 18px;
+            }
         </style>
     </head>
     <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -111,62 +119,76 @@ if (isset($conexion) && $conexion) {
                 <div class="page-content">
                     <!-- BEGIN BREADCRUMBS -->
                     <div class="breadcrumbs">
-                        <h1>Travel Packages Management
-                            <small>Complete client packages with services and itineraries</small>
+                        <h1><?php echo $page_heading; ?>
+                            <small><?php echo $page_caption; ?></small>
                         </h1>
                         <ol class="breadcrumb">
-                            <li>
-                                <a href="index.php">Home</a>
-                            </li>
-                            <li>
-                                <a href="#">Administrative</a>
-                            </li>
-                            <li class="active">Travel Packages</li>
+                            <li><a href="index.php">Inicio</a></li>
+                            <li><a href="#">Gestión</a></li>
+                            <li class="active">Paquetes y Cotizaciones Integrales</li>
                         </ol>
                     </div>
                     <!-- END BREADCRUMBS -->
                     
-                    <!-- BEGIN CONTENT -->
-                    <div class="row">
-                        <div class="col-md-12">
-                            <!-- BEGIN PORTLET -->
-                            <div class="portlet light bordered">
-                                <div class="portlet-title">
-                                    <div class="caption">
-                                        <i class="icon-briefcase font-dark"></i>
-                                        <span class="caption-subject font-dark bold uppercase">Travel Packages - All-Inclusive Client Solutions</span>
-                                    </div>
-                                    <div class="actions">
-                                        <button type="button" class="btn btn-primary" id="btnNuevoPaquete">
-                                            <i class="fa fa-plus"></i> New Package
-                                        </button>
-                                    </div>
+                    <div class="page-content-container">
+                        <div class="page-content-row">
+                            <div class="page-sidebar">
+                                <nav class="navbar" role="navigation">
+                                    <ul class="nav navbar-nav">
+                                        <li class="active"><a href="paquetes.php"><i class="icon-briefcase"></i> <?php echo $page_heading; ?></a></li>
+                                    </ul>
+                                </nav>
+                            </div>
+                            <div class="page-content-col">
+                                <div class="alert alert-info module-intro">
+                                    <strong>Consola central de MedTravel:</strong> este módulo administra <strong>paquetes y cotizaciones integrales para cliente final</strong>.
+                                    <br>
+                                    <span class="small">Aquí se arma una propuesta compuesta combinando componentes médicos, complementarios y comerciales dentro de un mismo flujo operativo.</span>
                                 </div>
-                                <div class="portlet-body">
-                                    <table class="table table-striped table-bordered table-hover" id="tabla_paquetes">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Paquete</th>
-                                                <th>Cliente</th>
-                                                <th>Fechas</th>
-                                                <th>Días</th>
-                                                <th>Costo Total</th>
-                                                <th>Margen Neto</th>
-                                                <th>Estado</th>
-                                                <th>Pago</th>
-                                                <th>Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                        </tbody>
-                                    </table>
+                                <div class="alert alert-warning module-intro">
+                                    <strong>Alcance funcional:</strong> esta pantalla <strong>no reemplaza</strong> las <strong>ofertas médicas</strong> del prestador ni el <strong>catálogo de servicios complementarios</strong>.
+                                    <br>
+                                    <span class="small">Usa esas capas como insumo para construir una cotización integral centrada en el cliente y en la propuesta comercial/operativa de MedTravel.</span>
+                                </div>
+                                <p class="text-muted module-intro"><?php echo $page_helper; ?></p>
+
+                                <div class="portlet light bordered">
+                                    <div class="portlet-title">
+                                        <div class="caption">
+                                            <i class="icon-briefcase font-dark"></i>
+                                            <span class="caption-subject font-dark bold uppercase"><?php echo $page_caption; ?></span>
+                                            <span class="caption-helper">Paquetes integrales armados por MedTravel para cotizar, confirmar y dar seguimiento comercial</span>
+                                        </div>
+                                        <div class="actions">
+                                            <button type="button" class="btn btn-primary" id="btnNuevoPaquete">
+                                                <i class="fa fa-plus"></i> <?php echo $page_cta_label; ?>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="portlet-body">
+                                        <table class="table table-striped table-bordered table-hover" id="tabla_paquetes">
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>Paquete / Cotización</th>
+                                                    <th>Cliente</th>
+                                                    <th>Fechas</th>
+                                                    <th>Días</th>
+                                                    <th>Total cotizado</th>
+                                                    <th>Margen Neto</th>
+                                                    <th>Estado</th>
+                                                    <th>Pago</th>
+                                                    <th>Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
-                            <!-- END PORTLET -->
                         </div>
                     </div>
-                    <!-- END CONTENT -->
                 </div>
             </div>
             <!-- END CONTAINER -->
@@ -179,18 +201,22 @@ if (isset($conexion) && $conexion) {
                 <div class="modal-content">
                     <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
-                        <h4 class="modal-title" id="modalPaqueteTitle">Nuevo Paquete</h4>
+                        <h4 class="modal-title" id="modalPaqueteTitle">Nueva cotización integral</h4>
                     </div>
                     <form id="formPaquete" class="form-horizontal">
                         <input type="hidden" id="paquete_id" name="id">
                         <div class="modal-body">
+                            <div class="alert alert-info" style="margin-bottom:18px;">
+                                Esta ficha construye una <strong>propuesta integral para cliente</strong> desde MedTravel.
+                                Puedes combinar <strong>componente médico</strong>, <strong>insumos complementarios</strong> y <strong>condiciones comerciales</strong> en un mismo paquete/cotización.
+                            </div>
                             <div class="tabbable-line">
                                 <ul class="nav nav-tabs">
-                                    <li class="active"><a href="#tab_general" data-toggle="tab">General</a></li>
-                                    <li><a href="#tab_catalog_services" data-toggle="tab"><i class="fa fa-shopping-cart"></i> Catalog Services</a></li>
-                                    <li><a href="#tab_vuelo" data-toggle="tab">Vuelo (Manual)</a></li>
-                                    <li><a href="#tab_hotel" data-toggle="tab">Hotel (Manual)</a></li>
-                                    <li><a href="#tab_transporte" data-toggle="tab">Transporte (Manual)</a></li>
+                                    <li class="active"><a href="#tab_general" data-toggle="tab">Contexto general</a></li>
+                                    <li><a href="#tab_catalog_services" data-toggle="tab"><i class="fa fa-shopping-cart"></i> Insumos complementarios</a></li>
+                                    <li><a href="#tab_vuelo" data-toggle="tab">Componente vuelo (manual)</a></li>
+                                    <li><a href="#tab_hotel" data-toggle="tab">Componente alojamiento (manual)</a></li>
+                                    <li><a href="#tab_transporte" data-toggle="tab">Componente transporte (manual)</a></li>
                                     <li><a href="#tab_costos" data-toggle="tab">Costos y Márgenes</a></li>
                                     <li><a href="#tab_pagos" data-toggle="tab">Pagos</a></li>
                                 </ul>
@@ -198,6 +224,10 @@ if (isset($conexion) && $conexion) {
                                     <!-- TAB GENERAL -->
                                     <div class="tab-pane active" id="tab_general">
                                         <div class="form-body">
+                                            <div class="alert alert-warning">
+                                                <i class="fa fa-info-circle"></i>
+                                                Este módulo no crea <strong>ofertas médicas</strong> ni administra el <strong>catálogo complementario</strong>. Usa esos insumos para construir una propuesta integral específica para el cliente.
+                                            </div>
                                             <div class="row">
                                                 <div class="col-md-6">
                                                     <div class="form-group">
@@ -211,9 +241,9 @@ if (isset($conexion) && $conexion) {
                                                 </div>
                                                 <div class="col-md-6">
                                                     <div class="form-group">
-                                                        <label class="control-label col-md-4">Nombre del Paquete</label>
+                                                        <label class="control-label col-md-4">Nombre de la propuesta</label>
                                                         <div class="col-md-8">
-                                                            <input type="text" class="form-control" id="package_name" name="package_name" placeholder="Ej: Cirugía Plástica + Recuperación">
+                                                            <input type="text" class="form-control" id="package_name" name="package_name" placeholder="Ej: Recuperación postoperatoria con alojamiento y traslados">
                                                         </div>
                                                     </div>
                                                 </div>
@@ -282,14 +312,14 @@ if (isset($conexion) && $conexion) {
                                             <?php if ($packages_catalog_schema_ready): ?>
                                             <div class="alert alert-info">
                                                 <i class="fa fa-info-circle"></i> 
-                                                <strong>Use Catalog Services:</strong> Select services from MedTravel's catalog. Prices and providers are pre-configured.
-                                                <br><small>Alternative: Use manual tabs (Flight, Hotel, Transport) for custom entries.</small>
+                                                <strong>Insumos complementarios del catálogo:</strong> selecciona servicios complementarios ya configurados por MedTravel para incorporarlos a esta cotización integral.
+                                                <br><small>Esto no reemplaza el módulo de Servicios Complementarios; aquí solo reutilizas esos insumos dentro del paquete del cliente.</small>
                                             </div>
                                             <?php else: ?>
                                             <div class="alert alert-warning">
                                                 <i class="fa fa-clock-o"></i>
-                                                <strong>Catálogo de servicios:</strong> Disponible próximamente.
-                                                <br><small>Por ahora usa las pestañas manuales (Vuelo, Hotel, Transporte).</small>
+                                                <strong>Insumos complementarios del catálogo:</strong> disponibles próximamente.
+                                                <br><small>Por ahora registra los componentes manuales de vuelo, alojamiento y transporte.</small>
                                             </div>
                                             <?php endif; ?>
 
@@ -297,21 +327,21 @@ if (isset($conexion) && $conexion) {
                                                 <div class="col-md-12">
                                                     <label class="mt-checkbox mt-checkbox-outline">
                                                         <input type="checkbox" id="use_catalog_services" name="use_catalog_services" value="1" <?php echo $packages_catalog_schema_ready ? 'onchange="toggleCatalogMode()"' : 'disabled'; ?>>
-                                                        <?php echo $packages_catalog_schema_ready ? 'Use services from catalog (recommended)' : 'Use services from catalog (disponible próximamente)'; ?>
+                                                        <?php echo $packages_catalog_schema_ready ? 'Usar insumos complementarios desde catálogo' : 'Usar insumos complementarios desde catálogo (disponible próximamente)'; ?>
                                                         <span></span>
                                                     </label>
                                                 </div>
                                             </div>
                                             <?php if ($packages_catalog_schema_ready): ?>
                                             <div id="catalog_services_section" style="display:none;">
-                                                <h4 class="form-section">Available Services</h4>
+                                                <h4 class="form-section">Servicios complementarios disponibles para la cotización</h4>
                                                 
                                                 <!-- Flights -->
                                                 <div class="panel panel-default">
                                                     <div class="panel-heading">
                                                         <h4 class="panel-title">
                                                             <a data-toggle="collapse" href="#collapse_flights">
-                                                                ✈️ Flights
+                                                                ✈️ Vuelos
                                                             </a>
                                                         </h4>
                                                     </div>
@@ -329,7 +359,7 @@ if (isset($conexion) && $conexion) {
                                                     <div class="panel-heading">
                                                         <h4 class="panel-title">
                                                             <a data-toggle="collapse" href="#collapse_accommodations">
-                                                                🏨 Accommodations
+                                                                🏨 Alojamientos
                                                             </a>
                                                         </h4>
                                                     </div>
@@ -347,7 +377,7 @@ if (isset($conexion) && $conexion) {
                                                     <div class="panel-heading">
                                                         <h4 class="panel-title">
                                                             <a data-toggle="collapse" href="#collapse_transport">
-                                                                🚗 Transport
+                                                                🚗 Transporte
                                                             </a>
                                                         </h4>
                                                     </div>
@@ -365,7 +395,7 @@ if (isset($conexion) && $conexion) {
                                                     <div class="panel-heading">
                                                         <h4 class="panel-title">
                                                             <a data-toggle="collapse" href="#collapse_meals">
-                                                                🍽️ Meals
+                                                                🍽️ Alimentación
                                                             </a>
                                                         </h4>
                                                     </div>
@@ -383,7 +413,7 @@ if (isset($conexion) && $conexion) {
                                                     <div class="panel-heading">
                                                         <h4 class="panel-title">
                                                             <a data-toggle="collapse" href="#collapse_support">
-                                                                🎧 Support
+                                                                🎧 Apoyo
                                                             </a>
                                                         </h4>
                                                     </div>
@@ -398,12 +428,12 @@ if (isset($conexion) && $conexion) {
 
                                                 <!-- Selected Services Summary -->
                                                 <div class="well" style="margin-top: 20px;">
-                                                    <h4>Selected Services Summary</h4>
+                                                    <h4>Resumen de insumos complementarios seleccionados</h4>
                                                     <div id="selected_services_summary">
-                                                        <em class="text-muted">No services selected yet</em>
+                                                        <em class="text-muted">Todavía no has agregado insumos complementarios a esta cotización</em>
                                                     </div>
                                                     <div id="catalog_services_total" style="margin-top: 10px; font-size: 18px; font-weight: bold;">
-                                                        Total from Catalog: <span id="catalog_total_amount">$0.00</span>
+                                                        Total complementario desde catálogo: <span id="catalog_total_amount">$0.00</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -807,7 +837,7 @@ if (isset($conexion) && $conexion) {
                         <div class="modal-footer">
                             <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
                             <button type="submit" class="btn btn-primary" id="btnGuardarPaquete">
-                                <i class="fa fa-save"></i> Guardar Paquete
+                                <i class="fa fa-save"></i> Guardar cotización
                             </button>
                         </div>
                     </form>
@@ -822,14 +852,14 @@ if (isset($conexion) && $conexion) {
                 <div class="modal-content">
                     <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal">&times;</button>
-                        <h4 class="modal-title"><i class="fa fa-envelope"></i> Enviar Cotización al Cliente</h4>
+                        <h4 class="modal-title"><i class="fa fa-envelope"></i> Enviar cotización integral al cliente</h4>
                     </div>
                     <div class="modal-body">
                         <form id="formEnviarCotizacion" class="form-horizontal">
                             <input type="hidden" id="quote_package_id" name="package_id">
                             
                             <div class="alert alert-info">
-                                <i class="fa fa-info-circle"></i> Se enviará una cotización detallada al email del cliente con todos los costos del paquete.
+                                                <i class="fa fa-info-circle"></i> Se enviará al cliente una cotización integral de MedTravel con el desglose de la propuesta armada en este paquete.
                             </div>
                             
                             <div class="form-group">
@@ -847,7 +877,7 @@ if (isset($conexion) && $conexion) {
                             </div>
                             
                             <div class="form-group">
-                                <label class="col-md-3 control-label">Paquete:</label>
+                                <label class="col-md-3 control-label">Propuesta:</label>
                                 <div class="col-md-9">
                                     <p class="form-control-static" id="quote_package_name"></p>
                                 </div>
@@ -863,7 +893,7 @@ if (isset($conexion) && $conexion) {
                             <div class="form-group">
                                 <label class="col-md-3 control-label">Asunto:</label>
                                 <div class="col-md-9">
-                                    <input type="text" class="form-control" id="quote_subject" name="subject" value="Cotización de Paquete Turístico Médico - MedTravel" required>
+                                    <input type="text" class="form-control" id="quote_subject" name="subject" value="Cotización integral MedTravel" required>
                                 </div>
                             </div>
                             
@@ -888,7 +918,7 @@ if (isset($conexion) && $conexion) {
                     <div class="modal-footer">
                         <button type="button" class="btn default" data-dismiss="modal">Cancelar</button>
                         <button type="button" class="btn blue" id="btnConfirmarEnvio">
-                            <i class="fa fa-send"></i> Enviar Cotización
+                            <i class="fa fa-send"></i> Enviar cotización
                         </button>
                     </div>
                 </div>

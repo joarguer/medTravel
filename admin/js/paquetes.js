@@ -230,7 +230,7 @@ function loadCatalogServices() {
 // ===================================================================
 function renderCatalogServices(type, services, container) {
     if(services.length === 0) {
-        container.html('<p class="text-muted"><em>No services available in this category</em></p>');
+        container.html('<p class="text-muted"><em>No hay servicios complementarios disponibles en esta categoría</em></p>');
         return;
     }
     
@@ -242,23 +242,23 @@ function renderCatalogServices(type, services, container) {
                 <div class="service-item-header">
                     <div>
                         <div class="service-item-title">${service.service_name}</div>
-                        ${service.provider_name ? `<div class="service-item-provider">Provider: ${service.provider_name}</div>` : ''}
+                        ${service.provider_name ? `<div class="service-item-provider">Proveedor: ${service.provider_name}</div>` : ''}
                     </div>
                     <div class="service-item-price">${service.currency} $${parseFloat(service.sale_price).toFixed(2)}</div>
                 </div>
                 ${service.short_description ? `<div class="service-item-description">${service.short_description}</div>` : ''}
                 <div class="service-quantity-control" style="display:none;">
-                    <label>Quantity:</label>
+                    <label>Cantidad:</label>
                     <input type="number" class="form-control service-quantity" value="1" min="1" max="10">
                     <button type="button" class="btn btn-sm btn-success" onclick="addServiceToPackage(${service.id})">
-                        <i class="fa fa-plus"></i> Add
+                        <i class="fa fa-plus"></i> Agregar
                     </button>
                     <button type="button" class="btn btn-sm btn-default" onclick="deselectService(${service.id})">
-                        <i class="fa fa-times"></i> Cancel
+                        <i class="fa fa-times"></i> Cancelar
                     </button>
                 </div>
                 <button type="button" class="btn btn-sm btn-primary service-select-btn" onclick="selectService(${service.id})">
-                    <i class="fa fa-check"></i> Select
+                    <i class="fa fa-check"></i> Seleccionar
                 </button>
             </div>
         `;
@@ -329,14 +329,14 @@ function addServiceToPackage(serviceId) {
     });
     
     if(!serviceData) {
-        toastr.error('Service not found');
+        toastr.error('No se encontró el servicio seleccionado');
         return;
     }
     
     // Verificar si ya está agregado
     var alreadyAdded = selectedServices.find(function(s) { return s.id == serviceId; });
     if(alreadyAdded) {
-        toastr.warning('Service already added');
+        toastr.warning('Ese servicio ya está agregado a la cotización');
         return;
     }
     
@@ -359,7 +359,7 @@ function addServiceToPackage(serviceId) {
     // Actualizar resumen
     updateSelectedServicesSummary();
     
-    toastr.success('Service added to package');
+    toastr.success('Servicio complementario agregado a la cotización');
 }
 
 // ===================================================================
@@ -368,7 +368,7 @@ function addServiceToPackage(serviceId) {
 function removeServiceFromSummary(serviceId) {
     selectedServices = selectedServices.filter(function(s) { return s.id != serviceId; });
     updateSelectedServicesSummary();
-    toastr.info('Service removed');
+    toastr.info('Servicio removido de la cotización');
 }
 
 // ===================================================================
@@ -378,12 +378,12 @@ function updateSelectedServicesSummary() {
     var container = $('#selected_services_summary');
     
     if(selectedServices.length === 0) {
-        container.html('<em class="text-muted">No services selected yet</em>');
+        container.html('<em class="text-muted">Todavía no hay insumos complementarios seleccionados</em>');
         $('#catalog_total_amount').text('$0.00');
         return;
     }
     
-    var html = '<table class="table table-condensed"><thead><tr><th>Service</th><th>Provider</th><th>Qty</th><th>Unit Price</th><th>Total</th><th></th></tr></thead><tbody>';
+    var html = '<table class="table table-condensed"><thead><tr><th>Servicio</th><th>Proveedor</th><th>Cant.</th><th>Precio unitario</th><th>Total</th><th></th></tr></thead><tbody>';
     var grandTotal = 0;
     
     $.each(selectedServices, function(i, service) {
@@ -391,7 +391,7 @@ function updateSelectedServicesSummary() {
         html += `
             <tr>
                 <td><strong>${service.service_name}</strong></td>
-                <td><small>${service.provider_name || 'N/A'}</small></td>
+                <td><small>${service.provider_name || 'Sin proveedor'}</small></td>
                 <td>${service.quantity}</td>
                 <td>${service.currency} $${parseFloat(service.sale_price).toFixed(2)}</td>
                 <td><strong>${service.currency} $${service.total.toFixed(2)}</strong></td>
@@ -451,7 +451,7 @@ function loadClientes() {
 function openCreateModal() {
     formPaquete[0].reset();
     $('#paquete_id').val('');
-    $('#modalPaqueteTitle').text('Nuevo Paquete');
+    $('#modalPaqueteTitle').text('Nueva cotización integral');
     selectedServices = [];
     updateSelectedServicesSummary();
     
@@ -490,7 +490,7 @@ function editPaquete(id) {
         success: function(response) {
             if(response.ok) {
                 populateForm(response.data);
-                $('#modalPaqueteTitle').text('Editar Paquete #' + id);
+                $('#modalPaqueteTitle').text('Editar paquete integral #' + id);
                 if (catalogSchemaReady) {
                     loadPackageCatalogServices(id, function(items) {
                         $('#use_catalog_services').prop('checked', items.length > 0);
@@ -619,7 +619,7 @@ function savePaquete() {
         dataType: 'json',
         success: function(response) {
             if(response.ok) {
-                toastr.success(response.message || 'Paquete guardado exitosamente');
+                toastr.success('Cotización integral guardada correctamente');
                 modalPaquete.modal('hide');
                 tablaPaquetes.ajax.reload();
                 
@@ -630,15 +630,15 @@ function savePaquete() {
                                    'Margen Negativo', {timeOut: 5000});
                 }
             } else {
-                toastr.error(response.message || 'Error al guardar paquete');
+                toastr.error(response.message || 'No se pudo guardar la cotización integral');
             }
         },
         error: function(xhr, status, error) {
-            toastr.error('Error de conexión al guardar');
+            toastr.error('Error de conexión al guardar la cotización');
             console.error('Error:', error);
         },
         complete: function() {
-            btnGuardar.prop('disabled', false).html('<i class="fa fa-save"></i> Guardar Paquete');
+            btnGuardar.prop('disabled', false).html('<i class="fa fa-save"></i> Guardar cotización');
         }
     });
 }
@@ -647,7 +647,7 @@ function savePaquete() {
 // ELIMINAR PAQUETE
 // ===================================================================
 function deletePaquete(id) {
-    if(!confirm('¿Está seguro de eliminar este paquete? Esta acción no se puede deshacer.')) {
+    if(!confirm('¿Está seguro de eliminar esta cotización integral? Esta acción no se puede deshacer.')) {
         return;
     }
     
@@ -661,14 +661,14 @@ function deletePaquete(id) {
         dataType: 'json',
         success: function(response) {
             if(response.ok) {
-                toastr.success(response.message || 'Paquete eliminado exitosamente');
+                toastr.success('Cotización integral eliminada correctamente');
                 tablaPaquetes.ajax.reload();
             } else {
-                toastr.error(response.message || 'Error al eliminar paquete');
+                toastr.error(response.message || 'No se pudo eliminar la cotización integral');
             }
         },
         error: function() {
-            toastr.error('Error de conexión al eliminar');
+            toastr.error('Error de conexión al eliminar la cotización');
         }
     });
 }
@@ -714,7 +714,7 @@ function autoCalculatePrice() {
     calculateMargins();
     
     // Mostrar notificación
-    toastr.info('Precio calculado automáticamente: ' + formatCurrency(suggestedPrice, $('#currency').val() || 'USD'), 'Auto-cálculo');
+    toastr.info('Total cotizado calculado automáticamente: ' + formatCurrency(suggestedPrice, $('#currency').val() || 'USD'), 'Auto-cálculo');
 }
 
 // ===================================================================
@@ -898,7 +898,7 @@ function sendQuote(packageId) {
                             $('#quote_package_id').val(packageId);
                             $('#quote_client_name').text(client.nombre + ' ' + client.apellido);
                             $('#quote_client_email').val(client.email);
-                            $('#quote_package_name').text(data.package_name || 'Paquete #' + packageId);
+                            $('#quote_package_name').text(data.package_name || 'Cotización #' + packageId);
                             $('#quote_total_price').text(formatCurrency(data.total_package_cost, data.currency));
                             
                             // Mostrar modal
