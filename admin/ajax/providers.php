@@ -27,6 +27,286 @@ function table_has_column($conexion, $table, $column){
     return $cache[$key];
 }
 
+function table_exists($conexion, $table){
+    static $cache = array();
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $q = mysqli_query($conexion, "SHOW TABLES LIKE '{$tableEsc}'");
+    $cache[$table] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$table];
+}
+
+function bind_dynamic_stmt_params($stmt, $values){
+    if (empty($values)) {
+        return;
+    }
+    $types = '';
+    $bind = array();
+    foreach ($values as $idx => $value) {
+        $types .= is_int($value) ? 'i' : 's';
+        $bindName = 'b' . $idx;
+        $$bindName = $value;
+        $bind[] = &$$bindName;
+    }
+    array_unshift($bind, $types);
+    call_user_func_array(array($stmt, 'bind_param'), $bind);
+}
+
+function provider_users_schema_ready($conexion){
+    return table_exists($conexion, 'provider_users')
+        && table_has_column($conexion, 'provider_users', 'provider_id')
+        && table_has_column($conexion, 'provider_users', 'user_id')
+        && table_has_column($conexion, 'provider_users', 'role_in_provider');
+}
+
+function resolve_provider_owner_role_priority_sql(){
+    return "CASE LOWER(COALESCE(NULLIF(TRIM(pu.role_in_provider), ''), 'owner'))
+                WHEN 'owner' THEN 0
+                WHEN 'primary' THEN 1
+                WHEN 'principal' THEN 2
+                WHEN 'admin' THEN 3
+                WHEN 'administrator' THEN 4
+                ELSE 10
+            END";
+}
+
+function fetch_provider_owner_user_from_mapping($conexion, $provider_id){
+    if ($provider_id <= 0 || !provider_users_schema_ready($conexion) || !table_exists($conexion, 'usuarios')) {
+        return null;
+    }
+
+    $select = array(
+        'u.id',
+        table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
+        table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
+        table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
+        table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
+        table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
+        table_has_column($conexion, 'usuarios', 'rol') ? 'u.rol' : 'NULL AS rol',
+        'pu.role_in_provider'
+    );
+
+    $sql = "SELECT " . implode(', ', $select) . "
+              FROM provider_users pu
+              INNER JOIN usuarios u ON u.id = pu.user_id
+             WHERE pu.provider_id = ?
+               AND u.id <> 1";
+    if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $sql .= " AND COALESCE(u.service_provider_id, 0) = 0";
+    }
+    if (table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= " AND COALESCE(u.is_deleted, 0) = 0";
+    }
+    $sql .= " ORDER BY " . resolve_provider_owner_role_priority_sql() . ", u.id ASC LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    if (!$row) {
+        return null;
+    }
+    $row['owner_source'] = 'provider_users';
+    return $row;
+}
+
+function fetch_provider_owner_user_legacy($conexion, $provider_id){
+    if ($provider_id <= 0 || !table_exists($conexion, 'usuarios') || !table_has_column($conexion, 'usuarios', 'provider_id')) {
+        return null;
+    }
+
+    $select = array(
+        'u.id',
+        table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
+        table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
+        table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
+        table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
+        table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
+        table_has_column($conexion, 'usuarios', 'rol') ? 'u.rol' : 'NULL AS rol',
+        table_has_column($conexion, 'usuarios', 'ppal') ? 'u.ppal' : '0 AS ppal'
+    );
+
+    $sql = "SELECT " . implode(', ', $select) . "
+              FROM usuarios u
+             WHERE u.provider_id = ?
+               AND u.id <> 1";
+    if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $sql .= " AND COALESCE(u.service_provider_id, 0) = 0";
+    }
+    if (table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= " AND COALESCE(u.is_deleted, 0) = 0";
+    }
+
+    $rolePriority = '5';
+    if (table_has_column($conexion, 'usuarios', 'role_id')) {
+        $rolePriority = "CASE
+            WHEN u.role_id = " . (int)ROLE_PROVIDER_ADMIN . " THEN 0
+            WHEN u.role_id = " . (int)ROLE_PROVIDER . " THEN 1
+            ELSE 5
+        END";
+    } elseif (table_has_column($conexion, 'usuarios', 'rol')) {
+        $rolePriority = "CASE LOWER(TRIM(COALESCE(u.rol, '')))
+            WHEN '" . mysqli_real_escape_string($conexion, (string)ROLE_PROVIDER_ADMIN) . "' THEN 0
+            WHEN 'provider_admin' THEN 0
+            WHEN 'prestador_admin' THEN 0
+            WHEN 'admin prestador' THEN 0
+            WHEN '" . mysqli_real_escape_string($conexion, (string)ROLE_PROVIDER) . "' THEN 1
+            WHEN 'provider' THEN 1
+            WHEN 'prestador' THEN 1
+            WHEN 'proveedor' THEN 1
+            ELSE 5
+        END";
+    }
+
+    $ppalPriority = table_has_column($conexion, 'usuarios', 'ppal')
+        ? 'CASE WHEN COALESCE(u.ppal, 0) = 1 THEN 0 ELSE 1 END'
+        : '1';
+
+    $sql .= " ORDER BY {$ppalPriority}, {$rolePriority}, u.id ASC LIMIT 1";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    if (!$row) {
+        return null;
+    }
+    $row['owner_source'] = 'legacy_fallback';
+    return $row;
+}
+
+function fetch_provider_owner_user($conexion, $provider_id, $allowLegacyFallback = true){
+    $owner = fetch_provider_owner_user_from_mapping($conexion, $provider_id);
+    if ($owner) {
+        return $owner;
+    }
+    if (!$allowLegacyFallback) {
+        return null;
+    }
+    return fetch_provider_owner_user_legacy($conexion, $provider_id);
+}
+
+function create_provider_owner_user($conexion, $provider_id, $username, $password_plain, $display_name){
+    $password_hash = password_hash($password_plain, PASSWORD_DEFAULT);
+    $fields = array('usuario', 'password', 'nombre', 'rol', 'provider_id');
+    $values = array($username, $password_hash, $display_name, (string)ROLE_PROVIDER_ADMIN, (int)$provider_id);
+
+    if (table_has_column($conexion, 'usuarios', 'role_id')) {
+        $fields[] = 'role_id';
+        $values[] = (int)ROLE_PROVIDER_ADMIN;
+    }
+    if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $fields[] = 'service_provider_id';
+        $values[] = null;
+    }
+    if (table_has_column($conexion, 'usuarios', 'ppal')) {
+        $fields[] = 'ppal';
+        $values[] = 0;
+    }
+
+    $sql = "INSERT INTO usuarios (" . implode(', ', $fields) . ") VALUES (" . implode(', ', array_fill(0, count($fields), '?')) . ")";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        throw new Exception('Error preparando INSERT usuario owner/admin');
+    }
+    bind_dynamic_stmt_params($stmt, $values);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new Exception('Error ejecutando INSERT usuario owner/admin: ' . $err);
+    }
+    $user_id = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+    return $user_id;
+}
+
+function update_provider_owner_user($conexion, $user_id, $provider_id, $username, $display_name, $password_plain = ''){
+    $fields = array(
+        'usuario = ?',
+        'nombre = ?'
+    );
+    $values = array($username, $display_name);
+
+    if ($password_plain !== '') {
+        $fields[] = 'password = ?';
+        $values[] = password_hash($password_plain, PASSWORD_DEFAULT);
+    }
+    if (table_has_column($conexion, 'usuarios', 'rol')) {
+        $fields[] = 'rol = ?';
+        $values[] = (string)ROLE_PROVIDER_ADMIN;
+    }
+    if (table_has_column($conexion, 'usuarios', 'role_id')) {
+        $fields[] = 'role_id = ?';
+        $values[] = (int)ROLE_PROVIDER_ADMIN;
+    }
+    if (table_has_column($conexion, 'usuarios', 'provider_id')) {
+        $fields[] = 'provider_id = ?';
+        $values[] = (int)$provider_id;
+    }
+    if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $fields[] = 'service_provider_id = ?';
+        $values[] = null;
+    }
+    if (table_has_column($conexion, 'usuarios', 'ppal')) {
+        $fields[] = 'ppal = ?';
+        $values[] = 0;
+    }
+
+    $sql = "UPDATE usuarios SET " . implode(', ', $fields) . " WHERE id = ? LIMIT 1";
+    $values[] = (int)$user_id;
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        throw new Exception('Error preparando UPDATE usuario owner/admin');
+    }
+    bind_dynamic_stmt_params($stmt, $values);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new Exception('Error ejecutando UPDATE usuario owner/admin: ' . $err);
+    }
+    mysqli_stmt_close($stmt);
+}
+
+function ensure_provider_owner_mapping($conexion, $provider_id, $user_id){
+    if ($provider_id <= 0 || $user_id <= 0) {
+        throw new Exception('Provider owner mapping inválido');
+    }
+    if ((int)$user_id === 1) {
+        throw new Exception('El superusuario global no puede mapearse como owner de provider');
+    }
+    if (!provider_users_schema_ready($conexion)) {
+        throw new Exception('provider_users no está listo para ownership explícito');
+    }
+
+    $sql = "INSERT INTO provider_users (provider_id, user_id, role_in_provider)
+            VALUES (?,?,?)
+            ON DUPLICATE KEY UPDATE role_in_provider = VALUES(role_in_provider)";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        throw new Exception('Error preparando INSERT provider_users');
+    }
+    $role = 'owner';
+    mysqli_stmt_bind_param($stmt, 'iis', $provider_id, $user_id, $role);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new Exception('Error ejecutando INSERT provider_users: ' . $err);
+    }
+    mysqli_stmt_close($stmt);
+}
+
 try{
     if($tipo == 'list'){
         $kind_filter = isset($_REQUEST['kind']) ? $_REQUEST['kind'] : '';
@@ -105,16 +385,8 @@ try{
             mysqli_stmt_bind_param($s2, 'i', $id); mysqli_stmt_execute($s2); $r2 = mysqli_stmt_get_result($s2);
             while($ss = mysqli_fetch_assoc($r2)) $sv[] = (int)$ss['service_id']; mysqli_stmt_close($s2);
             
-            // usuario asociado
-            $user_data = null;
-            $s3 = mysqli_prepare($conexion, "SELECT id, usuario, nombre FROM usuarios WHERE provider_id = ? LIMIT 1");
-            mysqli_stmt_bind_param($s3, 'i', $id); 
-            mysqli_stmt_execute($s3); 
-            $r3 = mysqli_stmt_get_result($s3);
-            if($user_row = mysqli_fetch_assoc($r3)){
-                $user_data = $user_row;
-            }
-            mysqli_stmt_close($s3);
+            // owner/admin inicial canónico del provider
+            $user_data = fetch_provider_owner_user($conexion, $id, true);
 
             echo json_encode(['ok'=>true,'data'=>['provider'=>$row,'category_ids'=>$cats,'service_ids'=>$sv,'user'=>$user_data]]); exit;
         } else { error_log('providers get prepare error: '.mysqli_error($conexion)); echo json_encode(['ok'=>false,'error'=>'db_prepare']); exit; }
@@ -192,18 +464,13 @@ try{
             $vs = mysqli_prepare($conexion, "INSERT INTO provider_verification (provider_id, status, verification_level, trust_score) VALUES (?,?, 'basic', 0)");
             if($vs){ mysqli_stmt_bind_param($vs, 'is', $provider_id, $ver_status); mysqli_stmt_execute($vs); mysqli_stmt_close($vs); }
             
-            // 2. Crear usuario asociado
-            $password_hash = password_hash($password, PASSWORD_DEFAULT);
-                $ins_user = mysqli_prepare($conexion, "INSERT INTO usuarios (usuario, password, nombre, rol, provider_id, role_id) VALUES (?,?,?,?,?,?)");
-            if(!$ins_user){ throw new Exception('Error preparando INSERT usuario'); }
-                $rol = (string)ROLE_PROVIDER;
-                $role_id = ROLE_PROVIDER;
-                mysqli_stmt_bind_param($ins_user,'ssssii', $username, $password_hash, $name, $rol, $provider_id, $role_id);
-            $exec_user = mysqli_stmt_execute($ins_user);
-            if(!$exec_user){ throw new Exception('Error ejecutando INSERT usuario: '.mysqli_stmt_error($ins_user)); }
-            mysqli_stmt_close($ins_user);
+            // 2. Crear usuario owner/admin inicial
+            $owner_user_id = create_provider_owner_user($conexion, $provider_id, $username, $password, $name);
+
+            // 3. Persistir ownership explícito del provider
+            ensure_provider_owner_mapping($conexion, $provider_id, $owner_user_id);
             
-            // 3. Relaciones con categorías y servicios
+            // 4. Relaciones con categorías y servicios
             $category_ids = isset($_REQUEST['category_ids']) && is_array($_REQUEST['category_ids']) ? $_REQUEST['category_ids'] : [];
             $service_ids = isset($_REQUEST['service_ids']) && is_array($_REQUEST['service_ids']) ? $_REQUEST['service_ids'] : [];
             
@@ -220,7 +487,7 @@ try{
             
             // Commit
             mysqli_commit($conexion);
-            echo json_encode(['ok'=>true,'id'=>$provider_id,'message'=>'Proveedor y usuario creados exitosamente']); exit;
+            echo json_encode(['ok'=>true,'id'=>$provider_id,'message'=>'Proveedor y owner/admin inicial creados exitosamente']); exit;
             
         } catch(Exception $e) {
             mysqli_rollback($conexion);
@@ -276,20 +543,19 @@ try{
             echo json_encode(['ok'=>false,'error'=>'invalid_username','message'=>'Usuario es requerido']); exit; 
         }
         
-        // Verificar que el usuario no esté usado por otro proveedor
-        $check_user = mysqli_prepare($conexion, "SELECT u.id, u.provider_id FROM usuarios u WHERE u.usuario = ? LIMIT 1");
+        $owner_user = fetch_provider_owner_user($conexion, $id, true);
+        $owner_user_id = $owner_user && !empty($owner_user['id']) ? (int)$owner_user['id'] : 0;
+
+        // Verificar unicidad del login del owner/admin inicial
+        $check_user = mysqli_prepare($conexion, "SELECT u.id FROM usuarios u WHERE u.usuario = ? LIMIT 1");
         mysqli_stmt_bind_param($check_user, 's', $username);
         mysqli_stmt_execute($check_user);
         $result_check = mysqli_stmt_get_result($check_user);
         if($row_check = mysqli_fetch_assoc($result_check)){
-            // Si existe y no es del proveedor actual
-            if($row_check['provider_id'] != $id){
+            if((int)$row_check['id'] !== $owner_user_id){
                 mysqli_stmt_close($check_user);
                 echo json_encode(['ok'=>false,'error'=>'username_exists','message'=>'El usuario ya está en uso']); exit;
             }
-            $user_id = $row_check['id'];
-        } else {
-            $user_id = null; // No existe usuario, se creará
         }
         mysqli_stmt_close($check_user);
         
@@ -343,49 +609,29 @@ try{
                     $$bind_name = $values[$i]; 
                     $bind_names[] = &$$bind_name; 
                 }
-                call_user_func_array(array($stmt,'bind_param'), $bind_names);
-                $exec = mysqli_stmt_execute($stmt);
-                if(!$exec){ throw new Exception('Error actualizando provider: '.mysqli_stmt_error($stmt)); }
-                if(mysqli_stmt_affected_rows($stmt) < 1){ throw new Exception('registro eliminado'); }
-                mysqli_stmt_close($stmt);
-            } else { 
-                throw new Exception('Error preparando UPDATE provider: '.mysqli_error($conexion)); 
+	                call_user_func_array(array($stmt,'bind_param'), $bind_names);
+	                $exec = mysqli_stmt_execute($stmt);
+	                if(!$exec){ throw new Exception('Error actualizando provider: '.mysqli_stmt_error($stmt)); }
+	                mysqli_stmt_close($stmt);
+	            } else { 
+	                throw new Exception('Error preparando UPDATE provider: '.mysqli_error($conexion)); 
             }
             
-            // 2. Actualizar o crear usuario
-            $provider_name = isset($_REQUEST['name']) ? trim($_REQUEST['name']) : null;
+            // 2. Actualizar o crear owner/admin inicial
+            $provider_name = isset($_REQUEST['name'])
+                ? trim($_REQUEST['name'])
+                : (($owner_user && isset($owner_user['nombre'])) ? trim((string)$owner_user['nombre']) : '');
             
-            if($user_id){
-                // Usuario existe, actualizar
-                if($password !== ''){
-                    // Cambiar contraseña
-                    $password_hash = password_hash($password, PASSWORD_DEFAULT);
-                    $upd_user = mysqli_prepare($conexion, "UPDATE usuarios SET usuario = ?, password = ?, nombre = ? WHERE id = ? LIMIT 1");
-                    if(!$upd_user){ throw new Exception('Error preparando UPDATE usuario con password'); }
-                    mysqli_stmt_bind_param($upd_user,'sssi', $username, $password_hash, $provider_name, $user_id);
-                } else {
-                    // Sin cambiar contraseña
-                    $upd_user = mysqli_prepare($conexion, "UPDATE usuarios SET usuario = ?, nombre = ? WHERE id = ? LIMIT 1");
-                    if(!$upd_user){ throw new Exception('Error preparando UPDATE usuario'); }
-                    mysqli_stmt_bind_param($upd_user,'ssi', $username, $provider_name, $user_id);
-                }
-                $exec_user = mysqli_stmt_execute($upd_user);
-                if(!$exec_user){ throw new Exception('Error ejecutando UPDATE usuario: '.mysqli_stmt_error($upd_user)); }
-                mysqli_stmt_close($upd_user);
+            if($owner_user_id > 0){
+                update_provider_owner_user($conexion, $owner_user_id, $id, $username, $provider_name, $password);
             } else {
-                // Usuario no existe, crear
                 if($password === ''){
-                    throw new Exception('Se requiere contraseña para crear el usuario');
+                    throw new Exception('Se requiere contraseña para crear el owner/admin inicial');
                 }
-                $password_hash = password_hash($password, PASSWORD_DEFAULT);
-                $ins_user = mysqli_prepare($conexion, "INSERT INTO usuarios (usuario, password, nombre, rol, provider_id) VALUES (?,?,?,?,?)");
-                if(!$ins_user){ throw new Exception('Error preparando INSERT usuario'); }
-                $rol = 'prestador';
-                mysqli_stmt_bind_param($ins_user,'ssssi', $username, $password_hash, $provider_name, $rol, $id);
-                $exec_user = mysqli_stmt_execute($ins_user);
-                if(!$exec_user){ throw new Exception('Error ejecutando INSERT usuario: '.mysqli_stmt_error($ins_user)); }
-                mysqli_stmt_close($ins_user);
+                $owner_user_id = create_provider_owner_user($conexion, $id, $username, $password, $provider_name);
             }
+
+            ensure_provider_owner_mapping($conexion, $id, $owner_user_id);
             
             // 3. Actualizar relaciones
             $category_ids = isset($_REQUEST['category_ids']) && is_array($_REQUEST['category_ids']) ? $_REQUEST['category_ids'] : [];
@@ -424,7 +670,7 @@ try{
             
             // Commit
             mysqli_commit($conexion);
-            echo json_encode(['ok'=>true,'message'=>'Proveedor y usuario actualizados exitosamente']); exit;
+            echo json_encode(['ok'=>true,'message'=>'Proveedor y owner/admin inicial actualizados exitosamente']); exit;
             
         } catch(Exception $e) {
             mysqli_rollback($conexion);

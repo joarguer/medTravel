@@ -241,6 +241,10 @@ function current_admin_user_id() {
     return 0;
 }
 
+function is_protected_global_superuser_id($userId) {
+    return (int)$userId === 1;
+}
+
 function is_medical_provider_role_id($roleId) {
     return in_array((int)$roleId, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
 }
@@ -250,6 +254,7 @@ function provider_user_membership_role($conexion, $providerId, $userId) {
         !$conexion ||
         $providerId <= 0 ||
         $userId <= 0 ||
+        is_protected_global_superuser_id($userId) ||
         !roles_table_exists($conexion, 'provider_users') ||
         !roles_table_has_column($conexion, 'provider_users', 'provider_id') ||
         !roles_table_has_column($conexion, 'provider_users', 'user_id')
@@ -289,6 +294,7 @@ function is_canonical_provider_owner_session($conexion, $providerId, $sessionUse
         !$conexion ||
         $providerId <= 0 ||
         $sessionUserId <= 0 ||
+        is_protected_global_superuser_id($sessionUserId) ||
         !roles_table_exists($conexion, 'usuarios') ||
         !roles_table_has_column($conexion, 'usuarios', 'provider_id')
     ) {
@@ -301,7 +307,8 @@ function is_canonical_provider_owner_session($conexion, $providerId, $sessionUse
 
     $sql = 'SELECT ' . implode(', ', $select) . '
               FROM usuarios u
-             WHERE u.provider_id = ?';
+             WHERE u.provider_id = ?
+               AND u.id <> 1';
     if (roles_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
         $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
     }
@@ -370,6 +377,9 @@ function is_provider_owner_or_admin_session($conexion = null) {
     $sessionUserId = current_admin_user_id();
     if ($sessionUserId <= 0) {
         return false;
+    }
+    if (is_protected_global_superuser_id($sessionUserId)) {
+        return true;
     }
 
     $hasRoleId = roles_table_has_column($conexion, 'usuarios', 'role_id');

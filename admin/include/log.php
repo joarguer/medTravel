@@ -251,17 +251,27 @@ if (mysqli_num_rows($busca_usua) > 0) {
     // Verificación canónica compartida con create/reset password.
     $password_valido = verify_password_for_user($password, $fil);
     
-    if ($password_valido) {
-        medtravel_session_mark_login();
-        //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC
-        $rasocial = v($fil,'empresa','');
-        $role_id_val = (isset($fil['role_id']) && is_numeric($fil['role_id'])) ? intval($fil['role_id']) : normalize_role_value(v($fil, 'rol', ''));
-        $is_global_admin_role = ($role_id_val === ROLE_ADMIN || $role_id_val === ROLE_ADMINISTRATIVE || v($fil, 'ppal', '') === '1');
-        $is_medical_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
-        $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
-        $is_client_role = ($role_id_val === ROLE_CLIENT);
-        $provider_id_val = !empty($fil['provider_id']) ? intval($fil['provider_id']) : 0;
-        $service_provider_id_val = !empty($fil['service_provider_id']) ? intval($fil['service_provider_id']) : 0;
+	    if ($password_valido) {
+	        medtravel_session_mark_login();
+	        //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC
+	        $rasocial = v($fil,'empresa','');
+	        $role_id_val = (isset($fil['role_id']) && is_numeric($fil['role_id'])) ? intval($fil['role_id']) : normalize_role_value(v($fil, 'rol', ''));
+	        $is_global_admin_role = ($role_id_val === ROLE_ADMIN || $role_id_val === ROLE_ADMINISTRATIVE || v($fil, 'ppal', '') === '1');
+	        $is_medical_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
+	        $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
+	        $is_client_role = ($role_id_val === ROLE_CLIENT);
+	        $provider_id_val = !empty($fil['provider_id']) ? intval($fil['provider_id']) : 0;
+	        $service_provider_id_val = !empty($fil['service_provider_id']) ? intval($fil['service_provider_id']) : 0;
+	        $is_protected_superuser = ((int)v($fil, 'id', 0) === 1);
+
+	        if ($is_protected_superuser) {
+	            $is_global_admin_role = true;
+	            $is_medical_role = false;
+	            $is_complementary_role = false;
+	            $is_client_role = false;
+	            $provider_id_val = 0;
+	            $service_provider_id_val = 0;
+	        }
 
         if ($is_medical_role) {
             if ($provider_id_val <= 0) {
@@ -375,15 +385,17 @@ if (mysqli_num_rows($busca_usua) > 0) {
         $_SESSION["id_usuario"]		=   v($fil,'id',0);
         // Mapear user -> provider (si existe) y guardar provider_id en sesión
         // NUEVO: Leer provider_id directamente de la tabla usuarios
-        if (!empty($fil['provider_id']) && (int)$fil['provider_id'] > 0) {
-            $_SESSION['provider_id'] = (int)$fil['provider_id'];
-        } else {
-            // Fallback: buscar en tabla provider_users (sistema antiguo)
-            $provider_id = null;
-            if (isset($conexion) && is_int((int)$_SESSION["id_usuario"])) {
-                $stmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1");
-                if ($stmt) {
-                    $uid = (int) $_SESSION["id_usuario"];
+	        if ($is_protected_superuser) {
+	            if (isset($_SESSION['provider_id'])) unset($_SESSION['provider_id']);
+	        } elseif (!empty($fil['provider_id']) && (int)$fil['provider_id'] > 0) {
+	            $_SESSION['provider_id'] = (int)$fil['provider_id'];
+	        } else {
+	            // Fallback: buscar en tabla provider_users (sistema antiguo)
+	            $provider_id = null;
+	            if (isset($conexion) && is_int((int)$_SESSION["id_usuario"])) {
+	                $stmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1");
+	                if ($stmt) {
+	                    $uid = (int) $_SESSION["id_usuario"];
                     mysqli_stmt_bind_param($stmt, "i", $uid);
                     mysqli_stmt_execute($stmt);
                     mysqli_stmt_bind_result($stmt, $p_id);
@@ -397,10 +409,12 @@ if (mysqli_num_rows($busca_usua) > 0) {
             }
         }
         // Ownership complementario: service_provider_id -> service_providers.id
-        if (!empty($fil['service_provider_id']) && (int)$fil['service_provider_id'] > 0) {
-            $_SESSION['service_provider_id'] = (int)$fil['service_provider_id'];
-        } else {
-            if (isset($_SESSION['service_provider_id'])) unset($_SESSION['service_provider_id']);
+	        if ($is_protected_superuser) {
+	            if (isset($_SESSION['service_provider_id'])) unset($_SESSION['service_provider_id']);
+	        } elseif (!empty($fil['service_provider_id']) && (int)$fil['service_provider_id'] > 0) {
+	            $_SESSION['service_provider_id'] = (int)$fil['service_provider_id'];
+	        } else {
+	            if (isset($_SESSION['service_provider_id'])) unset($_SESSION['service_provider_id']);
         }
         $_SESSION["nombre_usuario"]	=   v($fil,'nombre','');
         $_SESSION["usuario"]		=   v($fil,'usuario','');
