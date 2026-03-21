@@ -103,10 +103,72 @@ Desde 2026-03-20 la navegacion del panel para prestadores medicos esta organizad
 - **Mi Empresa**: datos de empresa, staff medico, catalogos del staff, perfil.
 
 Semantica canonizada:
-- **Mis Servicios** = servicios clinicos que el proveedor realmente puede atender (catalogo habilitado de `service_catalog`).
-- **Mis Ofertas** = publicaciones comerciales visibles al paciente sobre esos servicios (`provider_offers`).
+- **Mis Servicios** = capacidad medica real habilitada del provider.
+- **Mis Ofertas** = publicaciones comerciales visibles al paciente sobre servicios habilitados del provider.
 
 Esta distincion debe mantenerse consistente en UI, textos de ayuda y documentacion.
+
+## Canon oficial de servicios medicos, staff y ofertas
+
+MedTravel separa formalmente tres capas distintas para el dominio medico. Esta separacion ya es obligatoria a nivel de producto y documentacion, aunque el runtime siga cerrando deuda tecnica.
+
+### Diccionario maestro global
+
+- `service_catalog` es el diccionario maestro global de servicios medicos de MedTravel.
+- Su funcion es normalizar nombres, sostener taxonomia base y reducir duplicados semanticos.
+- `service_catalog` NO debe interpretarse como `Mis Servicios` del provider.
+- La categoria clinica global existente puede seguir viviendo aqui como taxonomia base comun.
+
+### Servicio habilitado del provider
+
+- `provider_catalog_services` es la entidad canónica objetivo de `Mis Servicios`.
+- `Mis Servicios` representa la capacidad medica real habilitada del provider dentro de MedTravel.
+- Esta entidad debe ser la unidad base operativa para staff, matching clinico, ofertas y operacion futura.
+- Aunque hoy el runtime la trate en varios puntos como una tabla puente minima, el canon oficial declara que este es el norte correcto del modelo.
+
+### Oferta comercial / publicable
+
+- `provider_service_offers` se mantiene como la capa comercial / publicable.
+- Una oferta representa la comercializacion de uno o mas servicios habilitados del provider.
+- Una oferta NO define capacidad medica.
+- La capacidad medica real del provider define que ofertas se pueden crear.
+
+### Relacion oficial entre las tres capas
+
+- `service_catalog` -> diccionario maestro global
+- `provider_catalog_services` -> servicio habilitado del provider / capacidad medica real
+- `provider_service_offers` -> capa comercial / publicable derivada de esa capacidad
+
+Formula canónica:
+- `service_catalog` normaliza
+- `provider_catalog_services` habilita y opera
+- `provider_service_offers` publica y comercializa
+
+### Regla oficial para Staff
+
+- El staff medico debe relacionarse con `Mis Servicios`, no con ofertas.
+- El staff atiende servicios clinicos reales del provider, no piezas comerciales.
+- La separacion entre prestador y medico / staff interno se mantiene como regla de producto y de operacion.
+
+### Regla oficial de clasificacion estructural
+
+- La clasificacion operativa efectiva debe vivir en `Mis Servicios`, no en `Mis Ofertas`.
+- Cada servicio habilitado del provider debe poder clasificarse al menos por dos ejes:
+  - nivel de atencion: primer nivel, segundo nivel, tercer nivel, cuarto nivel
+  - tipo de servicio asistencial: consulta externa, hospitalizacion y cirugias, apoyo diagnostico / terapeutico
+- La categoria clinica global puede seguir existiendo en el catalogo maestro, pero no reemplaza la clasificacion operativa del servicio habilitado del provider.
+
+### Naturaleza de la capacidad medica real
+
+`Mis Servicios` representa la capacidad real habilitada de prestacion del provider segun su naturaleza operativa. Esto incluye, como minimo:
+
+- clinica
+- medico general
+- medico especialista
+- prestador diagnostico / terapeutico
+- otro actor asistencial valido dentro del modelo MedTravel
+
+La documentacion, el copy y la arquitectura futura no deben volver a mezclar el catalogo maestro global con la capacidad especifica del provider.
 
 ### Regla oficial de idioma por contexto
 

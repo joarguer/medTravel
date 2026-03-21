@@ -51,11 +51,86 @@ Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
 - Cuando falten campos dedicados, el sistema debe soportar derivacion segura o alias logicos sin inventar una tabla definitiva que aun no exista.
 - La separacion operativa canonica ya es obligatoria a nivel de documentacion, aunque la persistencia siga madurando por fases.
 
+## Servicios medicos, servicios habilitados del provider y ofertas
+
+Este frente queda documentado en cuatro capas: estado actual real, decision canónica, deuda tecnica y transicion esperada.
+
+### Estado actual real del runtime
+
+- `service_catalog` funciona hoy como maestro global de servicios medicos con taxonomia base por `service_categories`.
+- `provider_catalog_services` existe hoy como vinculo minimo entre provider y servicio global.
+- `provider_service_offers` funciona hoy como capa comercial / publicable.
+- `provider_medical_staff_services` ya orienta semanticamente el staff hacia servicios y no hacia ofertas.
+
+Relacion actual observable:
+- `service_catalog` = servicio maestro global
+- `provider_catalog_services` = habilitacion minima provider -> servicio global
+- `provider_service_offers` = oferta comercial que hoy depende tecnicamente de `service_catalog.id`
+- `provider_medical_staff_services` = relacion staff -> servicio global, usada semanticamente como capacidad del provider
+
+### Problema actual
+
+- La UI y el lenguaje de `Mis Servicios` lo presentan como capacidad medica real del provider.
+- El flujo actual de `Mis Servicios` crea / edita registros en `service_catalog` y luego los vincula a `provider_catalog_services`.
+- Esto mezcla en una misma operacion dos cosas distintas:
+  - alta o edicion del diccionario maestro global
+  - habilitacion operativa de servicios para un provider
+- Ademas, hoy existen dos rutas de habilitacion de servicios:
+  - desde `providers`
+  - desde `Mis Servicios`
+- Esa duplicidad rompe la idea de una sola fuente operativa.
+
+### Decision canónica / target de arquitectura
+
+- `service_catalog` queda declarado como diccionario maestro global.
+- `provider_catalog_services` queda declarado como la entidad canónica objetivo de `Mis Servicios`.
+- `provider_catalog_services` debe evolucionar desde tabla puente minima a entidad operativa ampliada del servicio habilitado del provider.
+- `provider_service_offers` permanece como capa comercial / publicable, subordinada a la existencia previa de un servicio habilitado del provider.
+- `Staff` debe depender del servicio habilitado del provider, no de la oferta.
+
+Relacion objetivo:
+- `service_catalog` normaliza nombres y taxonomia base
+- `provider_catalog_services` expresa capacidad medica real habilitada
+- `provider_service_offers` comercializa / publica esa capacidad
+
+### Clasificacion estructural objetivo
+
+La clasificacion operativa efectiva debe vivir en `provider_catalog_services`, no en `provider_service_offers`.
+
+Minimos exigidos por canon:
+- nivel de atencion:
+  - primer nivel
+  - segundo nivel
+  - tercer nivel
+  - cuarto nivel
+- tipo de servicio asistencial:
+  - consulta externa
+  - hospitalizacion y cirugias
+  - apoyo diagnostico / terapeutico
+
+La categoria clinica global actual puede seguir residiendo en `service_catalog`, pero no debe seguir siendo la unica clasificacion disponible para la operacion real del provider.
+
+### Deuda tecnica explicitada
+
+- Hoy `provider_catalog_services` todavia no es una entidad fuerte de negocio; sigue siendo un vinculo minimo.
+- Hoy `provider_service_offers` depende tecnicamente de `service_catalog.id` en varios puntos del runtime.
+- Hoy `provider_medical_staff_services` tambien depende tecnicamente de `service_catalog.id`, aunque semanticamente ya opera como capacidad del provider.
+- El sistema actual todavia no modela `nivel de atencion` ni `tipo de servicio asistencial`.
+- La clasificacion por sede tampoco existe todavia como entidad formal a nivel de servicio habilitado; solo hay aproximaciones parciales en provider o staff.
+
+### Transicion esperada
+
+- Desacoplar progresivamente la operacion del provider respecto del catalogo maestro global.
+- Evitar que `Mis Servicios` siga creando o editando el diccionario maestro global desde contexto provider.
+- Unificar la habilitacion de servicios en una sola fuente operativa.
+- Reapuntar progresivamente staff y ofertas a la entidad canónica del servicio habilitado del provider.
+- Mantener compatibilidad transitoria mientras existan referencias tecnicas legacy al servicio global.
+
 ## Staff medico — tablas y componentes operativos (desde 2026-03-20)
 
 **Tablas**
 - `provider_medical_staff` — entidad principal del staff interno del prestador
-- `provider_medical_staff_services` — relacion staff ↔ servicios habilitados del proveedor
+- `provider_medical_staff_services` — relacion staff ↔ servicios del proveedor; semanticamente ya responde al canon de capacidad real, aunque tecnicamente aun apunte al servicio global en varios puntos del runtime
 - `provider_staff_roles` — catalogo de roles/cargos por proveedor (provider_id=NULL = sistema; NOT NULL = personalizado)
 - `provider_staff_specialties` — catalogo de especialidades con la misma estructura
 

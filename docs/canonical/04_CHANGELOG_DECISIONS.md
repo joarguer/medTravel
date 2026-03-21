@@ -1,5 +1,39 @@
 # Changelog Decisions
 
+## 2026-03-21 — Redefinicion oficial de Mis Servicios, Staff y Mis Ofertas
+
+**Outcome**
+- `service_catalog` queda declarado oficialmente como el diccionario maestro global de servicios medicos de MedTravel.
+- `service_catalog` deja de interpretarse como `Mis Servicios` del provider.
+- `provider_catalog_services` queda declarado oficialmente como la entidad canónica objetivo de `Mis Servicios`.
+- `Mis Servicios` se redefine como la capacidad medica real habilitada del provider.
+- `provider_service_offers` se mantiene oficialmente como la capa comercial / publicable.
+- `Staff` queda formalmente ligado a `Mis Servicios` del provider y no a ofertas.
+
+**Decision**
+- La relacion canónica correcta del dominio medico queda definida como:
+  - `service_catalog` -> diccionario maestro global
+  - `provider_catalog_services` -> servicio habilitado del provider / capacidad medica real
+  - `provider_service_offers` -> publicacion comercial derivada de esa capacidad
+- La clasificacion operativa efectiva debe vivir en `Mis Servicios`, no en `Mis Ofertas`.
+- Cada servicio habilitado del provider debe poder clasificarse, como minimo, por:
+  - nivel de atencion
+  - tipo de servicio asistencial
+
+**Transition note**
+- Se reconoce explicitamente que el runtime actual sigue siendo ambiguo en este frente.
+- Hoy `provider_catalog_services` todavia opera en muchos puntos como tabla puente minima.
+- Hoy ofertas y staff siguen apuntando tecnicamente al servicio global en varios componentes.
+- Esa condicion queda registrada como deuda tecnica y no invalida la decision canónica ya tomada.
+
+**Operational effect**
+- La documentacion, el vocabulario de producto y las futuras decisiones de implementacion no deben volver a mezclar catalogo maestro global con capacidad especifica del provider.
+- Las siguientes iteraciones tecnicas deben cerrar la brecha entre:
+  - estado actual del runtime
+  - y target canónico ya aprobado
+
+---
+
 ## 2026-03-20 — Catalogos persistentes de roles y especialidades del staff por proveedor
 
 **Commits**: `0e5a97f`, `183c84d`
@@ -24,10 +58,8 @@
 **Outcome**
 - `staff_medico.php` queda como pagina independiente separada formalmente de `mi_empresa.php`.
 - La navegacion del prestador medico se reorganiza en cuatro dominios: Operacion, Servicios, Presencia, Mi Empresa.
-- Semantica canonizada y reflejada en UI y textos de ayuda:
-  - **Mis Servicios** = servicios clinicos habilitados que el proveedor puede realmente atender.
-  - **Mis Ofertas** = publicaciones comerciales sobre esos servicios, visibles al paciente.
-- Esta distincion no debe revertirse en iteraciones futuras.
+- Se instala una primera separacion semantica entre `Mis Servicios` y `Mis Ofertas` en UI y textos de ayuda.
+- La definicion de detalle queda posteriormente cerrada de forma oficial por la decision del 2026-03-21.
 
 ---
 
