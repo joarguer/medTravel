@@ -161,7 +161,7 @@ $(function(){
                     editBtn.attr('data-id', u.id);
                     actions.append(editBtn);
                 } else {
-                    actions.append('<button type="button" class="btn btn-xs btn-primary btn-user-edit edit-user" data-id="' + u.id + '" style="margin-right:6px;">EDITAR</button>');
+                    actions.append('<button type="button" class="btn btn-xs btn-primary btn-user-edit edit-user" data-id="' + u.id + '" style="margin-right:6px;">Editar cuenta</button>');
                 }
                 if(isAdmin){
                     var resetBtn = $('#users-reset-btn-template').find('button').first().clone();
@@ -169,7 +169,7 @@ $(function(){
                         resetBtn.attr('data-id', u.id);
                         actions.append(resetBtn);
                     } else {
-                        actions.append('<button type="button" class="btn btn-xs btn-warning btn-user-reset-pass" data-id="' + u.id + '" style="margin-right:6px;">RESET PASS</button>');
+                        actions.append('<button type="button" class="btn btn-xs btn-warning btn-user-reset-pass" data-id="' + u.id + '" style="margin-right:6px;">Restablecer acceso</button>');
                     }
                 }
                 actions.append('<button type="button" class="btn btn-xs btn-default toggle-active" style="margin-right:6px;">' + (u.activo === 1 ? 'Desactivar' : 'Activar') + '</button>');
@@ -321,13 +321,13 @@ $(function(){
         $.post('ajax/usuarios.php', payload, function(res){
             if(res && res.success){
                 $('#user-edit-modal').modal('hide');
-                notifySuccess('Usuario actualizado correctamente');
+                notifySuccess('Cuenta actualizada correctamente');
                 loadUsers();
                 return;
             }
-            notifyError((res && res.error) ? res.error : 'Error al actualizar usuario');
+            notifyError((res && res.error) ? res.error : 'Error al actualizar la cuenta');
         }, 'json').fail(function(xhr){
-            var msg = 'Error al actualizar usuario';
+            var msg = 'Error al actualizar la cuenta';
             if(xhr && xhr.responseJSON && xhr.responseJSON.error){
                 msg = xhr.responseJSON.error;
             }
@@ -385,13 +385,13 @@ $(function(){
 
         $.post('ajax/usuarios.php', {action:'soft_delete_user', id:id}, function(res){
             if(res && res.success){
-                notifySuccess('Usuario eliminado (soft)');
+                notifySuccess('Cuenta eliminada lógicamente');
                 loadUsers();
             } else {
-                notifyError((res && res.error) ? res.error : 'Error al eliminar usuario');
+                notifyError((res && res.error) ? res.error : 'Error al eliminar la cuenta');
             }
         }, 'json').fail(function(xhr){
-            var msg = 'Error al eliminar usuario';
+            var msg = 'Error al eliminar la cuenta';
             if(xhr && xhr.responseJSON && xhr.responseJSON.error){
                 msg = xhr.responseJSON.error;
             }
@@ -418,28 +418,28 @@ $(function(){
             return;
         }
 
-        if(!window.confirm('¿Resetear contraseña de este usuario?')){
+        if(!window.confirm('¿Restablecer el acceso de esta cuenta?')){
             return;
         }
 
         $.post('ajax/usuarios.php', { action:'reset_password', user_id:userId }, function(res){
             if(!(res && res.success)){
-                notifyError((res && res.error) ? res.error : 'Error al resetear contraseña');
+                notifyError((res && res.error) ? res.error : 'Error al restablecer el acceso');
                 return;
             }
 
             if(res.mail_failed === true && res.temp_password){
-                notifySuccess('Password temporal generado. Correo pendiente.');
+                notifySuccess('Acceso restablecido. Contraseña temporal generada; correo pendiente.');
                 if(!shownTempPasswordAlerts[userId]){
                     shownTempPasswordAlerts[userId] = true;
-                    window.prompt('Password temporal generado (copiar):', res.temp_password);
+                    window.prompt('Contraseña temporal generada (copiar):', res.temp_password);
                 }
                 return;
             }
 
-            notifySuccess('Password temporal generado y enviado por correo');
+            notifySuccess('Acceso restablecido. Contraseña temporal enviada por correo');
         }, 'json').fail(function(xhr){
-            var msg = 'Error al resetear contraseña';
+            var msg = 'Error al restablecer el acceso';
             if(xhr && xhr.responseJSON && xhr.responseJSON.error){
                 msg = xhr.responseJSON.error;
             }

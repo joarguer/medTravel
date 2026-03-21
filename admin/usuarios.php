@@ -31,11 +31,12 @@ if (!user_can('users.view') && !$can_manage_users) {
         <div class="container-fluid">
             <div class="page-content">
                 <div class="breadcrumbs">
-                    <h1>Usuarios
-                        <small>Listado y roles</small></h1>
+                    <h1>Administración de Cuentas
+                        <small>Accesos, roles y mantenimiento de cuentas existentes</small></h1>
                     <ol class="breadcrumb">
                         <li><a href="index.php">Inicio</a></li>
-                        <li class="active">Usuarios</li>
+                        <li><a href="#">Administración</a></li>
+                        <li class="active">Cuentas y Accesos</li>
                     </ol>
                 </div>
 
@@ -44,19 +45,40 @@ if (!user_can('users.view') && !$can_manage_users) {
                         <div class="portlet light ">
                             <div class="portlet-title">
                                 <div class="caption">
-                                    <span class="caption-subject font-dark bold">Usuarios</span>
-                                    <span class="caption-helper">Gestiona roles y estado</span>
+                                        <span class="caption-subject font-dark bold">Cuentas y Accesos del Sistema</span>
+                                        <span class="caption-helper">Consola global para administrar cuentas ya existentes, roles y estado operativo</span>
                                 </div>
                                 <div class="actions">
-                                    <select id="filter-kind-users" class="form-control input-sm" style="width:auto; display:inline-block;">
+                                        <label for="filter-kind-users" class="sr-only">Filtrar por dominio asociado</label>
+                                        <select id="filter-kind-users" class="form-control input-sm" style="width:auto; display:inline-block;">
                                         <option value="">Todos</option>
-                                        <option value="medical">Prestadores médicos</option>
-                                        <option value="partner">Partners</option>
-                                        <option value="sin">Sin prestador</option>
+                                            <option value="medical">Con vínculo a prestador médico</option>
+                                            <option value="partner">Con vínculo a proveedor complementario</option>
+                                            <option value="sin">Sin vínculo empresarial</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="portlet-body">
+                                    <div class="alert alert-info">
+                                        <strong>Alcance del módulo:</strong> esta pantalla administra <strong>cuentas ya existentes</strong> del sistema, sus <strong>roles</strong>, su <strong>estado</strong> y su <strong>scope de acceso</strong>.
+                                        <br>
+                                        <span class="small">Aquí pueden aparecer cuentas administrativas globales, cuentas asociadas a prestadores médicos, cuentas vinculadas a proveedores complementarios y otros usuarios internos existentes.</span>
+                                    </div>
+                                    <div class="alert alert-warning">
+                                        <strong>Esta consola no reemplaza otros flujos:</strong> el onboarding médico se gestiona en <strong>Prestadores Médicos</strong>, el alta manual de nuevas cuentas en <strong>Crear Usuarios</strong>, el equipo asistencial en <strong>Staff médico</strong> y el perfil propio en <strong>Mi Perfil</strong>.
+                                        <br>
+                                        <span class="small">Usa esta pantalla para mantenimiento transversal de cuentas ya creadas. Usa los módulos anteriores cuando lo que cambia es la entidad de negocio o el flujo de alta.</span>
+                                    </div>
+                                    <div class="row" style="margin-bottom:15px;">
+                                        <div class="col-md-8">
+                                            <p class="text-muted" style="margin:0; max-width:860px;">
+                                                El filtro de la derecha ayuda a revisar el <strong>dominio asociado</strong> de la cuenta, pero esta pantalla no se limita a providers. El recurso principal sigue siendo la <strong>cuenta de acceso</strong> dentro del sistema.
+                                            </p>
+                                        </div>
+                                        <div class="col-md-4 text-right">
+                                            <span class="text-muted small">Filtro por dominio asociado</span>
+                                        </div>
+                                    </div>
                                 <table class="table table-striped table-bordered" id="users-table">
                                     <thead>
                                         <tr>
@@ -74,12 +96,12 @@ if (!user_can('users.view') && !$can_manage_users) {
                                 </table>
                                 <?php if ($can_manage_users): ?>
                                 <div id="users-edit-btn-template" class="hide">
-                                    <button type="button" class="btn btn-xs btn-primary btn-user-edit edit-user" data-id="" style="margin-right:6px;">EDITAR</button>
+                                    <button type="button" class="btn btn-xs btn-primary btn-user-edit edit-user" data-id="" style="margin-right:6px;">Editar cuenta</button>
                                 </div>
                                 <?php endif; ?>
                                 <?php if ($is_admin): ?>
                                 <div id="users-reset-btn-template" class="hide">
-                                    <button type="button" class="btn btn-xs btn-warning btn-user-reset-pass" data-id="" style="margin-right:6px;">RESET PASS</button>
+                                    <button type="button" class="btn btn-xs btn-warning btn-user-reset-pass" data-id="" style="margin-right:6px;">Restablecer acceso</button>
                                 </div>
                                 <?php endif; ?>
                             </div>
@@ -100,9 +122,12 @@ if (!user_can('users.view') && !$can_manage_users) {
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                     </button>
-                    <h4 class="modal-title">Editar Usuario</h4>
+                    <h4 class="modal-title">Editar cuenta existente</h4>
                 </div>
                 <div class="modal-body">
+                    <div class="alert alert-info" style="margin-bottom:15px;">
+                        Aquí editas la <strong>cuenta de acceso</strong> del sistema. Si necesitas crear una cuenta nueva, usar onboarding de prestador o gestionar staff/perfil propio, debes hacerlo desde su módulo correspondiente.
+                    </div>
                     <form id="user-edit-form">
                         <input type="hidden" id="edit-id" name="id">
                         <div class="form-group">
@@ -110,20 +135,23 @@ if (!user_can('users.view') && !$can_manage_users) {
                             <input type="email" class="form-control" id="edit-email" name="email" required>
                         </div>
                         <div class="form-group">
-                            <label for="edit-usuario">Usuario</label>
+                            <label for="edit-usuario">Usuario de acceso</label>
                             <input type="text" class="form-control" id="edit-usuario" name="usuario" required>
                         </div>
                         <div class="form-group">
                             <label for="edit-role-id">Rol</label>
                             <select class="form-control" id="edit-role-id" name="role_id" required></select>
+                            <span class="help-block">Cambia aquí el alcance de la cuenta dentro del sistema. El rol no sustituye el onboarding ni la entidad de negocio asociada.</span>
                         </div>
                         <div class="form-group" id="edit-provider-group" style="display:none;">
                             <label for="edit-provider-id">Prestador médico</label>
                             <select class="form-control" id="edit-provider-id" name="provider_id"></select>
+                            <span class="help-block">Usa este campo solo para cuentas ya existentes que deban quedar asociadas a un prestador médico.</span>
                         </div>
                         <div class="form-group" id="edit-service-provider-group" style="display:none;">
                             <label for="edit-service-provider-id">Proveedor complementario</label>
                             <select class="form-control" id="edit-service-provider-id" name="service_provider_id"></select>
+                            <span class="help-block">Usa este campo solo para cuentas ya existentes del dominio complementario.</span>
                         </div>
                         <div class="form-group">
                             <label for="edit-activo">Estado</label>
