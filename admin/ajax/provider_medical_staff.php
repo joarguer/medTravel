@@ -90,6 +90,45 @@ function pms_catalog_table_ready($conexion, $table)
     return $cache[$table];
 }
 
+/**
+ * Sube la foto de un miembro del staff.
+ * Devuelve la ruta relativa a la raíz del proyecto (p.ej. "uploads/staff_photos/123_abc.jpg")
+ * o un array con clave 'error' si falla.
+ */
+function pms_upload_staff_photo(array $file, int $providerId)
+{
+    $maxBytes  = 2 * 1024 * 1024; // 2 MB
+    $allowed   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    $extMap    = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
+
+    if ($file['size'] > $maxBytes) {
+        return ['error' => 'La foto no puede superar 2 MB'];
+    }
+
+    // Verificar tipo real (no confiar solo en la extensión)
+    $finfo    = new finfo(FILEINFO_MIME_TYPE);
+    $mimeType = $finfo->file($file['tmp_name']);
+    if (!in_array($mimeType, $allowed, true)) {
+        return ['error' => 'Formato de imagen no permitido. Usa JPG, PNG o WebP'];
+    }
+
+    $ext     = $extMap[$mimeType];
+    $dir     = dirname(__DIR__) . '/uploads/staff_photos/';
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        return ['error' => 'No se pudo crear el directorio de fotos'];
+    }
+
+    // Nombre único: provider_{id}_{timestamp}_{random}.ext
+    $filename = 'provider_' . $providerId . '_' . time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+    $dest     = $dir . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $dest)) {
+        return ['error' => 'No se pudo mover la foto al servidor'];
+    }
+
+    return 'uploads/staff_photos/' . $filename;
+}
+
 function pms_table_has_column($conexion, $table, $column)
 {
     static $cache = [];
@@ -1357,7 +1396,17 @@ switch ($action) {
         $roleTitle = pms_clean_text($_POST['role_title'] ?? '', 120);
         $specialty = pms_clean_text($_POST['specialty'] ?? '', 120);
         $bioShort = pms_clean_long_text($_POST['bio_short'] ?? '');
+
+        // ── Foto: upload de archivo tiene prioridad sobre URL guardada ────────
         $photo = pms_clean_text($_POST['photo'] ?? '', 255);
+        if (!empty($_FILES['photo_file']['tmp_name']) && $_FILES['photo_file']['error'] === UPLOAD_ERR_OK) {
+            $uploadResult = pms_upload_staff_photo($_FILES['photo_file'], $providerId);
+            if (is_string($uploadResult)) {
+                $photo = $uploadResult; // ruta relativa guardada en BD
+            } else {
+                pms_err($uploadResult['error'] ?? 'Error al subir la foto', 422);
+            }
+        }
         $license = pms_clean_text($_POST['professional_license'] ?? '', 120);
         $email = pms_clean_email($_POST['email'] ?? '');
         if ($email === false) {

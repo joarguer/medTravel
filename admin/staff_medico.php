@@ -196,8 +196,24 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                             </div>
                         </div>
                         <div class="form-group">
-                            <label for="pms-photo">Foto (URL o ruta interna)</label>
-                            <input type="text" class="form-control" id="pms-photo" name="photo" maxlength="255" />
+                            <label>Foto del profesional</label>
+                            <!-- Foto actual / preview -->
+                            <div id="pms-photo-preview-wrap" style="margin-bottom:8px; display:none;">
+                                <img id="pms-photo-preview" src="" alt="Foto actual"
+                                     style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" />
+                                <button type="button" class="btn btn-xs btn-danger" id="pms-photo-clear"
+                                        style="vertical-align:top; margin-left:6px;"
+                                        title="Quitar foto">
+                                    <i class="fa fa-times"></i> Quitar
+                                </button>
+                            </div>
+                            <!-- Input file -->
+                            <input type="file" id="pms-photo-file" name="photo_file"
+                                   accept="image/jpeg,image/png,image/webp,image/gif"
+                                   style="display:block;" />
+                            <!-- Campo oculto con la URL/ruta guardada en BD -->
+                            <input type="hidden" id="pms-photo" name="photo" value="" />
+                            <span class="help-block">JPG, PNG o WebP. Máximo 2 MB. Dimensión recomendada: 400×400 px.</span>
                         </div>
                         <div class="form-group">
                             <label for="pms-bio-short">Bio corta <small class="text-muted">(en inglés)</small></label>

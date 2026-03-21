@@ -361,6 +361,11 @@
         $('#pms-access-status').text('Sin usuario vinculado');
         $('#providerMedicalStaffModalLabel').text('Agregar staff médico');
         $('#pms-save-msg').hide().empty();
+        // Foto: limpiar preview y campo hidden
+        $('#pms-photo').val('');
+        $('#pms-photo-file').val('');
+        $('#pms-photo-preview').attr('src', '');
+        $('#pms-photo-preview-wrap').hide();
         // Signaling de carga para selects dinámicos
         $('#pms-role-title').html('<option value="">Cargando...</option>');
         $('#pms-specialty').html('<option value="">Cargando...</option>');
@@ -392,7 +397,18 @@
         renderRoleOptions(staffCatalogs.roles, item.role_title || '');
         renderSpecialtyOptions(staffCatalogs.specialties, item.specialty || '');
         $('#pms-sort-order').val(item.sort_order != null ? item.sort_order : '');
-        $('#pms-photo').val(item.photo || '');
+        // Foto: guardar ruta en hidden y mostrar preview
+        var photoUrl = $.trim(item.photo || '');
+        $('#pms-photo').val(photoUrl);
+        $('#pms-photo-file').val('');
+        if (photoUrl) {
+            var previewSrc = (photoUrl.indexOf('://') === -1) ? '../../' + photoUrl : photoUrl;
+            $('#pms-photo-preview').attr('src', previewSrc);
+            $('#pms-photo-preview-wrap').show();
+        } else {
+            $('#pms-photo-preview').attr('src', '');
+            $('#pms-photo-preview-wrap').hide();
+        }
         $('#pms-bio-short').val(item.bio_short || '');
         $('#pms-email').val(item.email || '');
         $('#pms-phone').val(item.phone || '');
@@ -503,40 +519,39 @@
             return;
         }
 
-        var payload = {
-            action: 'save_staff',
-            provider_id: PROVIDER_ID,
-            id: $('#pms-id').val() || '',
-            full_name: fullName,
-            role_title: $.trim($('#pms-role-title').val() || ''),
-            specialty: $.trim($('#pms-specialty').val() || ''),
-            sort_order: $.trim($('#pms-sort-order').val() || ''),
-            photo: $.trim($('#pms-photo').val() || ''),
-            bio_short: $.trim($('#pms-bio-short').val() || ''),
-            professional_license: $.trim($('#pms-license').val() || ''),
-            email: $.trim($('#pms-email').val() || ''),
-            phone: $.trim($('#pms-phone').val() || ''),
-            clinic_name: ($.trim($('#pms-clinic').val() || '') === '__other__')
-                ? $.trim($('#pms-clinic-other').val() || '')
-                : $.trim($('#pms-clinic').val() || ''),
-            linked_user_id: $('#pms-linked-user-id').val() || '',
-            notes: $.trim($('#pms-notes').val() || '')
-        };
+        var fd = new FormData();
+        fd.append('action',      'save_staff');
+        fd.append('provider_id', PROVIDER_ID);
+        fd.append('id',          $('#pms-id').val() || '');
+        fd.append('full_name',   fullName);
+        fd.append('role_title',  $.trim($('#pms-role-title').val() || ''));
+        fd.append('specialty',   $.trim($('#pms-specialty').val() || ''));
+        fd.append('sort_order',  $.trim($('#pms-sort-order').val() || ''));
+        fd.append('photo',       $.trim($('#pms-photo').val() || ''));
+        fd.append('bio_short',   $.trim($('#pms-bio-short').val() || ''));
+        fd.append('professional_license', $.trim($('#pms-license').val() || ''));
+        fd.append('email',       $.trim($('#pms-email').val() || ''));
+        fd.append('phone',       $.trim($('#pms-phone').val() || ''));
+        var clinicVal = $.trim($('#pms-clinic').val() || '') === '__other__'
+            ? $.trim($('#pms-clinic-other').val() || '')
+            : $.trim($('#pms-clinic').val() || '');
+        fd.append('clinic_name', clinicVal);
+        fd.append('linked_user_id', $('#pms-linked-user-id').val() || '');
+        fd.append('notes',       $.trim($('#pms-notes').val() || ''));
+
+        // Archivo de foto (si el usuario eligió uno)
+        var photoFileInput = document.getElementById('pms-photo-file');
+        if (photoFileInput && photoFileInput.files && photoFileInput.files[0]) {
+            fd.append('photo_file', photoFileInput.files[0]);
+        }
 
         ($('#pms-service-ids').val() || []).forEach(function (serviceId) {
-            payload['service_ids[]'] = payload['service_ids[]'] || [];
-            payload['service_ids[]'].push(serviceId);
+            fd.append('service_ids[]', serviceId);
         });
 
-        if ($('#pms-is-active').is(':checked')) {
-            payload.is_active = 1;
-        }
-        if ($('#pms-is-primary-doctor').is(':checked')) {
-            payload.is_primary_doctor = 1;
-        }
-        if ($('#pms-can-access-admin').is(':checked')) {
-            payload.can_access_admin = 1;
-        }
+        if ($('#pms-is-active').is(':checked'))        { fd.append('is_active', 1); }
+        if ($('#pms-is-primary-doctor').is(':checked')) { fd.append('is_primary_doctor', 1); }
+        if ($('#pms-can-access-admin').is(':checked'))  { fd.append('can_access_admin', 1); }
 
         var $btn = $('#btn-save-medical-staff');
         var $msg = $('#pms-save-msg');
@@ -544,10 +559,12 @@
         $msg.hide().empty();
 
         $.ajax({
-            url: ENDPOINT,
-            method: 'POST',
-            dataType: 'json',
-            data: payload
+            url:         ENDPOINT,
+            method:      'POST',
+            dataType:    'json',
+            data:        fd,
+            processData: false,
+            contentType: false
         }).done(function (res) {
             if (!res || !res.ok) {
                 $msg.html('<span class="text-danger">' + escapeHtml((res && res.message) || 'No fue posible guardar.') + '</span>').show();
@@ -643,6 +660,27 @@
         });
         $('#form-provider-medical-staff').on('submit', saveStaff);
         $('#providerMedicalStaffModal').on('hidden.bs.modal', resetForm);
+
+        // Preview de foto en tiempo real al seleccionar archivo
+        $(document).on('change', '#pms-photo-file', function () {
+            var file = this.files && this.files[0];
+            if (!file) { return; }
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                $('#pms-photo-preview').attr('src', e.target.result);
+                $('#pms-photo-preview-wrap').show();
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Quitar foto: limpiar preview, archivo e hidden
+        $(document).on('click', '#pms-photo-clear', function () {
+            $('#pms-photo').val('');
+            $('#pms-photo-file').val('');
+            $('#pms-photo-preview').attr('src', '');
+            $('#pms-photo-preview-wrap').hide();
+        });
+
         // Toggle companion input para "Otra sede..."
         $(document).on('change', '#pms-clinic', function () {
             if ($(this).val() === '__other__') {
