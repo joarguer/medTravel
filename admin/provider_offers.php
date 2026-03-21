@@ -213,11 +213,12 @@ if (!$es_admin_principal && $ses_rol !== '') {
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label class="control-label">
-                                            <i class="fa fa-stethoscope text-primary"></i> Servicio Médico <span class="required">*</span>
+                                            <i class="fa fa-stethoscope text-primary"></i> Servicio habilitado del provider <span class="required">*</span>
                                         </label>
-                                        <select id="offer-service" name="service_id" class="form-control select2me" required>
+                                        <select id="offer-service" name="provider_catalog_service_id" class="form-control select2me" required>
                                         </select>
-                                        <span class="help-block">Seleccione el tipo de servicio que ofrece</span>
+                                        <span class="help-block" id="offer-service-help">La oferta comercial se construye sobre un servicio ya habilitado en Mis Servicios.</span>
+                                        <span class="help-block" id="offer-service-lock-note" style="display:none;">En edición, el servicio queda bloqueado para evitar cambiar el vínculo de la oferta en este paso.</span>
                                     </div>
                                 </div>
                                 <div class="col-md-6">

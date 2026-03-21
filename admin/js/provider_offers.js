@@ -1,5 +1,6 @@
 $(function(){
     var showOwnerColumn = Number($('#tbl-offers').data('show-owner')) === 1;
+    var defaultServiceHelp = 'La oferta comercial se construye sobre un servicio ya habilitado en Mis Servicios.';
     // Inicializar Summernote
     function initSummernote(){
         if ($.fn.summernote) {
@@ -49,17 +50,86 @@ $(function(){
         });
     }
 
-    function loadServices(cb){
-        $.getJSON('ajax/service_catalog.php?tipo=list', function(res){
-            if(res.ok){
-                var sel = $('#offer-service'); sel.empty();
-                $.each(res.data, function(i,r){ var txt = (r.name? r.name : (r.nombre? r.nombre : 'Servicio ' + r.id)); sel.append($('<option>').val(r.id).text(txt)); });
-                // inicializar select2 si está disponible (Metronic)
-                if ($.fn.select2) {
-                    try { sel.select2({placeholder:'Seleccione', width: '100%'}); } catch(e) { console.warn('select2 init failed', e); }
-                }
-                if(cb) cb();
+    function updateServiceHelp(message, isLocked){
+        $('#offer-service-help').text(message || defaultServiceHelp);
+        $('#offer-service-lock-note').toggle(!!isLocked);
+    }
+
+    function setServiceSelectValue(providerCatalogServiceId, serviceId){
+        var sel = $('#offer-service');
+        var value = providerCatalogServiceId ? String(providerCatalogServiceId) : '';
+
+        if (!value && serviceId) {
+            var fallback = sel.find('option').filter(function(){
+                return String($(this).data('service-id')) === String(serviceId);
+            }).first();
+            if (fallback.length) {
+                value = String(fallback.val());
             }
+        }
+
+        if (!value && serviceId) {
+            var existing = sel.find('option').filter(function(){
+                return String($(this).data('service-id')) === String(serviceId);
+            }).first();
+            if (!existing.length) {
+                var fallbackOption = $('<option>')
+                    .val('')
+                    .attr('data-service-id', serviceId)
+                    .text('Servicio actual no disponible en la lista habilitada');
+                sel.append(fallbackOption);
+            }
+        }
+
+        sel.val(value);
+        if ($.fn.select2) {
+            try { sel.trigger('change.select2'); } catch(e) {}
+        }
+    }
+
+    function setServiceSelectLocked(locked){
+        var sel = $('#offer-service');
+        sel.prop('disabled', !!locked);
+        if ($.fn.select2) {
+            try { sel.trigger('change.select2'); } catch(e) {}
+        }
+        updateServiceHelp(
+            locked
+                ? 'La oferta comercial se construye sobre un servicio ya habilitado en Mis Servicios. En esta edición el servicio queda bloqueado.'
+                : defaultServiceHelp,
+            locked
+        );
+    }
+
+    function loadServices(cb){
+        $.getJSON('ajax/provider_offers.php?tipo=list_provider_services', function(res){
+            if(res && res.ok){
+                var sel = $('#offer-service');
+                sel.empty();
+                sel.append($('<option>').val('').text('Seleccione un servicio habilitado'));
+                $.each(res.data || [], function(i, r){
+                    var txt = r.service_name ? r.service_name : ('Servicio ' + r.service_id);
+                    var option = $('<option>')
+                        .val(r.provider_catalog_service_id)
+                        .attr('data-service-id', r.service_id)
+                        .text(txt);
+                    sel.append(option);
+                });
+                if ($.fn.select2) {
+                    try {
+                        if (sel.hasClass('select2-hidden-accessible')) {
+                            sel.trigger('change.select2');
+                        } else {
+                            sel.select2({placeholder:'Seleccione', width: '100%'});
+                        }
+                    } catch(e) { console.warn('select2 init failed', e); }
+                }
+                if(cb) cb(res.data || []);
+                return;
+            }
+            if (cb) cb([]);
+        }).fail(function(){
+            if (cb) cb([]);
         });
     }
 
@@ -93,6 +163,8 @@ $(function(){
             $('#offer-id').val(''); 
             $('#offer-active').prop('checked',true);
             $('#modal-title-text').text('Nueva Oferta de Servicio');
+            setServiceSelectLocked(false);
+            setServiceSelectValue('', '');
             // Limpiar Summernote
             if ($.fn.summernote) {
                 $('#offer-desc').summernote('code', '');
@@ -104,26 +176,28 @@ $(function(){
             return;
         }
         $('#modal-title-text').text('Editar Oferta de Servicio');
-        $.getJSON('ajax/provider_offers.php?tipo=get&id='+id, function(res){
-            if(!res.ok) return alert(res.error);
-            var d = res.data;
-            $('#offer-id').val(d.id);
-            $('#offer-service').val(d.service_id);
-            if ($.fn.select2) { try { $('#offer-service').trigger('change'); } catch(e){} }
-            $('#offer-title').val(d.title);
-            // Cargar HTML en Summernote
-            if ($.fn.summernote) {
-                $('#offer-desc').summernote('code', d.description || '');
-            } else {
-                $('#offer-desc').val(d.description);
-            }
-            $('#offer-price').val(d.price_from);
-            $('#offer-currency').val(d.currency);
-            $('#offer-active').prop('checked', d.is_active==1);
-            renderGalleryInModal(d.media||[], d.id);
-            // Activar primera pestaña
-            $('.nav-tabs a[href="#tab-general"]').tab('show');
-            $('#offerModal').modal('show');
+        loadServices(function(){
+            $.getJSON('ajax/provider_offers.php?tipo=get&id='+id, function(res){
+                if(!res.ok) return alert(res.error);
+                var d = res.data;
+                $('#offer-id').val(d.id);
+                setServiceSelectValue(d.provider_catalog_service_id, d.service_id);
+                setServiceSelectLocked(true);
+                $('#offer-title').val(d.title);
+                // Cargar HTML en Summernote
+                if ($.fn.summernote) {
+                    $('#offer-desc').summernote('code', d.description || '');
+                } else {
+                    $('#offer-desc').val(d.description);
+                }
+                $('#offer-price').val(d.price_from);
+                $('#offer-currency').val(d.currency);
+                $('#offer-active').prop('checked', d.is_active==1);
+                renderGalleryInModal(d.media||[], d.id);
+                // Activar primera pestaña
+                $('.nav-tabs a[href="#tab-general"]').tab('show');
+                $('#offerModal').modal('show');
+            });
         });
     }
 
@@ -139,7 +213,8 @@ $(function(){
         
         var data = {
             tipo: id? 'update':'create',
-            service_id: $('#offer-service').val(),
+            provider_catalog_service_id: $('#offer-service').val(),
+            service_id: $('#offer-service option:selected').data('service-id') || '',
             title: $('#offer-title').val(),
             description: description,
             price_from: $('#offer-price').val(),
