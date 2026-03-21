@@ -2,6 +2,7 @@ $(document).ready(function () {
     const ctx = window.PROVIDERS_COMPLEMENTARY_CTX || {};
     const scopedProviderId = (ctx.isComplementary && ctx.serviceProviderId) ? parseInt(ctx.serviceProviderId, 10) : 0;
     const apiUrl = 'ajax/service_providers.php';
+    const isScopedComplementary = scopedProviderId > 0;
     const table = $('#providers_table').DataTable({
         processing: true,
         serverSide: false,
@@ -29,7 +30,10 @@ $(document).ready(function () {
         ],
         order: [[1, 'asc']],
         language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.10.25/i18n/Spanish.json'
+            url: 'https://cdn.datatables.net/plug-ins/1.10.25/i18n/Spanish.json',
+            emptyTable: isScopedComplementary
+                ? 'No hay datos disponibles para el proveedor complementario asociado a tu scope actual.'
+                : 'No hay proveedores complementarios registrados todavía.'
         }
     });
 
@@ -42,6 +46,7 @@ $(document).ready(function () {
             hotel: 'badge-hotel',
             transport: 'badge-transport',
             restaurant: 'badge-restaurant',
+            support: 'badge-tour_operator',
             tour_operator: 'badge-tour_operator',
             other: 'badge-other'
         };
@@ -50,7 +55,8 @@ $(document).ready(function () {
             hotel: 'Hotel',
             transport: 'Transporte',
             restaurant: 'Restaurante',
-            tour_operator: 'Tour Operador',
+            support: 'Apoyo logístico',
+            tour_operator: 'Operador turístico (legacy)',
             other: 'Otro'
         };
         const cls = classes[type] || 'badge-other';
@@ -114,15 +120,24 @@ $(document).ready(function () {
         $('#rating').val('');
         $('#is_active').prop('checked', true);
         $('#is_preferred').prop('checked', false);
+        $('#provider_type').val('');
+        $('#provider-modal-context').html(
+            'Esta ficha administra la <strong>entidad complementaria</strong> y sus datos operativos/comerciales. '
+            + 'El acceso administrativo sigue el scoping vigente del usuario; aquí no se configura todavía una cuenta owner/admin inicial explícita como en el dominio médico.'
+        );
+    }
+
+    function normalizeProviderTypeForForm(type) {
+        return type === 'tour_operator' ? 'support' : (type || '');
     }
 
     function openCreateModal() {
-        if (scopedProviderId) {
+        if (isScopedComplementary) {
             toastr.warning('No tienes permisos para crear nuevos proveedores.');
             return;
         }
         resetForm();
-        $('#providerModalTitle').text('Nuevo Proveedor');
+        $('#providerModalTitle').text('Nuevo proveedor complementario');
         $('#providerModal').modal('show');
     }
 
@@ -135,7 +150,7 @@ $(document).ready(function () {
             const p = res.data;
             $('#provider_id').val(p.id);
             $('#provider_name').val(p.provider_name);
-            $('#provider_type').val(p.provider_type);
+            $('#provider_type').val(normalizeProviderTypeForForm(p.provider_type));
             $('#tax_id').val(p.tax_id);
             $('#country').val(p.country);
             $('#city').val(p.city);
@@ -154,7 +169,18 @@ $(document).ready(function () {
             $('#contract_details').val(p.contract_details);
             $('#is_active').prop('checked', p.is_active == 1);
             $('#is_preferred').prop('checked', p.is_preferred == 1);
-            $('#providerModalTitle').text('Editar Proveedor');
+            if (p.provider_type === 'tour_operator') {
+                $('#provider-modal-context').html(
+                    'Esta ficha administra la <strong>entidad complementaria</strong> y sus datos operativos/comerciales. '
+                    + 'Se detectó una tipología legacy de operador turístico; al guardar, la categoría visible se normaliza como <strong>Apoyo logístico</strong>.'
+                );
+            } else {
+                $('#provider-modal-context').html(
+                    'Esta ficha administra la <strong>entidad complementaria</strong> y sus datos operativos/comerciales. '
+                    + 'El acceso administrativo sigue el scoping vigente del usuario; aquí no se configura todavía una cuenta owner/admin inicial explícita como en el dominio médico.'
+                );
+            }
+            $('#providerModalTitle').text('Editar proveedor complementario');
             $('#providerModal').modal('show');
         });
     }
@@ -190,7 +216,7 @@ $(document).ready(function () {
     function saveProvider(e) {
         e.preventDefault();
         const payload = serializeForm();
-        if (scopedProviderId && !payload.id) {
+        if (isScopedComplementary && !payload.id) {
             toastr.error('No autorizado');
             return;
         }
@@ -199,7 +225,7 @@ $(document).ready(function () {
             return;
         }
         if (!payload.provider_type) {
-            toastr.warning('Selecciona un tipo de proveedor');
+            toastr.warning('Selecciona un tipo de proveedor complementario');
             return;
         }
         const action = payload.id ? 'update' : 'create';
@@ -242,7 +268,7 @@ $(document).ready(function () {
         }, 'json');
     }
 
-    if (scopedProviderId) {
+    if (isScopedComplementary) {
         $('#btnNewProvider').hide();
     }
     $('#btnNewProvider').on('click', openCreateModal);

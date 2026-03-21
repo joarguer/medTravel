@@ -3,6 +3,10 @@ include('include/include.php');
 $is_admin = is_role_admin_session();
 $is_complementary = is_complementary_user_session();
 $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
+$page_heading = 'Proveedores Complementarios';
+$page_subtitle = 'Consola del dominio comercial y logístico complementario';
+$page_caption = 'Directorio operativo de proveedores complementarios';
+$cta_label = 'Nuevo proveedor complementario';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -41,12 +45,12 @@ $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_
         <div class="container-fluid">
             <div class="page-content">
                 <div class="breadcrumbs">
-                    <h1>Proveedores Complementarios
-                        <small>Catálogo de aerolíneas, hoteles, transporte, restaurantes</small>
+                    <h1><?php echo $page_heading; ?>
+                        <small><?php echo $page_subtitle; ?></small>
                     </h1>
                     <ol class="breadcrumb">
                         <li><a href="index.php">Inicio</a></li>
-                        <li class="active">Proveedores Complementarios</li>
+                        <li class="active"><?php echo $page_heading; ?></li>
                     </ol>
                     <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".page-sidebar">
                         <span class="sr-only">Toggle navigation</span>
@@ -60,21 +64,46 @@ $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_
 
                 <div class="page-content-container">
                     <div class="page-content-row">
+                        <div class="page-sidebar">
+                            <nav class="navbar" role="navigation">
+                                <ul class="nav navbar-nav">
+                                    <li class="active"><a href="providers_complementary.php"><i class="icon-plane"></i> <?php echo $page_heading; ?></a></li>
+                                </ul>
+                            </nav>
+                        </div>
                         <div class="page-content-col">
                             <div class="portlet light bordered">
                                 <div class="portlet-title">
                                     <div class="caption">
                                         <i class="icon-briefcase font-blue"></i>
-                                        <span class="caption-subject font-blue bold uppercase">Listado de Proveedores Complementarios</span>
-                                        <span class="caption-helper">Catálogo reutilizable para servicios comerciales</span>
+                                        <span class="caption-subject font-blue bold uppercase"><?php echo $page_caption; ?></span>
+                                        <span class="caption-helper">Entidad complementaria reutilizable para servicios, paquetes y operación comercial</span>
                                     </div>
                                     <div class="actions">
                                         <button id="btnNewProvider" class="btn btn-primary">
-                                            <i class="fa fa-plus"></i> Nuevo Proveedor
+                                            <i class="fa fa-plus"></i> <?php echo $cta_label; ?>
                                         </button>
                                     </div>
                                 </div>
                                 <div class="portlet-body">
+                                    <div class="alert alert-info" style="margin-bottom:16px;">
+                                        <strong>Dominio complementario:</strong> esta consola administra la <strong>entidad complementaria</strong> y sus datos comerciales, de contacto y estado operativo.
+                                        <br>
+                                        <span class="small">No administra prestadores médicos y no reemplaza el onboarding de <strong>Prestadores Médicos</strong>. Tampoco define todavía una cuenta owner/admin inicial explícita equivalente al dominio médico.</span>
+                                    </div>
+                                    <?php if ($is_complementary && $service_provider_session_id > 0): ?>
+                                    <div class="alert alert-success" id="complementary-scope-alert" style="margin-bottom:16px;">
+                                        Tu sesión está acotada al proveedor complementario asociado actualmente. Aquí gestionas la ficha operativa disponible para ese scope.
+                                    </div>
+                                    <?php else: ?>
+                                    <div class="alert alert-warning" id="complementary-scope-alert" style="margin-bottom:16px;">
+                                        El acceso administrativo del dominio complementario sigue el scoping actual del usuario y su relación con <code>service_provider_id</code>. Esta pantalla no configura todavía ownership explícito como el dominio médico.
+                                    </div>
+                                    <?php endif; ?>
+                                    <p class="text-muted" style="max-width:900px; margin-bottom:16px;">
+                                        Usa este módulo para registrar y mantener <strong>proveedores complementarios</strong> como hoteles, transporte, aerolíneas, restaurantes y apoyos logísticos.
+                                        La ficha concentra <strong>datos de la entidad</strong>, contacto comercial, preferencia operativa y condiciones básicas de relación.
+                                    </p>
                                     <table class="table table-striped table-bordered table-hover" id="providers_table">
                                         <thead>
                                             <tr>
@@ -109,11 +138,17 @@ $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_
                 <form id="providerForm" class="form-horizontal">
                     <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                        <h4 class="modal-title" id="providerModalTitle">Nuevo Proveedor</h4>
+                        <h4 class="modal-title" id="providerModalTitle">Nuevo proveedor complementario</h4>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" id="provider_id" name="id">
                         <div class="form-body">
+                            <div class="alert alert-info" id="provider-modal-context" style="margin-bottom:18px;">
+                                Esta ficha administra la <strong>entidad complementaria</strong> y sus datos operativos/comerciales.
+                                El acceso administrativo sigue el scoping vigente del usuario; aquí no se configura todavía una cuenta owner/admin inicial explícita como en el dominio médico.
+                            </div>
+                            <h4 class="bold" style="margin-top:0;"><i class="fa fa-building-o"></i> A. Datos de la entidad complementaria</h4>
+                            <p class="text-muted" style="margin-bottom:18px;">Define el tipo de proveedor complementario, ubicación general y datos básicos de identificación comercial.</p>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
@@ -131,9 +166,10 @@ $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_
                                                 <option value="hotel">Hotel</option>
                                                 <option value="transport">Transporte</option>
                                                 <option value="restaurant">Restaurante</option>
-                                                <option value="tour_operator">Tour Operador</option>
+                                                <option value="support">Apoyo logístico</option>
                                                 <option value="other">Otro</option>
                                             </select>
+                                            <span class="help-block">Clasificación del proveedor dentro del dominio comercial/logístico complementario.</span>
                                         </div>
                                     </div>
                                     <div class="form-group">
@@ -219,6 +255,8 @@ $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_
                                     </div>
                                 </div>
                             </div>
+                            <h4 class="bold" style="margin-top:10px;"><i class="fa fa-address-card-o"></i> B. Contacto y condiciones comerciales</h4>
+                            <p class="text-muted" style="margin-bottom:18px;">Completa la información de contacto principal, términos de pago, preferencia operativa y notas internas.</p>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
