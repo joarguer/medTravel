@@ -11,6 +11,15 @@
     var providerClinics = [];
     var currentItems = [];
     var MANAGE_DISABLED_BY_CONTEXT = false;
+    var serviceMultiSelectNeedsInit = false;
+
+    function serviceMultiSelectContainerSelector() {
+        return '#ms-pms-service-ids';
+    }
+
+    function hasServiceMultiSelectRendered() {
+        return $(serviceMultiSelectContainerSelector()).length > 0 || $('#pms-service-ids').next('.ms-container').length > 0;
+    }
 
     function canManageStaff() {
         return !MANAGE_DISABLED_BY_CONTEXT && !$('#btn-add-medical-staff').prop('disabled');
@@ -38,6 +47,111 @@
         if (type !== 'success') {
             alert(message);
         }
+    }
+
+    function accessFeedbackMessage(res) {
+        if (!res || !res.status) {
+            return res && res.message ? res.message : 'Registro guardado';
+        }
+        switch (res.status) {
+            case 'created_user_and_mail_sent':
+                return 'Staff guardado. El acceso al panel quedó configurado correctamente.';
+            case 'created_user_mail_failed':
+                return 'Staff guardado. El acceso quedó configurado, pero no se pudo enviar la notificación.';
+            case 'linked_existing_user_mail_sent':
+                return 'Staff guardado. El acceso al panel quedó actualizado correctamente.';
+            case 'linked_existing_user_mail_failed':
+                return 'Staff guardado. El acceso quedó actualizado, pero no se pudo enviar la notificación.';
+            default:
+                return res.message || 'Registro guardado';
+        }
+    }
+
+    function destroyServiceMultiSelect() {
+        var $field = $('#pms-service-ids');
+        $(serviceMultiSelectContainerSelector()).remove();
+        $field.next('.ms-container').remove();
+        if ($field.length && typeof $.fn.multiSelect === 'function' && $field.data('multiselect')) {
+            $field.multiSelect('destroy');
+        }
+        $field.css('position', '').css('left', '');
+        serviceMultiSelectNeedsInit = false;
+    }
+
+    function initServiceMultiSelect() {
+        var $field = $('#pms-service-ids');
+        if (!$field.length || typeof $.fn.multiSelect !== 'function' || $field.prop('disabled') || !$field.find('option').length) {
+            return;
+        }
+
+        destroyServiceMultiSelect();
+        $field.multiSelect({
+            selectableOptgroup: true,
+            selectableHeader: '<div class="staff-services-header">Disponibles</div>',
+            selectionHeader: '<div class="staff-services-header">Seleccionados</div>',
+            afterInit: function () {
+                updateServiceSelectionSummary();
+            },
+            afterSelect: function () {
+                updateServiceSelectionSummary();
+            },
+            afterDeselect: function () {
+                updateServiceSelectionSummary();
+            }
+        });
+        serviceMultiSelectNeedsInit = false;
+
+        if (!hasServiceMultiSelectRendered()) {
+            window.setTimeout(function () {
+                if (!hasServiceMultiSelectRendered() && !$field.prop('disabled') && $field.find('option').length) {
+                    destroyServiceMultiSelect();
+                    $field.multiSelect({
+                        selectableOptgroup: true,
+                        selectableHeader: '<div class="staff-services-header">Disponibles</div>',
+                        selectionHeader: '<div class="staff-services-header">Seleccionados</div>',
+                        afterInit: function () {
+                            updateServiceSelectionSummary();
+                        },
+                        afterSelect: function () {
+                            updateServiceSelectionSummary();
+                        },
+                        afterDeselect: function () {
+                            updateServiceSelectionSummary();
+                        }
+                    });
+                }
+            }, 80);
+        }
+    }
+
+    function ensureServiceMultiSelectRendered() {
+        var $modal = $('#providerMedicalStaffModal');
+        var $field = $('#pms-service-ids');
+        if (!$field.length || $field.prop('disabled') || !$field.find('option').length) {
+            return;
+        }
+        if (hasServiceMultiSelectRendered()) {
+            serviceMultiSelectNeedsInit = false;
+            return;
+        }
+        if (!$modal.is(':visible')) {
+            serviceMultiSelectNeedsInit = true;
+            return;
+        }
+        initServiceMultiSelect();
+    }
+
+    function normalizeAccessError(message, status) {
+        if (status === 'staff_access_requires_valid_email') {
+            return 'Para configurar acceso al panel debes registrar un email válido del profesional.';
+        }
+        if (status === 'existing_user_belongs_to_other_provider') {
+            return 'El email ingresado ya está asociado a otro prestador. Usa otro correo para este profesional.';
+        }
+        if (status === 'user_already_linked_to_other_staff') {
+            return 'No fue posible configurar el acceso porque ese usuario ya está asociado a otro miembro del staff.';
+        }
+        return message || 'No fue posible guardar el registro.';
     }
 
     function setTabCount(total, activeTotal) {
@@ -170,30 +284,86 @@
     }
 
     function setAccessSectionMode(mode) {
-        var isEdit = mode === 'edit';
-        $('#pms-access-section').toggle(isEdit);
-        $('#pms-linked-user-id').prop('disabled', !isEdit);
-        $('#pms-can-access-admin').prop('disabled', !isEdit);
+        var allowAccessSetup = (mode === 'edit' || mode === 'create');
+        $('#pms-access-section').toggle(allowAccessSetup);
+        $('#pms-can-access-admin').prop('disabled', !allowAccessSetup);
+        $('#pms-linked-user-id').prop('disabled', !allowAccessSetup);
+        if (allowAccessSetup) {
+            syncAccessUi();
+        }
     }
 
-    function renderServiceOptions(items, selectedIds) {
+    function buildSelectedMap(values) {
         var selectedMap = {};
-        (selectedIds || []).forEach(function (id) {
-            selectedMap[parseInt(id, 10)] = true;
+        (values || []).forEach(function (id) {
+            var parsed = parseInt(id, 10);
+            if (parsed > 0) {
+                selectedMap[parsed] = true;
+            }
         });
+        return selectedMap;
+    }
 
-        if (!Array.isArray(items) || items.length === 0) {
-            $('#pms-service-ids').html('<option value="">Este prestador no tiene servicios activos habilitados</option>');
+    function updateServiceSelectionSummary() {
+        var selectedTexts = ($('#pms-service-ids option:selected').map(function () {
+            return $.trim($(this).text() || '');
+        }).get() || []).filter(Boolean);
+
+        if (!selectedTexts.length) {
+            $('#pms-service-selection-summary').text('Sin servicios seleccionados.');
             return;
         }
 
-        var options = items.map(function (item) {
-            var serviceId = parseInt(item.service_id || item.id, 10);
-            var selected = selectedMap[serviceId] ? ' selected' : '';
-            var label = item.label || item.service_name || ('Servicio #' + serviceId);
-            return '<option value="' + escapeHtml(serviceId) + '"' + selected + '>' + escapeHtml(label) + '</option>';
+        $('#pms-service-selection-summary').text(selectedTexts.length + ' servicio(s) seleccionado(s).');
+    }
+
+    function renderServiceOptions(items, selectedProviderCatalogServiceIds, selectedServiceIds) {
+        var selectedProviderCatalogMap = buildSelectedMap(selectedProviderCatalogServiceIds || []);
+        var selectedServiceMap = buildSelectedMap(selectedServiceIds || []);
+        var $select = $('#pms-service-ids');
+
+        if (!Array.isArray(items) || items.length === 0) {
+            destroyServiceMultiSelect();
+            $select.html('');
+            $select.prop('disabled', true);
+            $('#pms-service-empty-state').show();
+            updateServiceSelectionSummary();
+            return;
+        }
+
+        var groups = [];
+        var currentGroup = null;
+        items.forEach(function (item) {
+            var groupName = $.trim(item.category_name || 'Sin categoría');
+            if (!currentGroup || currentGroup.name !== groupName) {
+                currentGroup = { name: groupName, options: [] };
+                groups.push(currentGroup);
+            }
+
+            var providerCatalogServiceId = parseInt(item.provider_catalog_service_id || item.id, 10);
+            var serviceId = parseInt(item.service_id || 0, 10);
+            var selected = (
+                (providerCatalogServiceId > 0 && selectedProviderCatalogMap[providerCatalogServiceId])
+                || (serviceId > 0 && selectedServiceMap[serviceId])
+            ) ? ' selected' : '';
+            var label = item.label || item.service_name || ('Servicio #' + (serviceId || providerCatalogServiceId));
+
+            currentGroup.options.push(
+                '<option value="' + escapeHtml(providerCatalogServiceId) + '" data-service-id="' + escapeHtml(serviceId) + '"' + selected + '>'
+                + escapeHtml(label)
+                + '</option>'
+            );
         });
-        $('#pms-service-ids').html(options.join(''));
+
+        var html = groups.map(function (group) {
+            return '<optgroup label="' + escapeHtml(group.name) + '">' + group.options.join('') + '</optgroup>';
+        }).join('');
+
+        $('#pms-service-empty-state').hide();
+        $select.prop('disabled', false).html(html);
+        serviceMultiSelectNeedsInit = true;
+        ensureServiceMultiSelectRendered();
+        updateServiceSelectionSummary();
     }
 
     function renderLinkedUserOptions(items, selectedId) {
@@ -214,6 +384,8 @@
             );
         });
         $('#pms-linked-user-id').html(options.join(''));
+        $('#pms-linked-user-id').val(selectedId ? String(selectedId) : '');
+        syncAccessUi();
     }
 
     // ── render y load: catálogos de roles, especialidades y sedes ──────────────
@@ -303,7 +475,7 @@
         });
     }
 
-    function loadProviderServices(selectedIds) {
+    function loadProviderServices(selectedProviderCatalogServiceIds, selectedServiceIds) {
         return $.ajax({
             url: ENDPOINT,
             method: 'GET',
@@ -314,14 +486,17 @@
             }
         }).done(function (res) {
             providerServices = (res && Array.isArray(res.items)) ? res.items : [];
-            renderServiceOptions(providerServices, selectedIds || []);
+            renderServiceOptions(providerServices, selectedProviderCatalogServiceIds || [], selectedServiceIds || []);
         }).fail(function (xhr) {
             providerServices = [];
             var message = 'No fue posible cargar los servicios habilitados.';
             if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
                 message = xhr.responseJSON.message;
             }
-            $('#pms-service-ids').html('<option value="">' + escapeHtml(message) + '</option>');
+            destroyServiceMultiSelect();
+            $('#pms-service-ids').html('').prop('disabled', true);
+            $('#pms-service-empty-state').text(message).show();
+            updateServiceSelectionSummary();
         });
     }
 
@@ -358,7 +533,9 @@
         $('#pms-is-active').prop('checked', true);
         $('#pms-is-primary-doctor').prop('checked', false);
         $('#pms-can-access-admin').prop('checked', false);
-        $('#pms-access-status').text('Sin usuario vinculado');
+        $('input[name="pms_access_level"][value="scoped"]').prop('checked', true);
+        $('input[name="pms_access_level"][value="admin"]').prop('checked', false);
+        $('#pms-access-status').text('Solo sus asignaciones');
         $('#providerMedicalStaffModalLabel').text('Agregar staff médico');
         $('#pms-save-msg').hide().empty();
         // Foto: limpiar preview y campo hidden
@@ -372,7 +549,8 @@
         $('#pms-clinic').html('<option value="">Cargando...</option>');
         $('#pms-clinic-other').val('').hide();
         providerServices = [];
-        renderServiceOptions([], []);
+        $('#pms-service-empty-state').text('Este prestador no tiene servicios habilitados disponibles.').hide();
+        renderServiceOptions([], [], []);
         renderLinkedUserOptions([], 0);
         setAccessSectionMode('create');
     }
@@ -419,10 +597,65 @@
         $('#pms-is-active').prop('checked', parseInt(item.is_active || item.active, 10) === 1);
         $('#pms-is-primary-doctor').prop('checked', parseInt(item.is_primary_doctor, 10) === 1);
         $('#pms-can-access-admin').prop('checked', parseInt(item.can_access_admin, 10) === 1);
-        $('#pms-access-status').text(item.access_status_label || 'Sin usuario vinculado');
-        renderServiceOptions(providerServices, item.service_ids || []);
+        $('input[name="pms_access_level"][value="admin"]').prop('checked', parseInt(item.can_access_admin, 10) === 1);
+        $('input[name="pms_access_level"][value="scoped"]').prop('checked', parseInt(item.can_access_admin, 10) !== 1);
+        renderServiceOptions(providerServices, item.provider_catalog_service_ids || [], item.service_ids || []);
         $('#providerMedicalStaffModalLabel').text('Editar staff médico');
         setAccessSectionMode('edit');
+        syncAccessUi(item.access_status_label || '');
+    }
+
+    function findSelectedLinkedUser() {
+        var selectedId = parseInt($('#pms-linked-user-id').val() || 0, 10);
+        if (selectedId <= 0) {
+            return null;
+        }
+        for (var i = 0; i < linkableUsers.length; i += 1) {
+            if (parseInt(linkableUsers[i].id, 10) === selectedId) {
+                return linkableUsers[i];
+            }
+        }
+        return null;
+    }
+
+    function resolveAccessStatusText(fallbackText) {
+        var allowAccess = $('#pms-can-access-admin').is(':checked');
+        var email = $.trim($('#pms-email').val() || '');
+
+        if (!allowAccess) {
+            return 'Solo sus asignaciones';
+        }
+
+        if (!email) {
+            return 'Pendiente de completar email';
+        }
+
+        return fallbackText || 'Permisos administrativos';
+    }
+
+    function syncAccessUi(fallbackStatusText) {
+        var allowAccess = $('#pms-can-access-admin').is(':checked');
+        var email = $.trim($('#pms-email').val() || '');
+        var summaryClass = 'alert alert-info';
+        var summaryText = 'Este profesional tendrá un acceso estándar orientado a sus asignaciones.';
+
+        $('.staff-permission-option').removeClass('is-active');
+        $('.staff-permission-option[data-access-level="' + (allowAccess ? 'admin' : 'scoped') + '"]').addClass('is-active');
+
+        if (allowAccess) {
+            $('#pms-email-label').text('Email del profesional');
+            $('#pms-email-help').text('Se usará para el acceso al panel y para las notificaciones relacionadas con su cuenta.');
+            summaryClass = email ? 'alert alert-success' : 'alert alert-warning';
+            summaryText = email
+                ? 'Este profesional tendrá permisos administrativos en el panel.'
+                : 'Para asignar permisos administrativos debes registrar un email válido del profesional.';
+        } else {
+            $('#pms-email-label').text('Email del profesional');
+            $('#pms-email-help').text('Opcional. Úsalo para contacto del profesional y para su acceso al panel si necesita ingresar.');
+        }
+
+        $('#pms-access-summary').attr('class', summaryClass).text(summaryText);
+        $('#pms-access-status').text(resolveAccessStatusText(fallbackStatusText));
     }
 
     function loadStaffList() {
@@ -465,9 +698,11 @@
         $.when(
             loadStaffCatalogs(),
             loadProviderClinics(''),
-            loadProviderServices([])
+            loadProviderServices([], []),
+            loadLinkableUsers(0, 0)
         ).always(function () {
             $('#providerMedicalStaffModal').modal('show');
+            window.setTimeout(ensureServiceMultiSelectRendered, 120);
         });
     }
 
@@ -489,13 +724,14 @@
             }
             $.when(
                 loadLinkableUsers(res.item.linked_user_id || 0, res.item.id || 0),
-                loadProviderServices(res.item.service_ids || []),
+                loadProviderServices(res.item.provider_catalog_service_ids || [], res.item.service_ids || []),
                 loadStaffCatalogs(),
                 loadProviderClinics(res.item.clinic_name || '')
             ).always(function () {
                 fillForm(res.item);
                 $('#pms-linked-user-id').val(res.item.linked_user_id || '');
                 $('#providerMedicalStaffModal').modal('show');
+                window.setTimeout(ensureServiceMultiSelectRendered, 120);
             });
         }).fail(function (xhr) {
             var message = 'No fue posible cargar el registro.';
@@ -514,9 +750,13 @@
             $('#pms-save-msg').html('<span class="text-danger">El nombre completo es obligatorio.</span>').show();
             return;
         }
-        if ($('#pms-can-access-admin').is(':checked') && !$('#pms-linked-user-id').val()) {
-            $('#pms-save-msg').html('<span class="text-danger">Debes seleccionar un usuario vinculado para habilitar acceso al admin.</span>').show();
-            return;
+        if ($('#pms-can-access-admin').is(':checked')) {
+            var email = $.trim($('#pms-email').val() || '');
+            if (!email) {
+                $('#pms-save-msg').html('<span class="text-danger">Para asignar permisos administrativos debes registrar un email válido del profesional.</span>').show();
+                $('#pms-email').focus();
+                return;
+            }
         }
 
         var fd = new FormData();
@@ -545,8 +785,13 @@
             fd.append('photo_file', photoFileInput.files[0]);
         }
 
-        ($('#pms-service-ids').val() || []).forEach(function (serviceId) {
-            fd.append('service_ids[]', serviceId);
+        ($('#pms-service-ids').val() || []).forEach(function (providerCatalogServiceId) {
+            var $option = $('#pms-service-ids option[value="' + providerCatalogServiceId + '"]');
+            var serviceId = parseInt($option.attr('data-service-id') || 0, 10);
+            fd.append('provider_catalog_service_ids[]', providerCatalogServiceId);
+            if (serviceId > 0) {
+                fd.append('service_ids[]', serviceId);
+            }
         });
 
         if ($('#pms-is-active').is(':checked'))        { fd.append('is_active', 1); }
@@ -570,15 +815,23 @@
                 $msg.html('<span class="text-danger">' + escapeHtml((res && res.message) || 'No fue posible guardar.') + '</span>').show();
                 return;
             }
-            toast(res.message || 'Registro guardado', 'success');
+            var feedback = accessFeedbackMessage(res);
+            if (Array.isArray(res.warnings) && res.warnings.length) {
+                $msg.html('<span class="text-warning">' + escapeHtml(res.warnings.join(' ')) + '</span>').show();
+            }
+            toast(feedback, (res.status && res.status.indexOf('mail_failed') !== -1) ? 'error' : 'success');
             $('#providerMedicalStaffModal').modal('hide');
             loadStaffList();
         }).fail(function (xhr) {
             var message = 'No fue posible guardar el registro.';
+            var status = '';
             if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
                 message = xhr.responseJSON.message;
             }
-            $msg.html('<span class="text-danger">' + escapeHtml(message) + '</span>').show();
+            if (xhr && xhr.responseJSON && xhr.responseJSON.status) {
+                status = xhr.responseJSON.status;
+            }
+            $msg.html('<span class="text-danger">' + escapeHtml(normalizeAccessError(message, status)) + '</span>').show();
         }).always(function () {
             $btn.prop('disabled', false).html('<i class="fa fa-save"></i> Guardar');
         });
@@ -660,6 +913,11 @@
         });
         $('#form-provider-medical-staff').on('submit', saveStaff);
         $('#providerMedicalStaffModal').on('hidden.bs.modal', resetForm);
+        $('#providerMedicalStaffModal').on('shown.bs.modal', function () {
+            if (serviceMultiSelectNeedsInit) {
+                ensureServiceMultiSelectRendered();
+            }
+        });
 
         // Preview de foto en tiempo real al seleccionar archivo
         $(document).on('change', '#pms-photo-file', function () {
@@ -690,33 +948,17 @@
             }
         });
 
-        $('#pms-linked-user-id').on('change', function () {
-            if ($(this).val()) {
-                var selected = linkableUsers.find(function (item) {
-                    return parseInt(item.id, 10) === parseInt($('#pms-linked-user-id').val(), 10);
-                });
-                if (selected && parseInt(selected.activo, 10) !== 1) {
-                    $('#pms-access-status').text('Usuario vinculado inactivo');
-                } else if ($('#pms-can-access-admin').is(':checked')) {
-                    $('#pms-access-status').text('Médico con acceso propio');
-                } else {
-                    $('#pms-access-status').text('Usuario vinculado sin acceso');
-                }
-            } else {
-                $('#pms-access-status').text('Sin usuario vinculado');
-                $('#pms-can-access-admin').prop('checked', false);
-            }
+        $('input[name="pms_access_level"]').on('change', function () {
+            $('#pms-can-access-admin').prop('checked', $(this).val() === 'admin');
+            syncAccessUi();
         });
 
-        $('#pms-can-access-admin').on('change', function () {
-            if (!$('#pms-linked-user-id').val()) {
-                $('#pms-access-status').text('Sin usuario vinculado');
-                if ($(this).is(':checked')) {
-                    $('#pms-save-msg').html('<span class="text-danger">Selecciona un usuario antes de habilitar acceso.</span>').show();
-                }
-                return;
-            }
-            $('#pms-access-status').text($(this).is(':checked') ? 'Médico con acceso propio' : 'Usuario vinculado sin acceso');
+        $('#pms-email').on('input blur', function () {
+            syncAccessUi();
+        });
+
+        $('#pms-service-ids').on('change', function () {
+            updateServiceSelectionSummary();
         });
 
         $('#tbl-provider-medical-staff').on('click', '.staff-edit', function () {

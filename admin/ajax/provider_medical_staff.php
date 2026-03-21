@@ -17,6 +17,9 @@
 require_once '../include/conexion.php';
 require_once '../include/roles.php';
 require_once '../include/provider_medical_staff_helpers.php';
+require_once '../include/password_utils.php';
+require_once '../include/email_config.php';
+require_once '../../inc/email_template.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -141,6 +144,425 @@ function pms_table_has_column($conexion, $table, $column)
     $q = mysqli_query($conexion, "SHOW COLUMNS FROM {$tableEsc} LIKE '{$columnEsc}'");
     $cache[$key] = ($q && mysqli_num_rows($q) > 0);
     return $cache[$key];
+}
+
+function pms_generate_secure_reset_token($bytes = 32)
+{
+    $bytes = max(16, (int)$bytes);
+    if (function_exists('random_bytes')) {
+        try {
+            return bin2hex(random_bytes($bytes));
+        } catch (Throwable $e) {
+        }
+    }
+    if (function_exists('openssl_random_pseudo_bytes')) {
+        try {
+            $raw = openssl_random_pseudo_bytes($bytes);
+            if ($raw !== false) {
+                return bin2hex($raw);
+            }
+        } catch (Throwable $e) {
+        }
+    }
+    return hash('sha256', uniqid((string)mt_rand(), true) . microtime(true));
+}
+
+function pms_users_has_column($conexion, $column)
+{
+    return pms_table_has_column($conexion, 'usuarios', $column);
+}
+
+function pms_users_table_ready($conexion)
+{
+    return pms_catalog_table_ready($conexion, 'usuarios');
+}
+
+function pms_build_user_placeholder_password_payload()
+{
+    $placeholder = bin2hex(random_bytes(16));
+    if (function_exists('hash_password_for_storage')) {
+        return hash_password_for_storage($placeholder, []);
+    }
+    $token = function_exists('generate_user_token') ? generate_user_token() : md5(uniqid(rand(), true));
+    $password = function_exists('hash_password')
+        ? hash_password($placeholder, $token)
+        : hash('sha512', $token . $placeholder);
+    return [
+        'password' => $password,
+        'token' => $token,
+    ];
+}
+
+function pms_find_user_by_identity($conexion, $identity)
+{
+    $identity = trim((string)$identity);
+    if ($identity === '' || !pms_users_table_ready($conexion)) {
+        return null;
+    }
+
+    $conditions = [];
+    $types = '';
+    $params = [];
+    if (pms_users_has_column($conexion, 'email')) {
+        $conditions[] = 'u.email = ?';
+        $types .= 's';
+        $params[] = $identity;
+    }
+    if (pms_users_has_column($conexion, 'usuario')) {
+        $conditions[] = 'u.usuario = ?';
+        $types .= 's';
+        $params[] = $identity;
+    }
+    if (empty($conditions)) {
+        return null;
+    }
+
+    $select = [
+        'u.id',
+        pms_users_has_column($conexion, 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
+        pms_users_has_column($conexion, 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
+        pms_users_has_column($conexion, 'nombre') ? 'u.nombre' : 'NULL AS nombre',
+        pms_users_has_column($conexion, 'usuario') ? 'u.usuario' : 'NULL AS usuario',
+        pms_users_has_column($conexion, 'email') ? 'u.email' : 'NULL AS email',
+        pms_users_has_column($conexion, 'activo') ? 'u.activo' : '1 AS activo',
+        pms_users_has_column($conexion, 'role_id') ? 'u.role_id' : 'NULL AS role_id',
+        pms_users_has_column($conexion, 'rol') ? 'u.rol' : 'NULL AS rol',
+        pms_users_has_column($conexion, 'token') ? 'u.token' : 'NULL AS token',
+    ];
+
+    $sql = 'SELECT ' . implode(', ', $select) . ' FROM usuarios u WHERE (' . implode(' OR ', $conditions) . ')';
+    if (pms_users_has_column($conexion, 'is_deleted')) {
+        $sql .= ' AND u.is_deleted = 0';
+    }
+    $sql .= ' ORDER BY u.id ASC LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    bind_stmt_params($stmt, $types, $params);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ?: null;
+}
+
+function pms_validate_user_not_linked_elsewhere($conexion, $userId, $currentStaffId = 0)
+{
+    if ($userId <= 0 || !pms_has_access_columns($conexion)) {
+        return null;
+    }
+    $sql = 'SELECT id, full_name FROM provider_medical_staff WHERE linked_user_id = ?';
+    if ($currentStaffId > 0) {
+        $sql .= ' AND id <> ?';
+    }
+    $sql .= ' LIMIT 1';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return ['error' => 'db_prepare_failed'];
+    }
+    if ($currentStaffId > 0) {
+        mysqli_stmt_bind_param($stmt, 'ii', $userId, $currentStaffId);
+    } else {
+        mysqli_stmt_bind_param($stmt, 'i', $userId);
+    }
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    if ($row) {
+        return ['error' => 'user_already_linked_to_other_staff', 'linked_staff' => $row];
+    }
+    return null;
+}
+
+function pms_create_staff_user($conexion, $providerId, $providerName, $staffName, $staffEmail)
+{
+    if (!pms_users_table_ready($conexion)) {
+        return ['error' => 'usuarios_table_missing'];
+    }
+    if (!pms_users_has_column($conexion, 'usuario') || !pms_users_has_column($conexion, 'password') || !pms_users_has_column($conexion, 'token')) {
+        return ['error' => 'usuarios_required_columns_missing'];
+    }
+    if (!pms_users_has_column($conexion, 'provider_id')) {
+        return ['error' => 'usuarios_provider_scope_missing'];
+    }
+
+    $payload = pms_build_user_placeholder_password_payload();
+    $columns = ['usuario', 'password', 'token', 'provider_id'];
+    $placeholders = ['?', '?', '?', '?'];
+    $types = 'sssi';
+    $params = [$staffEmail, $payload['password'], $payload['token'], $providerId];
+
+    if (pms_users_has_column($conexion, 'email')) {
+        $columns[] = 'email';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $staffEmail;
+    }
+    if (pms_users_has_column($conexion, 'nombre')) {
+        $columns[] = 'nombre';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $staffName;
+    }
+    if (pms_users_has_column($conexion, 'activo')) {
+        $columns[] = 'activo';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = 1;
+    }
+    if (pms_users_has_column($conexion, 'avatar')) {
+        $columns[] = 'avatar';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = 'img/perfil/default.png';
+    }
+    if (pms_users_has_column($conexion, 'empresa')) {
+        $columns[] = 'empresa';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $providerName;
+    }
+    if (pms_users_has_column($conexion, 'ppal')) {
+        $columns[] = 'ppal';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = 0;
+    }
+    if (pms_users_has_column($conexion, 'usrlogin')) {
+        $columns[] = 'usrlogin';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $staffEmail;
+    }
+    if (pms_users_has_column($conexion, 'rol')) {
+        $columns[] = 'rol';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = (string)ROLE_PROVIDER;
+    }
+    if (pms_users_has_column($conexion, 'role_id')) {
+        $columns[] = 'role_id';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = ROLE_PROVIDER;
+    }
+    if (pms_users_has_column($conexion, 'cargo')) {
+        $columns[] = 'cargo';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = 'Medical Staff';
+    }
+    if (pms_users_has_column($conexion, 'ciudad')) {
+        $columns[] = 'ciudad';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = '';
+    }
+    if (pms_users_has_column($conexion, 'telefono')) {
+        $columns[] = 'telefono';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = '';
+    }
+    if (pms_users_has_column($conexion, 'celular')) {
+        $columns[] = 'celular';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = '';
+    }
+    if (pms_users_has_column($conexion, 'cambio_password')) {
+        $columns[] = 'cambio_password';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = 1;
+    }
+
+    $sql = 'INSERT INTO usuarios (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return ['error' => 'db_prepare_failed'];
+    }
+    bind_stmt_params($stmt, $types, $params);
+    $ok = mysqli_stmt_execute($stmt);
+    $err = mysqli_stmt_error($stmt);
+    $newId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+    if (!$ok || $newId <= 0) {
+        return ['error' => 'db_error', 'detail' => $err];
+    }
+
+    $user = pms_find_user_by_identity($conexion, $staffEmail);
+    if ($user) {
+        return ['ok' => true, 'user' => $user, 'provision_status' => 'created_user'];
+    }
+
+    return ['ok' => true, 'user' => ['id' => $newId, 'provider_id' => $providerId, 'usuario' => $staffEmail, 'email' => $staffEmail, 'nombre' => $staffName], 'provision_status' => 'created_user'];
+}
+
+function pms_resolve_staff_access_user($conexion, $providerId, $providerName, $staffName, $staffEmail, $requestedLinkedUserId, $currentStaffId = 0)
+{
+    $requestedLinkedUserId = (int)$requestedLinkedUserId;
+    if ($requestedLinkedUserId > 0) {
+        $linkedUser = pms_fetch_linked_user($conexion, $requestedLinkedUserId, $providerId, $currentStaffId);
+        if (!$linkedUser) {
+            return ['error' => 'linked_user_not_found_for_provider'];
+        }
+        if (!empty($linkedUser['error'])) {
+            if ($linkedUser['error'] === 'linked_user_already_assigned') {
+                return ['error' => 'user_already_linked_to_other_staff', 'linked_staff' => $linkedUser['linked_staff'] ?? null];
+            }
+            return ['error' => $linkedUser['error']];
+        }
+        return ['ok' => true, 'user' => $linkedUser, 'provision_status' => 'linked_existing_user'];
+    }
+
+    if ($staffEmail === '' || !filter_var($staffEmail, FILTER_VALIDATE_EMAIL)) {
+        return ['error' => 'staff_access_requires_valid_email'];
+    }
+
+    $existingUser = pms_find_user_by_identity($conexion, $staffEmail);
+    if ($existingUser) {
+        $existingProviderId = isset($existingUser['provider_id']) && $existingUser['provider_id'] !== null ? (int)$existingUser['provider_id'] : 0;
+        if ($existingProviderId > 0 && $existingProviderId !== $providerId) {
+            return ['error' => 'existing_user_belongs_to_other_provider'];
+        }
+        $linkedElsewhere = pms_validate_user_not_linked_elsewhere($conexion, (int)$existingUser['id'], $currentStaffId);
+        if ($linkedElsewhere && !empty($linkedElsewhere['error'])) {
+            return $linkedElsewhere;
+        }
+        return ['ok' => true, 'user' => $existingUser, 'provision_status' => 'linked_existing_user'];
+    }
+
+    return pms_create_staff_user($conexion, $providerId, $providerName, $staffName, $staffEmail);
+}
+
+function pms_issue_staff_access_token($conexion, $userId)
+{
+    $userId = (int)$userId;
+    if ($userId <= 0 || !pms_users_table_ready($conexion)) {
+        return ['error' => 'invalid_user'];
+    }
+
+    $hasResetToken = pms_users_has_column($conexion, 'password_reset_token');
+    $hasResetExpires = pms_users_has_column($conexion, 'password_reset_expires_at');
+    $hasResetSentAt = pms_users_has_column($conexion, 'password_reset_sent_at');
+    $hasLegacyToken = pms_users_has_column($conexion, 'token');
+
+    if (!$hasResetToken && !$hasLegacyToken) {
+        return ['error' => 'password_reset_columns_missing'];
+    }
+
+    $token = pms_generate_secure_reset_token(32);
+    $expiresAt = date('Y-m-d H:i:s', time() + 86400);
+    if ($hasResetToken && $hasResetExpires && $hasResetSentAt) {
+        $sql = 'UPDATE usuarios SET password_reset_token = ?, password_reset_expires_at = ?, password_reset_sent_at = NOW() WHERE id = ? LIMIT 1';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return ['error' => 'db_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmt, 'ssi', $token, $expiresAt, $userId);
+    } elseif ($hasResetToken && $hasResetExpires) {
+        $sql = 'UPDATE usuarios SET password_reset_token = ?, password_reset_expires_at = ? WHERE id = ? LIMIT 1';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return ['error' => 'db_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmt, 'ssi', $token, $expiresAt, $userId);
+    } elseif ($hasLegacyToken && $hasResetSentAt) {
+        $sql = 'UPDATE usuarios SET token = ?, password_reset_sent_at = NOW() WHERE id = ? LIMIT 1';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return ['error' => 'db_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmt, 'si', $token, $userId);
+    } else {
+        $sql = 'UPDATE usuarios SET token = ? WHERE id = ? LIMIT 1';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return ['error' => 'db_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmt, 'si', $token, $userId);
+        $expiresAt = date('Y-m-d H:i:s', time() + 86400);
+    }
+
+    $ok = mysqli_stmt_execute($stmt);
+    $err = mysqli_stmt_error($stmt);
+    mysqli_stmt_close($stmt);
+    if (!$ok) {
+        return ['error' => 'db_error', 'detail' => $err];
+    }
+
+    return [
+        'ok' => true,
+        'token' => $token,
+        'expires_at' => $expiresAt,
+        'set_password_url' => 'https://medtravel.com.co/set_password.php?token=' . urlencode($token),
+        'login_url' => 'https://medtravel.com.co/login.php',
+    ];
+}
+
+function pms_build_staff_welcome_email_payload($staffName, $providerName, $loginEmail, $setPasswordUrl, $loginUrl, $expiresAt)
+{
+    $staffName = trim((string)$staffName) !== '' ? trim((string)$staffName) : 'Medical staff member';
+    $providerName = trim((string)$providerName) !== '' ? trim((string)$providerName) : 'your provider team';
+    $loginEmail = trim((string)$loginEmail);
+    $expiresLabel = $expiresAt !== '' ? date('M j, Y g:i A', strtotime($expiresAt)) . ' UTC' : 'within 24 hours';
+
+    $contentHtml = ''
+        . '<p style="margin:0 0 14px 0;">Hello ' . htmlspecialchars($staffName, ENT_QUOTES, 'UTF-8') . ',</p>'
+        . '<p style="margin:0 0 14px 0;">' . htmlspecialchars($providerName, ENT_QUOTES, 'UTF-8') . ' has enabled your MedTravel staff access.</p>'
+        . '<p style="margin:0 0 14px 0;">Use your email/login <strong>' . htmlspecialchars($loginEmail, ENT_QUOTES, 'UTF-8') . '</strong> to access the admin once you create your password.</p>'
+        . '<p style="margin:0 0 14px 0;">Create your password using the secure button below. This invitation expires on <strong>' . htmlspecialchars($expiresLabel, ENT_QUOTES, 'UTF-8') . '</strong>.</p>'
+        . '<p style="margin:0 0 14px 0;">If the button does not work, copy this secure link into your browser:<br><a href="' . htmlspecialchars($setPasswordUrl, ENT_QUOTES, 'UTF-8') . '" style="color:#0b4ea2; text-decoration:none;">' . htmlspecialchars($setPasswordUrl, ENT_QUOTES, 'UTF-8') . '</a></p>'
+        . '<p style="margin:0;">After setting your password, you can sign in here: <a href="' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '" style="color:#0b4ea2; text-decoration:none;">' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '</a></p>';
+
+    $html = renderMedTravelEmail(
+        'Your staff access is ready',
+        'Create your password and access MedTravel staff tools.',
+        $contentHtml,
+        'This access email was generated automatically by MedTravel.',
+        [
+            'text' => 'Create your password',
+            'url' => $setPasswordUrl,
+        ],
+        'MedTravel Patient Care'
+    );
+
+    $alt = "Hello {$staffName},\n\n"
+        . "{$providerName} has enabled your MedTravel staff access.\n"
+        . "Login email: {$loginEmail}\n"
+        . "Create your password: {$setPasswordUrl}\n"
+        . "Login after activation: {$loginUrl}\n"
+        . "This invitation expires on {$expiresLabel}.\n";
+
+    return [
+        'subject' => 'MedTravel – Your staff access is ready',
+        'html' => $html,
+        'alt' => $alt,
+    ];
+}
+
+function pms_send_staff_welcome_email($conexion, $toEmail, $payload)
+{
+    if (!function_exists('sendEmail') || !function_exists('renderMedTravelEmail')) {
+        return ['success' => false, 'error' => 'email_functions_unavailable'];
+    }
+    try {
+        $result = sendEmail($toEmail, $payload['subject'], $payload['html'], 'patientcare', ['alt_body' => $payload['alt']], $conexion);
+        if ($result === true) {
+            return ['success' => true];
+        }
+        if (is_array($result)) {
+            return ['success' => false, 'error' => $result['error'] ?? 'send_failed'];
+        }
+        return ['success' => false, 'error' => 'send_failed'];
+    } catch (Throwable $e) {
+        error_log('provider_medical_staff welcome email exception: ' . $e->getMessage());
+        return ['success' => false, 'error' => 'send_exception'];
+    }
 }
 
 function pms_provider_exists($conexion, $providerId)
@@ -330,33 +752,44 @@ function pms_provider_enabled_services($conexion, $providerId, $activeOnly = tru
         return [];
     }
 
+    $hasProviderCatalogServiceId = pms_table_has_column($conexion, 'provider_catalog_services', 'id');
+    $hasProviderCatalogServiceActive = pms_table_has_column($conexion, 'provider_catalog_services', 'is_active');
+    $hasProviderCatalogSortOrder = pms_table_has_column($conexion, 'provider_catalog_services', 'sort_order');
+    $hasProviderCatalogCategory = pms_table_has_column($conexion, 'provider_catalog_services', 'category_id');
     $hasServiceActive = pms_table_has_column($conexion, 'service_catalog', 'is_active');
     $hasServiceDeleted = pms_table_has_column($conexion, 'service_catalog', 'is_deleted');
     $hasCategoryTable = pms_table_has_column($conexion, 'service_categories', 'id');
     $hasServiceCategory = pms_table_has_column($conexion, 'service_catalog', 'category_id');
-    $categoryOrderExpr = ($hasCategoryTable && $hasServiceCategory) ? "COALESCE(cat.name, '')" : "''";
+    $categoryOrderExpr = ($hasCategoryTable && ($hasProviderCatalogCategory || $hasServiceCategory)) ? "COALESCE(cat.name, '')" : "''";
 
     $select = [
+        $hasProviderCatalogServiceId ? 'pcs.id AS provider_catalog_service_id' : 'NULL AS provider_catalog_service_id',
         'sc.id AS service_id',
         'sc.name AS service_name',
-        $hasServiceCategory ? 'sc.category_id' : 'NULL AS category_id',
-        ($hasCategoryTable && $hasServiceCategory) ? 'cat.name AS category_name' : "'' AS category_name",
+        ($hasProviderCatalogSortOrder ? 'pcs.sort_order' : 'NULL') . ' AS sort_order',
+        ($hasProviderCatalogCategory ? 'pcs.category_id' : ($hasServiceCategory ? 'sc.category_id' : 'NULL')) . ' AS category_id',
+        ($hasCategoryTable && ($hasProviderCatalogCategory || $hasServiceCategory)) ? 'cat.name AS category_name' : "'' AS category_name",
     ];
 
     $sql = 'SELECT ' . implode(', ', $select) . '
             FROM provider_catalog_services pcs
             INNER JOIN service_catalog sc ON sc.id = pcs.service_id';
-    if ($hasCategoryTable && $hasServiceCategory) {
-        $sql .= ' LEFT JOIN service_categories cat ON cat.id = sc.category_id';
+    if ($hasCategoryTable && ($hasProviderCatalogCategory || $hasServiceCategory)) {
+        $sql .= ' LEFT JOIN service_categories cat ON cat.id = ' . ($hasProviderCatalogCategory ? 'pcs.category_id' : 'sc.category_id');
     }
     $sql .= ' WHERE pcs.provider_id = ?';
+    if ($activeOnly && $hasProviderCatalogServiceActive) {
+        $sql .= ' AND pcs.is_active = 1';
+    }
     if ($activeOnly && $hasServiceActive) {
         $sql .= ' AND sc.is_active = 1';
     }
     if ($hasServiceDeleted) {
         $sql .= ' AND sc.is_deleted = 0';
     }
-    $sql .= ' ORDER BY ' . $categoryOrderExpr . ' ASC, sc.name ASC, sc.id ASC';
+    $sql .= ' ORDER BY '
+        . ($hasProviderCatalogSortOrder ? 'COALESCE(pcs.sort_order, 0) ASC, ' : '')
+        . $categoryOrderExpr . ' ASC, sc.name ASC, sc.id ASC';
 
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
@@ -368,8 +801,12 @@ function pms_provider_enabled_services($conexion, $providerId, $activeOnly = tru
 
     $rows = [];
     while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $row['provider_catalog_service_id'] = isset($row['provider_catalog_service_id']) && $row['provider_catalog_service_id'] !== null
+            ? (int)$row['provider_catalog_service_id']
+            : null;
         $row['service_id'] = (int)($row['service_id'] ?? 0);
         $row['category_id'] = isset($row['category_id']) && $row['category_id'] !== null ? (int)$row['category_id'] : null;
+        $row['sort_order'] = isset($row['sort_order']) && $row['sort_order'] !== null ? (int)$row['sort_order'] : null;
         $row['label'] = pms_service_label($row);
         $rows[] = $row;
     }
@@ -377,9 +814,15 @@ function pms_provider_enabled_services($conexion, $providerId, $activeOnly = tru
     return $rows;
 }
 
-function pms_requested_service_ids()
+function pms_requested_int_ids($keys)
 {
-    $raw = $_POST['service_ids'] ?? $_POST['service_ids[]'] ?? [];
+    $raw = [];
+    foreach ((array)$keys as $key) {
+        if (isset($_POST[$key])) {
+            $raw = $_POST[$key];
+            break;
+        }
+    }
     if (!is_array($raw)) {
         $raw = trim((string)$raw);
         if ($raw === '') {
@@ -398,7 +841,46 @@ function pms_requested_service_ids()
     return array_values($ids);
 }
 
-function pms_validate_provider_service_ids($conexion, $providerId, $serviceIds)
+function pms_requested_provider_catalog_service_ids()
+{
+    return pms_requested_int_ids(['provider_catalog_service_ids', 'provider_catalog_service_ids[]']);
+}
+
+function pms_requested_service_ids()
+{
+    return pms_requested_int_ids(['service_ids', 'service_ids[]']);
+}
+
+function pms_validate_provider_catalog_service_ids($conexion, $providerId, $providerCatalogServiceIds)
+{
+    $providerCatalogServiceIds = array_values(array_unique(array_map('intval', (array)$providerCatalogServiceIds)));
+    if (empty($providerCatalogServiceIds)) {
+        return [];
+    }
+
+    $allowed = pms_provider_enabled_services($conexion, $providerId, true);
+    $allowedById = [];
+    foreach ($allowed as $row) {
+        $providerCatalogServiceId = (int)($row['provider_catalog_service_id'] ?? 0);
+        if ($providerCatalogServiceId > 0) {
+            $allowedById[$providerCatalogServiceId] = $row;
+        }
+    }
+
+    $resolved = [];
+    foreach ($providerCatalogServiceIds as $providerCatalogServiceId) {
+        if ($providerCatalogServiceId <= 0 || !isset($allowedById[$providerCatalogServiceId])) {
+            return [
+                'error' => 'invalid_provider_catalog_service',
+                'provider_catalog_service_id' => $providerCatalogServiceId,
+            ];
+        }
+        $resolved[] = $allowedById[$providerCatalogServiceId];
+    }
+    return $resolved;
+}
+
+function pms_resolve_legacy_provider_service_ids($conexion, $providerId, $serviceIds)
 {
     $serviceIds = array_values(array_unique(array_map('intval', (array)$serviceIds)));
     if (empty($serviceIds)) {
@@ -406,19 +888,46 @@ function pms_validate_provider_service_ids($conexion, $providerId, $serviceIds)
     }
 
     $allowed = pms_provider_enabled_services($conexion, $providerId, true);
-    $allowedById = [];
+    $allowedByServiceId = [];
     foreach ($allowed as $row) {
-        $allowedById[(int)$row['service_id']] = $row;
+        $serviceId = (int)($row['service_id'] ?? 0);
+        if ($serviceId <= 0) {
+            continue;
+        }
+        if (!isset($allowedByServiceId[$serviceId])) {
+            $allowedByServiceId[$serviceId] = [];
+        }
+        $allowedByServiceId[$serviceId][] = $row;
     }
 
     $resolved = [];
     foreach ($serviceIds as $serviceId) {
-        if ($serviceId <= 0 || !isset($allowedById[$serviceId])) {
+        $candidates = isset($allowedByServiceId[$serviceId]) ? $allowedByServiceId[$serviceId] : [];
+        if (empty($candidates)) {
             return ['error' => 'invalid_provider_service', 'service_id' => $serviceId];
         }
-        $resolved[] = $allowedById[$serviceId];
+        if (count($candidates) > 1) {
+            return ['error' => 'ambiguous_provider_service_match', 'service_id' => $serviceId];
+        }
+        $resolved[] = $candidates[0];
     }
+
     return $resolved;
+}
+
+function pms_resolve_requested_provider_services($conexion, $providerId)
+{
+    $requestedProviderCatalogServiceIds = pms_requested_provider_catalog_service_ids();
+    if (!empty($requestedProviderCatalogServiceIds)) {
+        return pms_validate_provider_catalog_service_ids($conexion, $providerId, $requestedProviderCatalogServiceIds);
+    }
+
+    $requestedServiceIds = pms_requested_service_ids();
+    if (!empty($requestedServiceIds)) {
+        return pms_resolve_legacy_provider_service_ids($conexion, $providerId, $requestedServiceIds);
+    }
+
+    return [];
 }
 
 function pms_fetch_staff_services_map($conexion, $providerId, $staffIds = [], $activeOnly = true)
@@ -428,30 +937,74 @@ function pms_fetch_staff_services_map($conexion, $providerId, $staffIds = [], $a
     }
 
     $hasRelActive = pms_table_has_column($conexion, 'provider_medical_staff_services', 'active');
+    $hasRelProviderCatalogServiceId = pms_table_has_column($conexion, 'provider_medical_staff_services', 'provider_catalog_service_id');
+    $hasProviderCatalogServiceId = pms_table_has_column($conexion, 'provider_catalog_services', 'id');
+    $hasProviderCatalogServiceActive = pms_table_has_column($conexion, 'provider_catalog_services', 'is_active');
+    $hasProviderCatalogCategory = pms_table_has_column($conexion, 'provider_catalog_services', 'category_id');
+    $hasProviderCatalogSortOrder = pms_table_has_column($conexion, 'provider_catalog_services', 'sort_order');
     $hasServiceActive = pms_table_has_column($conexion, 'service_catalog', 'is_active');
     $hasServiceDeleted = pms_table_has_column($conexion, 'service_catalog', 'is_deleted');
     $hasCategoryTable = pms_table_has_column($conexion, 'service_categories', 'id');
     $hasServiceCategory = pms_table_has_column($conexion, 'service_catalog', 'category_id');
-    $categoryOrderExpr = ($hasCategoryTable && $hasServiceCategory) ? "COALESCE(cat.name, '')" : "''";
+    $categoryOrderExpr = ($hasCategoryTable && ($hasProviderCatalogCategory || $hasServiceCategory)) ? "COALESCE(cat.name, '')" : "''";
 
     $select = [
         'rel.provider_medical_staff_id AS staff_id',
-        'sc.id AS service_id',
+        'COALESCE(pcs.id, pcs_legacy.provider_catalog_service_id) AS provider_catalog_service_id',
+        'COALESCE(pcs.service_id, pcs_legacy.service_id, rel.service_id) AS service_id',
         'sc.name AS service_name',
-        ($hasServiceCategory ? 'sc.category_id' : 'NULL') . ' AS category_id',
-        ($hasCategoryTable && $hasServiceCategory) ? 'cat.name AS category_name' : "'' AS category_name",
+        ($hasProviderCatalogSortOrder ? 'COALESCE(pcs.sort_order, pcs_legacy.sort_order)' : 'NULL') . ' AS sort_order',
+        (($hasProviderCatalogCategory ? 'COALESCE(pcs.category_id, pcs_legacy.category_id)' : ($hasServiceCategory ? 'sc.category_id' : 'NULL'))) . ' AS category_id',
+        ($hasCategoryTable && ($hasProviderCatalogCategory || $hasServiceCategory)) ? 'cat.name AS category_name' : "'' AS category_name",
     ];
 
     $sql = 'SELECT ' . implode(', ', $select) . '
             FROM provider_medical_staff_services rel
-            INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id
-            INNER JOIN service_catalog sc ON sc.id = rel.service_id';
-    if ($hasCategoryTable && $hasServiceCategory) {
-        $sql .= ' LEFT JOIN service_categories cat ON cat.id = sc.category_id';
+            INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id';
+    if ($hasProviderCatalogServiceId && $hasRelProviderCatalogServiceId) {
+        $sql .= ' LEFT JOIN provider_catalog_services pcs
+                    ON pcs.id = rel.provider_catalog_service_id
+                   AND pcs.provider_id = pms.provider_id';
+        $sql .= ' LEFT JOIN (
+                    SELECT
+                        provider_id,
+                        service_id,
+                        MIN(id) AS provider_catalog_service_id'
+                        . ($hasProviderCatalogSortOrder ? ', MIN(sort_order) AS sort_order' : ', NULL AS sort_order')
+                        . ($hasProviderCatalogCategory ? ', MIN(category_id) AS category_id' : ', NULL AS category_id') . '
+                    FROM provider_catalog_services
+                    ' . (($activeOnly && $hasProviderCatalogServiceActive) ? 'WHERE is_active = 1 ' : '') . '
+                    GROUP BY provider_id, service_id
+                    HAVING COUNT(*) = 1
+                 ) pcs_legacy
+                    ON pcs_legacy.provider_id = pms.provider_id
+                   AND pcs_legacy.service_id = rel.service_id';
+    } else {
+        $sql .= ' LEFT JOIN (
+                    SELECT
+                        provider_id,
+                        service_id,
+                        NULL AS provider_catalog_service_id,
+                        NULL AS sort_order,
+                        NULL AS category_id
+                    FROM provider_catalog_services
+                    GROUP BY provider_id, service_id
+                 ) pcs_legacy
+                    ON pcs_legacy.provider_id = pms.provider_id
+                   AND pcs_legacy.service_id = rel.service_id';
+    }
+    $sql .= ' INNER JOIN service_catalog sc
+                ON sc.id = COALESCE(pcs.service_id, pcs_legacy.service_id, rel.service_id)';
+    if ($hasCategoryTable && ($hasProviderCatalogCategory || $hasServiceCategory)) {
+        $sql .= ' LEFT JOIN service_categories cat ON cat.id = '
+            . ($hasProviderCatalogCategory ? 'COALESCE(pcs.category_id, pcs_legacy.category_id, sc.category_id)' : 'sc.category_id');
     }
     $sql .= ' WHERE pms.provider_id = ?';
     if ($activeOnly && $hasRelActive) {
         $sql .= ' AND rel.active = 1';
+    }
+    if ($activeOnly && $hasProviderCatalogServiceActive && $hasProviderCatalogServiceId && $hasRelProviderCatalogServiceId) {
+        $sql .= ' AND COALESCE(pcs.is_active, 1) = 1';
     }
     if ($hasServiceActive) {
         $sql .= ' AND sc.is_active = 1';
@@ -471,7 +1024,9 @@ function pms_fetch_staff_services_map($conexion, $providerId, $staffIds = [], $a
             $params[] = $staffId;
         }
     }
-    $sql .= ' ORDER BY ' . $categoryOrderExpr . ' ASC, sc.name ASC, sc.id ASC';
+    $sql .= ' ORDER BY '
+        . ($hasProviderCatalogSortOrder ? 'COALESCE(pcs.sort_order, pcs_legacy.sort_order, 0) ASC, ' : '')
+        . $categoryOrderExpr . ' ASC, sc.name ASC, sc.id ASC';
 
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
@@ -487,8 +1042,12 @@ function pms_fetch_staff_services_map($conexion, $providerId, $staffIds = [], $a
         if ($staffId <= 0) {
             continue;
         }
+        $row['provider_catalog_service_id'] = isset($row['provider_catalog_service_id']) && $row['provider_catalog_service_id'] !== null
+            ? (int)$row['provider_catalog_service_id']
+            : null;
         $row['service_id'] = (int)($row['service_id'] ?? 0);
         $row['category_id'] = isset($row['category_id']) && $row['category_id'] !== null ? (int)$row['category_id'] : null;
+        $row['sort_order'] = isset($row['sort_order']) && $row['sort_order'] !== null ? (int)$row['sort_order'] : null;
         $row['label'] = pms_service_label($row);
         if (!isset($map[$staffId])) {
             $map[$staffId] = [];
@@ -505,9 +1064,13 @@ function pms_attach_service_payload($rows, $serviceMap)
     foreach ((array)$rows as $row) {
         $staffId = (int)($row['id'] ?? 0);
         $serviceItems = isset($serviceMap[$staffId]) ? $serviceMap[$staffId] : [];
+        $providerCatalogServiceIds = [];
         $serviceIds = [];
         $serviceLabels = [];
         foreach ($serviceItems as $serviceItem) {
+            if (isset($serviceItem['provider_catalog_service_id']) && $serviceItem['provider_catalog_service_id'] !== null) {
+                $providerCatalogServiceIds[] = (int)$serviceItem['provider_catalog_service_id'];
+            }
             $serviceIds[] = (int)$serviceItem['service_id'];
             $serviceLabels[] = (string)($serviceItem['label'] ?? pms_service_label($serviceItem));
         }
@@ -521,6 +1084,7 @@ function pms_attach_service_payload($rows, $serviceMap)
             }
         }
         $row['service_items'] = $serviceItems;
+        $row['provider_catalog_service_ids'] = array_values(array_unique($providerCatalogServiceIds));
         $row['service_ids'] = $serviceIds;
         $row['service_count'] = $count;
         $row['service_summary'] = $summary;
@@ -530,10 +1094,10 @@ function pms_attach_service_payload($rows, $serviceMap)
     return $out;
 }
 
-function pms_replace_staff_services($conexion, $providerId, $staffId, $serviceIds)
+function pms_replace_staff_services($conexion, $providerId, $staffId, $serviceRows)
 {
     if (!pms_staff_services_table_ready($conexion)) {
-        if (!empty($serviceIds)) {
+        if (!empty($serviceRows)) {
             return ['error' => 'staff_services_table_missing'];
         }
         return ['ok' => true];
@@ -555,13 +1119,22 @@ function pms_replace_staff_services($conexion, $providerId, $staffId, $serviceId
         return ['error' => 'db_error', 'detail' => $deleteErr];
     }
 
-    $serviceIds = array_values(array_unique(array_map('intval', (array)$serviceIds)));
-    if (empty($serviceIds)) {
+    $serviceRows = array_values((array)$serviceRows);
+    if (empty($serviceRows)) {
         return ['ok' => true];
     }
 
     $hasActive = pms_table_has_column($conexion, 'provider_medical_staff_services', 'active');
-    if ($hasActive) {
+    $hasProviderCatalogServiceId = pms_table_has_column($conexion, 'provider_medical_staff_services', 'provider_catalog_service_id');
+    if ($hasProviderCatalogServiceId && $hasActive) {
+        $insertSql = 'INSERT INTO provider_medical_staff_services
+                        (provider_medical_staff_id, service_id, provider_catalog_service_id, active)
+                      VALUES (?, ?, ?, 1)';
+    } elseif ($hasProviderCatalogServiceId) {
+        $insertSql = 'INSERT INTO provider_medical_staff_services
+                        (provider_medical_staff_id, service_id, provider_catalog_service_id)
+                      VALUES (?, ?, ?)';
+    } elseif ($hasActive) {
         $insertSql = 'INSERT INTO provider_medical_staff_services
                         (provider_medical_staff_id, service_id, active)
                       VALUES (?, ?, 1)';
@@ -574,8 +1147,18 @@ function pms_replace_staff_services($conexion, $providerId, $staffId, $serviceId
     if (!$insertStmt) {
         return ['error' => 'db_prepare_failed'];
     }
-    foreach ($serviceIds as $serviceId) {
-        mysqli_stmt_bind_param($insertStmt, 'ii', $staffId, $serviceId);
+    foreach ($serviceRows as $serviceRow) {
+        $serviceId = (int)($serviceRow['service_id'] ?? 0);
+        $providerCatalogServiceId = (int)($serviceRow['provider_catalog_service_id'] ?? 0);
+        if ($serviceId <= 0) {
+            mysqli_stmt_close($insertStmt);
+            return ['error' => 'invalid_provider_service'];
+        }
+        if ($hasProviderCatalogServiceId) {
+            mysqli_stmt_bind_param($insertStmt, 'iii', $staffId, $serviceId, $providerCatalogServiceId);
+        } else {
+            mysqli_stmt_bind_param($insertStmt, 'ii', $staffId, $serviceId);
+        }
         $ok = mysqli_stmt_execute($insertStmt);
         if (!$ok) {
             $err = mysqli_stmt_error($insertStmt);
@@ -592,20 +1175,27 @@ function pms_resolve_provider_service_id($conexion, $providerId, $serviceId = 0,
     $serviceId = (int)$serviceId;
     $offerId = (int)$offerId;
     if ($serviceId > 0) {
-        $validated = pms_validate_provider_service_ids($conexion, $providerId, [$serviceId]);
-        if (!empty($validated['error'])) {
-            return ['error' => 'invalid_provider_service'];
+        $resolved = pms_resolve_legacy_provider_service_ids($conexion, $providerId, [$serviceId]);
+        if (!empty($resolved['error'])) {
+            return ['error' => $resolved['error']];
         }
-        return ['service_id' => $serviceId];
+        $item = $resolved[0];
+        return [
+            'provider_catalog_service_id' => (int)($item['provider_catalog_service_id'] ?? 0),
+            'service_id' => (int)($item['service_id'] ?? 0),
+        ];
     }
 
     if ($offerId <= 0 || !pms_table_has_column($conexion, 'provider_service_offers', 'id')) {
         return ['error' => 'service_id_or_offer_id_required'];
     }
 
+    $select = pms_table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id')
+        ? 'provider_catalog_service_id, service_id'
+        : 'NULL AS provider_catalog_service_id, service_id';
     $stmt = mysqli_prepare(
         $conexion,
-        'SELECT service_id FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1'
+        'SELECT ' . $select . ' FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1'
     );
     if (!$stmt) {
         return ['error' => 'db_prepare_failed'];
@@ -615,16 +1205,36 @@ function pms_resolve_provider_service_id($conexion, $providerId, $serviceId = 0,
     $res = mysqli_stmt_get_result($stmt);
     $row = $res ? mysqli_fetch_assoc($res) : null;
     mysqli_stmt_close($stmt);
-    if (!$row || empty($row['service_id'])) {
+    if (!$row) {
         return ['error' => 'offer_not_found'];
     }
 
-    $resolvedServiceId = (int)$row['service_id'];
-    $validated = pms_validate_provider_service_ids($conexion, $providerId, [$resolvedServiceId]);
-    if (!empty($validated['error'])) {
-        return ['error' => 'invalid_provider_service'];
+    $providerCatalogServiceId = (int)($row['provider_catalog_service_id'] ?? 0);
+    if ($providerCatalogServiceId > 0) {
+        $resolved = pms_validate_provider_catalog_service_ids($conexion, $providerId, [$providerCatalogServiceId]);
+        if (!empty($resolved['error'])) {
+            return ['error' => $resolved['error']];
+        }
+        $item = $resolved[0];
+        return [
+            'provider_catalog_service_id' => (int)($item['provider_catalog_service_id'] ?? 0),
+            'service_id' => (int)($item['service_id'] ?? 0),
+        ];
     }
-    return ['service_id' => $resolvedServiceId];
+
+    $resolvedServiceId = (int)($row['service_id'] ?? 0);
+    if ($resolvedServiceId <= 0) {
+        return ['error' => 'offer_not_found'];
+    }
+    $resolved = pms_resolve_legacy_provider_service_ids($conexion, $providerId, [$resolvedServiceId]);
+    if (!empty($resolved['error'])) {
+        return ['error' => $resolved['error']];
+    }
+    $item = $resolved[0];
+    return [
+        'provider_catalog_service_id' => (int)($item['provider_catalog_service_id'] ?? 0),
+        'service_id' => (int)($item['service_id'] ?? 0),
+    ];
 }
 
 function pms_fetch_linked_user($conexion, $userId, $providerId, $currentStaffId = 0)
@@ -1423,47 +2033,75 @@ switch ($action) {
             : max(0, (int)$sortOrderRaw);
         $linkedUserId = (int)($_POST['linked_user_id'] ?? 0);
         $canAccessAdmin = isset($_POST['can_access_admin']) ? 1 : 0;
-        $requestedServiceIds = pms_requested_service_ids();
-
-        if ($canAccessAdmin === 1 && $linkedUserId <= 0) {
-            pms_err('Debes seleccionar un usuario vinculado para habilitar acceso al admin', 422);
-        }
 
         if (($linkedUserId > 0 || $canAccessAdmin === 1) && !pms_has_access_columns($conexion)) {
             pms_err('provider_medical_staff_access_columns_missing — run sql/2026_03_12_provider_staff_access_and_item_assignment.sql', 503);
         }
 
-        $linkedUser = null;
-        if ($linkedUserId > 0) {
-            $linkedUser = pms_fetch_linked_user($conexion, $linkedUserId, $providerId, $staffId);
-            if (!$linkedUser) {
-                pms_err('El usuario vinculado no pertenece a este prestador', 422);
-            }
-            if (!empty($linkedUser['error'])) {
-                if ($linkedUser['error'] === 'linked_user_must_be_medical_provider_role') {
+        $accessProvision = [
+            'enabled' => false,
+            'linked_user_id' => 0,
+            'user' => null,
+            'provision_status' => 'access_not_requested',
+        ];
+        if ($canAccessAdmin === 1) {
+            $accessProvision = pms_resolve_staff_access_user(
+                $conexion,
+                $providerId,
+                (string)($provider['name'] ?? ''),
+                $fullName,
+                $email === false ? '' : (string)$email,
+                $linkedUserId,
+                $staffId
+            );
+            if (empty($accessProvision['ok'])) {
+                $error = $accessProvision['error'] ?? 'staff_access_resolution_failed';
+                if ($error === 'staff_access_requires_valid_email') {
+                    pms_err('Debes indicar un email válido para provisionar el acceso o seleccionar un usuario existente del mismo prestador.', 422, ['status' => 'staff_access_requires_valid_email']);
+                }
+                if ($error === 'existing_user_belongs_to_other_provider') {
+                    pms_err('El email indicado ya pertenece a un usuario de otro prestador. Usa otro email o vincula un usuario válido de este prestador.', 422, ['status' => 'existing_user_belongs_to_other_provider']);
+                }
+                if ($error === 'user_already_linked_to_other_staff') {
+                    $linkedStaffName = trim((string)($accessProvision['linked_staff']['full_name'] ?? ''));
+                    $message = 'El usuario seleccionado ya está vinculado a otro miembro del staff.';
+                    if ($linkedStaffName !== '') {
+                        $message .= ' Staff actual: ' . $linkedStaffName . '.';
+                    }
+                    pms_err($message, 422, ['status' => 'user_already_linked_to_other_staff']);
+                }
+                if ($error === 'linked_user_must_be_medical_provider_role') {
                     pms_err('El usuario vinculado debe tener rol médico del prestador', 422);
                 }
-                if ($linkedUser['error'] === 'linked_user_already_assigned') {
-                    $staffName = trim((string)($linkedUser['linked_staff']['full_name'] ?? ''));
-                    pms_err('Ese usuario ya está vinculado a otro staff' . ($staffName !== '' ? ': ' . $staffName : ''), 422);
+                if ($error === 'linked_user_not_found_for_provider') {
+                    pms_err('El usuario vinculado no pertenece a este prestador o no está disponible para este staff.', 422);
                 }
-                pms_err('No fue posible validar el usuario vinculado', 422);
+                pms_err($error, 422);
             }
+            $linkedUserId = (int)($accessProvision['user']['id'] ?? 0);
+            $accessProvision['enabled'] = true;
+            $accessProvision['linked_user_id'] = $linkedUserId;
         } else {
-            $canAccessAdmin = 0;
+            $linkedUserId = 0;
         }
+        $linkedUserIdSql = $linkedUserId > 0 ? $linkedUserId : 0;
 
-        $validatedServices = pms_validate_provider_service_ids($conexion, $providerId, $requestedServiceIds);
+        $validatedServices = pms_resolve_requested_provider_services($conexion, $providerId);
         if (!empty($validatedServices['error'])) {
+            if ($validatedServices['error'] === 'ambiguous_provider_service_match') {
+                pms_err('Un servicio legado corresponde a múltiples servicios habilitados del prestador. Selecciona el servicio habilitado actualizado.', 422);
+            }
             pms_err('Solo puedes asignar al médico servicios activos habilitados para este prestador', 422);
         }
 
         mysqli_begin_transaction($conexion);
 
+        $savedId = 0;
+        $message = '';
+
         try {
             $statusColumn = provider_staff_status_column_name($conexion);
             $legacyActiveColumn = provider_staff_has_legacy_active_column($conexion);
-            $linkedUserIdSql = $linkedUserId > 0 ? $linkedUserId : 0;
 
             if ($staffId > 0) {
                 $fields = [];
@@ -1699,7 +2337,7 @@ switch ($action) {
                 }
             }
 
-            $replaceResult = pms_replace_staff_services($conexion, $providerId, $savedId, $requestedServiceIds);
+            $replaceResult = pms_replace_staff_services($conexion, $providerId, $savedId, $validatedServices);
             if (!empty($replaceResult['error'])) {
                 if ($replaceResult['error'] === 'staff_services_table_missing') {
                     throw new Exception('provider_medical_staff_services_table_missing — run sql/2026_03_12_provider_medical_staff_services.sql');
@@ -1717,11 +2355,59 @@ switch ($action) {
             pms_err($e->getMessage(), $status);
         }
 
-        $saved = pms_staff_row($conexion, $savedId, $providerId);
+        $responseStatus = $staffId > 0 ? 'updated' : 'created';
+        $postCommitWarnings = [];
+        $mailMeta = null;
+        if (!empty($accessProvision['enabled']) && $linkedUserId > 0) {
+            $tokenResult = pms_issue_staff_access_token($conexion, $linkedUserId);
+            if (empty($tokenResult['ok'])) {
+                $responseStatus = ($accessProvision['provision_status'] === 'created_user')
+                    ? 'created_user_mail_failed'
+                    : 'linked_existing_user_mail_failed';
+                $postCommitWarnings[] = 'No fue posible emitir el token seguro de acceso.';
+            } else {
+                $welcomePayload = pms_build_staff_welcome_email_payload(
+                    $fullName,
+                    (string)($provider['name'] ?? ''),
+                    (string)($accessProvision['user']['email'] ?? $accessProvision['user']['usuario'] ?? $email),
+                    $tokenResult['set_password_url'],
+                    $tokenResult['login_url'],
+                    (string)$tokenResult['expires_at']
+                );
+                $mailMeta = pms_send_staff_welcome_email(
+                    $conexion,
+                    (string)($accessProvision['user']['email'] ?? $accessProvision['user']['usuario'] ?? $email),
+                    $welcomePayload
+                );
+                if (!empty($mailMeta['success'])) {
+                    $responseStatus = ($accessProvision['provision_status'] === 'created_user')
+                        ? 'created_user_and_mail_sent'
+                        : 'linked_existing_user_mail_sent';
+                } else {
+                    $responseStatus = ($accessProvision['provision_status'] === 'created_user')
+                        ? 'created_user_mail_failed'
+                        : 'linked_existing_user_mail_failed';
+                    $postCommitWarnings[] = 'El acceso fue provisionado pero el correo de bienvenida no se pudo enviar.';
+                }
+            }
+        }
+
+        $savedRow = pms_staff_row($conexion, $savedId, $providerId);
+        if (!$savedRow) {
+            pms_err('staff_saved_but_reload_failed', 500);
+        }
+
         pms_ok([
-            'item' => $saved,
             'message' => $message,
-            'provider' => $provider,
+            'status' => $responseStatus,
+            'item' => $savedRow,
+            'warnings' => $postCommitWarnings,
+            'access_provision' => [
+                'enabled' => !empty($accessProvision['enabled']),
+                'linked_user_id' => $linkedUserId > 0 ? $linkedUserId : null,
+                'provision_status' => $accessProvision['provision_status'] ?? 'access_not_requested',
+                'mail_sent' => !empty($mailMeta['success']),
+            ],
         ]);
     }
 
@@ -1742,17 +2428,26 @@ switch ($action) {
         }
 
         $rows = pms_list_staff_rows($conexion, $providerId, true);
-        $targetServiceId = (int)$resolved['service_id'];
+        $targetProviderCatalogServiceId = (int)($resolved['provider_catalog_service_id'] ?? 0);
+        $targetServiceId = (int)($resolved['service_id'] ?? 0);
         $items = [];
         foreach ($rows as $row) {
+            $providerCatalogServiceIds = array_map('intval', (array)($row['provider_catalog_service_ids'] ?? []));
             $serviceIds = array_map('intval', (array)($row['service_ids'] ?? []));
-            if (in_array($targetServiceId, $serviceIds, true)) {
+            $matchesProviderCatalogService = ($targetProviderCatalogServiceId > 0)
+                ? in_array($targetProviderCatalogServiceId, $providerCatalogServiceIds, true)
+                : false;
+            $matchesLegacyService = ($targetServiceId > 0)
+                ? in_array($targetServiceId, $serviceIds, true)
+                : false;
+            if ($matchesProviderCatalogService || (!$matchesProviderCatalogService && $matchesLegacyService)) {
                 $items[] = $row;
             }
         }
 
         pms_ok([
             'provider' => $provider,
+            'provider_catalog_service_id' => $targetProviderCatalogServiceId > 0 ? $targetProviderCatalogServiceId : null,
             'service_id' => $targetServiceId,
             'items' => $items,
             'total' => count($items),

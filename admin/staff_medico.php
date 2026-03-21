@@ -52,7 +52,104 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
+    <link href="../../assets/global/plugins/jquery-multi-select/css/multi-select.css" rel="stylesheet" type="text/css" />
     <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+    <style>
+        .staff-form-section {
+            border: 1px solid #e7ecf1;
+            border-radius: 6px;
+            padding: 18px;
+            margin-bottom: 18px;
+            background: #fff;
+        }
+
+        .staff-form-section-title {
+            margin: 0 0 6px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #2f4050;
+        }
+
+        .staff-form-section-help {
+            margin: 0 0 16px;
+            color: #6b7c93;
+            font-size: 13px;
+        }
+
+        .staff-permission-option {
+            display: block;
+            border: 1px solid #dfe6ee;
+            border-radius: 6px;
+            padding: 12px 14px 12px 40px;
+            margin-bottom: 10px;
+            background: #fafbfd;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .staff-permission-option input {
+            position: absolute;
+            left: 14px;
+            top: 15px;
+        }
+
+        .staff-permission-option strong {
+            display: block;
+            margin-bottom: 2px;
+            color: #2f4050;
+        }
+
+        .staff-permission-option span {
+            display: block;
+            color: #6b7c93;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .staff-permission-option.is-active {
+            border-color: #5b9bd1;
+            background: #f4f8fc;
+            box-shadow: inset 0 0 0 1px rgba(91, 155, 209, 0.15);
+        }
+
+        .staff-clinic-deemphasized {
+            display: none;
+        }
+
+        #pms-linked-user-id-wrap {
+            display: none !important;
+        }
+
+        .staff-services-field .ms-container {
+            width: 100%;
+        }
+
+        .staff-services-field .ms-selectable,
+        .staff-services-field .ms-selection {
+            width: calc(50% - 10px);
+        }
+
+        .staff-services-field .ms-list {
+            min-height: 280px;
+            max-height: 280px;
+            border-radius: 4px;
+        }
+
+        .staff-services-header {
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #6b7c93;
+            letter-spacing: .04em;
+        }
+
+        .staff-services-empty {
+            margin-top: 8px;
+            color: #6b7c93;
+            font-size: 13px;
+        }
+    </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
     <div class="wrapper">
@@ -148,6 +245,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
 
     <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
     <?php echo $theme_layout_script;?>
+    <script src="../../assets/global/plugins/jquery-multi-select/js/jquery.multi-select.js" type="text/javascript"></script>
 
     <!-- Modal staff médico -->
     <div id="providerMedicalStaffModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="providerMedicalStaffModalLabel">
@@ -160,150 +258,163 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                 <div class="modal-body">
                     <form id="form-provider-medical-staff">
                         <input type="hidden" id="pms-id" name="id" value="" />
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-full-name">Nombre completo <span class="required">*</span></label>
-                                    <input type="text" class="form-control" id="pms-full-name" name="full_name" maxlength="150" required />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-role-title">Cargo / rol <small class="text-muted">(en inglés)</small></label>
-                                    <select class="form-control" id="pms-role-title" name="role_title">
-                                        <option value="">Cargando...</option>
-                                    </select>
-                                    <span class="help-block"><i class="fa fa-globe"></i> Write in English — this label may be visible to patients.</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-specialty">Especialidad <small class="text-muted">(en inglés)</small></label>
-                                    <select class="form-control" id="pms-specialty" name="specialty">
-                                        <option value="">Cargando...</option>
-                                    </select>
-                                    <span class="help-block"><i class="fa fa-globe"></i> Write in English — this label may be visible to patients.</span>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-sort-order">Orden</label>
-                                    <input type="number" class="form-control" id="pms-sort-order" name="sort_order" min="0" step="1" />
-                                    <span class="help-block">Menor número = aparece primero.</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Foto del profesional</label>
-                            <!-- Foto actual / preview -->
-                            <div id="pms-photo-preview-wrap" style="margin-bottom:8px; display:none;">
-                                <img id="pms-photo-preview" src="" alt="Foto actual"
-                                     style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" />
-                                <button type="button" class="btn btn-xs btn-danger" id="pms-photo-clear"
-                                        style="vertical-align:top; margin-left:6px;"
-                                        title="Quitar foto">
-                                    <i class="fa fa-times"></i> Quitar
-                                </button>
-                            </div>
-                            <!-- Input file -->
-                            <input type="file" id="pms-photo-file" name="photo_file"
-                                   accept="image/jpeg,image/png,image/webp,image/gif"
-                                   style="display:block;" />
-                            <!-- Campo oculto con la URL/ruta guardada en BD -->
-                            <input type="hidden" id="pms-photo" name="photo" value="" />
-                            <span class="help-block">JPG, PNG o WebP. Máximo 2 MB. Dimensión recomendada: 400×400 px.</span>
-                        </div>
-                        <div class="form-group">
-                            <label for="pms-bio-short">Bio corta <small class="text-muted">(en inglés)</small></label>
-                            <textarea class="form-control" id="pms-bio-short" name="bio_short" rows="3"></textarea>
-                            <span class="help-block"><i class="fa fa-globe"></i> Write in English — this text may be shown to patients on the platform.</span>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-email">Correo</label>
-                                    <input type="email" class="form-control" id="pms-email" name="email" maxlength="120" />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-phone">Teléfono</label>
-                                    <input type="text" class="form-control" id="pms-phone" name="phone" maxlength="60" />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <label class="mt-checkbox mt-checkbox-outline">
-                                    <input type="checkbox" id="pms-is-primary-doctor" name="is_primary_doctor" value="1" />
-                                    Marcar como médico principal
-                                    <span></span>
-                                </label>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="mt-checkbox mt-checkbox-outline">
-                                    <input type="checkbox" id="pms-is-active" name="is_active" value="1" checked />
-                                    Registro activo
-                                    <span></span>
-                                </label>
-                            </div>
-                        </div>
-                        <hr />
-                        <h5 class="bold">Información adicional</h5>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-license">Registro profesional</label>
-                                    <input type="text" class="form-control" id="pms-license" name="professional_license" maxlength="120" />
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="pms-clinic">Clínica / sede</label>
-                                    <select class="form-control" id="pms-clinic" name="clinic_name">
-                                        <option value="">Cargando...</option>
-                                    </select>
-                                    <input type="text" class="form-control" id="pms-clinic-other" name="" maxlength="180" placeholder="Escribir nombre de sede" style="margin-top:6px; display:none;" />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="pms-service-ids">Servicios habilitados</label>
-                            <select class="form-control" id="pms-service-ids" name="service_ids[]" multiple size="8"></select>
-                            <span class="help-block">Opcional. Indica qué servicios cl&iacute;nicos de <strong>Mis Servicios</strong> puede atender este profesional. Solo se listan los servicios habilitados del prestador. Mant&eacute;n <kbd>Ctrl</kbd> (o <kbd>&lceil;</kbd>) para selecci&oacute;n m&uacute;ltiple.</span>
-                        </div>
-                        <div class="form-group">
-                            <label for="pms-notes">Notas</label>
-                            <textarea class="form-control" id="pms-notes" name="notes" rows="4"></textarea>
-                        </div>
-                        <div id="pms-access-section" style="display:none;">
-                            <hr />
-                            <h4 class="bold" style="margin-top:0;">Acceso al sistema</h4>
-                            <p class="text-muted">Configura aquí si este médico tendrá acceso propio al admin y con qué usuario quedará vinculado.</p>
+                        <div class="staff-form-section">
+                            <h5 class="staff-form-section-title">Datos del profesional</h5>
+                            <p class="staff-form-section-help">Completa la información principal del staff que se mostrará y gestionará en el panel.</p>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="pms-linked-user-id">Usuario vinculado</label>
-                                        <select class="form-control" id="pms-linked-user-id" name="linked_user_id">
-                                            <option value="">Sin usuario vinculado</option>
-                                        </select>
-                                        <span class="help-block">Debe pertenecer al mismo prestador y tener usuario activo en el sistema.</span>
+                                        <label for="pms-full-name">Nombre completo <span class="required">*</span></label>
+                                        <input type="text" class="form-control" id="pms-full-name" name="full_name" maxlength="150" required />
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <div class="form-group" style="padding-top:26px;">
-                                        <label class="mt-checkbox mt-checkbox-outline">
-                                            <input type="checkbox" id="pms-can-access-admin" name="can_access_admin" value="1" />
-                                            Permitir acceso al admin
-                                            <span></span>
-                                        </label>
-                                        <span class="help-block">
-                                            Estado de acceso: <strong id="pms-access-status">Sin usuario vinculado</strong>
-                                        </span>
+                                    <div class="form-group">
+                                        <label for="pms-role-title">Cargo / rol <small class="text-muted">(en inglés)</small></label>
+                                        <select class="form-control" id="pms-role-title" name="role_title">
+                                            <option value="">Cargando...</option>
+                                        </select>
+                                        <span class="help-block"><i class="fa fa-globe"></i> Write in English — this label may be visible to patients.</span>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="pms-specialty">Especialidad <small class="text-muted">(en inglés)</small></label>
+                                        <select class="form-control" id="pms-specialty" name="specialty">
+                                            <option value="">Cargando...</option>
+                                        </select>
+                                        <span class="help-block"><i class="fa fa-globe"></i> Write in English — this label may be visible to patients.</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="pms-sort-order">Orden de visualización</label>
+                                        <input type="number" class="form-control" id="pms-sort-order" name="sort_order" min="0" step="1" />
+                                        <span class="help-block">Opcional. Usa un número menor si quieres que este profesional aparezca antes en la lista. Si lo dejas vacío, se ubicará automáticamente al final.</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Foto del profesional</label>
+                                <div id="pms-photo-preview-wrap" style="margin-bottom:8px; display:none;">
+                                    <img id="pms-photo-preview" src="" alt="Foto actual"
+                                         style="width:80px; height:80px; object-fit:cover; border-radius:4px; border:1px solid #ddd;" />
+                                    <button type="button" class="btn btn-xs btn-danger" id="pms-photo-clear"
+                                            style="vertical-align:top; margin-left:6px;"
+                                            title="Quitar foto">
+                                        <i class="fa fa-times"></i> Quitar
+                                    </button>
+                                </div>
+                                <input type="file" id="pms-photo-file" name="photo_file"
+                                       accept="image/jpeg,image/png,image/webp,image/gif"
+                                       style="display:block;" />
+                                <input type="hidden" id="pms-photo" name="photo" value="" />
+                                <span class="help-block">JPG, PNG o WebP. Máximo 2 MB. Dimensión recomendada: 400×400 px.</span>
+                            </div>
+                            <div class="form-group">
+                                <label for="pms-bio-short">Bio corta <small class="text-muted">(en inglés)</small></label>
+                                <textarea class="form-control" id="pms-bio-short" name="bio_short" rows="3"></textarea>
+                                <span class="help-block"><i class="fa fa-globe"></i> Write in English — this text may be shown to patients on the platform.</span>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="pms-email" id="pms-email-label">Email del profesional</label>
+                                        <input type="email" class="form-control" id="pms-email" name="email" maxlength="120" />
+                                        <span class="help-block" id="pms-email-help">Opcional. Úsalo para contacto del profesional y para su acceso al panel si necesita ingresar.</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="pms-phone">Teléfono</label>
+                                        <input type="text" class="form-control" id="pms-phone" name="phone" maxlength="60" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="mt-checkbox mt-checkbox-outline">
+                                        <input type="checkbox" id="pms-is-primary-doctor" name="is_primary_doctor" value="1" />
+                                        Marcar como médico principal
+                                        <span></span>
+                                    </label>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="mt-checkbox mt-checkbox-outline">
+                                        <input type="checkbox" id="pms-is-active" name="is_active" value="1" checked />
+                                        Registro activo
+                                        <span></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="staff-form-section">
+                            <h5 class="staff-form-section-title">Servicios que puede atender</h5>
+                            <p class="staff-form-section-help">Selecciona los servicios habilitados del prestador que este profesional puede atender.</p>
+                            <div class="form-group staff-services-field" style="margin-bottom:8px;">
+                                <label for="pms-service-ids">Servicios que puede atender</label>
+                                <select class="form-control" id="pms-service-ids" name="provider_catalog_service_ids[]" multiple></select>
+                                <span class="help-block">Selecciona los servicios habilitados del prestador que este profesional puede atender.</span>
+                                <div id="pms-service-selection-summary" class="small text-muted">Sin servicios seleccionados.</div>
+                                <div id="pms-service-empty-state" class="staff-services-empty" style="display:none;">Este prestador no tiene servicios habilitados disponibles.</div>
+                            </div>
+                        </div>
+
+                        <div id="pms-access-section" class="staff-form-section" style="display:none;">
+                            <h5 class="staff-form-section-title">Acceso y permisos</h5>
+                            <p class="staff-form-section-help">Define el nivel de acceso del staff dentro del panel según sus responsabilidades.</p>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label>Nivel de acceso del staff</label>
+                                <label class="staff-permission-option" data-access-level="scoped">
+                                    <input type="radio" name="pms_access_level" value="scoped" checked />
+                                    <strong>Solo sus asignaciones</strong>
+                                    <span>Puede ingresar al panel para gestionar únicamente la información y tareas que le correspondan.</span>
+                                </label>
+                                <label class="staff-permission-option" data-access-level="admin">
+                                    <input type="radio" name="pms_access_level" value="admin" />
+                                    <strong>Permisos administrativos</strong>
+                                    <span>Además de sus asignaciones, tendrá permisos ampliados dentro del panel según el modelo interno del prestador.</span>
+                                </label>
+                            </div>
+                            <div class="alert alert-info" id="pms-access-summary" style="margin-bottom:12px;">
+                                Este profesional tendrá un acceso estándar orientado a sus asignaciones.
+                            </div>
+                            <div class="small text-muted">Estado del acceso: <strong id="pms-access-status">Solo sus asignaciones</strong></div>
+                            <input type="checkbox" id="pms-can-access-admin" name="can_access_admin" value="1" style="display:none;" />
+                            <div id="pms-linked-user-id-wrap">
+                                <select class="form-control" id="pms-linked-user-id" name="linked_user_id">
+                                    <option value="">Sin usuario vinculado</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="staff-form-section" style="margin-bottom:0;">
+                            <h5 class="staff-form-section-title">Información adicional</h5>
+                            <p class="staff-form-section-help">Campos complementarios para registro interno. La sede queda en segundo plano y solo se usa si realmente aplica.</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="pms-license">Registro profesional</label>
+                                        <input type="text" class="form-control" id="pms-license" name="professional_license" maxlength="120" />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group staff-clinic-deemphasized" id="pms-clinic-field">
+                                        <label for="pms-clinic">Clínica / sede</label>
+                                        <select class="form-control" id="pms-clinic" name="clinic_name">
+                                            <option value="">Cargando...</option>
+                                        </select>
+                                        <input type="text" class="form-control" id="pms-clinic-other" name="" maxlength="180" placeholder="Escribir nombre de sede" style="margin-top:6px; display:none;" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="pms-notes">Notas</label>
+                                <textarea class="form-control" id="pms-notes" name="notes" rows="4"></textarea>
+                                <span class="help-block">Opcional. Úsalo para observaciones internas del equipo.</span>
                             </div>
                         </div>
                     </form>
