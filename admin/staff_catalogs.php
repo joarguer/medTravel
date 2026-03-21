@@ -236,9 +236,8 @@ $hasMedicalStaffAjax = is_file(__DIR__ . '/ajax/provider_medical_staff.php');
         <?php echo $footer; ?>
     </div><!-- /.wrapper -->
 
-    <?php echo $global_scripts; ?>
-    <?php echo $theme_global_scripts; ?>
-    <?php echo $theme_layout_scripts; ?>
+    <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
+    <?php echo $theme_layout_script; ?>
 
     <script>
     (function ($) {
