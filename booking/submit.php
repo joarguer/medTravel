@@ -4,7 +4,9 @@ include(__DIR__ . '/../inc/include.php');
 require_once __DIR__ . '/../admin/include/roles.php';
 require_once __DIR__ . '/../admin/include/password_utils.php';
 require_once __DIR__ . '/../admin/include/email_config.php';
+require_once __DIR__ . '/../admin/include/provider_medical_staff_helpers.php';
 require_once __DIR__ . '/../inc/email_template.php';
+require_once __DIR__ . '/../inc/interaction_email.php';
 require_once __DIR__ . '/../inc/calendar_utils.php';
 
 function table_exists_local($conexion, $table)
@@ -548,11 +550,223 @@ function run_static_booking_insert_local($conexion, $data)
     return $result;
 }
 
+function booking_fetch_eligible_staff_ids_local($conexion, $providerId, $providerCatalogServiceId = 0, $serviceId = 0)
+{
+    $providerId = (int)$providerId;
+    $providerCatalogServiceId = (int)$providerCatalogServiceId;
+    $serviceId = (int)$serviceId;
+    if ($providerId <= 0 || $serviceId <= 0) {
+        return [];
+    }
+    if (!table_exists_local($conexion, 'provider_medical_staff') || !table_exists_local($conexion, 'provider_medical_staff_services')) {
+        return [];
+    }
+
+    $hasRelActive = table_has_column_local($conexion, 'provider_medical_staff_services', 'active');
+    $hasRelProviderCatalogServiceId = table_has_column_local($conexion, 'provider_medical_staff_services', 'provider_catalog_service_id');
+    $staffStatusColumn = provider_staff_status_column_name($conexion);
+
+    $sql = "SELECT DISTINCT pms.id
+            FROM provider_medical_staff_services rel
+            INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id
+            WHERE pms.provider_id = ?";
+    $types = 'i';
+    $params = [$providerId];
+
+    if ($hasRelActive) {
+        $sql .= ' AND rel.active = 1';
+    }
+    if ($staffStatusColumn !== '') {
+        $sql .= ' AND pms.`' . $staffStatusColumn . '` = 1';
+    }
+
+    if ($providerCatalogServiceId > 0 && $hasRelProviderCatalogServiceId) {
+        $sql .= ' AND (rel.provider_catalog_service_id = ?';
+        $types .= 'i';
+        $params[] = $providerCatalogServiceId;
+        $sql .= ' OR (COALESCE(rel.provider_catalog_service_id, 0) = 0 AND rel.service_id = ?))';
+        $types .= 'i';
+        $params[] = $serviceId;
+    } else {
+        $sql .= ' AND rel.service_id = ?';
+        $types .= 'i';
+        $params[] = $serviceId;
+    }
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return [];
+    }
+    if (!bind_stmt_params_local($stmt, $types, $params)) {
+        mysqli_stmt_close($stmt);
+        return [];
+    }
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return [];
+    }
+
+    $res = mysqli_stmt_get_result($stmt);
+    $ids = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $staffId = (int)($row['id'] ?? 0);
+        if ($staffId > 0) {
+            $ids[] = $staffId;
+        }
+    }
+    mysqli_stmt_close($stmt);
+    return array_values(array_unique($ids));
+}
+
+function booking_resolve_unique_staff_id_local($conexion, $providerId, $providerCatalogServiceId = 0, $serviceId = 0)
+{
+    $eligibleIds = booking_fetch_eligible_staff_ids_local($conexion, $providerId, $providerCatalogServiceId, $serviceId);
+    return count($eligibleIds) === 1 ? (int)$eligibleIds[0] : 0;
+}
+
+function booking_assign_initial_staff_to_item_local($conexion, $itemId, $providerId, $providerCatalogServiceId = 0, $serviceId = 0)
+{
+    $itemId = (int)$itemId;
+    $providerId = (int)$providerId;
+    if ($itemId <= 0 || $providerId <= 0 || !table_has_column_local($conexion, 'booking_request_items', 'assigned_staff_id')) {
+        return 0;
+    }
+
+    $staffId = booking_resolve_unique_staff_id_local($conexion, $providerId, $providerCatalogServiceId, $serviceId);
+    if ($staffId <= 0) {
+        return 0;
+    }
+
+    $setParts = ['assigned_staff_id = ?'];
+    $types = 'ii';
+    $params = [$staffId, $itemId];
+    if (table_has_column_local($conexion, 'booking_request_items', 'assigned_at')) {
+        $setParts[] = 'assigned_at = NOW()';
+    }
+
+    $sql = 'UPDATE booking_request_items SET ' . implode(', ', $setParts) . ' WHERE id = ? LIMIT 1';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return 0;
+    }
+    if (!bind_stmt_params_local($stmt, $types, $params)) {
+        mysqli_stmt_close($stmt);
+        return 0;
+    }
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return 0;
+    }
+    mysqli_stmt_close($stmt);
+    return $staffId;
+}
+
+function booking_build_provider_case_url_local($requestId, $itemId)
+{
+    return 'https://medtravel.com.co/admin/my_booking_requests.php?item_id=' . (int)$itemId . '&request_id=' . (int)$requestId;
+}
+
+function booking_notify_provider_new_request_local($conexion, $bookingRequestId, $item)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $itemId = (int)($item['item_id'] ?? 0);
+    if ($bookingRequestId <= 0 || $itemId <= 0) {
+        return ['success' => false, 'error' => 'invalid_item'];
+    }
+
+    $emailSource = '';
+    $providerEmail = interaction_email_fetch_provider_email($conexion, $itemId, $emailSource);
+    if (!filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'error' => 'provider_email_not_found'];
+    }
+
+    $timelineExpr = table_has_column_local($conexion, 'booking_requests', 'timeline') ? 'br.timeline' : "''";
+    $detailSql = "SELECT
+                    bri.provider_id,
+                    br.name AS client_name,
+                    br.email AS client_email,
+                    " . (table_has_column_local($conexion, 'booking_requests', 'phone') ? 'br.phone' : "''") . " AS client_phone,
+                    br.destination,
+                    {$timelineExpr} AS timeline,
+                    COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
+                    " . (table_has_column_local($conexion, 'booking_request_items', 'assigned_staff_id') ? 'bri.assigned_staff_id' : 'NULL') . " AS assigned_staff_id
+                FROM booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                LEFT JOIN service_catalog sc ON sc.id = o.service_id
+                LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                WHERE bri.id = ? AND bri.booking_request_id = ?
+                LIMIT 1";
+    $stmtDetail = mysqli_prepare($conexion, $detailSql);
+    if ($stmtDetail) {
+        mysqli_stmt_bind_param($stmtDetail, 'ii', $itemId, $bookingRequestId);
+        if (mysqli_stmt_execute($stmtDetail)) {
+            $resDetail = mysqli_stmt_get_result($stmtDetail);
+            $detailRow = $resDetail ? mysqli_fetch_assoc($resDetail) : null;
+            if (is_array($detailRow)) {
+                $item = array_merge($detailRow, $item);
+            }
+        }
+        mysqli_stmt_close($stmtDetail);
+    }
+
+    $requestMeta = interaction_email_request_meta($conexion, 'ITEM', $bookingRequestId, $itemId);
+    $itemTitle = trim((string)($requestMeta['title'] ?? ''));
+    if ($itemTitle === '') {
+        $itemTitle = trim((string)($item['item_name'] ?? 'Item #' . $itemId));
+    }
+    $patientName = trim((string)($item['client_name'] ?? 'Paciente'));
+    $patientEmail = trim((string)($item['client_email'] ?? ''));
+    $patientPhone = trim((string)($item['client_phone'] ?? ''));
+    $destination = trim((string)($item['destination'] ?? ''));
+    $timeline = trim((string)($item['timeline'] ?? ''));
+    $assignedStaffId = (int)($item['assigned_staff_id'] ?? 0);
+    $assignedStaff = $assignedStaffId > 0 ? provider_staff_fetch_basic_row($conexion, $assignedStaffId, (int)($item['provider_id'] ?? 0)) : null;
+    $assignedStaffName = trim((string)($assignedStaff['full_name'] ?? ''));
+    $caseUrl = booking_build_provider_case_url_local($bookingRequestId, $itemId);
+    $subject = 'New booking request received - case #' . $bookingRequestId;
+
+    $contentHtml = '<p>A new booking request has been created and is waiting for provider review.</p>'
+        . '<p style="margin:0 0 6px 0;"><strong>Case:</strong> ' . escape_html_local($itemTitle) . '</p>'
+        . '<p style="margin:0 0 6px 0;"><strong>Patient:</strong> ' . escape_html_local($patientName) . '</p>'
+        . ($patientEmail !== '' ? '<p style="margin:0 0 6px 0;"><strong>Email:</strong> ' . escape_html_local($patientEmail) . '</p>' : '')
+        . ($patientPhone !== '' ? '<p style="margin:0 0 6px 0;"><strong>Phone:</strong> ' . escape_html_local($patientPhone) . '</p>' : '')
+        . ($destination !== '' ? '<p style="margin:0 0 6px 0;"><strong>Destination:</strong> ' . escape_html_local($destination) . '</p>' : '')
+        . ($timeline !== '' ? '<p style="margin:0 0 6px 0;"><strong>Timeline:</strong> ' . escape_html_local($timeline) . '</p>' : '')
+        . ($assignedStaffName !== '' ? '<p style="margin:0 0 16px 0;"><strong>Assigned staff:</strong> ' . escape_html_local($assignedStaffName) . '</p>' : '<p style="margin:0 0 16px 0;"><strong>Assigned staff:</strong> Pending assignment</p>')
+        . '<p>Please open the provider portal to review the case details and continue the workflow.</p>';
+
+    $textBody = "A new booking request has been created and is waiting for provider review.\n\n"
+        . 'Case: ' . $itemTitle . "\n"
+        . 'Patient: ' . $patientName . "\n"
+        . ($patientEmail !== '' ? 'Email: ' . $patientEmail . "\n" : '')
+        . ($patientPhone !== '' ? 'Phone: ' . $patientPhone . "\n" : '')
+        . ($destination !== '' ? 'Destination: ' . $destination . "\n" : '')
+        . ($timeline !== '' ? 'Timeline: ' . $timeline . "\n" : '')
+        . 'Assigned staff: ' . ($assignedStaffName !== '' ? $assignedStaffName : 'Pending assignment') . "\n\n"
+        . 'Open case: ' . $caseUrl;
+
+    return send_interaction_email(
+        $providerEmail,
+        $subject,
+        $contentHtml,
+        $textBody,
+        [
+            'preheader' => 'A new case is waiting for provider review in MedTravel.',
+            'cta' => ['text' => 'Open case in MedTravel', 'url' => $caseUrl],
+            'footer_note' => 'Please handle the case through your MedTravel portal.',
+            'sender_label' => 'MedTravel Coordination Team',
+        ],
+        $conexion
+    );
+}
+
 function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offers, $medtravel_services)
 {
+    $createdItems = [];
     if (!table_exists_local($conexion, 'booking_request_items')) {
         error_log('booking_submit: booking_request_items table does not exist; skipping item insert for booking_request_id=' . intval($booking_request_id));
-        return;
+        return $createdItems;
     }
     $itemsHasProviderId = table_has_column_local($conexion, 'booking_request_items', 'provider_id');
     $itemsHasServiceProviderId = table_has_column_local($conexion, 'booking_request_items', 'service_provider_id');
@@ -560,7 +774,7 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     $itemsHasCurrency = table_has_column_local($conexion, 'booking_request_items', 'currency');
     if (!$itemsHasProviderId && !$itemsHasServiceProviderId) {
         error_log('booking_submit: booking_request_items missing provider_id/service_provider_id; skipping booking_request_id=' . intval($booking_request_id));
-        return;
+        return $createdItems;
     }
     $canInsertMedical = $itemsHasProviderId;
     $canInsertComplementary = $itemsHasServiceProviderId;
@@ -577,7 +791,10 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     $hasProviderDeleted = table_has_column_local($conexion, 'providers', 'is_deleted');
     $offerPriceExpr = table_has_column_local($conexion, 'provider_service_offers', 'price_from') ? 'o.price_from' : 'NULL';
     $offerCurrencyExpr = table_has_column_local($conexion, 'provider_service_offers', 'currency') ? 'o.currency' : "''";
+    $offerProviderCatalogServiceExpr = table_has_column_local($conexion, 'provider_service_offers', 'provider_catalog_service_id') ? 'o.provider_catalog_service_id' : 'NULL';
     $offerSql = "SELECT o.provider_id,
+                        o.service_id,
+                        {$offerProviderCatalogServiceExpr} AS provider_catalog_service_id,
                         {$offerPriceExpr} AS offer_price,
                         {$offerCurrencyExpr} AS offer_currency
                  FROM provider_service_offers o
@@ -673,7 +890,28 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
             }
             if (!mysqli_stmt_execute($insertMedicalStmt)) {
                 error_log('booking_submit: medical item insert failed booking_request_id=' . intval($booking_request_id) . ' offer_id=' . $offerId . ' provider_id=' . $providerId . ' error=' . mysqli_stmt_error($insertMedicalStmt));
+                continue;
             }
+
+            $itemId = (int)mysqli_insert_id($conexion);
+            $serviceId = (int)($offerRow['service_id'] ?? 0);
+            $providerCatalogServiceId = (int)($offerRow['provider_catalog_service_id'] ?? 0);
+            $assignedStaffId = booking_assign_initial_staff_to_item_local(
+                $conexion,
+                $itemId,
+                $providerId,
+                $providerCatalogServiceId,
+                $serviceId
+            );
+            $createdItems[] = [
+                'item_id' => $itemId,
+                'item_type' => 'medical_offer',
+                'offer_id' => $offerId,
+                'provider_id' => $providerId,
+                'service_id' => $serviceId,
+                'provider_catalog_service_id' => $providerCatalogServiceId,
+                'assigned_staff_id' => $assignedStaffId,
+            ];
         }
     } elseif ($canInsertMedical) {
         error_log('booking_submit: prepare failed for medical items. offerStmt=' . ($offerStmt ? 'ok' : 'null') . ', insertMedicalStmt=' . ($insertMedicalStmt ? 'ok' : 'null'));
@@ -696,7 +934,7 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
         if (!empty($medtravel_services)) {
             error_log('booking_submit: medtravel_services_catalog has no provider_id/service_provider_id; skipping complementary item insert for booking_request_id=' . intval($booking_request_id));
         }
-        return;
+        return $createdItems;
     }
 
     $hasSvcActive = table_has_column_local($conexion, 'medtravel_services_catalog', 'is_active');
@@ -804,7 +1042,16 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
             }
             if (!mysqli_stmt_execute($insertComplementaryStmt)) {
                 error_log('booking_submit: complementary item insert failed booking_request_id=' . intval($booking_request_id) . ' medtravel_service_id=' . $serviceId . ' error=' . mysqli_stmt_error($insertComplementaryStmt));
+                continue;
             }
+
+            $createdItems[] = [
+                'item_id' => (int)mysqli_insert_id($conexion),
+                'item_type' => 'complementary_service',
+                'medtravel_service_id' => $serviceId,
+                'service_provider_id' => $serviceProviderId,
+                'assigned_staff_id' => 0,
+            ];
         }
     } else {
         error_log('booking_submit: prepare failed for complementary items. serviceStmt=' . ($serviceStmt ? 'ok' : 'null') . ', insertComplementaryStmt=' . ($insertComplementaryStmt ? 'ok' : 'null'));
@@ -816,6 +1063,8 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     if ($insertComplementaryStmt) {
         mysqli_stmt_close($insertComplementaryStmt);
     }
+
+    return $createdItems;
 }
 
 function find_or_create_client_user_for_booking($conexion, $booking)
@@ -2002,8 +2251,9 @@ if (!$saved) {
 }
 
 if ($saved && $booking_request_id > 0) {
+    $createdItems = [];
     try {
-        insert_booking_items_mvp($conexion, $booking_request_id, $selected_offers, $medtravel_services);
+        $createdItems = insert_booking_items_mvp($conexion, $booking_request_id, $selected_offers, $medtravel_services);
     } catch (Throwable $e) {
         error_log('booking_submit: post-save items error booking_id=' . intval($booking_request_id) . ' msg=' . $e->getMessage());
     }
@@ -2034,6 +2284,16 @@ if ($saved && $booking_request_id > 0) {
         $items = fetch_booking_summary_items($conexion, $selected_offers, $medtravel_services);
         $summaryPayload = build_submission_summary_payload($booking_request_id, $booking, $timeline, $items);
         $_SESSION['booking_submission_summary'] = $summaryPayload;
+
+        foreach ($createdItems as $createdItem) {
+            if (($createdItem['item_type'] ?? '') !== 'medical_offer') {
+                continue;
+            }
+            $notifyResult = booking_notify_provider_new_request_local($conexion, $booking_request_id, $createdItem);
+            if (is_array($notifyResult) && empty($notifyResult['success']) && empty($notifyResult['skipped'])) {
+                error_log('booking_submit: provider notification failed booking_id=' . intval($booking_request_id) . ' item_id=' . intval($createdItem['item_id'] ?? 0) . ' payload=' . json_encode($notifyResult));
+            }
+        }
 
         send_booking_confirmation_email(
             $conexion,

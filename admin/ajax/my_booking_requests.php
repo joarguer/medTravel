@@ -10,6 +10,58 @@ require_once __DIR__ . '/../../inc/fee_gate.php';
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 
+$GLOBALS['my_booking_requests_debug_action'] = 'bootstrap';
+$GLOBALS['my_booking_requests_debug_branch'] = 'bootstrap';
+
+function my_booking_requests_debug_log($label, $context = [])
+{
+    $path = __DIR__ . '/../../storage/logs/my_booking_requests_debug.log';
+    $dir = dirname($path);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    $payload = [
+        'time' => date('Y-m-d H:i:s'),
+        'label' => (string)$label,
+        'action' => (string)($GLOBALS['my_booking_requests_debug_action'] ?? ''),
+        'branch' => (string)($GLOBALS['my_booking_requests_debug_branch'] ?? ''),
+        'context' => is_array($context) ? $context : ['value' => $context],
+    ];
+    @file_put_contents($path, json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND | LOCK_EX);
+}
+
+function my_booking_requests_set_debug_branch($branch)
+{
+    $GLOBALS['my_booking_requests_debug_branch'] = (string)$branch;
+}
+
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if (!$error) {
+        return;
+    }
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array((int)$error['type'], $fatalTypes, true)) {
+        return;
+    }
+    my_booking_requests_debug_log('fatal', $error);
+});
+
+set_exception_handler(function ($exception) {
+    my_booking_requests_debug_log('uncaught_exception', [
+        'type' => is_object($exception) ? get_class($exception) : 'unknown',
+        'message' => is_object($exception) ? $exception->getMessage() : 'unknown',
+        'file' => is_object($exception) ? $exception->getFile() : '',
+        'line' => is_object($exception) ? $exception->getLine() : 0,
+    ]);
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['ok' => false, 'message' => 'server_exception']);
+    exit;
+});
+
 function json_ok($data = [])
 {
     echo json_encode(array_merge(['ok' => true], $data));
@@ -990,9 +1042,11 @@ function build_medical_provider_scope($conexion, $providerId)
 
 function fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete)
 {
+    $assignedStaffExpr = table_has_column($conexion, 'booking_request_items', 'assigned_staff_id') ? 'bri.assigned_staff_id' : 'NULL';
     $sql = "SELECT
                 bri.id,
                 bri.booking_request_id,
+                {$assignedStaffExpr} AS assigned_staff_id,
                 CASE
                     WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
                     ELSE bri.item_status
@@ -1031,6 +1085,271 @@ function fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeP
     $row = $res ? mysqli_fetch_assoc($res) : null;
     mysqli_stmt_close($stmt);
     return $row;
+}
+
+function current_booking_actor_user_id()
+{
+    $userId = current_admin_user_id();
+    if ($userId > 0) {
+        return $userId;
+    }
+
+    $userId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+    if ($userId > 0) {
+        return $userId;
+    }
+
+    $userId = isset($_SESSION['id']) ? (int)$_SESSION['id'] : 0;
+    return $userId > 0 ? $userId : 0;
+}
+
+function fetch_item_assignment_context($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete, $offerProviderCatalogServiceExpr)
+{
+    $assignedDoctorExpr = table_has_column($conexion, 'booking_request_items', 'assigned_doctor')
+        ? 'bri.assigned_doctor'
+        : (table_has_column($conexion, 'booking_request_items', 'doctor_name') ? 'bri.doctor_name' : "''");
+    $clinicExpr = table_has_column($conexion, 'booking_request_items', 'clinic')
+        ? 'bri.clinic'
+        : (table_has_column($conexion, 'booking_request_items', 'clinic_name') ? 'bri.clinic_name' : "''");
+
+    $sql = "SELECT
+                bri.id AS item_id,
+                bri.booking_request_id,
+                bri.item_type,
+                " . (table_has_column($conexion, 'booking_request_items', 'provider_id') ? 'bri.provider_id' : 'o.provider_id') . " AS provider_id,
+                bri.offer_id,
+                o.service_id AS service_id,
+                {$offerProviderCatalogServiceExpr} AS provider_catalog_service_id,
+                " . (table_has_column($conexion, 'booking_request_items', 'assigned_staff_id') ? 'bri.assigned_staff_id' : 'NULL') . " AS assigned_staff_id,
+                {$assignedDoctorExpr} AS assigned_doctor,
+                {$clinicExpr} AS clinic
+            FROM booking_request_items bri
+            INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+            LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+            WHERE bri.id = ?";
+
+    if ($hasItemsSoftDelete) {
+        $sql .= ' AND bri.is_deleted = 0';
+    }
+    if ($hasRequestsSoftDelete) {
+        $sql .= ' AND br.is_deleted = 0';
+    }
+    $sql .= $scopeWhere;
+    $sql .= ' LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+
+    $types = 'i' . $scopeTypes;
+    $params = array_merge([$itemId], $scopeParams);
+    bind_stmt_params($stmt, $types, $params);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return null;
+    }
+
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row;
+}
+
+function fetch_staff_assignment_service_sets($conexion, $providerId, $staffId)
+{
+    $providerId = (int)$providerId;
+    $staffId = (int)$staffId;
+    if ($providerId <= 0 || $staffId <= 0 || !table_exists($conexion, 'provider_medical_staff_services')) {
+        return ['provider_catalog_service_ids' => [], 'service_ids' => []];
+    }
+
+    $hasRelActive = table_has_column($conexion, 'provider_medical_staff_services', 'active');
+    $hasRelProviderCatalogServiceId = table_has_column($conexion, 'provider_medical_staff_services', 'provider_catalog_service_id');
+    $hasProviderCatalogServices = table_exists($conexion, 'provider_catalog_services') && table_has_column($conexion, 'provider_catalog_services', 'id');
+    $hasProviderCatalogServiceActive = $hasProviderCatalogServices && table_has_column($conexion, 'provider_catalog_services', 'is_active');
+    $hasServiceCatalog = table_exists($conexion, 'service_catalog') && table_has_column($conexion, 'service_catalog', 'id');
+    $hasServiceActive = $hasServiceCatalog && table_has_column($conexion, 'service_catalog', 'is_active');
+    $hasServiceDeleted = $hasServiceCatalog && table_has_column($conexion, 'service_catalog', 'is_deleted');
+
+    $providerCatalogServiceSelect = $hasProviderCatalogServices && $hasRelProviderCatalogServiceId
+        ? 'COALESCE(pcs.id, pcs_legacy.provider_catalog_service_id)'
+        : 'pcs_legacy.provider_catalog_service_id';
+    $serviceIdSelect = $hasProviderCatalogServices && $hasRelProviderCatalogServiceId
+        ? 'COALESCE(pcs.service_id, pcs_legacy.service_id, rel.service_id)'
+        : 'COALESCE(pcs_legacy.service_id, rel.service_id)';
+
+    $sql = 'SELECT
+                ' . $providerCatalogServiceSelect . ' AS provider_catalog_service_id,
+                ' . $serviceIdSelect . ' AS service_id
+            FROM provider_medical_staff_services rel
+            INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id';
+
+    if ($hasProviderCatalogServices && $hasRelProviderCatalogServiceId) {
+        $sql .= ' LEFT JOIN provider_catalog_services pcs
+                    ON pcs.id = rel.provider_catalog_service_id
+                   AND pcs.provider_id = pms.provider_id';
+        $sql .= ' LEFT JOIN (
+                    SELECT provider_id, service_id, MIN(id) AS provider_catalog_service_id
+                    FROM provider_catalog_services'
+            . ($hasProviderCatalogServiceActive ? ' WHERE is_active = 1' : '')
+            . ' GROUP BY provider_id, service_id
+                    HAVING COUNT(*) = 1
+                 ) pcs_legacy
+                    ON pcs_legacy.provider_id = pms.provider_id
+                   AND pcs_legacy.service_id = rel.service_id';
+    } elseif ($hasProviderCatalogServices) {
+        $sql .= ' LEFT JOIN (
+                    SELECT provider_id, service_id, NULL AS provider_catalog_service_id
+                    FROM provider_catalog_services
+                    GROUP BY provider_id, service_id
+                 ) pcs_legacy
+                    ON pcs_legacy.provider_id = pms.provider_id
+                   AND pcs_legacy.service_id = rel.service_id';
+    } else {
+        $sql .= ' LEFT JOIN (
+                    SELECT NULL AS provider_id, NULL AS service_id, NULL AS provider_catalog_service_id
+                 ) pcs_legacy ON 1=0';
+    }
+
+    if ($hasServiceCatalog) {
+        $sql .= ' INNER JOIN service_catalog sc
+                    ON sc.id = ' . $serviceIdSelect;
+    }
+
+    $sql .= ' WHERE pms.provider_id = ?
+              AND rel.provider_medical_staff_id = ?';
+
+    if ($hasRelActive) {
+        $sql .= ' AND rel.active = 1';
+    }
+    if ($hasProviderCatalogServiceActive && $hasProviderCatalogServices && $hasRelProviderCatalogServiceId) {
+        $sql .= ' AND COALESCE(pcs.is_active, 1) = 1';
+    }
+    if ($hasServiceCatalog && $hasServiceActive) {
+        $sql .= ' AND sc.is_active = 1';
+    }
+    if ($hasServiceCatalog && $hasServiceDeleted) {
+        $sql .= ' AND sc.is_deleted = 0';
+    }
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return ['provider_catalog_service_ids' => [], 'service_ids' => []];
+    }
+    mysqli_stmt_bind_param($stmt, 'ii', $providerId, $staffId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $providerCatalogServiceIds = [];
+    $serviceIds = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        if (isset($row['provider_catalog_service_id']) && $row['provider_catalog_service_id'] !== null) {
+            $providerCatalogServiceIds[] = (int)$row['provider_catalog_service_id'];
+        }
+        $resolvedServiceId = (int)($row['service_id'] ?? 0);
+        if ($resolvedServiceId > 0) {
+            $serviceIds[] = $resolvedServiceId;
+        }
+    }
+    mysqli_stmt_close($stmt);
+
+    return [
+        'provider_catalog_service_ids' => array_values(array_unique($providerCatalogServiceIds)),
+        'service_ids' => array_values(array_unique($serviceIds)),
+    ];
+}
+
+function is_staff_eligible_for_item_assignment($itemContext, $staffServiceSets)
+{
+    $targetProviderCatalogServiceId = (int)($itemContext['provider_catalog_service_id'] ?? 0);
+    $targetServiceId = (int)($itemContext['service_id'] ?? 0);
+    $providerCatalogServiceIds = array_map('intval', (array)($staffServiceSets['provider_catalog_service_ids'] ?? []));
+    $serviceIds = array_map('intval', (array)($staffServiceSets['service_ids'] ?? []));
+
+    $matchesProviderCatalogService = ($targetProviderCatalogServiceId > 0)
+        ? in_array($targetProviderCatalogServiceId, $providerCatalogServiceIds, true)
+        : false;
+    $matchesLegacyService = ($targetServiceId > 0)
+        ? in_array($targetServiceId, $serviceIds, true)
+        : false;
+
+    return $matchesProviderCatalogService || (!$matchesProviderCatalogService && $matchesLegacyService);
+}
+
+function maybe_assign_item_to_current_linked_staff($conexion, $itemId, $providerId, $currentLinkedStaffId, $currentAssignedStaffId, $hasItemAssignedStaffId, $hasItemAssignedAt, $hasItemAssignedByUserId, $hasItemsSoftDelete, $hasRequestsSoftDelete)
+{
+    $itemId = (int)$itemId;
+    $providerId = (int)$providerId;
+    $currentLinkedStaffId = (int)$currentLinkedStaffId;
+    $currentAssignedStaffId = (int)$currentAssignedStaffId;
+
+    if ($itemId <= 0 || $providerId <= 0 || $currentLinkedStaffId <= 0 || !$hasItemAssignedStaffId) {
+        return ['ok' => true, 'assigned' => false];
+    }
+
+    if ($currentAssignedStaffId > 0) {
+        if ($currentAssignedStaffId !== $currentLinkedStaffId) {
+            return ['ok' => false, 'assigned' => false, 'message' => 'item_assigned_to_other_staff', 'status' => 403];
+        }
+        return ['ok' => true, 'assigned' => false];
+    }
+
+    $staffRow = provider_staff_fetch_basic_row($conexion, $currentLinkedStaffId, $providerId);
+    if (!$staffRow) {
+        return ['ok' => false, 'assigned' => false, 'message' => 'invalid_staff_context', 'status' => 403];
+    }
+
+    $setParts = ['bri.assigned_staff_id = ?'];
+    $types = 'i';
+    $params = [$currentLinkedStaffId];
+
+    if ($hasItemAssignedAt) {
+        $setParts[] = 'bri.assigned_at = NOW()';
+    }
+
+    $actorUserId = current_booking_actor_user_id();
+    if ($hasItemAssignedByUserId && $actorUserId > 0) {
+        $setParts[] = 'bri.assigned_by_user_id = ?';
+        $types .= 'i';
+        $params[] = $actorUserId;
+    }
+
+    $sql = "UPDATE booking_request_items bri
+            INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+            SET " . implode(', ', $setParts) . "
+            WHERE bri.id = ?
+              AND (bri.assigned_staff_id IS NULL OR bri.assigned_staff_id = 0)";
+    $types .= 'i';
+    $params[] = $itemId;
+
+    if ($hasItemsSoftDelete) {
+        $sql .= ' AND bri.is_deleted = 0';
+    }
+    if ($hasRequestsSoftDelete) {
+        $sql .= ' AND br.is_deleted = 0';
+    }
+    $sql .= ' LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return ['ok' => false, 'assigned' => false, 'message' => 'db_prepare_error', 'status' => 500];
+    }
+
+    bind_stmt_params($stmt, $types, $params);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        return ['ok' => false, 'assigned' => false, 'message' => 'db_error: ' . $err, 'status' => 500];
+    }
+
+    $affected = mysqli_stmt_affected_rows($stmt);
+    mysqli_stmt_close($stmt);
+    if ($affected <= 0) {
+        return ['ok' => false, 'assigned' => false, 'message' => 'item_assignment_conflict', 'status' => 409];
+    }
+
+    return ['ok' => true, 'assigned' => true, 'assigned_staff_id' => $currentLinkedStaffId];
 }
 
 function fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete)
@@ -1310,6 +1629,13 @@ if (!$isAdminSession && !$isMedicalProviderSession && $serviceProviderId <= 0) {
 }
 
 $action = isset($_POST['action']) ? $_POST['action'] : (isset($_GET['action']) ? $_GET['action'] : 'list');
+$GLOBALS['my_booking_requests_debug_action'] = (string)$action;
+my_booking_requests_debug_log('request', [
+    'method' => $_SERVER['REQUEST_METHOD'] ?? '',
+    'post_bytes' => strlen((string)http_build_query($_POST)),
+    'post_keys' => array_keys($_POST),
+    'item_id' => $_POST['item_id'] ?? $_GET['item_id'] ?? null,
+]);
 $canonicalItemStatuses = [
     'pending_provider',
     'provider_confirmed',
@@ -1332,6 +1658,8 @@ $hasItemsProviderId = table_has_column($conexion, 'booking_request_items', 'prov
 $hasItemsServiceProviderId = table_has_column($conexion, 'booking_request_items', 'service_provider_id');
 $hasItemStatus = table_has_column($conexion, 'booking_request_items', 'item_status');
 $hasItemAssignedStaffId = table_has_column($conexion, 'booking_request_items', 'assigned_staff_id');
+$hasItemAssignedAt = table_has_column($conexion, 'booking_request_items', 'assigned_at');
+$hasItemAssignedByUserId = table_has_column($conexion, 'booking_request_items', 'assigned_by_user_id');
 $hasItemCreatedAt = table_has_column($conexion, 'booking_request_items', 'created_at');
 $hasItemUpdatedAt = table_has_column($conexion, 'booking_request_items', 'updated_at');
 $hasItemCurrency = table_has_column($conexion, 'booking_request_items', 'currency');
@@ -1381,10 +1709,16 @@ $itemTimezoneCol = first_existing_column($conexion, 'booking_request_items', ['t
 $itemLocationCol = first_existing_column($conexion, 'booking_request_items', ['location']);
 $itemRescheduleCountCol = first_existing_column($conexion, 'booking_request_items', ['reschedule_count']);
 $itemLastProviderActionCol = first_existing_column($conexion, 'booking_request_items', ['last_provider_action']);
+$offerProviderCatalogServiceExpr = table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id')
+    ? 'o.provider_catalog_service_id'
+    : 'NULL';
 
 if (!$hasItemStatus) {
     json_err('item_status_not_available', 409);
 }
+
+$currentLinkedStaffId = current_provider_medical_staff_id($conexion);
+$isLinkedMedicalStaffSession = $isMedicalProviderSession && $currentLinkedStaffId > 0;
 
 $scopeWhere = '';
 $scopeTypes = '';
@@ -1398,11 +1732,21 @@ if ($isAdminSession) {
         $scopeWhere = " AND bri.provider_id = ? AND bri.item_type = 'medical_offer'";
         $scopeTypes = 'i';
         $scopeParams = [$providerId];
+        if ($isLinkedMedicalStaffSession && $hasItemAssignedStaffId) {
+            $scopeWhere .= " AND (bri.assigned_staff_id = ? OR (COALESCE(bri.assigned_staff_id, 0) = 0 AND (bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review'))))";
+            $scopeTypes .= 'i';
+            $scopeParams[] = $currentLinkedStaffId;
+        }
     } else {
         $medicalScope = build_medical_provider_scope($conexion, $providerId);
         $scopeWhere = (string)$medicalScope['where'];
         $scopeTypes = (string)$medicalScope['types'];
         $scopeParams = is_array($medicalScope['params']) ? $medicalScope['params'] : [];
+        if ($isLinkedMedicalStaffSession && $hasItemAssignedStaffId) {
+            $scopeWhere .= " AND (bri.assigned_staff_id = ? OR (COALESCE(bri.assigned_staff_id, 0) = 0 AND (bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review'))))";
+            $scopeTypes .= 'i';
+            $scopeParams[] = $currentLinkedStaffId;
+        }
     }
 } else {
     if (!$hasItemsServiceProviderId) {
@@ -1545,6 +1889,7 @@ if ($action === 'list_threads') {
 }
 
 if ($action === 'list') {
+    my_booking_requests_set_debug_branch('list');
     $sql = "SELECT
                 bri.id AS item_id,
                 bri.booking_request_id,
@@ -1609,6 +1954,7 @@ if ($action === 'list') {
 }
 
 if ($action === 'get_detail') {
+    my_booking_requests_set_debug_branch('get_detail');
     $itemId = intval($_POST['item_id'] ?? $_GET['item_id'] ?? 0);
     if ($itemId <= 0) {
         json_err('invalid_id');
@@ -1638,6 +1984,9 @@ if ($action === 'get_detail') {
                 bri.item_type,
                 " . ($hasItemsProviderId ? 'bri.provider_id' : 'NULL') . " AS provider_id,
                 " . ($hasItemsServiceProviderId ? 'bri.service_provider_id' : 'NULL') . " AS service_provider_id,
+                bri.offer_id,
+                o.service_id AS service_id,
+                {$offerProviderCatalogServiceExpr} AS provider_catalog_service_id,
                 CASE
                     WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
                     ELSE bri.item_status
@@ -1885,6 +2234,15 @@ if ($action === 'get_detail') {
         $history[$historyIndex] = enrich_item_trace_row($conexion, $historyRow, $calendarTraceMap);
     }
 
+    $row['provider_catalog_service_id'] = isset($row['provider_catalog_service_id']) && $row['provider_catalog_service_id'] !== null
+        ? (int)$row['provider_catalog_service_id']
+        : null;
+    $row['service_id'] = (int)($row['service_id'] ?? 0);
+    $row['offer_id'] = (int)($row['offer_id'] ?? 0);
+    $row['provider_id'] = (int)($row['provider_id'] ?? 0);
+    $row['assigned_staff_id'] = (int)($row['assigned_staff_id'] ?? 0);
+    $row['can_assign_staff'] = (!$isLinkedMedicalStaffSession && ($row['item_type'] ?? '') === 'medical_offer' && (int)$row['provider_id'] > 0 && ((int)$row['offer_id'] > 0 || (int)$row['service_id'] > 0)) ? 1 : 0;
+
     $row['coordination_unlocked'] = $coordinationFee['unlocked'] ? 1 : 0;
     $row['coordination_actions_locked'] = (!$coordinationFee['unlocked'] && !$isAdminSession) ? 1 : 0;
     $row['coordination_pending_message'] = $coordinationFee['message'];
@@ -1917,7 +2275,177 @@ if ($action === 'get_detail') {
     json_ok(['data' => $row, 'items_history' => $history]);
 }
 
+if ($action === 'assign_staff') {
+    my_booking_requests_set_debug_branch('assign_staff');
+    if (!$hasItemAssignedStaffId) {
+        json_err('assigned_staff_not_available', 409);
+    }
+    if ($isLinkedMedicalStaffSession) {
+        json_err('forbidden', 403);
+    }
+
+    $itemId = intval($_POST['item_id'] ?? $_GET['item_id'] ?? 0);
+    $staffId = intval($_POST['staff_id'] ?? $_GET['staff_id'] ?? 0);
+    if ($itemId <= 0 || $staffId <= 0) {
+        json_err('invalid_assignment_payload', 422);
+    }
+
+    $itemContext = fetch_item_assignment_context(
+        $conexion,
+        $itemId,
+        $scopeWhere,
+        $scopeTypes,
+        $scopeParams,
+        $hasItemsSoftDelete,
+        $hasRequestsSoftDelete,
+        $offerProviderCatalogServiceExpr
+    );
+    if (!$itemContext) {
+        my_booking_requests_debug_log('assign_staff_context_missing', ['item_id' => $itemId]);
+        json_err('not_found', 404);
+    }
+    if (($itemContext['item_type'] ?? '') !== 'medical_offer') {
+        json_err('item_not_assignable', 422);
+    }
+
+    $itemProviderId = (int)($itemContext['provider_id'] ?? 0);
+    if ($itemProviderId <= 0) {
+        json_err('provider_context_missing', 409);
+    }
+    if ((int)($itemContext['offer_id'] ?? 0) <= 0 && (int)($itemContext['service_id'] ?? 0) <= 0) {
+        json_err('service_context_missing', 409);
+    }
+
+    $staffRow = provider_staff_fetch_basic_row($conexion, $staffId, $itemProviderId);
+    if (!$staffRow) {
+        json_err('staff_not_found', 404);
+    }
+    if ((int)($staffRow['is_active'] ?? 1) !== 1) {
+        json_err('staff_not_active', 422);
+    }
+
+    $staffServiceSets = fetch_staff_assignment_service_sets($conexion, $itemProviderId, $staffId);
+    if (!is_staff_eligible_for_item_assignment($itemContext, $staffServiceSets)) {
+        my_booking_requests_debug_log('assign_staff_not_eligible', [
+            'item_id' => $itemId,
+            'staff_id' => $staffId,
+            'provider_id' => $itemProviderId,
+            'item_context' => $itemContext,
+            'staff_service_sets' => $staffServiceSets,
+        ]);
+        json_err('staff_not_eligible_for_item', 422);
+    }
+
+    $currentAssignedStaffId = (int)($itemContext['assigned_staff_id'] ?? 0);
+    if ($currentAssignedStaffId !== $staffId) {
+        $setParts = ['bri.assigned_staff_id = ?'];
+        $types = 'i';
+        $params = [$staffId];
+
+        if ($hasItemAssignedAt) {
+            $setParts[] = 'bri.assigned_at = NOW()';
+        }
+        $actorUserId = current_booking_actor_user_id();
+        if ($hasItemAssignedByUserId && $actorUserId > 0) {
+            $setParts[] = 'bri.assigned_by_user_id = ?';
+            $types .= 'i';
+            $params[] = $actorUserId;
+        }
+        if ($hasItemUpdatedAt) {
+            $setParts[] = 'bri.updated_at = NOW()';
+        }
+
+        $sql = "UPDATE booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                SET " . implode(', ', $setParts) . "
+                WHERE bri.id = ?";
+        $types .= 'i';
+        $params[] = $itemId;
+
+        if ($hasItemsSoftDelete) {
+            $sql .= ' AND bri.is_deleted = 0';
+        }
+        if ($hasRequestsSoftDelete) {
+            $sql .= ' AND br.is_deleted = 0';
+        }
+        $sql .= $scopeWhere;
+        $sql .= ' LIMIT 1';
+        if ($scopeTypes !== '') {
+            $types .= $scopeTypes;
+            $params = array_merge($params, $scopeParams);
+        }
+
+        my_booking_requests_debug_log('assign_staff_update_attempt', [
+            'item_id' => $itemId,
+            'staff_id' => $staffId,
+            'types' => $types,
+            'param_count' => count($params),
+            'scope_types' => $scopeTypes,
+            'scope_param_count' => count($scopeParams),
+        ]);
+
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            my_booking_requests_debug_log('assign_staff_prepare_failed', ['sql' => $sql, 'db_error' => mysqli_error($conexion)]);
+            json_err('db_prepare_error', 500);
+        }
+        if (!bind_stmt_params($stmt, $types, $params)) {
+            mysqli_stmt_close($stmt);
+            my_booking_requests_debug_log('assign_staff_bind_failed', [
+                'types' => $types,
+                'param_count' => count($params),
+            ]);
+            json_err('db_bind_error', 500);
+        }
+        if (!mysqli_stmt_execute($stmt)) {
+            $err = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            my_booking_requests_debug_log('assign_staff_execute_failed', ['db_error' => $err]);
+            json_err('db_error: ' . $err, 500);
+        }
+        mysqli_stmt_close($stmt);
+    }
+
+    $updatedContext = fetch_item_assignment_context(
+        $conexion,
+        $itemId,
+        $scopeWhere,
+        $scopeTypes,
+        $scopeParams,
+        $hasItemsSoftDelete,
+        $hasRequestsSoftDelete,
+        $offerProviderCatalogServiceExpr
+    );
+    if (!$updatedContext) {
+        json_err('assignment_saved_but_reload_failed', 500);
+    }
+
+    $updatedContext['provider_id'] = (int)($updatedContext['provider_id'] ?? 0);
+    $updatedContext['offer_id'] = (int)($updatedContext['offer_id'] ?? 0);
+    $updatedContext['service_id'] = (int)($updatedContext['service_id'] ?? 0);
+    $updatedContext['assigned_staff_id'] = (int)($updatedContext['assigned_staff_id'] ?? 0);
+    $updatedContext['provider_catalog_service_id'] = isset($updatedContext['provider_catalog_service_id']) && $updatedContext['provider_catalog_service_id'] !== null
+        ? (int)$updatedContext['provider_catalog_service_id']
+        : null;
+    $updatedContext = provider_staff_apply_assignment_payload($conexion, $updatedContext);
+
+    json_ok([
+        'data' => [
+            'item_id' => (int)($updatedContext['item_id'] ?? $itemId),
+            'provider_id' => (int)($updatedContext['provider_id'] ?? $itemProviderId),
+            'offer_id' => (int)($updatedContext['offer_id'] ?? 0),
+            'service_id' => (int)($updatedContext['service_id'] ?? 0),
+            'provider_catalog_service_id' => $updatedContext['provider_catalog_service_id'],
+            'assigned_staff_id' => (int)($updatedContext['assigned_staff_id'] ?? 0),
+            'assigned_doctor' => $updatedContext['assigned_doctor'] ?? null,
+            'clinic' => $updatedContext['clinic'] ?? null,
+            'assigned_staff' => $updatedContext['assigned_staff'] ?? null,
+        ],
+    ]);
+}
+
 if ($action === 'list_messages') {
+    my_booking_requests_set_debug_branch('list_messages');
     $threadTypeRaw = trim((string)($_POST['thread_type'] ?? $_GET['thread_type'] ?? ''));
     $legacyMode = ($threadTypeRaw === '');
     $threadType = strtoupper($threadTypeRaw);
@@ -2158,6 +2686,23 @@ if ($action === 'send_message') {
         if (!$itemRow) {
             json_err('not_found', 404);
         }
+        if ($isLinkedMedicalStaffSession) {
+            $assignmentResult = maybe_assign_item_to_current_linked_staff(
+                $conexion,
+                $itemId,
+                $providerId,
+                $currentLinkedStaffId,
+                (int)($itemRow['assigned_staff_id'] ?? 0),
+                $hasItemAssignedStaffId,
+                $hasItemAssignedAt,
+                $hasItemAssignedByUserId,
+                $hasItemsSoftDelete,
+                $hasRequestsSoftDelete
+            );
+            if (empty($assignmentResult['ok'])) {
+                json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
+            }
+        }
         $bookingRequestId = (int)$itemRow['booking_request_id'];
     } else {
         if ($bookingRequestId <= 0) {
@@ -2282,6 +2827,23 @@ if ($action === 'propose_dates') {
     $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
     if (!$itemRow) {
         json_err('not_found', 404);
+    }
+    if ($isLinkedMedicalStaffSession) {
+        $assignmentResult = maybe_assign_item_to_current_linked_staff(
+            $conexion,
+            $itemId,
+            $providerId,
+            $currentLinkedStaffId,
+            (int)($itemRow['assigned_staff_id'] ?? 0),
+            $hasItemAssignedStaffId,
+            $hasItemAssignedAt,
+            $hasItemAssignedByUserId,
+            $hasItemsSoftDelete,
+            $hasRequestsSoftDelete
+        );
+        if (empty($assignmentResult['ok'])) {
+            json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
+        }
     }
 
     $currentStatus = normalize_legacy_item_status($itemRow['current_status'] ?? '');
@@ -2429,6 +2991,23 @@ if ($action === 'send_final_decision') {
     $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
     if (!$itemRow) {
         json_err('not_found', 404);
+    }
+    if ($isLinkedMedicalStaffSession) {
+        $assignmentResult = maybe_assign_item_to_current_linked_staff(
+            $conexion,
+            $itemId,
+            $providerId,
+            $currentLinkedStaffId,
+            (int)($itemRow['assigned_staff_id'] ?? 0),
+            $hasItemAssignedStaffId,
+            $hasItemAssignedAt,
+            $hasItemAssignedByUserId,
+            $hasItemsSoftDelete,
+            $hasRequestsSoftDelete
+        );
+        if (empty($assignmentResult['ok'])) {
+            json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
+        }
     }
 
     $currentStatus = normalize_legacy_item_status($itemRow['current_status'] ?? '');
@@ -2579,6 +3158,23 @@ if ($action === 'send_quick_reply') {
     if (!$itemRow) {
         json_err('not_found', 404);
     }
+    if ($isLinkedMedicalStaffSession) {
+        $assignmentResult = maybe_assign_item_to_current_linked_staff(
+            $conexion,
+            $itemId,
+            $providerId,
+            $currentLinkedStaffId,
+            (int)($itemRow['assigned_staff_id'] ?? 0),
+            $hasItemAssignedStaffId,
+            $hasItemAssignedAt,
+            $hasItemAssignedByUserId,
+            $hasItemsSoftDelete,
+            $hasRequestsSoftDelete
+        );
+        if (empty($assignmentResult['ok'])) {
+            json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
+        }
+    }
     $bookingRequestId = (int)$itemRow['booking_request_id'];
     if ($bookingRequestId <= 0) {
         json_err('invalid_booking_id', 422);
@@ -2649,6 +3245,26 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
     if (!$itemRow) {
         json_err('not_found', 404);
+    }
+    if ($isLinkedMedicalStaffSession) {
+        $assignmentResult = maybe_assign_item_to_current_linked_staff(
+            $conexion,
+            $itemId,
+            $providerId,
+            $currentLinkedStaffId,
+            (int)($itemRow['assigned_staff_id'] ?? 0),
+            $hasItemAssignedStaffId,
+            $hasItemAssignedAt,
+            $hasItemAssignedByUserId,
+            $hasItemsSoftDelete,
+            $hasRequestsSoftDelete
+        );
+        if (empty($assignmentResult['ok'])) {
+            json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
+        }
+        if (!empty($assignmentResult['assigned'])) {
+            $itemRow['assigned_staff_id'] = (int)$assignmentResult['assigned_staff_id'];
+        }
     }
 
     $currentStatus = normalize_legacy_item_status($itemRow['current_status'] ?? '');
