@@ -38,6 +38,34 @@ function bind_stmt_params($stmt, $types, &$values) {
     return call_user_func_array([$stmt, 'bind_param'], $bind);
 }
 
+function service_catalog_table_has_column($conexion, $table, $column) {
+    $sql = "SELECT COUNT(*) AS c
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'ss', $table, $column);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row && intval($row['c']) > 0;
+}
+
+function service_catalog_description_column($conexion) {
+    if (service_catalog_table_has_column($conexion, 'service_catalog', 'short_description')) {
+        return 'short_description';
+    }
+    if (service_catalog_table_has_column($conexion, 'service_catalog', 'description')) {
+        return 'description';
+    }
+    return '';
+}
+
 function slugify($text){
     $text = preg_replace('~[^\pL0-9]+~u', '-', $text);
     $text = iconv('UTF-8', 'ASCII//TRANSLIT', $text);
@@ -116,6 +144,8 @@ try{
         $categoryFilter = isset($_REQUEST['category_id']) ? intval($_REQUEST['category_id']) : 0;
         $targetProviderId = 0;
         $targetProviderName = '';
+        $hasOfferProviderCatalogServiceId = service_catalog_table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id');
+        $descriptionColumn = service_catalog_description_column($conexion);
 
         if ($isAdminPrincipal) {
             $targetProviderId = isset($_REQUEST['provider_id']) ? intval($_REQUEST['provider_id']) : 0;
@@ -144,16 +174,20 @@ try{
 
         $sql = "SELECT DISTINCT
                     sc.id,
+                    pcs.id AS provider_catalog_service_id,
                     sc.category_id,
                     c.name AS category_name,
                     sc.name,
                     sc.slug,
-                    sc.short_description,
+                    " . ($descriptionColumn !== '' ? ('sc.' . $descriptionColumn . ' AS short_description') : "'' AS short_description") . ",
                     sc.sort_order,
                     sc.is_active,
                     sc.created_at,
                     pcs.provider_id,
-                    p.name AS provider_name
+                    p.name AS provider_name,
+                    " . ($hasOfferProviderCatalogServiceId
+                        ? "(SELECT COUNT(*) FROM provider_service_offers o WHERE o.provider_id = pcs.provider_id AND o.provider_catalog_service_id = pcs.id)"
+                        : "(SELECT COUNT(*) FROM provider_service_offers o WHERE o.provider_id = pcs.provider_id AND o.service_id = pcs.service_id)") . " AS offer_count
                 FROM service_catalog sc
                 INNER JOIN provider_catalog_services pcs
                     ON pcs.service_id = sc.id
@@ -186,6 +220,8 @@ try{
 
         $res = mysqli_stmt_get_result($stmt);
         while($r = mysqli_fetch_assoc($res)) {
+            $r['provider_catalog_service_id'] = isset($r['provider_catalog_service_id']) ? (int)$r['provider_catalog_service_id'] : 0;
+            $r['offer_count'] = isset($r['offer_count']) ? (int)$r['offer_count'] : 0;
             $rows[] = $r;
         }
         mysqli_stmt_close($stmt);
@@ -204,9 +240,13 @@ try{
         $shortDescription = isset($_REQUEST['short_description']) ? trim((string)$_REQUEST['short_description']) : null;
         $sortOrder = isset($_REQUEST['sort_order']) ? intval($_REQUEST['sort_order']) : 1;
         $isActive = isset($_REQUEST['is_active']) ? intval($_REQUEST['is_active']) : 0;
+        $descriptionColumn = service_catalog_description_column($conexion);
 
         if ($categoryId <= 0 || $name === '') {
             json_err('category_or_name_required');
+        }
+        if ($descriptionColumn === '') {
+            json_err('service_description_column_missing', 500);
         }
 
         validate_active_category($conexion, $categoryId);
@@ -228,7 +268,7 @@ try{
             $i++;
         }
 
-        $ins = mysqli_prepare($conexion, "INSERT INTO service_catalog (category_id, name, slug, short_description, sort_order, is_active) VALUES (?,?,?,?,?,?)");
+        $ins = mysqli_prepare($conexion, "INSERT INTO service_catalog (category_id, name, slug, " . $descriptionColumn . ", sort_order, is_active) VALUES (?,?,?,?,?,?)");
         if (!$ins) json_err('db_prepare');
         mysqli_stmt_bind_param($ins, 'isssii', $categoryId, $name, $slug, $shortDescription, $sortOrder, $isActive);
         if (!mysqli_stmt_execute($ins)) {
@@ -251,6 +291,7 @@ try{
 
         assert_owned_service_for_scoped_provider($conexion, $isAdminPrincipal, $scopedProviderId, $id);
         $targetProviderId = resolve_target_provider_id($conexion, $isAdminPrincipal, $scopedProviderId);
+        $descriptionColumn = service_catalog_description_column($conexion);
 
         $allowed = ['category_id','name','short_description','sort_order','is_active'];
         $fields = [];
@@ -266,6 +307,13 @@ try{
                 $values[] = $val;
             } else {
                 $values[] = trim((string)$_REQUEST[$k]);
+            }
+            if ($k === 'short_description') {
+                if ($descriptionColumn === '') {
+                    json_err('service_description_column_missing', 500);
+                }
+                $fields[] = $descriptionColumn . ' = ?';
+                continue;
             }
             $fields[] = "$k = ?";
         }

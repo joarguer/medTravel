@@ -6,6 +6,30 @@ $(document).ready(function(){
     const isAdminMedical = !!catalogCtx.isAdmin;
     const scopedMedicalProviderId = catalogCtx.providerId ? parseInt(catalogCtx.providerId, 10) : 0;
     let adminSelectedProviderId = 0;
+    let categoryFilterHydrated = false;
+
+    function initToastr(){
+        if (typeof toastr === 'undefined') {
+            return;
+        }
+        toastr.options = $.extend({}, toastr.options, {
+            closeButton: true,
+            newestOnTop: true,
+            progressBar: true,
+            positionClass: 'toast-top-right',
+            timeOut: 3500
+        });
+    }
+
+    function serviceToast(type, message, title){
+        if (typeof toastr !== 'undefined' && toastr[type]) {
+            toastr[type](message, title || 'Mis Servicios');
+            return;
+        }
+        if (type === 'error') {
+            alert(message);
+        }
+    }
 
     function initCategorySelect2(){
         if (!$.fn.select2) {
@@ -34,6 +58,20 @@ $(document).ready(function(){
     }
 
     function escapeHtml(text){ if(!text) return ''; return $('<div>').text(text).html(); }
+
+    function buildOffersUrl(rowProviderId, providerCatalogServiceId, offerCount){
+        var params = [];
+        if(isAdminMedical && rowProviderId > 0){
+            params.push('provider_id=' + encodeURIComponent(rowProviderId));
+        }
+        if(providerCatalogServiceId > 0){
+            params.push('provider_catalog_service_id=' + encodeURIComponent(providerCatalogServiceId));
+        }
+        if(offerCount <= 0){
+            params.push('action=create');
+        }
+        return 'provider_offers.php' + (params.length ? ('?' + params.join('&')) : '');
+    }
 
     function renderEmptyState(message){
         $('#tbl-services tbody').html(
@@ -91,6 +129,10 @@ $(document).ready(function(){
             $(selectSelector).html(opts);
             if(selectSelector === '#filter-category' || selectSelector === '#svc-category'){
                 initCategorySelect2();
+                if(selectSelector === '#filter-category' && !categoryFilterHydrated){
+                    categoryFilterHydrated = true;
+                    $(selectSelector).val('');
+                }
                 $(selectSelector).trigger('change.select2');
             }
         }, 'json');
@@ -116,11 +158,12 @@ $(document).ready(function(){
         }, 'json');
     }
 
-    function loadList(){
+    function loadList(cb){
         let providerId = getActiveProviderContextId();
         if(isAdminMedical && providerId <= 0){
             renderEmptyState('Seleccione un prestador médico para ver sus servicios habilitados.');
             updateAdminContextState('');
+            if (cb) cb(false);
             return;
         }
         let cat = $('#filter-category').val() || '';
@@ -128,11 +171,22 @@ $(document).ready(function(){
         if(providerId > 0){
             data.provider_id = providerId;
         }
-        $.post(url, data, function(res){
-            if(!res || !res.ok) return;
+        $.ajax({
+            url: url,
+            method: 'POST',
+            data: data,
+            dataType: 'json'
+        }).done(function(res){
+            if(!res || !res.ok) {
+                renderEmptyState('No fue posible cargar los servicios habilitados del prestador en contexto.');
+                serviceToast('error', (res && res.error) ? ('Error al listar servicios: ' + res.error) : 'No fue posible cargar los servicios habilitados.');
+                if (cb) cb(false, res);
+                return;
+            }
             if(res.require_provider_context){
                 renderEmptyState('Seleccione un prestador médico para ver sus servicios habilitados.');
                 updateAdminContextState('');
+                if (cb) cb(false, res);
                 return;
             }
             updateAdminContextState(res.provider_name || '');
@@ -140,17 +194,33 @@ $(document).ready(function(){
             res.data.forEach(function(r){
                 const categoryId = r.category_id ? parseInt(r.category_id, 10) : 0;
                 const rowProviderId = r.provider_id ? parseInt(r.provider_id, 10) : providerId;
-                tbody += '<tr data-id="'+r.id+'" data-category-id="'+categoryId+'" data-provider-id="'+rowProviderId+'">';
+                const providerCatalogServiceId = r.provider_catalog_service_id ? parseInt(r.provider_catalog_service_id, 10) : 0;
+                const offerCount = r.offer_count ? parseInt(r.offer_count, 10) : 0;
+                const offersUrl = buildOffersUrl(rowProviderId, providerCatalogServiceId, offerCount);
+                const offersLabel = offerCount > 0 ? ('Ver ofertas' + (offerCount > 1 ? ' (' + offerCount + ')' : '')) : 'Crear oferta';
+                const offersClass = offerCount > 0 ? 'btn btn-sm btn-default' : 'btn btn-sm btn-success';
+                tbody += '<tr data-id="'+r.id+'" data-category-id="'+categoryId+'" data-provider-id="'+rowProviderId+'" data-short-description="'+escapeHtml(r.short_description || '')+'">';
                 tbody += '<td>'+escapeHtml(r.category_name || '')+'</td>';
                 tbody += '<td>'+escapeHtml(r.name)+'</td>';
                 tbody += '<td>'+escapeHtml(r.slug)+'</td>';
                 tbody += '<td>'+r.sort_order+'</td>';
                 tbody += '<td>'+(r.is_active == 1 ? '<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>' : '<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>';
-                tbody += '<td><button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Eliminar</button></td>';
+                tbody += '<td><a class="'+offersClass+' mr5" href="'+offersUrl+'">'+offersLabel+'</a> <button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Eliminar</button></td>';
                 tbody += '</tr>';
             });
             $('#tbl-services tbody').html(tbody || '<tr><td colspan="6" class="text-center text-muted" style="padding:24px 12px;">No hay servicios habilitados para el prestador seleccionado.</td></tr>');
-        }, 'json');
+            if (cb) cb(true, res);
+        }).fail(function(xhr){
+            renderEmptyState('No fue posible cargar los servicios habilitados del prestador en contexto.');
+            var message = 'Error de conexión al listar servicios.';
+            try {
+                if (xhr && xhr.responseJSON && xhr.responseJSON.error) {
+                    message = 'Error al listar servicios: ' + xhr.responseJSON.error;
+                }
+            } catch (e) {}
+            serviceToast('error', message);
+            if (cb) cb(false, null);
+        });
     }
 
     function resetFormDefaults(){
@@ -158,6 +228,7 @@ $(document).ready(function(){
         $('#svc-id').val('');
         $('#svc-order').val(1);
         $('#svc-active').prop('checked', true);
+        $('#svc-desc').val('');
         $('#svc-category').val('').trigger('change');
         if(isAdminMedical){
             $('#svc-provider').val(adminSelectedProviderId > 0 ? String(adminSelectedProviderId) : '');
@@ -166,6 +237,7 @@ $(document).ready(function(){
         }
     }
 
+    initToastr();
     applyProviderScopeUI();
     loadCategories('#filter-category', true);
     loadCategories('#svc-category', false);
@@ -182,7 +254,7 @@ $(document).ready(function(){
 
     $('#btn-new-service').click(function(){
         if(isAdminMedical && !hasProviderContext()){
-            alert('Seleccione un prestador médico antes de crear o editar servicios en esta vista.');
+            serviceToast('warning', 'Seleccione un prestador médico antes de crear o editar servicios en esta vista.');
             return;
         }
         resetFormDefaults();
@@ -193,14 +265,14 @@ $(document).ready(function(){
         let id = $('#svc-id').val();
         let category_id = parseInt($('#svc-category').val(), 10) || 0;
         let name = $('#svc-name').val().trim();
-        if(!category_id){ alert('Seleccione categoría'); return; }
-        if(name === ''){ alert('El nombre es requerido'); return; }
+        if(!category_id){ serviceToast('warning', 'Seleccione una categoría para el servicio.'); return; }
+        if(name === ''){ serviceToast('warning', 'El nombre del servicio es requerido.'); return; }
 
         let providerIdPayload = 0;
         if(isAdminMedical){
             providerIdPayload = parseInt($('#svc-provider').val(), 10) || 0;
             if(providerIdPayload <= 0){
-                alert('Seleccione un prestador médico');
+                serviceToast('warning', 'Seleccione un prestador médico.');
                 return;
             }
         } else if(scopedMedicalProviderId > 0){
@@ -221,11 +293,31 @@ $(document).ready(function(){
         $.post(url, data, function(res){
             if(res && res.ok){
                 $('#serviceModal').modal('hide');
-                loadList();
+                let activeCategoryFilter = parseInt($('#filter-category').val(), 10) || 0;
+                if(activeCategoryFilter > 0 && activeCategoryFilter !== category_id){
+                    $('#filter-category').val('').trigger('change');
+                    serviceToast('success', id ? 'Servicio actualizado correctamente.' : 'Servicio guardado correctamente.');
+                    return;
+                }
+                loadList(function(ok){
+                    if (ok) {
+                        serviceToast('success', id ? 'Servicio actualizado correctamente.' : 'Servicio guardado correctamente.');
+                        return;
+                    }
+                    serviceToast('error', 'El servicio se guardó, pero no fue posible refrescar la tabla de Mis Servicios.');
+                });
             } else {
-                alert('Error: '+(res && res.error ? res.error : 'unknown'));
+                serviceToast('error', 'No fue posible guardar el servicio: ' + (res && res.error ? res.error : 'unknown'));
             }
-        }, 'json');
+        }, 'json').fail(function(xhr){
+            var message = 'Error de conexión al guardar el servicio.';
+            try {
+                if (xhr && xhr.responseJSON && xhr.responseJSON.error) {
+                    message = 'No fue posible guardar el servicio: ' + xhr.responseJSON.error;
+                }
+            } catch (e) {}
+            serviceToast('error', message);
+        });
     });
 
     $('#tbl-services').on('click', '.edit', function(){
@@ -233,12 +325,14 @@ $(document).ready(function(){
         let id = tr.data('id');
         let categoryId = parseInt(tr.attr('data-category-id'), 10) || 0;
         let providerId = parseInt(tr.attr('data-provider-id'), 10) || getActiveProviderContextId();
+        let shortDescription = tr.attr('data-short-description') || '';
         let name = tr.find('td').eq(1).text();
         let order = tr.find('td').eq(3).text();
         let activeText = tr.find('td').eq(4).text();
 
         $('#svc-id').val(id);
         $('#svc-name').val(name);
+        $('#svc-desc').val(shortDescription);
         $('#svc-order').val(order);
         $('#svc-active').prop('checked', activeText.trim().toLowerCase().indexOf('activo') !== -1);
         $('#svc-category').val(categoryId ? String(categoryId) : '').trigger('change');
@@ -258,7 +352,7 @@ $(document).ready(function(){
         let id = tr.data('id');
         $.post(url, { tipo: 'toggle', id: id, val: 0 }, function(res){
             if(res && res.ok) loadList();
-            else alert('Error');
+            else serviceToast('error', 'No fue posible actualizar el estado del servicio.');
         }, 'json');
     });
 
@@ -269,7 +363,7 @@ $(document).ready(function(){
         let val = btn.data('val');
         $.post(url, { tipo: 'toggle', id: id, val: val }, function(res){
             if(res && res.ok) loadList();
-            else alert('Error');
+            else serviceToast('error', 'No fue posible actualizar el estado del servicio.');
         }, 'json');
     });
 });
