@@ -9,6 +9,12 @@ include('include/include.php');
 require_once 'include/roles.php';
 require_once __DIR__ . '/include/conexion.php';
 
+if (!function_exists('is_role_admin_session') || !is_role_admin_session()) {
+    http_response_code(403);
+    require __DIR__ . '/error_403.php';
+    exit;
+}
+
 $provider_id = intval($_GET['id'] ?? 0);
 if ($provider_id <= 0) {
     echo '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Proveedor inválido</title></head><body>';

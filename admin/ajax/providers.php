@@ -5,6 +5,13 @@ require_once '../include/email_config.php';
 require_once '../../inc/email_template.php';
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
+
+if (!function_exists('is_role_admin_session') || !is_role_admin_session()) {
+    http_response_code(403);
+    echo json_encode(['ok' => false, 'error' => 'forbidden_admin_only']);
+    exit;
+}
+
 $tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
 
 function slugify($text){
@@ -594,6 +601,182 @@ function ensure_provider_owner_mapping($conexion, $provider_id, $user_id){
     mysqli_stmt_close($stmt);
 }
 
+function provider_owner_staff_mirror_schema($conexion){
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $cache = array(
+        'table' => table_exists($conexion, 'provider_medical_staff'),
+        'provider_id' => table_has_column($conexion, 'provider_medical_staff', 'provider_id'),
+        'full_name' => table_has_column($conexion, 'provider_medical_staff', 'full_name'),
+        'linked_user_id' => table_has_column($conexion, 'provider_medical_staff', 'linked_user_id'),
+        'role_title' => table_has_column($conexion, 'provider_medical_staff', 'role_title'),
+        'email' => table_has_column($conexion, 'provider_medical_staff', 'email'),
+        'is_primary_doctor' => table_has_column($conexion, 'provider_medical_staff', 'is_primary_doctor'),
+        'is_active' => table_has_column($conexion, 'provider_medical_staff', 'is_active'),
+        'active' => table_has_column($conexion, 'provider_medical_staff', 'active'),
+        'sort_order' => table_has_column($conexion, 'provider_medical_staff', 'sort_order'),
+        'can_access_admin' => table_has_column($conexion, 'provider_medical_staff', 'can_access_admin')
+    );
+
+    return $cache;
+}
+
+function provider_owner_staff_mirror_full_name($display_name, $owner_email, $owner_user_id){
+    $full_name = trim((string)$display_name);
+    if ($full_name !== '') {
+        return $full_name;
+    }
+
+    $owner_email = trim((string)$owner_email);
+    if ($owner_email !== '') {
+        return $owner_email;
+    }
+
+    return 'Owner #' . (int)$owner_user_id;
+}
+
+function find_provider_owner_staff_mirror($conexion, $provider_id, $owner_user_id){
+    $schema = provider_owner_staff_mirror_schema($conexion);
+    if (!$schema['table'] || !$schema['linked_user_id'] || $provider_id <= 0 || $owner_user_id <= 0) {
+        return 0;
+    }
+
+    $stmt = mysqli_prepare($conexion, 'SELECT id FROM provider_medical_staff WHERE provider_id = ? AND linked_user_id = ? ORDER BY id ASC LIMIT 1');
+    if (!$stmt) {
+        throw new Exception('Error preparando búsqueda de espejo owner/staff');
+    }
+    mysqli_stmt_bind_param($stmt, 'ii', $provider_id, $owner_user_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    return $row ? (int)$row['id'] : 0;
+}
+
+function next_provider_owner_staff_sort_order($conexion, $provider_id){
+    $stmt = mysqli_prepare($conexion, 'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort_order FROM provider_medical_staff WHERE provider_id = ?');
+    if (!$stmt) {
+        throw new Exception('Error preparando cálculo de sort_order para espejo owner/staff');
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    return $row ? (int)$row['next_sort_order'] : 1;
+}
+
+function ensure_provider_owner_staff_mirror($conexion, $provider_id, $owner_user_id, $provider_type, $display_name, $owner_email){
+    $provider_type = strtolower(trim((string)$provider_type));
+    if ($provider_type !== 'medico' || $provider_id <= 0 || $owner_user_id <= 0) {
+        return 0;
+    }
+
+    $schema = provider_owner_staff_mirror_schema($conexion);
+    if (!$schema['table']) {
+        throw new Exception('provider_medical_staff no existe para materializar el espejo owner/staff');
+    }
+    if (!$schema['provider_id'] || !$schema['full_name'] || !$schema['linked_user_id']) {
+        throw new Exception('provider_medical_staff no tiene las columnas mínimas para materializar el espejo owner/staff');
+    }
+
+    $full_name = provider_owner_staff_mirror_full_name($display_name, $owner_email, $owner_user_id);
+    $owner_email = trim((string)$owner_email);
+    $existing_id = find_provider_owner_staff_mirror($conexion, $provider_id, $owner_user_id);
+
+    if ($existing_id > 0) {
+        $fields = array('full_name = ?');
+        $values = array($full_name);
+
+        if ($schema['role_title']) {
+            $fields[] = 'role_title = ?';
+            $values[] = 'Owner / admin inicial';
+        }
+        if ($schema['email']) {
+            $fields[] = 'email = ?';
+            $values[] = ($owner_email !== '' ? $owner_email : null);
+        }
+        if ($schema['is_active']) {
+            $fields[] = 'is_active = 1';
+        }
+        if ($schema['active']) {
+            $fields[] = 'active = 1';
+        }
+        if ($schema['is_primary_doctor']) {
+            $fields[] = 'is_primary_doctor = 1';
+        }
+        if ($schema['can_access_admin']) {
+            $fields[] = 'can_access_admin = 1';
+        }
+
+        $sql = 'UPDATE provider_medical_staff SET ' . implode(', ', $fields) . ' WHERE id = ? AND provider_id = ? LIMIT 1';
+        $values[] = $existing_id;
+        $values[] = $provider_id;
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            throw new Exception('Error preparando UPDATE del espejo owner/staff');
+        }
+        bind_dynamic_stmt_params($stmt, $values);
+        if (!mysqli_stmt_execute($stmt)) {
+            $err = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            throw new Exception('Error actualizando espejo owner/staff: ' . $err);
+        }
+        mysqli_stmt_close($stmt);
+        return $existing_id;
+    }
+
+    $columns = array('provider_id', 'full_name', 'linked_user_id');
+    $values = array($provider_id, $full_name, $owner_user_id);
+
+    if ($schema['role_title']) {
+        $columns[] = 'role_title';
+        $values[] = 'Owner / admin inicial';
+    }
+    if ($schema['email']) {
+        $columns[] = 'email';
+        $values[] = ($owner_email !== '' ? $owner_email : null);
+    }
+    if ($schema['is_primary_doctor']) {
+        $columns[] = 'is_primary_doctor';
+        $values[] = 1;
+    }
+    if ($schema['is_active']) {
+        $columns[] = 'is_active';
+        $values[] = 1;
+    }
+    if ($schema['active']) {
+        $columns[] = 'active';
+        $values[] = 1;
+    }
+    if ($schema['sort_order']) {
+        $columns[] = 'sort_order';
+        $values[] = next_provider_owner_staff_sort_order($conexion, $provider_id);
+    }
+    if ($schema['can_access_admin']) {
+        $columns[] = 'can_access_admin';
+        $values[] = 1;
+    }
+
+    $sql = 'INSERT INTO provider_medical_staff (' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        throw new Exception('Error preparando INSERT del espejo owner/staff');
+    }
+    bind_dynamic_stmt_params($stmt, $values);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        throw new Exception('Error creando espejo owner/staff: ' . $err);
+    }
+    $mirror_id = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+    return $mirror_id;
+}
+
 try{
     if($tipo == 'list'){
         $kind_filter = isset($_REQUEST['kind']) ? $_REQUEST['kind'] : '';
@@ -807,6 +990,7 @@ try{
 
             // 3. Persistir ownership explícito del provider
             ensure_provider_owner_mapping($conexion, $provider_id, $owner_user_id);
+            ensure_provider_owner_staff_mirror($conexion, $provider_id, $owner_user_id, $type, $name, $owner_email);
             
             // 4. Relaciones con categorías y servicios
             $category_ids = isset($_REQUEST['category_ids']) && is_array($_REQUEST['category_ids']) ? $_REQUEST['category_ids'] : [];
@@ -878,15 +1062,16 @@ try{
         // obtener kind actual si no viene en request
         $kind = isset($_REQUEST['kind']) ? trim($_REQUEST['kind']) : '';
         $kind_db = 'medical';
+        $type_db = '';
         $providerFound = false;
-        $kindSql = "SELECT kind FROM providers WHERE id = ?";
+        $kindSql = "SELECT kind, type FROM providers WHERE id = ?";
         if($hasSoftDelete){ $kindSql .= " AND is_deleted = 0"; }
         $kindSql .= " LIMIT 1";
         $kq = mysqli_prepare($conexion, $kindSql);
         mysqli_stmt_bind_param($kq,'i',$id);
         mysqli_stmt_execute($kq);
         $kr = mysqli_stmt_get_result($kq);
-        if($kr && $rowk = mysqli_fetch_assoc($kr)){ $kind_db = $rowk['kind'] ?: 'medical'; $providerFound = true; }
+        if($kr && $rowk = mysqli_fetch_assoc($kr)){ $kind_db = $rowk['kind'] ?: 'medical'; $type_db = isset($rowk['type']) ? trim((string)$rowk['type']) : ''; $providerFound = true; }
         mysqli_stmt_close($kq);
         if($hasSoftDelete && !$providerFound){
             echo json_encode(['ok'=>false,'error'=>'record_deleted','message'=>'registro eliminado']); exit;
@@ -927,6 +1112,9 @@ try{
         }
         
         $providerColumns = provider_table_columns($conexion);
+        $provider_type_effective = isset($_REQUEST['type']) && trim((string)$_REQUEST['type']) !== ''
+            ? trim((string)$_REQUEST['type'])
+            : $type_db;
         $allowed = ['type','kind','name','legal_name','description','city','address','phone','email','website','is_verified','is_active'];
         $fields=[]; $values=[];
         foreach($allowed as $k){ 
@@ -1007,6 +1195,7 @@ try{
             }
 
             ensure_provider_owner_mapping($conexion, $id, $owner_user_id);
+            ensure_provider_owner_staff_mirror($conexion, $id, $owner_user_id, $provider_type_effective, $provider_name, (string)$owner_email_to_persist);
             
             // 3. Actualizar relaciones
             $category_ids = isset($_REQUEST['category_ids']) && is_array($_REQUEST['category_ids']) ? $_REQUEST['category_ids'] : [];

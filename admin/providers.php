@@ -1,6 +1,10 @@
 <?php
 include('include/include.php');
-// TODO: proteger para SUPERADMIN
+if (!function_exists('is_role_admin_session') || !is_role_admin_session()) {
+    http_response_code(403);
+    require __DIR__ . '/error_403.php';
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -81,6 +85,8 @@ include('include/include.php');
                                         <strong>Onboarding médico canónico:</strong> aquí se crea el prestador médico y su cuenta owner/admin inicial.
                                         <br>
                                         <span class="small">Los prestadores complementarios se administran en <strong>Proveedores Complementarios</strong>; esta pantalla queda reservada al dominio médico.</span>
+                                        <br>
+                                        <span class="small">Si el provider es de tipo médico/persona, el espejo técnico owner/admin → provider_medical_staff se materializa internamente como efecto del onboarding administrativo central. No sustituye la gestión operativa de staff.</span>
                                     </div>
                                     <table class="table table-striped table-bordered" id="tbl-providers">
                                         <thead>
