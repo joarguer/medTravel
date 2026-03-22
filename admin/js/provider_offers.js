@@ -4,6 +4,17 @@ $(function(){
     var scopedMedicalProviderId = offersCtx.providerId ? parseInt(offersCtx.providerId, 10) : 0;
     var adminSelectedProviderId = 0;
     var defaultServiceHelp = 'La oferta comercial se construye sobre un servicio ya habilitado en Mis Servicios.';
+    var pageParams = (function(){
+        try {
+            return new URLSearchParams(window.location.search || '');
+        } catch (e) {
+            return { get: function(){ return ''; } };
+        }
+    })();
+    var deepLinkedProviderId = parseInt(pageParams.get('provider_id') || '0', 10) || 0;
+    var deepLinkedProviderCatalogServiceId = parseInt(pageParams.get('provider_catalog_service_id') || '0', 10) || 0;
+    var deepLinkedAction = String(pageParams.get('action') || '').toLowerCase();
+    var deepLinkConsumed = false;
 
     function escapeHtml(text){
         if (text === null || typeof text === 'undefined') return '';
@@ -86,6 +97,16 @@ $(function(){
                 + 'Esta publicación se apoya en un servicio ya habilitado del prestador y no modifica el catálogo maestro ni el staff.'
             )
             .show();
+    }
+
+    function updateDeepLinkContextMessage(serviceName, offerCount){
+        if (!deepLinkedProviderCatalogServiceId || isAdminMedical) {
+            return;
+        }
+        var message = offerCount > 0
+            ? 'Mostrando las ofertas asociadas al servicio habilitado <strong>' + escapeHtml(serviceName || ('#' + deepLinkedProviderCatalogServiceId)) + '</strong>.'
+            : 'Estás entrando desde Mis Servicios para crear la primera oferta comercial del servicio habilitado <strong>' + escapeHtml(serviceName || ('#' + deepLinkedProviderCatalogServiceId)) + '</strong>.';
+        $('#offer-context-note').html(message).show();
     }
 
     function withProviderContext(data){
@@ -254,17 +275,32 @@ $(function(){
                 updateAdminContextState();
             }
 
+            var filteredData = data || [];
+            if (deepLinkedProviderCatalogServiceId > 0) {
+                filteredData = filteredData.filter(function(row){
+                    return parseInt(row.provider_catalog_service_id || 0, 10) === deepLinkedProviderCatalogServiceId;
+                });
+            }
+
             var tbody = $('#tbl-offers tbody').empty();
-            if(!data || !data.length){
+            if(!filteredData.length){
+                if (deepLinkedProviderCatalogServiceId > 0) {
+                    updateDeepLinkContextMessage('', 0);
+                }
                 renderEmptyState(
-                    isAdminMedical
+                    deepLinkedProviderCatalogServiceId > 0
+                        ? 'Este servicio habilitado todavía no tiene ofertas comerciales registradas.'
+                        : isAdminMedical
                         ? 'No hay ofertas comerciales registradas para el prestador seleccionado.'
                         : 'No hay ofertas comerciales registradas todavía.'
                 );
                 renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
                 return;
             }
-            $.each(data, function(i,row){
+            if (deepLinkedProviderCatalogServiceId > 0) {
+                updateDeepLinkContextMessage(filteredData[0].service_name || '', filteredData.length);
+            }
+            $.each(filteredData, function(i,row){
                 var tr = $('<tr>');
                 tr.append($('<td>').text(row.service_name));
                 tr.append($('<td>').text(row.title));
@@ -324,6 +360,17 @@ $(function(){
                 $('.nav-tabs a[href="#tab-general"]').tab('show');
                 $('#offerModal').modal('show');
             });
+        });
+    }
+
+    function openCreateForService(providerCatalogServiceId){
+        loadServices(function(){
+            initSummernote();
+            openEdit(0);
+            if (providerCatalogServiceId > 0) {
+                setServiceSelectValue(providerCatalogServiceId, '');
+                updateServiceHelp('La oferta comercial se construye sobre un servicio ya habilitado en Mis Servicios. Llegaste aquí desde el servicio seleccionado.', false);
+            }
         });
     }
 
@@ -521,7 +568,13 @@ $(function(){
                 }
             });
             $('#filter-provider').html(opts);
+            if (deepLinkedProviderId > 0) {
+                adminSelectedProviderId = deepLinkedProviderId;
+                $('#filter-provider').val(String(deepLinkedProviderId));
+            }
             updateAdminContextState();
+            loadServices();
+            listOffers();
         }, 'json');
     }
 
@@ -530,12 +583,20 @@ $(function(){
         updateAdminContextState();
     } else {
         loadServices(listOffers);
+        if (deepLinkedProviderCatalogServiceId > 0 && deepLinkedAction === 'create' && !deepLinkConsumed) {
+            deepLinkConsumed = true;
+            openCreateForService(deepLinkedProviderCatalogServiceId);
+        }
     }
 
     $('#filter-provider').change(function(){
         adminSelectedProviderId = parseInt($(this).val(), 10) || 0;
         loadServices();
         listOffers();
+        if (deepLinkedProviderCatalogServiceId > 0 && deepLinkedAction === 'create' && !deepLinkConsumed && adminSelectedProviderId > 0) {
+            deepLinkConsumed = true;
+            openCreateForService(deepLinkedProviderCatalogServiceId);
+        }
     });
     
     // Inicializar Summernote al abrir modal de edición
