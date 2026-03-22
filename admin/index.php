@@ -56,6 +56,8 @@ $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] :
 $series_data = [];
 $pie_data = [];
 $metric_cards = [];
+$provider_onboarding_steps = [];
+$provider_operation_links = [];
 
 if ($es_admin) {
     $metric_cards = [
@@ -104,6 +106,87 @@ if ($es_admin) {
         $metric_cards[2]['value'] = fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE status = 'pending' AND ($like_sql)");
         $metric_cards[3]['value'] = fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE ($like_sql)");
     }
+
+    if (!empty($can_view_my_bookings)) {
+        $provider_operation_links[] = ['label' => 'Mis Solicitudes', 'href' => 'my_booking_requests.php'];
+        $provider_operation_links[] = ['label' => 'Inbox', 'href' => 'app_inbox.php'];
+        $provider_operation_links[] = ['label' => 'Agenda', 'href' => 'app_calendar.php'];
+    }
+
+    $provider_onboarding_steps = [
+        [
+            'eyebrow' => 'Paso 0',
+            'title' => 'Completa toda la información de tu empresa',
+            'summary' => 'Empieza por Mi Empresa. Este es el paso más importante para presentarte bien dentro de MedTravel.',
+            'items' => [
+                'Completa la información institucional lo más completa posible.',
+                'Incluye nombre, ciudad, teléfono, email, descripción y logo de tu empresa.',
+                'Esta información se usa en la presentación comercial y pública del provider dentro de MedTravel, por lo que impacta confianza y visibilidad.',
+            ],
+            'links' => [
+                ['label' => 'Ir a Mi Empresa', 'href' => 'mi_empresa.php'],
+            ],
+        ],
+        [
+            'eyebrow' => 'Paso 1',
+            'title' => 'Revisa o configura tus servicios',
+            'summary' => 'Mis Servicios representa los servicios habilitados reales de tu empresa dentro del sistema.',
+            'items' => [
+                'Aquí defines la base operativa de lo que tu provider realmente puede atender.',
+                'Estos servicios serán la base para crear ofertas y para asignar capacidad al staff médico.',
+            ],
+            'links' => [
+                ['label' => 'Ir a Mis Servicios', 'href' => 'service_catalog.php'],
+            ],
+        ],
+        [
+            'eyebrow' => 'Paso 2',
+            'title' => 'Crea tus ofertas',
+            'summary' => 'Mis Ofertas es la capa comercial que publicas al paciente.',
+            'items' => [
+                'Un servicio habilitado no es lo mismo que una oferta publicada.',
+                'La oferta toma como base un servicio de tu catálogo y le agrega enfoque comercial, precio y contenido visible.',
+            ],
+            'links' => [
+                ['label' => 'Ir a Mis Ofertas', 'href' => 'provider_offers.php'],
+            ],
+        ],
+        [
+            'eyebrow' => 'Paso 3',
+            'title' => 'Crea tu staff médico',
+            'summary' => 'El staff se registra aparte del provider para mantener clara la estructura operativa.',
+            'items' => [
+                'Registra cada profesional desde el módulo de Staff médico.',
+                'Luego podrás definir qué servicios puede atender cada integrante y, si aplica, su acceso al panel.',
+            ],
+            'links' => [
+                ['label' => 'Ir a Staff médico', 'href' => 'staff_medico.php'],
+            ],
+        ],
+        [
+            'eyebrow' => 'Paso 4',
+            'title' => 'Asigna servicios al staff',
+            'summary' => 'Cada miembro del staff debe quedar asociado a los servicios que realmente puede atender.',
+            'items' => [
+                'Esta asignación se hace dentro del formulario de Staff médico.',
+                'En cada perfil encontrarás el bloque “Servicios que puede atender” para relacionarlo con tus servicios habilitados.',
+            ],
+            'links' => [
+                ['label' => 'Gestionar staff y asignaciones', 'href' => 'staff_medico.php'],
+                ['label' => 'Ver Catálogos del staff', 'href' => 'staff_catalogs.php'],
+            ],
+        ],
+        [
+            'eyebrow' => 'Paso 5',
+            'title' => 'Revisa tu operación',
+            'summary' => 'Cuando ya tengas empresa, servicios, ofertas y staff, revisa tu operación diaria desde los módulos de seguimiento.',
+            'items' => [
+                'Consulta solicitudes, bookings pendientes y seguimiento operativo según los módulos habilitados en tu cuenta.',
+                'Usa esta revisión para mantener trazabilidad y responder a tiempo desde el panel.',
+            ],
+            'links' => $provider_operation_links,
+        ],
+    ];
 }
 
 // Preparar series combinadas
@@ -152,6 +235,94 @@ if ($es_admin) {
         <!-- END PAGE LEVEL PLUGINS -->
         <?php echo $theme_global_style;?>
         <?php echo $theme_layout_style;?>
+        <style>
+            .provider-onboarding-panel {
+                border: 1px solid #dfe6ee;
+                margin-bottom: 25px;
+            }
+            .provider-onboarding-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 12px;
+                color: #2c3e50;
+                text-decoration: none;
+            }
+            .provider-onboarding-toggle:hover,
+            .provider-onboarding-toggle:focus {
+                text-decoration: none;
+                color: #1f2d3d;
+            }
+            .provider-onboarding-toggle .caption-subject {
+                display: block;
+            }
+            .provider-onboarding-toggle .caption-helper {
+                display: block;
+                margin-top: 4px;
+            }
+            .provider-onboarding-badge {
+                background: #eaf4fb;
+                color: #2f6f9f;
+                border-radius: 999px;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 6px 10px;
+                white-space: nowrap;
+            }
+            .provider-onboarding-intro {
+                margin-bottom: 18px;
+                color: #5f6b7a;
+                max-width: 920px;
+            }
+            .provider-onboarding-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                gap: 16px;
+            }
+            .provider-onboarding-step {
+                background: #fcfdff;
+                border: 1px solid #e7ecf1;
+                border-radius: 6px;
+                padding: 16px;
+                min-height: 100%;
+            }
+            .provider-onboarding-step-label {
+                color: #6c7a89;
+                display: inline-block;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: .08em;
+                margin-bottom: 10px;
+                text-transform: uppercase;
+            }
+            .provider-onboarding-step h4 {
+                margin: 0 0 8px;
+                font-size: 18px;
+            }
+            .provider-onboarding-step p {
+                color: #5f6b7a;
+                margin-bottom: 10px;
+            }
+            .provider-onboarding-step ul {
+                margin: 0 0 14px 18px;
+                padding: 0;
+            }
+            .provider-onboarding-step li {
+                color: #5f6b7a;
+                margin-bottom: 6px;
+            }
+            .provider-onboarding-links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            @media (max-width: 767px) {
+                .provider-onboarding-toggle {
+                    align-items: flex-start;
+                    flex-direction: column;
+                }
+            }
+        </style>
     </head>
     <!-- END HEAD -->
 
@@ -185,6 +356,54 @@ if ($es_admin) {
                     </div>
                     <!-- END BREADCRUMBS -->
                     <!-- BEGIN PAGE BASE CONTENT -->
+                    <?php if (!$es_admin): ?>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="portlet light provider-onboarding-panel">
+                                <div class="portlet-title" style="border-bottom:0; margin-bottom:0;">
+                                    <a href="#provider-dashboard-onboarding-collapse" class="provider-onboarding-toggle" data-toggle="collapse" aria-expanded="false" aria-controls="provider-dashboard-onboarding-collapse">
+                                        <span>
+                                            <span class="caption-subject font-dark bold uppercase">Guía rápida para arrancar</span>
+                                            <span class="caption-helper">Abre esta ayuda si es tu primera vez configurando tu cuenta como provider médico.</span>
+                                        </span>
+                                        <span>
+                                            <span class="provider-onboarding-badge" id="provider-onboarding-toggle-label">Ver pasos</span>
+                                            <i class="fa fa-chevron-down" id="provider-onboarding-toggle-icon" style="margin-left:10px;"></i>
+                                        </span>
+                                    </a>
+                                </div>
+                                <div id="provider-dashboard-onboarding-collapse" class="collapse">
+                                    <div class="portlet-body" style="padding-top:0;">
+                                        <p class="provider-onboarding-intro">
+                                            Sigue este orden para dejar tu cuenta lista desde el inicio. La idea es que primero completes tu presentación institucional, luego configures tu capacidad médica y después pases a staff, ofertas y operación.
+                                        </p>
+                                        <div class="provider-onboarding-grid">
+                                            <?php foreach ($provider_onboarding_steps as $step): ?>
+                                            <div class="provider-onboarding-step">
+                                                <span class="provider-onboarding-step-label"><?php echo htmlspecialchars($step['eyebrow'], ENT_QUOTES); ?></span>
+                                                <h4><?php echo htmlspecialchars($step['title'], ENT_QUOTES); ?></h4>
+                                                <p><?php echo htmlspecialchars($step['summary'], ENT_QUOTES); ?></p>
+                                                <ul>
+                                                    <?php foreach ($step['items'] as $item): ?>
+                                                    <li><?php echo htmlspecialchars($item, ENT_QUOTES); ?></li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                                <?php if (!empty($step['links'])): ?>
+                                                <div class="provider-onboarding-links">
+                                                    <?php foreach ($step['links'] as $link): ?>
+                                                    <a class="btn btn-xs btn-outline blue" href="<?php echo htmlspecialchars($link['href'], ENT_QUOTES); ?>"><?php echo htmlspecialchars($link['label'], ENT_QUOTES); ?></a>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     <div class="row">
                         <?php foreach ($metric_cards as $card): ?>
                         <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
@@ -305,6 +524,24 @@ if ($es_admin) {
         jQuery(function() {
             var seriesData = <?php echo json_encode($series_data); ?>;
             var pieData = <?php echo json_encode($pie_data); ?>;
+            var $onboardingCollapse = $('#provider-dashboard-onboarding-collapse');
+
+            function syncOnboardingToggle(isOpen) {
+                $('#provider-onboarding-toggle-label').text(isOpen ? 'Ocultar pasos' : 'Ver pasos');
+                $('#provider-onboarding-toggle-icon')
+                    .toggleClass('fa-chevron-down', !isOpen)
+                    .toggleClass('fa-chevron-up', isOpen);
+            }
+
+            if ($onboardingCollapse.length) {
+                syncOnboardingToggle($onboardingCollapse.hasClass('in'));
+                $onboardingCollapse.on('show.bs.collapse', function() {
+                    syncOnboardingToggle(true);
+                });
+                $onboardingCollapse.on('hide.bs.collapse', function() {
+                    syncOnboardingToggle(false);
+                });
+            }
 
             AmCharts.makeChart('dashboard_amchart_1', {
                 type: 'serial',
