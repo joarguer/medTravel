@@ -28,18 +28,45 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
     <style>
+        #my_booking_detail_modal .modal-dialog {
+            width: 92%;
+            max-width: 1180px;
+        }
+        #my_booking_detail_modal .modal-body {
+            max-height: calc(100vh - 180px);
+            overflow-y: auto;
+            padding: 18px;
+            background: #f7f9fc;
+        }
+        .mt-request-detail {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .mt-request-detail .mt-detail-sticky {
+            position: sticky;
+            top: -18px;
+            z-index: 20;
+            background: #f7f9fc;
+            padding: 0 0 12px;
+        }
         .mt-request-detail .mt-detail-header {
             display: flex;
             justify-content: space-between;
-            gap: 12px;
+            gap: 16px;
             align-items: flex-start;
-            margin-bottom: 16px;
+            margin: 0;
+            padding: 18px;
+            border: 1px solid #dfe6ee;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #ffffff 0%, #f3f7fb 100%);
+            box-shadow: 0 8px 24px rgba(31, 45, 61, 0.06);
         }
         .mt-request-detail .mt-eyebrow {
             text-transform: uppercase;
             letter-spacing: .08em;
             font-size: 11px;
-            color: #7f8c8d;
+            color: #5f6f82;
             margin-bottom: 4px;
         }
         .mt-request-detail .mt-detail-title {
@@ -58,28 +85,128 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
             color: #555;
             margin-right: 4px;
         }
+        .mt-request-detail .mt-header-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .mt-request-detail .mt-header-summary-card {
+            border: 1px solid #e4ebf2;
+            border-radius: 8px;
+            background: #fff;
+            padding: 10px 12px;
+            min-height: 76px;
+        }
+        .mt-request-detail .mt-header-summary-card .mt-summary-label,
+        .mt-request-detail .mt-header-summary-card .mt-summary-value {
+            margin: 0;
+        }
         .mt-summary-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 12px;
-            margin-bottom: 16px;
+            margin: 0;
         }
         .mt-summary-card {
             border: 1px solid #e7ecf1;
             border-radius: 6px;
-            background: #fafcfe;
+            background: #fff;
             padding: 12px;
         }
         .mt-summary-label {
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: .05em;
-            color: #7f8c8d;
+            color: #6b7d90;
             margin-bottom: 6px;
         }
         .mt-summary-value {
             font-weight: 600;
             color: #2c3e50;
+        }
+        .mt-request-detail .mt-workflow-guide {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .mt-request-detail .mt-guide-card {
+            border: 1px solid #dfe6ee;
+            border-radius: 10px;
+            background: #fff;
+            padding: 14px 16px;
+        }
+        .mt-request-detail .mt-guide-card h6 {
+            margin: 0 0 8px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: #214d72;
+        }
+        .mt-request-detail .mt-guide-card p {
+            margin: 0;
+            color: #4f5f6f;
+            line-height: 1.5;
+        }
+        .mt-request-detail .mt-detail-tabs {
+            border: 1px solid #dfe6ee;
+            border-radius: 10px;
+            background: #fff;
+            overflow: hidden;
+        }
+        .mt-request-detail .mt-detail-tabs .nav-tabs {
+            border-bottom: 1px solid #dfe6ee;
+            padding: 0 14px;
+            background: #f8fafc;
+        }
+        .mt-request-detail .mt-detail-tabs .nav-tabs > li > a {
+            color: #516070;
+            font-weight: 600;
+            border: 0;
+            border-bottom: 3px solid transparent;
+            margin-right: 6px;
+            padding: 14px 10px;
+            background: transparent;
+        }
+        .mt-request-detail .mt-detail-tabs .nav-tabs > li.active > a,
+        .mt-request-detail .mt-detail-tabs .nav-tabs > li.active > a:focus,
+        .mt-request-detail .mt-detail-tabs .nav-tabs > li.active > a:hover {
+            color: #1d5f8c;
+            border: 0;
+            border-bottom: 3px solid #1d84c6;
+            background: transparent;
+        }
+        .mt-request-detail .mt-tab-pane {
+            padding: 18px;
+        }
+        .mt-request-detail .mt-panel {
+            border: 1px solid #e7ecf1;
+            border-radius: 8px;
+            background: #fbfcfe;
+            padding: 14px 16px;
+        }
+        .mt-request-detail .mt-panel + .mt-panel {
+            margin-top: 12px;
+        }
+        .mt-request-detail .mt-panel-title {
+            margin: 0 0 12px;
+            font-size: 15px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        .mt-request-detail .mt-panel-subtitle {
+            margin: 0 0 12px;
+            color: #6b7d90;
+        }
+        .mt-request-detail .mt-quick-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .mt-request-detail .mt-actions-note {
+            margin-top: 10px;
+            color: #6b7d90;
         }
         .mt-section {
             border-top: 1px solid #eef1f5;
@@ -102,12 +229,27 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
             font-weight: 700;
         }
         .mt-conversation-log {
-            max-height: 320px;
+            max-height: 360px;
             overflow: auto;
             border: 1px solid #e5e5e5;
             padding: 12px;
-            background: #fafafa;
+            background: #fff;
             border-radius: 6px;
+        }
+        .mt-request-detail .mt-conversation-cta {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 14px;
+            padding: 14px 16px;
+            border: 1px solid #dfe6ee;
+            border-radius: 8px;
+            background: #f8fbfd;
+        }
+        .mt-request-detail .mt-conversation-cta p {
+            margin: 6px 0 0;
+            color: #5d6b78;
         }
         .mt-message-row {
             border-bottom: 1px solid #ececec;
@@ -138,7 +280,17 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
             opacity: .65;
         }
         @media (max-width: 767px) {
+            #my_booking_detail_modal .modal-dialog {
+                width: auto;
+                margin: 10px;
+            }
             .mt-request-detail .mt-detail-header {
+                flex-direction: column;
+            }
+            .mt-request-detail .mt-detail-sticky {
+                top: -12px;
+            }
+            .mt-request-detail .mt-conversation-cta {
                 flex-direction: column;
             }
         }
@@ -208,7 +360,7 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
 <?php echo $sider_bar;?>
 
 <div class="modal fade" id="my_booking_detail_modal" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
@@ -298,6 +450,36 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" id="btn-provider-propose-save">Enviar propuesta de cita</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="assign_staff_modal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Asignar médico / staff</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assign_staff_item_id" value="">
+                <div class="form-group">
+                    <label>Asignación actual</label>
+                    <p class="form-control-static" id="assign_staff_current_label">Sin asignar</p>
+                </div>
+                <div class="form-group">
+                    <label for="assign_staff_select">Staff elegible</label>
+                    <select class="form-control" id="assign_staff_select">
+                        <option value="">Selecciona un médico o staff</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-assign-staff-save">Guardar asignación</button>
             </div>
         </div>
     </div>

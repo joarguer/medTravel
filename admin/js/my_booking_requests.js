@@ -1,6 +1,7 @@
 (function () {
     var table = null;
     var activeDetailItemId = 0;
+    var activeDetailData = null;
 
     $(document).ready(function () {
         initTable();
@@ -148,6 +149,32 @@
             $('#provider_propose_modal').modal('show');
         });
 
+        $('#my_booking_detail_modal').on('click', '#btn-modal-assign-staff', function () {
+            if (!activeDetailItemId) return;
+            openAssignStaffModal();
+        });
+
+        $('#btn-assign-staff-save').on('click', function () {
+            var itemId = parseInt($('#assign_staff_item_id').val(), 10) || 0;
+            var staffId = parseInt($('#assign_staff_select').val(), 10) || 0;
+            if (itemId <= 0 || staffId <= 0) {
+                toastr.error('Debes seleccionar un médico o staff');
+                return;
+            }
+
+            sendProviderAction('assign_staff', {
+                item_id: itemId,
+                staff_id: staffId
+            }, function (response) {
+                $('#assign_staff_modal').modal('hide');
+                if (response && response.data) {
+                    applyAssignmentUpdate(response.data);
+                    return;
+                }
+                reloadActiveDetail();
+            }, 'Asignación guardada');
+        });
+
         $('#my_booking_detail_modal').on('click', '.btn-modal-open-inbox, .btn-modal-open-calendar', function () {
             var $btn = $(this);
             if ($btn.is('[disabled]') || $btn.attr('aria-disabled') === 'true') {
@@ -197,6 +224,7 @@
                 activeDetailItemId = itemId;
                 var detailData = response.data || {};
                 detailData.items_history = response.items_history || [];
+                activeDetailData = detailData;
 
                 $('#my_booking_detail_content').html(renderDetail(detailData));
                 $('#my_booking_detail_modal').modal('show');
@@ -215,6 +243,115 @@
         }
     }
 
+    function loadAssignableStaff(detailData, onSuccess) {
+        detailData = detailData || activeDetailData || {};
+        var providerId = parseInt(detailData.provider_id, 10) || 0;
+        var offerId = parseInt(detailData.offer_id, 10) || 0;
+        var serviceId = parseInt(detailData.service_id, 10) || 0;
+        if (providerId <= 0 || (offerId <= 0 && serviceId <= 0)) {
+            toastr.error('El item no tiene contexto suficiente para asignar médico');
+            return;
+        }
+
+        $.ajax({
+            url: 'ajax/provider_medical_staff.php',
+            method: 'GET',
+            dataType: 'json',
+            data: {
+                action: 'list_assignable_staff',
+                provider_id: providerId,
+                offer_id: offerId,
+                service_id: serviceId
+            },
+            success: function (response) {
+                if (!response || !response.ok) {
+                    toastr.error((response && response.message) ? response.message : 'No se pudo cargar el staff elegible');
+                    return;
+                }
+                if (typeof onSuccess === 'function') {
+                    onSuccess(response.items || []);
+                }
+            },
+            error: function () {
+                toastr.error('Error de conexión al cargar staff elegible');
+            }
+        });
+    }
+
+    function openAssignStaffModal() {
+        if (!activeDetailData || parseInt(activeDetailData.can_assign_staff, 10) !== 1) {
+            toastr.warning('Este item no admite asignación manual de médico');
+            return;
+        }
+
+        $('#assign_staff_item_id').val(activeDetailItemId || 0);
+        $('#assign_staff_select').html('<option value="">Cargando staff elegible...</option>').prop('disabled', true);
+        $('#assign_staff_current_label').text((activeDetailData.assigned_doctor || 'Sin asignar').toString());
+        $('#btn-assign-staff-save').prop('disabled', true);
+        $('#assign_staff_modal').modal('show');
+
+        loadAssignableStaff(activeDetailData, function (items) {
+            var currentAssignedStaffId = parseInt(activeDetailData.assigned_staff_id, 10) || 0;
+            var options = ['<option value="">Selecciona un médico o staff</option>'];
+            (items || []).forEach(function (item) {
+                var staffId = parseInt(item.id, 10) || 0;
+                var label = (item.full_name || 'Staff #' + staffId).toString();
+                var specialty = (item.specialty || '').toString().trim();
+                var clinic = (item.clinic_name || '').toString().trim();
+                var suffix = [];
+                if (specialty) suffix.push(specialty);
+                if (clinic) suffix.push(clinic);
+                if (suffix.length) {
+                    label += ' - ' + suffix.join(' / ');
+                }
+                options.push('<option value="' + staffId + '"' + (currentAssignedStaffId === staffId ? ' selected' : '') + '>' + escapeHtml(label) + '</option>');
+            });
+
+            if (!(items || []).length) {
+                options = ['<option value="">No hay staff elegible para este caso</option>'];
+            }
+
+            $('#assign_staff_select').html(options.join('')).prop('disabled', false);
+            $('#btn-assign-staff-save').prop('disabled', !(items || []).length);
+        });
+    }
+
+    function applyAssignmentUpdate(payload) {
+        payload = payload || {};
+        if (!activeDetailData) {
+            reloadActiveDetail();
+            return;
+        }
+
+        activeDetailData.assigned_staff_id = parseInt(payload.assigned_staff_id, 10) || 0;
+        activeDetailData.assigned_doctor = payload.assigned_doctor || null;
+        activeDetailData.clinic = payload.clinic || null;
+        activeDetailData.assigned_staff = payload.assigned_staff || null;
+        activeDetailData.summary = activeDetailData.summary || {};
+        activeDetailData.summary.assigned_doctor = payload.assigned_doctor || null;
+        rerenderActiveDetail();
+    }
+
+    function rerenderActiveDetail(tabId) {
+        if (!activeDetailData) {
+            return;
+        }
+
+        var targetTabId = tabId || getActiveDetailTabId();
+        $('#my_booking_detail_content').html(renderDetail(activeDetailData));
+        if (targetTabId) {
+            $('#my_booking_detail_modal a[href="' + targetTabId + '"]').tab('show');
+        }
+        if (activeDetailItemId > 0) {
+            loadMessages(activeDetailItemId);
+        }
+    }
+
+    function getActiveDetailTabId() {
+        var activeHref = $('#my_booking_detail_modal .nav-tabs li.active a').attr('href');
+        return activeHref || '#mt-detail-tab-summary';
+    }
+
     function renderDetail(d) {
         var canShowLegacyActions = String(d.item_status || '') === 'pending_provider';
         var fee = d.coordination_fee || {};
@@ -225,34 +362,190 @@
 
         var html = '';
         html += '<div class="mt-request-detail">';
-        html += '<div class="mt-detail-header">';
-        html += '<div>';
-        html += '<div class="mt-eyebrow">Caso operativo</div>';
+        html += '<input type="hidden" id="provider-modal-currency" value="' + escapeHtml(d.item_currency || 'USD') + '">';
+        html += '<div class="mt-detail-sticky">';
+        html += renderDetailHeader(d, fee, actionsLocked, lockMessage, inboxHref, calendarHref);
+        html += '</div>';
+        html += renderWorkflowGuide();
+        html += renderDetailTabs(d, {
+            canShowLegacyActions: canShowLegacyActions,
+            actionsLocked: actionsLocked,
+            lockMessage: lockMessage,
+            inboxHref: inboxHref,
+            calendarHref: calendarHref
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function renderDetailHeader(d, fee, actionsLocked, lockMessage, inboxHref, calendarHref) {
+        var appointmentStatus = d.appointment_status || d.medical_coordination_status || 'pending';
+        var appointmentLabel = d.appointment_status_label_es || d.medical_coordination_status_label_es || genericStatusLabelEs(appointmentStatus);
+        var nextAppointment = d.next_appointment && d.next_appointment.start_at ? d.next_appointment.start_at : ((d.summary && d.summary.next_appointment) || '');
+        var cards = [
+            { label: 'Estado general', value: renderStatusBadge(d.booking_status || 'pending', { label: d.booking_status_label_es }) },
+            { label: 'Estado del prestador', value: renderStatusBadge(d.provider_status || d.item_status || 'pending_provider', { label: d.provider_status_label_es || d.item_status_label_es }) },
+            { label: 'Estado de la cita', value: renderStatusBadge(appointmentStatus, { label: appointmentLabel }) },
+            { label: 'Prestador asignado', value: escapeHtml((d.summary && d.summary.assigned_provider) || d.assigned_provider || 'Sin definir') },
+            { label: 'Médico asignado', value: escapeHtml((d.summary && d.summary.assigned_doctor) || d.assigned_doctor || 'Pendiente de asignación') },
+            { label: 'Próxima cita', value: escapeHtml(nextAppointment ? formatDateTime(nextAppointment) : 'Pendiente') }
+        ];
+
+        var html = '<div class="mt-detail-header">';
+        html += '<div style="flex:1 1 auto; min-width:0;">';
+        html += '<div class="mt-eyebrow">Caso / solicitud</div>';
         html += '<h4 class="mt-detail-title">Solicitud #' + escapeHtml(d.booking_request_id || '') + ' · ' + escapeHtml(d.item_name || ('Item #' + (d.item_id || ''))) + '</h4>';
         html += '<div class="mt-inline-meta">';
-        html += '<span>' + renderStatusBadge(d.booking_status || 'pending', { label: d.booking_status_label_es }) + '</span>';
-        html += '<span>' + renderStatusBadge(d.item_status || 'pending_provider', { label: d.item_status_label_es }) + '</span>';
+        html += '<span class="label label-default">Item #' + escapeHtml(d.item_id || '-') + '</span>';
+        html += '<span class="label label-default">' + escapeHtml(d.item_type === 'medical_offer' ? 'Médico' : (d.item_type === 'complementary_service' ? 'Complementario' : (d.item_type || 'Caso'))) + '</span>';
         html += '<span>' + renderFeeBadge(fee.status || '', fee.status_label_es || d.fee_status_label_es) + '</span>';
+        html += '</div>';
+        html += '<div class="mt-header-summary">';
+        cards.forEach(function (card) {
+            html += '<div class="mt-header-summary-card"><div class="mt-summary-label">' + card.label + '</div><div class="mt-summary-value">' + card.value + '</div></div>';
+        });
         html += '</div>';
         html += '</div>';
         html += '<div class="mt-header-actions">';
         html += renderCoordinationActionButton('btn-default btn-modal-open-inbox', 'Abrir conversación', inboxHref, actionsLocked, lockMessage);
-        html += renderCoordinationActionButton('btn-default btn-modal-open-calendar', 'Abrir calendario', calendarHref, actionsLocked, lockMessage);
+        html += renderCoordinationActionButton('btn-primary btn-modal-open-calendar', 'Abrir calendario', calendarHref, actionsLocked, lockMessage);
         html += '</div>';
         html += '</div>';
+        return html;
+    }
 
-        html += renderSummaryCards(d);
-        html += renderCaseSection(d, canShowLegacyActions);
+    function renderWorkflowGuide() {
+        var html = '<div class="mt-workflow-guide">';
+        html += '<div class="mt-guide-card"><h6>Este modal</h6><p>Revisa el caso, valida contexto clínico, acepta o rechaza, propone una cita y asigna o reasigna médico.</p></div>';
+        html += '<div class="mt-guide-card"><h6>Inbox</h6><p>Habla con el paciente, resuelve dudas, pide documentos y haz seguimiento conversacional del caso.</p></div>';
+        html += '<div class="mt-guide-card"><h6>Calendario</h6><p>Propón, confirma o mueve citas desde la agenda para mantener la coordinación ordenada.</p></div>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderDetailTabs(d, options) {
+        options = options || {};
+        var html = '<div class="mt-detail-tabs">';
+        html += '<ul class="nav nav-tabs" role="tablist">';
+        html += '<li class="active"><a href="#mt-detail-tab-summary" aria-controls="mt-detail-tab-summary" role="tab" data-toggle="tab">Resumen</a></li>';
+        html += '<li><a href="#mt-detail-tab-patient" aria-controls="mt-detail-tab-patient" role="tab" data-toggle="tab">Paciente</a></li>';
+        html += '<li><a href="#mt-detail-tab-clinical" aria-controls="mt-detail-tab-clinical" role="tab" data-toggle="tab">Atención clínica</a></li>';
+        html += '<li><a href="#mt-detail-tab-conversation" aria-controls="mt-detail-tab-conversation" role="tab" data-toggle="tab">Conversación</a></li>';
+        html += '<li><a href="#mt-detail-tab-history" aria-controls="mt-detail-tab-history" role="tab" data-toggle="tab">Historial</a></li>';
+        html += '</ul>';
+        html += '<div class="tab-content">';
+        html += '<div role="tabpanel" class="tab-pane active mt-tab-pane" id="mt-detail-tab-summary">' + renderSummaryTab(d, options) + '</div>';
+        html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-patient">' + renderPatientTab(d) + '</div>';
+        html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-clinical">' + renderClinicalTab(d) + '</div>';
+        html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-conversation">' + renderConversationTab(d, options) + '</div>';
+        html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-history">' + renderHistoryTab(d) + '</div>';
+        html += '</div>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderSummaryTab(d, options) {
+        var html = '';
+        html += '<div class="mt-panel">';
+        html += '<h5 class="mt-panel-title">Resumen operativo</h5>';
+        html += '<div class="row">';
+        html += '<div class="col-md-6">';
+        html += renderKeyValue('Servicio', d.item_name || '-');
+        html += renderKeyValue('Destino / ciudad', d.destination || 'Sin definir');
+        html += renderKeyValue('Fechas solicitadas', buildTimeline(d));
+        html += renderKeyValue('Presupuesto', d.budget || '-');
+        html += renderKeyValue('Oferta seleccionada', d.selected_offers || '-');
+        html += '</div>';
+        html += '<div class="col-md-6">';
+        html += renderKeyValue('Prestador asignado', (d.summary && d.summary.assigned_provider) || d.assigned_provider || 'Sin definir');
+        html += renderKeyValue('Médico asignado', d.assigned_doctor || 'Pendiente de asignación');
+        html += renderKeyValue('Próxima cita', d.next_appointment && d.next_appointment.start_at ? formatDateTime(d.next_appointment.start_at) : 'Pendiente');
+        html += renderKeyValue('Estado de la cita', d.appointment_status_label_es || d.medical_coordination_status_label_es || genericStatusLabelEs(d.appointment_status || d.medical_coordination_status || 'pending'));
+        html += renderKeyValue('Creado', formatDateTime(d.booking_created_at || ''));
+        html += '</div>';
+        html += '</div>';
+        html += '<p style="margin:12px 0 0;"><strong>Mensaje del paciente:</strong><br>' + nl2brSafe(d.special_request || 'Sin mensaje adicional') + '</p>';
+        html += '</div>';
+        html += renderQuickActionsPanel(d, options);
+        return html;
+    }
+
+    function renderQuickActionsPanel(d, options) {
+        options = options || {};
+        var canAssignStaff = parseInt(d.can_assign_staff, 10) === 1;
+        var hasActions = options.canShowLegacyActions || canAssignStaff;
+        var html = '<div class="mt-panel">';
+        html += '<h5 class="mt-panel-title">Acciones rápidas</h5>';
+        html += '<p class="mt-panel-subtitle">Gestiona aquí solo la decisión operativa del caso. La conversación y la agenda se continúan desde sus módulos dedicados.</p>';
+
+        if (hasActions) {
+            html += '<div class="mt-quick-actions">';
+            if (options.canShowLegacyActions) {
+                html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-provider-confirm">Aceptar caso</button>';
+                html += '<button type="button" class="btn btn-danger btn-sm" id="btn-modal-provider-reject">Rechazar caso</button>';
+                html += '<button type="button" class="btn btn-warning btn-sm" id="btn-modal-provider-propose">Proponer cita</button>';
+            }
+            if (canAssignStaff) {
+                html += '<button type="button" class="btn btn-info btn-sm" id="btn-modal-assign-staff"><i class="fa fa-user-md"></i> ' + escapeHtml(parseInt(d.assigned_staff_id, 10) > 0 ? 'Reasignar médico' : 'Asignar médico') + '</button>';
+            }
+            html += '</div>';
+        } else {
+            html += '<p class="text-muted" style="margin:0;">No hay acciones operativas pendientes en este momento para este item.</p>';
+        }
+
+        html += '<p class="mt-actions-note">Inbox: dudas, documentos y seguimiento. Calendario: propuesta, confirmación o cambio de cita.</p>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderPatientTab(d) {
+        var html = '';
+        html += renderClientSection(d);
+        html += renderPatientInsightsPanel(d);
+        html += renderDocumentsSection(d);
+        return html;
+    }
+
+    function renderPatientInsightsPanel(d) {
+        var access = d.contact_access || {};
+        var html = '<div class="mt-panel">';
+        html += '<h5 class="mt-panel-title">Datos relevantes del paciente</h5>';
+        if (access.note) {
+            html += '<div class="alert alert-warning" style="margin-bottom:12px;">' + escapeHtml(access.note) + '</div>';
+        }
+        html += '<div class="row">';
+        html += '<div class="col-md-6">';
+        html += renderKeyValue('Origen', d.origin || 'Sin definir');
+        html += renderKeyValue('Personas', d.persons || '-');
+        html += renderKeyValue('Categoría', d.category || '-');
+        html += '</div>';
+        html += '<div class="col-md-6">';
+        html += renderKeyValue('Categorías de servicio', d.service_categories || '-');
+        html += renderKeyValue('Servicios médicos', d.medical_services || '-');
+        html += renderKeyValue('Estado general del caso', d.booking_status_label_es || genericStatusLabelEs(d.booking_status || 'pending'));
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderClinicalTab(d) {
+        var html = '';
         html += renderProviderSection(d);
         html += renderMedicalStaffSection(d);
         html += renderAppointmentSection(d);
         html += renderCoordinationFeeSection(d);
-        html += renderClientSection(d);
-        html += renderDocumentsSection(d);
-        html += renderConversationSection(d, canShowLegacyActions, actionsLocked, lockMessage);
+        return html;
+    }
+
+    function renderConversationTab(d, options) {
+        return renderConversationSection(d, options || {});
+    }
+
+    function renderHistoryTab(d) {
+        var html = '';
         html += renderEventLogSection(d.event_log || []);
         html += renderItemsTimelineSection(d.items_history || []);
-        html += '</div>';
         return html;
     }
 
@@ -266,7 +559,7 @@
             { label: 'Próxima cita', value: escapeHtml(formatDateTime(summary.next_appointment || 'Sin definir')) }
         ];
 
-        var html = '<div class="mt-summary-grid">';
+        var html = '<div class="mt-summary-grid" id="mt-detail-summary">';
         cards.forEach(function (card) {
             html += '<div class="mt-summary-card"><div class="mt-summary-label">' + card.label + '</div><div class="mt-summary-value">' + card.value + '</div></div>';
         });
@@ -347,12 +640,19 @@
     }
 
     function renderMedicalStaffSection(d) {
-        var html = '<section class="mt-section">';
+        var buttonLabel = parseInt(d.assigned_staff_id, 10) > 0 ? 'Reasignar médico' : 'Asignar médico';
+        var html = '<section class="mt-section" id="mt-medical-staff-section">';
         html += '<div class="mt-section-head"><h5>Médico / staff</h5></div>';
         html += '<div class="row">';
         html += '<div class="col-md-6">' + renderKeyValue('Médico asignado', d.assigned_doctor || 'Pendiente de asignación') + '</div>';
         html += '<div class="col-md-6">' + renderKeyValue('Clínica / sede', d.clinic || 'Sin definir') + '</div>';
         html += '</div>';
+        if (parseInt(d.can_assign_staff, 10) === 1) {
+            html += '<div class="mt-inline-actions">';
+            html += '<span class="mt-inline-label">Asignación clínica</span>';
+            html += '<button type="button" class="btn btn-info btn-xs" id="btn-modal-assign-staff"><i class="fa fa-user-md"></i> ' + escapeHtml(buttonLabel) + '</button>';
+            html += '</div>';
+        }
         html += '</section>';
         return html;
     }
@@ -435,9 +735,21 @@
         return html;
     }
 
-    function renderConversationSection(d, canShowLegacyActions, actionsLocked, lockMessage) {
+    function renderConversationSection(d, options) {
+        options = options || {};
+        var canShowLegacyActions = !!options.canShowLegacyActions;
+        var actionsLocked = !!options.actionsLocked;
+        var lockMessage = options.lockMessage || '';
+        var inboxHref = options.inboxHref || ('app_inbox.php?thread_id=ITEM:' + encodeURIComponent(String(d.item_id || 0)));
         var html = '<section class="mt-section">';
         html += '<div class="mt-section-head"><h5>Conversación</h5></div>';
+        html += '<div class="mt-conversation-cta">';
+        html += '<div>';
+        html += '<strong>Gestiona la conversación desde Inbox</strong>';
+        html += '<p>Usa Inbox para resolver dudas, pedir documentos y mantener el seguimiento con el paciente fuera de este modal.</p>';
+        html += '</div>';
+        html += '<div>' + renderCoordinationActionButton('btn-primary btn-modal-open-inbox', 'Abrir conversación en Inbox', inboxHref, actionsLocked, lockMessage) + '</div>';
+        html += '</div>';
         if (actionsLocked && lockMessage) {
             html += '<div class="alert alert-warning" style="margin-bottom:12px;">' + escapeHtml(lockMessage) + '</div>';
         }
@@ -551,7 +863,7 @@
         $log.scrollTop($log[0].scrollHeight);
     }
 
-    function sendProviderAction(action, payload, onSuccess) {
+    function sendProviderAction(action, payload, onSuccess, successMessage) {
         payload = payload || {};
         payload.action = action;
 
@@ -566,9 +878,9 @@
                     return;
                 }
                 if (typeof onSuccess === 'function') {
-                    onSuccess();
+                    onSuccess(response);
                 }
-                toastr.success('Respuesta guardada');
+                toastr.success(successMessage || 'Respuesta guardada');
                 loadRows();
             },
             error: function () {
