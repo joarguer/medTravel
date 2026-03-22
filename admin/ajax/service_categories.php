@@ -7,7 +7,7 @@ header('Content-Type: application/json; charset=utf-8');
 $resp = ['ok' => false];
 $tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
 
-if (!is_role_admin_session()) {
+if (!is_role_admin_session() && $tipo !== 'list') {
     http_response_code(403);
     echo json_encode(['ok' => false, 'error' => 'forbidden']);
     exit;
@@ -44,7 +44,11 @@ function ensure_unique_slug($conexion, $base){
 try {
     if($tipo == 'list'){
         $rows = [];
-        $q = "SELECT id, name, slug, description, image, sort_order, is_active, created_at FROM service_categories ORDER BY sort_order ASC, id DESC";
+        $q = "SELECT id, name, slug, description, image, sort_order, is_active, created_at FROM service_categories";
+        if (!is_role_admin_session()) {
+            $q .= " WHERE is_active = 1";
+        }
+        $q .= " ORDER BY sort_order ASC, id DESC";
         $res = mysqli_query($conexion, $q);
         if(mysqli_errno($conexion)){
             error_log('service_categories list error: '.mysqli_error($conexion));

@@ -11,8 +11,42 @@ $catalog_caption = $is_admin ? 'Servicios habilitados del prestador seleccionado
     <meta charset="utf-8" />
     <title><?php echo $title;?> - <?php echo $catalog_heading; ?></title>
     <?php echo $global_first_style;?>
+    <link href="../../assets/global/plugins/select2/css/select2.min.css" rel="stylesheet" type="text/css" />
+    <link href="../../assets/global/plugins/select2/css/select2-bootstrap.min.css" rel="stylesheet" type="text/css" />
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
+    <style>
+        .service-catalog-filters {
+            background: #f8fafc;
+            border: 1px solid #e7ecf1;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            padding: 14px 16px;
+        }
+        .service-catalog-filters .filter-label {
+            color: #5f6b7a;
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .service-catalog-filters .select2-container {
+            min-width: 240px;
+        }
+        .service-catalog-filters .select2-container--bootstrap .select2-selection {
+            border-color: #cfd7e3;
+            min-height: 34px;
+        }
+        .service-catalog-filters .service-catalog-filter-row {
+            align-items: flex-end;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .service-catalog-filters .service-catalog-filter-item {
+            min-width: 240px;
+        }
+    </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
     <div class="wrapper">
@@ -60,14 +94,19 @@ $catalog_caption = $is_admin ? 'Servicios habilitados del prestador seleccionado
                                         Mientras el modelo sigue en transición, crear o editar aquí impacta la definición base del servicio y su habilitación para el prestador en contexto.
                                         Un servicio activo en esta lista podrá usarse como base de <a href="provider_offers.php">Mis Ofertas</a> y asignarse al staff médico del mismo prestador.
                                     </p>
-                                    <div class="form-inline margin-bottom-10">
-                                        <?php if ($is_admin): ?>
-                                        <label>Prestador médico:&nbsp;</label>
-                                        <select id="filter-provider" class="form-control" style="min-width:260px;"></select>
-                                        &nbsp;&nbsp;
-                                        <?php endif; ?>
-                                        <label>Filtrar por categoría:&nbsp;</label>
-                                        <select id="filter-category" class="form-control"></select>
+                                    <div class="service-catalog-filters">
+                                        <div class="service-catalog-filter-row">
+                                            <?php if ($is_admin): ?>
+                                            <div class="service-catalog-filter-item">
+                                                <label class="filter-label" for="filter-provider">Prestador médico</label>
+                                                <select id="filter-provider" class="form-control" style="min-width:260px;"></select>
+                                            </div>
+                                            <?php endif; ?>
+                                            <div class="service-catalog-filter-item">
+                                                <label class="filter-label" for="filter-category">Filtrar por categoría</label>
+                                                <select id="filter-category" class="form-control"></select>
+                                            </div>
+                                        </div>
                                     </div>
                                     <?php if ($is_admin): ?>
                                     <div class="alert alert-info" id="service-catalog-admin-context-help" style="margin-bottom:16px;">
@@ -98,6 +137,7 @@ $catalog_caption = $is_admin ? 'Servicios habilitados del prestador seleccionado
         </div>
         <?php echo $sider_bar;?>
         <?php echo $theme_layout_script;?>
+        <script src="../../assets/global/plugins/select2/js/select2.full.min.js" type="text/javascript"></script>
         <script>
             window.SERVICE_CATALOG_CTX = {
                 isAdmin: <?php echo $is_admin ? 'true' : 'false'; ?>,

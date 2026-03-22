@@ -7,6 +7,32 @@ $(document).ready(function(){
     const scopedMedicalProviderId = catalogCtx.providerId ? parseInt(catalogCtx.providerId, 10) : 0;
     let adminSelectedProviderId = 0;
 
+    function initCategorySelect2(){
+        if (!$.fn.select2) {
+            return;
+        }
+
+        if ($('#filter-category').data('select2')) {
+            $('#filter-category').select2('destroy');
+        }
+        $('#filter-category').select2({
+            theme: 'bootstrap',
+            width: '100%',
+            placeholder: 'Todas las categorías',
+            allowClear: true
+        });
+
+        if ($('#svc-category').data('select2')) {
+            $('#svc-category').select2('destroy');
+        }
+        $('#svc-category').select2({
+            theme: 'bootstrap',
+            width: '100%',
+            placeholder: 'Seleccionar categoría',
+            dropdownParent: $('#serviceModal')
+        });
+    }
+
     function escapeHtml(text){ if(!text) return ''; return $('<div>').text(text).html(); }
 
     function renderEmptyState(message){
@@ -63,6 +89,10 @@ $(document).ready(function(){
                 if(c.is_active == 1) opts += '<option value="'+c.id+'">'+escapeHtml(c.name)+'</option>';
             });
             $(selectSelector).html(opts);
+            if(selectSelector === '#filter-category' || selectSelector === '#svc-category'){
+                initCategorySelect2();
+                $(selectSelector).trigger('change.select2');
+            }
         }, 'json');
     }
 
@@ -128,6 +158,7 @@ $(document).ready(function(){
         $('#svc-id').val('');
         $('#svc-order').val(1);
         $('#svc-active').prop('checked', true);
+        $('#svc-category').val('').trigger('change');
         if(isAdminMedical){
             $('#svc-provider').val(adminSelectedProviderId > 0 ? String(adminSelectedProviderId) : '');
         } else if(scopedMedicalProviderId > 0){
@@ -210,7 +241,7 @@ $(document).ready(function(){
         $('#svc-name').val(name);
         $('#svc-order').val(order);
         $('#svc-active').prop('checked', activeText.trim().toLowerCase().indexOf('activo') !== -1);
-        $('#svc-category').val(categoryId ? String(categoryId) : '');
+        $('#svc-category').val(categoryId ? String(categoryId) : '').trigger('change');
 
         if(isAdminMedical){
             $('#svc-provider').val(providerId ? String(providerId) : '');
