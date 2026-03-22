@@ -398,6 +398,112 @@ function pms_validate_staff_access_email($conexion, $providerId, $email, $curren
     ];
 }
 
+function pms_catalog_source_table($catalogType)
+{
+    return $catalogType === 'roles' ? 'provider_staff_roles' : 'provider_staff_specialties';
+}
+
+function pms_fallback_staff_catalog_values($catalogType)
+{
+    if ($catalogType === 'roles') {
+        return [
+            'Lead Doctor', 'Specialist', 'Surgeon', 'Dentist', 'Orthodontist',
+            'Oral Surgeon', 'Cosmetic Dentist', 'General Physician', 'Nurse',
+            'Patient Coordinator', 'Medical Assistant', 'Anesthesiologist',
+            'Therapist', 'Administrative Coordinator',
+        ];
+    }
+
+    return [
+        'Dentistry', 'Cosmetic Dentistry', 'Orthodontics', 'Oral Surgery',
+        'Plastic Surgery', 'Bariatric Surgery', 'Dermatology', 'Ophthalmology',
+        'Fertility', 'Orthopedics', 'General Medicine', 'Aesthetic Medicine',
+        'Rehabilitation', 'Nutrition',
+    ];
+}
+
+function pms_load_staff_catalog_values($conexion, $providerId, $catalogType)
+{
+    $tableName = pms_catalog_source_table($catalogType);
+    $values = [];
+    $usesFallback = false;
+    $tableReady = pms_catalog_table_ready($conexion, $tableName);
+
+    if ($tableReady) {
+        $stmt = mysqli_prepare(
+            $conexion,
+            "SELECT name FROM `{$tableName}`
+             WHERE (provider_id IS NULL OR provider_id = ?)
+               AND is_active = 1
+             ORDER BY (provider_id IS NULL) DESC, sort_order ASC, name ASC"
+        );
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $providerId);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            while ($row = mysqli_fetch_assoc($res)) {
+                $name = trim((string)($row['name'] ?? ''));
+                if ($name !== '') {
+                    $values[] = $name;
+                }
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    $realCount = count($values);
+
+    if (!$tableReady && empty($values)) {
+        $values = pms_fallback_staff_catalog_values($catalogType);
+        $usesFallback = true;
+    }
+
+    return [
+        'values' => array_values(array_unique($values)),
+        'uses_fallback' => $usesFallback,
+        'table_ready' => $tableReady,
+        'real_count' => $realCount,
+        'table' => $tableName,
+    ];
+}
+
+function pms_validate_staff_catalog_value($conexion, $providerId, $catalogType, $value, $legacyValue = '')
+{
+    $value = trim((string)$value);
+    $legacyValue = trim((string)$legacyValue);
+    if ($value === '') {
+        return ['ok' => true, 'normalized' => ''];
+    }
+
+    if ($legacyValue !== '' && $value === $legacyValue) {
+        return [
+            'ok' => true,
+            'normalized' => $value,
+            'legacy' => true,
+        ];
+    }
+
+    $catalog = pms_load_staff_catalog_values($conexion, $providerId, $catalogType);
+    $allowed = $catalog['values'];
+    if (in_array($value, $allowed, true)) {
+        return [
+            'ok' => true,
+            'normalized' => $value,
+            'legacy' => false,
+            'uses_fallback' => !empty($catalog['uses_fallback']),
+        ];
+    }
+
+    return [
+        'ok' => false,
+        'status' => $catalogType === 'roles' ? 'invalid_role_title' : 'invalid_specialty',
+        'message' => $catalogType === 'roles'
+            ? 'Selecciona un cargo o rol válido del catálogo del staff.'
+            : 'Selecciona una especialidad válida del catálogo del staff.',
+        'uses_fallback' => !empty($catalog['uses_fallback']),
+    ];
+}
+
 function pms_create_staff_user($conexion, $providerId, $providerName, $staffName, $staffEmail)
 {
     if (!pms_users_table_ready($conexion)) {
@@ -1767,67 +1873,23 @@ switch ($action) {
     case 'list_staff_catalogs': {
         $providerId = (int)($_GET['provider_id'] ?? $_POST['provider_id'] ?? 0);
 
-        $fallbackRoles = [
-            'Lead Doctor', 'Specialist', 'Surgeon', 'Dentist', 'Orthodontist',
-            'Oral Surgeon', 'Cosmetic Dentist', 'General Physician', 'Nurse',
-            'Patient Coordinator', 'Medical Assistant', 'Anesthesiologist',
-            'Therapist', 'Administrative Coordinator',
-        ];
-        $fallbackSpecialties = [
-            'Dentistry', 'Cosmetic Dentistry', 'Orthodontics', 'Oral Surgery',
-            'Plastic Surgery', 'Bariatric Surgery', 'Dermatology', 'Ophthalmology',
-            'Fertility', 'Orthopedics', 'General Medicine', 'Aesthetic Medicine',
-            'Rehabilitation', 'Nutrition',
-        ];
+        $rolesCatalog = pms_load_staff_catalog_values($conexion, $providerId, 'roles');
+        $specialtiesCatalog = pms_load_staff_catalog_values($conexion, $providerId, 'specialties');
 
-        $roles        = [];
-        $specialties  = [];
-
-        if (pms_catalog_table_ready($conexion, 'provider_staff_roles')) {
-            $stmt = mysqli_prepare(
-                $conexion,
-                "SELECT name FROM provider_staff_roles
-                 WHERE (provider_id IS NULL OR provider_id = ?)
-                   AND is_active = 1
-                 ORDER BY (provider_id IS NULL) DESC, sort_order ASC, name ASC"
-            );
-            if ($stmt) {
-                mysqli_stmt_bind_param($stmt, 'i', $providerId);
-                mysqli_stmt_execute($stmt);
-                $res = mysqli_stmt_get_result($stmt);
-                while ($row = mysqli_fetch_assoc($res)) {
-                    $roles[] = $row['name'];
-                }
-                mysqli_stmt_close($stmt);
-            }
-        }
-        if (empty($roles)) {
-            $roles = $fallbackRoles;
-        }
-
-        if (pms_catalog_table_ready($conexion, 'provider_staff_specialties')) {
-            $stmt = mysqli_prepare(
-                $conexion,
-                "SELECT name FROM provider_staff_specialties
-                 WHERE (provider_id IS NULL OR provider_id = ?)
-                   AND is_active = 1
-                 ORDER BY (provider_id IS NULL) DESC, sort_order ASC, name ASC"
-            );
-            if ($stmt) {
-                mysqli_stmt_bind_param($stmt, 'i', $providerId);
-                mysqli_stmt_execute($stmt);
-                $res = mysqli_stmt_get_result($stmt);
-                while ($row = mysqli_fetch_assoc($res)) {
-                    $specialties[] = $row['name'];
-                }
-                mysqli_stmt_close($stmt);
-            }
-        }
-        if (empty($specialties)) {
-            $specialties = $fallbackSpecialties;
-        }
-
-        pms_ok(['roles' => $roles, 'specialties' => $specialties]);
+        pms_ok([
+            'roles' => $rolesCatalog['values'],
+            'specialties' => $specialtiesCatalog['values'],
+            'roles_meta' => [
+                'table_ready' => !empty($rolesCatalog['table_ready']),
+                'real_count' => (int)($rolesCatalog['real_count'] ?? 0),
+                'uses_fallback' => !empty($rolesCatalog['uses_fallback']),
+            ],
+            'specialties_meta' => [
+                'table_ready' => !empty($specialtiesCatalog['table_ready']),
+                'real_count' => (int)($specialtiesCatalog['real_count'] ?? 0),
+                'uses_fallback' => !empty($specialtiesCatalog['uses_fallback']),
+            ],
+        ]);
     }
 
     // ── CRUD: listar items de un catálogo (con id para gestión) ──────────────
@@ -1944,7 +2006,7 @@ switch ($action) {
             if ($affected === 0) {
                 pms_err('insert_failed', 500);
             }
-            pms_ok(['item_id' => $newId, 'action' => 'created']);
+            pms_ok(['item_id' => $newId, 'action' => 'created', 'name' => $name, 'catalog_type' => $catalogType]);
         }
     }
 
@@ -2169,6 +2231,38 @@ switch ($action) {
         $roleTitle = pms_clean_text($_POST['role_title'] ?? '', 120);
         $specialty = pms_clean_text($_POST['specialty'] ?? '', 120);
         $bioShort = pms_clean_long_text($_POST['bio_short'] ?? '');
+
+        $roleValidation = pms_validate_staff_catalog_value(
+            $conexion,
+            $providerId,
+            'roles',
+            $roleTitle,
+            $currentRow ? (string)($currentRow['role_title'] ?? '') : ''
+        );
+        if (empty($roleValidation['ok'])) {
+            pms_err(
+                (string)($roleValidation['message'] ?? 'Selecciona un cargo o rol válido del catálogo del staff.'),
+                422,
+                ['status' => (string)($roleValidation['status'] ?? 'invalid_role_title')]
+            );
+        }
+        $roleTitle = (string)($roleValidation['normalized'] ?? $roleTitle);
+
+        $specialtyValidation = pms_validate_staff_catalog_value(
+            $conexion,
+            $providerId,
+            'specialties',
+            $specialty,
+            $currentRow ? (string)($currentRow['specialty'] ?? '') : ''
+        );
+        if (empty($specialtyValidation['ok'])) {
+            pms_err(
+                (string)($specialtyValidation['message'] ?? 'Selecciona una especialidad válida del catálogo del staff.'),
+                422,
+                ['status' => (string)($specialtyValidation['status'] ?? 'invalid_specialty')]
+            );
+        }
+        $specialty = (string)($specialtyValidation['normalized'] ?? $specialty);
 
         // ── Foto: upload de archivo tiene prioridad sobre URL guardada ────────
         $photo = pms_clean_text($_POST['photo'] ?? '', 255);

@@ -11,6 +11,10 @@
     var linkableUsers = [];
     var providerServices = [];
     var staffCatalogs = { roles: [], specialties: [] };
+    var staffCatalogMeta = {
+        roles: { table_ready: true, real_count: 0, uses_fallback: false },
+        specialties: { table_ready: true, real_count: 0, uses_fallback: false }
+    };
     var providerClinics = [];
     var currentItems = [];
     var MANAGE_DISABLED_BY_CONTEXT = false;
@@ -367,6 +371,12 @@
     }
 
     function normalizeAccessError(message, status) {
+        if (status === 'invalid_role_title') {
+            return 'Selecciona un cargo o rol válido del catálogo del staff.';
+        }
+        if (status === 'invalid_specialty') {
+            return 'Selecciona una especialidad válida del catálogo del staff.';
+        }
         if (status === 'staff_access_requires_valid_email') {
             return 'Para configurar acceso al panel debes registrar un email válido del profesional.';
         }
@@ -644,17 +654,179 @@
         $('#' + selectId).html(opts.join(''));
     }
 
+    function catalogConfig(catalogType) {
+        if (catalogType === 'roles') {
+            return {
+                selectId: 'pms-role-title',
+                emptyNoteId: 'pms-role-title-empty-note',
+                fieldLabel: 'cargo o rol',
+                createButtonLabel: 'Nuevo cargo'
+            };
+        }
+        return {
+            selectId: 'pms-specialty',
+            emptyNoteId: 'pms-specialty-empty-note',
+            fieldLabel: 'especialidad',
+            createButtonLabel: 'Nueva especialidad'
+        };
+    }
+
+    function updateCatalogEmptyState(catalogType) {
+        var config = catalogConfig(catalogType);
+        var meta = staffCatalogMeta[catalogType] || {};
+        var items = staffCatalogs[catalogType] || [];
+        var $note = $('#' + config.emptyNoteId);
+        var message = '';
+
+        if (!meta.table_ready) {
+            message = 'El catálogo no está disponible todavía en esta instalación.';
+        } else if (!items.length) {
+            message = 'Aún no hay opciones cargadas. Crea una desde aquí para continuar.';
+        } else if (meta.uses_fallback) {
+            message = 'Se están usando opciones temporales del sistema porque el catálogo aún no tiene datos persistidos.';
+        }
+
+        if (message) {
+            $note.text(message).show();
+        } else {
+            $note.hide().text('');
+        }
+    }
+
+    function openCatalogCreateModal(catalogType) {
+        if (!canManageStaff()) {
+            return;
+        }
+        var config = catalogConfig(catalogType);
+        $('#pms-catalog-type').val(catalogType);
+        $('#pms-catalog-name').val('');
+        $('#pms-catalog-modal-feedback').hide().text('');
+        $('#pms-catalog-name-label').text(catalogType === 'roles' ? 'Nombre del nuevo cargo' : 'Nombre de la nueva especialidad');
+        $('#providerStaffCatalogModalLabel').html('<strong>' + escapeHtml(config.createButtonLabel) + '</strong>');
+        $('#providerStaffCatalogModal').modal('show');
+        window.setTimeout(function () {
+            $('#pms-catalog-name').focus();
+        }, 120);
+    }
+
+    function saveCatalogItemFromModal() {
+        var catalogType = $.trim($('#pms-catalog-type').val() || '');
+        var name = $.trim($('#pms-catalog-name').val() || '');
+        var config = catalogConfig(catalogType);
+        var $feedback = $('#pms-catalog-modal-feedback');
+        var $button = $('#btn-save-staff-catalog-item');
+
+        if (!catalogType || !config.selectId) {
+            return;
+        }
+        if (!name) {
+            $feedback.text('El nombre no puede estar vacío.').show();
+            return;
+        }
+
+        $feedback.hide().text('');
+        $button.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Guardando...');
+
+        $.ajax({
+            url: ENDPOINT,
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'save_staff_catalog_item',
+                provider_id: PROVIDER_ID,
+                catalog_type: catalogType,
+                name: name
+            }
+        }).done(function (res) {
+            if (!res || !res.ok) {
+                var failureMessage = (res && res.message) || 'No fue posible guardar el catálogo.';
+                $feedback.text(failureMessage).show();
+                toast(failureMessage, 'error');
+                return;
+            }
+
+            loadStaffCatalogs({
+                role_title: catalogType === 'roles' ? (res.name || name) : $.trim($('#pms-role-title').val() || ''),
+                specialty: catalogType === 'specialties' ? (res.name || name) : $.trim($('#pms-specialty').val() || '')
+            }).done(function () {
+                if (catalogType === 'roles') {
+                    $('#pms-role-title').val(res.name || name);
+                } else {
+                    $('#pms-specialty').val(res.name || name);
+                }
+                $('#providerStaffCatalogModal').modal('hide');
+                toast((catalogType === 'roles' ? 'Cargo' : 'Especialidad') + ' guardado correctamente.', 'success');
+            }).fail(function () {
+                $feedback.text('El catálogo se guardó, pero no pudo refrescarse el selector.').show();
+                toast('El catálogo se guardó, pero no pudo refrescarse el selector.', 'error');
+            });
+        }).fail(function (xhr) {
+            var message = 'No fue posible guardar el catálogo.';
+            if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                message = xhr.responseJSON.message;
+            }
+            $feedback.text(message).show();
+            toast(message, 'error');
+        }).always(function () {
+            $button.prop('disabled', false).html('<i class="fa fa-save"></i> Guardar');
+        });
+    }
+
+    function setLegacySelectState(selectId, legacyValue) {
+        var normalized = $.trim(legacyValue || '');
+        $('#' + selectId).attr('data-current-legacy-value', normalized);
+    }
+
+    function getLegacySelectState(selectId) {
+        return $.trim($('#' + selectId).attr('data-current-legacy-value') || '');
+    }
+
+    function validateCatalogSelectValue(selectId, fieldLabel) {
+        var $select = $('#' + selectId);
+        var value = $.trim($select.val() || '');
+        var legacyValue = getLegacySelectState(selectId);
+        if (!value) {
+            return { valid: true, value: '' };
+        }
+
+        var $option = $select.find('option').filter(function () {
+            return $(this).val() === value;
+        }).first();
+
+        if (!$option.length) {
+            return { valid: false, message: 'Selecciona un ' + fieldLabel + ' válido del catálogo.' };
+        }
+
+        if ($option.attr('data-legacy-option') === '1' && value !== legacyValue) {
+            return { valid: false, message: 'Selecciona un ' + fieldLabel + ' válido del catálogo.' };
+        }
+
+        return { valid: true, value: value, legacy: $option.attr('data-legacy-option') === '1' };
+    }
+
     function renderRoleOptions(roles, selectedValue) {
+        setLegacySelectState('pms-role-title', '');
         renderSelectOptions('pms-role-title', roles || staffCatalogs.roles, selectedValue || '',
             '— Seleccionar cargo —');
         // Compatibilidad legacy: si el valor no está en las opciones, añadirlo
-        if (selectedValue) { ensureSelectOption('pms-role-title', selectedValue); }
+        if (selectedValue) {
+            ensureSelectOption('pms-role-title', selectedValue, {
+                legacy: true,
+                legacyLabelSuffix: ' (valor legacy)'
+            });
+        }
     }
 
     function renderSpecialtyOptions(specialties, selectedValue) {
+        setLegacySelectState('pms-specialty', '');
         renderSelectOptions('pms-specialty', specialties || staffCatalogs.specialties, selectedValue || '',
             '— Seleccionar especialidad —');
-        if (selectedValue) { ensureSelectOption('pms-specialty', selectedValue); }
+        if (selectedValue) {
+            ensureSelectOption('pms-specialty', selectedValue, {
+                legacy: true,
+                legacyLabelSuffix: ' (valor legacy)'
+            });
+        }
     }
 
     function renderClinicOptions(clinics, selectedValue) {
@@ -686,20 +858,51 @@
         }
     }
 
-    function loadStaffCatalogs() {
+    function loadStaffCatalogs(selectedValues) {
+        selectedValues = selectedValues || {};
         return $.ajax({
             url: ENDPOINT,
             method: 'GET',
             dataType: 'json',
             data: { action: 'list_staff_catalogs', provider_id: PROVIDER_ID }
         }).done(function (res) {
+            var rolesMeta = (res && res.roles_meta) ? res.roles_meta : {};
+            var specialtiesMeta = (res && res.specialties_meta) ? res.specialties_meta : {};
+
+            staffCatalogMeta.roles = {
+                table_ready: rolesMeta.table_ready !== false,
+                real_count: parseInt(rolesMeta.real_count || 0, 10) || 0,
+                uses_fallback: !!rolesMeta.uses_fallback
+            };
+            staffCatalogMeta.specialties = {
+                table_ready: specialtiesMeta.table_ready !== false,
+                real_count: parseInt(specialtiesMeta.real_count || 0, 10) || 0,
+                uses_fallback: !!specialtiesMeta.uses_fallback
+            };
+
             staffCatalogs.roles = (res && Array.isArray(res.roles)) ? res.roles : [];
             staffCatalogs.specialties = (res && Array.isArray(res.specialties)) ? res.specialties : [];
-            renderRoleOptions(staffCatalogs.roles, '');
-            renderSpecialtyOptions(staffCatalogs.specialties, '');
+
+            if (staffCatalogMeta.roles.table_ready && staffCatalogMeta.roles.real_count === 0) {
+                staffCatalogs.roles = [];
+            }
+            if (staffCatalogMeta.specialties.table_ready && staffCatalogMeta.specialties.real_count === 0) {
+                staffCatalogs.specialties = [];
+            }
+
+            renderRoleOptions(staffCatalogs.roles, selectedValues.role_title || '');
+            renderSpecialtyOptions(staffCatalogs.specialties, selectedValues.specialty || '');
+            updateCatalogEmptyState('roles');
+            updateCatalogEmptyState('specialties');
         }).fail(function () {
             $('#pms-role-title').html('<option value="">No disponible</option>');
             $('#pms-specialty').html('<option value="">No disponible</option>');
+            staffCatalogs.roles = [];
+            staffCatalogs.specialties = [];
+            staffCatalogMeta.roles = { table_ready: false, real_count: 0, uses_fallback: false };
+            staffCatalogMeta.specialties = { table_ready: false, real_count: 0, uses_fallback: false };
+            updateCatalogEmptyState('roles');
+            updateCatalogEmptyState('specialties');
         });
     }
 
@@ -807,9 +1010,15 @@
         // Signaling de carga para selects dinámicos
         $('#pms-role-title').html('<option value="">Cargando...</option>');
         $('#pms-specialty').html('<option value="">Cargando...</option>');
+        $('#pms-role-title-empty-note').hide().text('');
+        $('#pms-specialty-empty-note').hide().text('');
         $('#pms-clinic').html('<option value="">Cargando...</option>');
         $('#pms-clinic-other').val('').hide();
         providerServices = [];
+        staffCatalogs.roles = [];
+        staffCatalogs.specialties = [];
+        staffCatalogMeta.roles = { table_ready: true, real_count: 0, uses_fallback: false };
+        staffCatalogMeta.specialties = { table_ready: true, real_count: 0, uses_fallback: false };
         $('#pms-service-empty-state').text('Este prestador no tiene servicios habilitados disponibles.').hide();
         renderServiceOptions([], [], []);
         renderLinkedUserOptions([], 0);
@@ -824,8 +1033,21 @@
             return;
         }
         var $sel = $('#' + selectId);
-        if ($sel.find('option').filter(function () { return $(this).val() === value; }).length === 0) {
-            $sel.append($('<option>').val(value).text(value + ' ✓'));
+        var config = arguments.length > 2 ? (arguments[2] || {}) : {};
+        var $existingOption = $sel.find('option').filter(function () { return $(this).val() === value; }).first();
+        if (!$existingOption.length) {
+            var $option = $('<option>').val(value).text(value + (config.legacyLabelSuffix || ' ✓'));
+            if (config.legacy) {
+                $option.attr('data-legacy-option', '1');
+                setLegacySelectState(selectId, value);
+            }
+            $sel.append($option);
+        } else if (config.legacy) {
+            $existingOption.attr('data-legacy-option', '1');
+            if (config.legacyLabelSuffix && $existingOption.text().indexOf(config.legacyLabelSuffix) === -1) {
+                $existingOption.text(value + config.legacyLabelSuffix);
+            }
+            setLegacySelectState(selectId, value);
         }
         $sel.val(value);
     }
@@ -1129,13 +1351,29 @@
                 return;
             }
 
+            var roleValidation = validateCatalogSelectValue('pms-role-title', 'cargo o rol');
+            if (!roleValidation.valid) {
+                $msg.html('<span class="text-danger">' + escapeHtml(roleValidation.message) + '</span>').show();
+                toast(roleValidation.message, 'error');
+                $('#pms-role-title').focus();
+                return;
+            }
+
+            var specialtyValidation = validateCatalogSelectValue('pms-specialty', 'especialidad');
+            if (!specialtyValidation.valid) {
+                $msg.html('<span class="text-danger">' + escapeHtml(specialtyValidation.message) + '</span>').show();
+                toast(specialtyValidation.message, 'error');
+                $('#pms-specialty').focus();
+                return;
+            }
+
             var fd = new FormData();
             fd.append('action',      'save_staff');
             fd.append('provider_id', PROVIDER_ID);
             fd.append('id',          $('#pms-id').val() || '');
             fd.append('full_name',   fullName);
-            fd.append('role_title',  $.trim($('#pms-role-title').val() || ''));
-            fd.append('specialty',   $.trim($('#pms-specialty').val() || ''));
+            fd.append('role_title',  roleValidation.value || '');
+            fd.append('specialty',   specialtyValidation.value || '');
             fd.append('sort_order',  $.trim($('#pms-sort-order').val() || ''));
             fd.append('photo',       $.trim($('#pms-photo').val() || ''));
             fd.append('bio_short',   $.trim($('#pms-bio-short').val() || ''));
@@ -1179,7 +1417,9 @@
                 contentType: false
             }).done(function (res) {
                 if (!res || !res.ok) {
-                    $msg.html('<span class="text-danger">' + escapeHtml((res && res.message) || 'No fue posible guardar.') + '</span>').show();
+                    var failureMessage = (res && res.message) || 'No fue posible guardar.';
+                    $msg.html('<span class="text-danger">' + escapeHtml(failureMessage) + '</span>').show();
+                    toast(failureMessage, 'error');
                     return;
                 }
                 var feedback = accessFeedbackMessage(res);
@@ -1198,7 +1438,9 @@
                 if (xhr && xhr.responseJSON && xhr.responseJSON.status) {
                     status = xhr.responseJSON.status;
                 }
-                $msg.html('<span class="text-danger">' + escapeHtml(normalizeAccessError(message, status)) + '</span>').show();
+                message = normalizeAccessError(message, status);
+                $msg.html('<span class="text-danger">' + escapeHtml(message) + '</span>').show();
+                toast(message, 'error');
             }).always(function () {
                 $btn.prop('disabled', false).html('<i class="fa fa-save"></i> Guardar');
             });
@@ -1315,12 +1557,25 @@
         $('#btn-save-medical-staff').on('click', function () {
             $('#form-provider-medical-staff').trigger('submit');
         });
+        $('#btn-save-staff-catalog-item').on('click', saveCatalogItemFromModal);
+        $('#form-provider-staff-catalog-item').on('submit', function (e) {
+            e.preventDefault();
+            saveCatalogItemFromModal();
+        });
+        $(document).on('click', '.pms-open-catalog-modal', function () {
+            openCatalogCreateModal($(this).data('catalog-type'));
+        });
         $('#form-provider-medical-staff').on('submit', saveStaff);
         $('#providerMedicalStaffModal').on('hidden.bs.modal', resetForm);
         $('#providerMedicalStaffModal').on('shown.bs.modal', function () {
             if (serviceMultiSelectNeedsInit) {
                 ensureServiceMultiSelectRendered();
             }
+        });
+        $('#providerStaffCatalogModal').on('hidden.bs.modal', function () {
+            $('#pms-catalog-type').val('');
+            $('#pms-catalog-name').val('');
+            $('#pms-catalog-modal-feedback').hide().text('');
         });
 
         // Preview de foto en tiempo real al seleccionar archivo

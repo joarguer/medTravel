@@ -149,6 +149,21 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
             color: #6b7c93;
             font-size: 13px;
         }
+
+        .staff-catalog-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .staff-catalog-empty-note {
+            display: none;
+            margin: 8px 0 0;
+            font-size: 12px;
+            color: #6b7c93;
+        }
     </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -275,6 +290,12 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                         <select class="form-control" id="pms-role-title" name="role_title">
                                             <option value="">Cargando...</option>
                                         </select>
+                                        <div class="staff-catalog-actions">
+                                            <button type="button" class="btn btn-link btn-xs pms-open-catalog-modal" data-catalog-type="roles" style="padding-left:0;" <?php echo $can_manage_staff ? '' : 'disabled'; ?>>
+                                                <i class="fa fa-plus"></i> Nuevo cargo
+                                            </button>
+                                            <span class="staff-catalog-empty-note" id="pms-role-title-empty-note"></span>
+                                        </div>
                                         <span class="help-block"><i class="fa fa-globe"></i> Write in English — this label may be visible to patients.</span>
                                     </div>
                                 </div>
@@ -286,6 +307,12 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                         <select class="form-control" id="pms-specialty" name="specialty">
                                             <option value="">Cargando...</option>
                                         </select>
+                                        <div class="staff-catalog-actions">
+                                            <button type="button" class="btn btn-link btn-xs pms-open-catalog-modal" data-catalog-type="specialties" style="padding-left:0;" <?php echo $can_manage_staff ? '' : 'disabled'; ?>>
+                                                <i class="fa fa-plus"></i> Nueva especialidad
+                                            </button>
+                                            <span class="staff-catalog-empty-note" id="pms-specialty-empty-note"></span>
+                                        </div>
                                         <span class="help-block"><i class="fa fa-globe"></i> Write in English — this label may be visible to patients.</span>
                                     </div>
                                 </div>
@@ -435,6 +462,34 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                     <span id="pms-save-msg" class="pull-left" style="display:none;"></span>
                     <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
                     <button type="button" class="btn btn-primary" id="btn-save-medical-staff" <?php echo $can_manage_staff ? '' : 'disabled'; ?>>
+                        <i class="fa fa-save"></i> Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="providerStaffCatalogModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="providerStaffCatalogModalLabel">
+        <div class="modal-dialog modal-sm" role="document">
+            <div class="modal-content">
+                <div class="modal-header" style="background:#f7f7f7; border-bottom:1px solid #ebebeb;">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><i class="fa fa-times"></i></button>
+                    <h4 class="modal-title" id="providerStaffCatalogModalLabel"><strong>Nuevo catálogo</strong></h4>
+                </div>
+                <div class="modal-body">
+                    <form id="form-provider-staff-catalog-item">
+                        <input type="hidden" id="pms-catalog-type" value="" />
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <label for="pms-catalog-name" id="pms-catalog-name-label">Nombre</label>
+                            <input type="text" class="form-control" id="pms-catalog-name" maxlength="120" />
+                        </div>
+                        <div class="small text-muted" id="pms-catalog-modal-help">Se guardará como una opción propia del prestador y quedará disponible al instante en este formulario.</div>
+                        <div id="pms-catalog-modal-feedback" class="text-danger small" style="display:none; margin-top:10px;"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btn-save-staff-catalog-item" <?php echo $can_manage_staff ? '' : 'disabled'; ?>>
                         <i class="fa fa-save"></i> Guardar
                     </button>
                 </div>
