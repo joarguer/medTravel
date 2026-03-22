@@ -1,6 +1,8 @@
 <?php
 session_start();
 include('../include/include.php');
+require_once '../include/email_config.php';
+require_once '../../inc/email_template.php';
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 $tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
@@ -54,6 +56,29 @@ function bind_dynamic_stmt_params($stmt, $values){
     call_user_func_array(array($stmt, 'bind_param'), $bind);
 }
 
+function provider_table_columns($conexion){
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    $cache = array(
+        'type' => table_has_column($conexion, 'providers', 'type'),
+        'kind' => table_has_column($conexion, 'providers', 'kind'),
+        'name' => table_has_column($conexion, 'providers', 'name'),
+        'legal_name' => table_has_column($conexion, 'providers', 'legal_name'),
+        'slug' => table_has_column($conexion, 'providers', 'slug'),
+        'description' => table_has_column($conexion, 'providers', 'description'),
+        'city' => table_has_column($conexion, 'providers', 'city'),
+        'address' => table_has_column($conexion, 'providers', 'address'),
+        'phone' => table_has_column($conexion, 'providers', 'phone'),
+        'email' => table_has_column($conexion, 'providers', 'email'),
+        'website' => table_has_column($conexion, 'providers', 'website'),
+        'is_verified' => table_has_column($conexion, 'providers', 'is_verified'),
+        'is_active' => table_has_column($conexion, 'providers', 'is_active')
+    );
+    return $cache;
+}
+
 function provider_users_schema_ready($conexion){
     return table_exists($conexion, 'provider_users')
         && table_has_column($conexion, 'provider_users', 'provider_id')
@@ -81,6 +106,7 @@ function fetch_provider_owner_user_from_mapping($conexion, $provider_id){
         'u.id',
         table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
         table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
+        table_has_column($conexion, 'usuarios', 'email') ? 'u.email' : "'' AS email",
         table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
         table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
         table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
@@ -126,6 +152,7 @@ function fetch_provider_owner_user_legacy($conexion, $provider_id){
         'u.id',
         table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
         table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
+        table_has_column($conexion, 'usuarios', 'email') ? 'u.email' : "'' AS email",
         table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
         table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
         table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
@@ -227,10 +254,196 @@ function build_provider_owner_ux($user_data){
     ];
 }
 
-function create_provider_owner_user($conexion, $provider_id, $username, $password_plain, $display_name){
+function normalize_owner_admin_email($value){
+    $email = trim((string)$value);
+    if ($email === '') {
+        return '';
+    }
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : false;
+}
+
+function owner_admin_email_exists($conexion, $email, $exclude_user_id = 0){
+    if ($email === '' || !table_exists($conexion, 'usuarios') || !table_has_column($conexion, 'usuarios', 'email')) {
+        return false;
+    }
+
+    $sql = 'SELECT id FROM usuarios WHERE email = ?';
+    if ($exclude_user_id > 0) {
+        $sql .= ' AND id <> ?';
+    }
+    if (table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= ' AND COALESCE(is_deleted, 0) = 0';
+    }
+    $sql .= ' LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return false;
+    }
+    if ($exclude_user_id > 0) {
+        mysqli_stmt_bind_param($stmt, 'si', $email, $exclude_user_id);
+    } else {
+        mysqli_stmt_bind_param($stmt, 's', $email);
+    }
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $exists = ($res && mysqli_num_rows($res) > 0);
+    mysqli_stmt_close($stmt);
+    return $exists;
+}
+
+function generate_provider_owner_reset_token(){
+    if (function_exists('random_bytes')) {
+        try {
+            return bin2hex(random_bytes(32));
+        } catch (Throwable $e) {
+            error_log('providers owner reset token random_bytes failed: ' . $e->getMessage());
+        }
+    }
+    if (function_exists('openssl_random_pseudo_bytes')) {
+        $raw = openssl_random_pseudo_bytes(32);
+        if ($raw !== false) {
+            return bin2hex($raw);
+        }
+    }
+    return hash('sha256', uniqid((string)mt_rand(), true) . microtime(true));
+}
+
+function issue_provider_owner_access_token($conexion, $user_id){
+    $user_id = (int)$user_id;
+    if ($user_id <= 0 || !table_exists($conexion, 'usuarios')) {
+        return ['error' => 'invalid_user'];
+    }
+
+    $hasResetToken = table_has_column($conexion, 'usuarios', 'password_reset_token');
+    $hasResetExpires = table_has_column($conexion, 'usuarios', 'password_reset_expires_at');
+    $hasResetSentAt = table_has_column($conexion, 'usuarios', 'password_reset_sent_at');
+    $hasLegacyToken = table_has_column($conexion, 'usuarios', 'token');
+
+    if (!$hasResetToken && !$hasLegacyToken) {
+        return ['error' => 'password_reset_columns_missing'];
+    }
+
+    $token = generate_provider_owner_reset_token();
+    $expires_at = date('Y-m-d H:i:s', time() + 86400);
+
+    if ($hasResetToken && $hasResetExpires && $hasResetSentAt) {
+        $sql = 'UPDATE usuarios SET password_reset_token = ?, password_reset_expires_at = ?, password_reset_sent_at = NOW() WHERE id = ? LIMIT 1';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return ['error' => 'db_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmt, 'ssi', $token, $expires_at, $user_id);
+    } elseif ($hasResetToken && $hasResetExpires) {
+        $sql = 'UPDATE usuarios SET password_reset_token = ?, password_reset_expires_at = ? WHERE id = ? LIMIT 1';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return ['error' => 'db_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmt, 'ssi', $token, $expires_at, $user_id);
+    } elseif ($hasLegacyToken && $hasResetSentAt) {
+        $sql = 'UPDATE usuarios SET token = ?, password_reset_sent_at = NOW() WHERE id = ? LIMIT 1';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return ['error' => 'db_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmt, 'si', $token, $user_id);
+    } else {
+        $sql = 'UPDATE usuarios SET token = ? WHERE id = ? LIMIT 1';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return ['error' => 'db_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmt, 'si', $token, $user_id);
+    }
+
+    $ok = mysqli_stmt_execute($stmt);
+    $err = mysqli_stmt_error($stmt);
+    mysqli_stmt_close($stmt);
+    if (!$ok) {
+        return ['error' => 'db_error', 'detail' => $err];
+    }
+
+    return [
+        'ok' => true,
+        'token' => $token,
+        'expires_at' => $expires_at,
+        'set_password_url' => 'https://medtravel.com.co/set_password.php?token=' . urlencode($token),
+        'login_url' => 'https://medtravel.com.co/login.php',
+    ];
+}
+
+function build_provider_owner_welcome_email_payload($owner_name, $provider_name, $login_username, $login_email, $set_password_url, $login_url, $expires_at){
+    $owner_name = trim((string)$owner_name) !== '' ? trim((string)$owner_name) : 'Provider owner';
+    $provider_name = trim((string)$provider_name) !== '' ? trim((string)$provider_name) : 'your medical provider';
+    $login_username = trim((string)$login_username);
+    $login_email = trim((string)$login_email);
+    $expires_label = $expires_at !== '' ? date('M j, Y g:i A', strtotime($expires_at)) . ' UTC' : 'within 24 hours';
+
+    $content_html = ''
+        . '<p style="margin:0 0 14px 0;">Hello ' . htmlspecialchars($owner_name, ENT_QUOTES, 'UTF-8') . ',</p>'
+        . '<p style="margin:0 0 14px 0;">Your MedTravel owner/admin access for <strong>' . htmlspecialchars($provider_name, ENT_QUOTES, 'UTF-8') . '</strong> is ready.</p>'
+        . '<p style="margin:0 0 14px 0;">Login username: <strong>' . htmlspecialchars($login_username, ENT_QUOTES, 'UTF-8') . '</strong></p>'
+        . '<p style="margin:0 0 14px 0;">Contact email for this account: <strong>' . htmlspecialchars($login_email, ENT_QUOTES, 'UTF-8') . '</strong></p>'
+        . '<p style="margin:0 0 14px 0;">For security, create your password using the secure button below. This invitation expires on <strong>' . htmlspecialchars($expires_label, ENT_QUOTES, 'UTF-8') . '</strong>.</p>'
+        . '<p style="margin:0 0 14px 0;">If the button does not work, copy this secure link into your browser:<br><a href="' . htmlspecialchars($set_password_url, ENT_QUOTES, 'UTF-8') . '" style="color:#0b4ea2; text-decoration:none;">' . htmlspecialchars($set_password_url, ENT_QUOTES, 'UTF-8') . '</a></p>'
+        . '<p style="margin:0;">After setting your password, you can sign in here: <a href="' . htmlspecialchars($login_url, ENT_QUOTES, 'UTF-8') . '" style="color:#0b4ea2; text-decoration:none;">' . htmlspecialchars($login_url, ENT_QUOTES, 'UTF-8') . '</a></p>';
+
+    $html = renderMedTravelEmail(
+        'Your provider owner access is ready',
+        'Create your password and access MedTravel as provider owner/admin.',
+        $content_html,
+        'This access email was generated automatically by MedTravel.',
+        [
+            'text' => 'Create your password',
+            'url' => $set_password_url,
+        ],
+        'MedTravel Patient Care'
+    );
+
+    $alt = "Hello {$owner_name},\n\n"
+        . "Your MedTravel owner/admin access for {$provider_name} is ready.\n"
+        . "Login username: {$login_username}\n"
+        . "Contact email: {$login_email}\n"
+        . "Create your password: {$set_password_url}\n"
+        . "Login after activation: {$login_url}\n"
+        . "This invitation expires on {$expires_label}.\n";
+
+    return [
+        'subject' => 'MedTravel - Your provider owner access is ready',
+        'html' => $html,
+        'alt' => $alt,
+    ];
+}
+
+function send_provider_owner_welcome_email($conexion, $to_email, $payload){
+    if (!function_exists('sendEmail') || !function_exists('renderMedTravelEmail')) {
+        return ['success' => false, 'error' => 'email_functions_unavailable'];
+    }
+    try {
+        $result = sendEmail($to_email, $payload['subject'], $payload['html'], 'patientcare', ['alt_body' => $payload['alt']], $conexion);
+        if ($result === true) {
+            return ['success' => true];
+        }
+        if (is_array($result)) {
+            return ['success' => false, 'error' => $result['error'] ?? 'send_failed'];
+        }
+        return ['success' => false, 'error' => 'send_failed'];
+    } catch (Throwable $e) {
+        error_log('providers owner welcome email exception: ' . $e->getMessage());
+        return ['success' => false, 'error' => 'send_exception'];
+    }
+}
+
+function create_provider_owner_user($conexion, $provider_id, $username, $owner_email, $password_plain, $display_name){
     $password_hash = password_hash($password_plain, PASSWORD_DEFAULT);
     $fields = array('usuario', 'password', 'nombre', 'rol', 'provider_id');
     $values = array($username, $password_hash, $display_name, (string)ROLE_PROVIDER_ADMIN, (int)$provider_id);
+
+    if (table_has_column($conexion, 'usuarios', 'email')) {
+        $fields[] = 'email';
+        $values[] = $owner_email;
+    }
 
     if (table_has_column($conexion, 'usuarios', 'role_id')) {
         $fields[] = 'role_id';
@@ -261,12 +474,17 @@ function create_provider_owner_user($conexion, $provider_id, $username, $passwor
     return $user_id;
 }
 
-function update_provider_owner_user($conexion, $user_id, $provider_id, $username, $display_name, $password_plain = ''){
+function update_provider_owner_user($conexion, $user_id, $provider_id, $username, $owner_email, $display_name, $password_plain = ''){
     $fields = array(
         'usuario = ?',
         'nombre = ?'
     );
     $values = array($username, $display_name);
+
+    if ($owner_email !== null && table_has_column($conexion, 'usuarios', 'email')) {
+        $fields[] = 'email = ?';
+        $values[] = $owner_email;
+    }
 
     if ($password_plain !== '') {
         $fields[] = 'password = ?';
@@ -454,6 +672,7 @@ try{
         $type = isset($_REQUEST['type']) ? trim($_REQUEST['type']) : '';
         $name = isset($_REQUEST['name']) ? trim($_REQUEST['name']) : '';
         $username = isset($_REQUEST['username']) ? trim($_REQUEST['username']) : '';
+        $owner_email = normalize_owner_admin_email($_REQUEST['owner_email'] ?? '');
         $password = isset($_REQUEST['password']) ? trim($_REQUEST['password']) : '';
         $kind = 'medical';
         if(isset($_REQUEST['kind']) && trim((string)$_REQUEST['kind']) !== '' && trim((string)$_REQUEST['kind']) !== 'medical'){
@@ -475,6 +694,9 @@ try{
         if($username === '' || $password === ''){ 
             echo json_encode(['ok'=>false,'error'=>'invalid_credentials','message'=>'Usuario y contraseña son requeridos']); exit; 
         }
+        if($owner_email === '' || $owner_email === false){
+            echo json_encode(['ok'=>false,'error'=>'invalid_owner_email','message'=>'El email del owner/admin inicial es requerido']); exit;
+        }
         
         // Verificar que el usuario no exista
         $check_user = mysqli_prepare($conexion, "SELECT id FROM usuarios WHERE usuario = ? LIMIT 1");
@@ -486,6 +708,10 @@ try{
             echo json_encode(['ok'=>false,'error'=>'username_exists','message'=>'El usuario ya existe']); exit;
         }
         mysqli_stmt_close($check_user);
+
+        if(owner_admin_email_exists($conexion, $owner_email, 0)){
+            echo json_encode(['ok'=>false,'error'=>'owner_email_exists','message'=>'El email del owner/admin inicial ya existe']); exit;
+        }
         
         $legal_name = isset($_REQUEST['legal_name']) ? trim($_REQUEST['legal_name']) : null;
         $description = isset($_REQUEST['description']) ? trim($_REQUEST['description']) : null;
@@ -506,9 +732,37 @@ try{
         
         try {
             // 1. Insertar proveedor
-            $ins = mysqli_prepare($conexion, "INSERT INTO providers (type,kind,name,legal_name,slug,description,city,address,phone,email,website,is_verified,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-            if(!$ins){ throw new Exception('Error preparando INSERT provider'); }
-            mysqli_stmt_bind_param($ins,'sssssssssssii', $type, $kind, $name, $legal_name, $slug, $description, $city, $address, $phone, $email, $website, $is_verified, $is_active);
+            $providerColumns = provider_table_columns($conexion);
+            $insert_fields = array();
+            $insert_values = array();
+
+            $provider_insert_map = array(
+                'type' => $type,
+                'kind' => $kind,
+                'name' => $name,
+                'legal_name' => $legal_name,
+                'slug' => $slug,
+                'description' => $description,
+                'city' => $city,
+                'address' => $address,
+                'phone' => $phone,
+                'email' => $email,
+                'website' => $website,
+                'is_verified' => $is_verified,
+                'is_active' => $is_active
+            );
+
+            foreach($provider_insert_map as $column => $value){
+                if(!empty($providerColumns[$column])){
+                    $insert_fields[] = $column;
+                    $insert_values[] = $value;
+                }
+            }
+
+            $insert_placeholders = implode(',', array_fill(0, count($insert_fields), '?'));
+            $ins = mysqli_prepare($conexion, "INSERT INTO providers (" . implode(',', $insert_fields) . ") VALUES (" . $insert_placeholders . ")");
+            if(!$ins){ throw new Exception('Error preparando INSERT provider: ' . mysqli_error($conexion)); }
+            bind_dynamic_stmt_params($ins, $insert_values);
             $exec = mysqli_stmt_execute($ins);
             if(!$exec){ throw new Exception('Error ejecutando INSERT provider: '.mysqli_stmt_error($ins)); }
             $provider_id = mysqli_insert_id($conexion);
@@ -520,7 +774,7 @@ try{
             if($vs){ mysqli_stmt_bind_param($vs, 'is', $provider_id, $ver_status); mysqli_stmt_execute($vs); mysqli_stmt_close($vs); }
             
             // 2. Crear usuario owner/admin inicial
-            $owner_user_id = create_provider_owner_user($conexion, $provider_id, $username, $password, $name);
+            $owner_user_id = create_provider_owner_user($conexion, $provider_id, $username, $owner_email, $password, $name);
 
             // 3. Persistir ownership explícito del provider
             ensure_provider_owner_mapping($conexion, $provider_id, $owner_user_id);
@@ -542,7 +796,43 @@ try{
             
             // Commit
             mysqli_commit($conexion);
-            echo json_encode(['ok'=>true,'id'=>$provider_id,'message'=>'Proveedor y owner/admin inicial creados exitosamente']); exit;
+
+            $mail_sent = false;
+            $mail_error = '';
+            $token_result = issue_provider_owner_access_token($conexion, $owner_user_id);
+            if(empty($token_result['ok'])){
+                $mail_error = $token_result['error'] ?? 'token_issue_failed';
+            } else {
+                $welcome_payload = build_provider_owner_welcome_email_payload(
+                    $username,
+                    $name,
+                    $username,
+                    $owner_email,
+                    $token_result['set_password_url'],
+                    $token_result['login_url'],
+                    (string)$token_result['expires_at']
+                );
+                $mail_meta = send_provider_owner_welcome_email($conexion, $owner_email, $welcome_payload);
+                $mail_sent = !empty($mail_meta['success']);
+                if(!$mail_sent){
+                    $mail_error = $mail_meta['error'] ?? 'email_send_failed';
+                }
+            }
+
+            $message = 'Proveedor y owner/admin inicial creados exitosamente';
+            if($mail_sent){
+                $message .= '. Correo de acceso enviado al owner/admin inicial.';
+            } else {
+                $message .= '. El owner/admin fue creado, pero el correo de acceso no pudo enviarse.';
+            }
+
+            echo json_encode([
+                'ok'=>true,
+                'id'=>$provider_id,
+                'message'=>$message,
+                'mail_sent'=>$mail_sent,
+                'mail_error'=>$mail_error
+            ]); exit;
             
         } catch(Exception $e) {
             mysqli_rollback($conexion);
@@ -557,6 +847,7 @@ try{
         $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
         
         $username = isset($_REQUEST['username']) ? trim($_REQUEST['username']) : '';
+        $owner_email = normalize_owner_admin_email($_REQUEST['owner_email'] ?? '');
         $password = isset($_REQUEST['password']) ? trim($_REQUEST['password']) : '';
         // obtener kind actual si no viene en request
         $kind = isset($_REQUEST['kind']) ? trim($_REQUEST['kind']) : '';
@@ -591,6 +882,9 @@ try{
         if($username === ''){ 
             echo json_encode(['ok'=>false,'error'=>'invalid_username','message'=>'Usuario es requerido']); exit; 
         }
+        if($owner_email === false){
+            echo json_encode(['ok'=>false,'error'=>'invalid_owner_email','message'=>'El email del owner/admin inicial no es válido']); exit;
+        }
         
         $owner_user = fetch_provider_owner_user($conexion, $id, true);
         $owner_user_id = $owner_user && !empty($owner_user['id']) ? (int)$owner_user['id'] : 0;
@@ -607,11 +901,16 @@ try{
             }
         }
         mysqli_stmt_close($check_user);
+
+        if($owner_email !== '' && owner_admin_email_exists($conexion, $owner_email, $owner_user_id)){
+            echo json_encode(['ok'=>false,'error'=>'owner_email_exists','message'=>'El email del owner/admin inicial ya está en uso']); exit;
+        }
         
+        $providerColumns = provider_table_columns($conexion);
         $allowed = ['type','kind','name','legal_name','description','city','address','phone','email','website','is_verified','is_active'];
         $fields=[]; $values=[];
         foreach($allowed as $k){ 
-            if(isset($_REQUEST[$k])){ 
+            if(!empty($providerColumns[$k]) && isset($_REQUEST[$k])){ 
                 if(in_array($k,['is_verified','is_active'])) $values[] = (int)$_REQUEST[$k]; 
                 else $values[] = trim($_REQUEST[$k]); 
                 $fields[] = "$k = ?"; 
@@ -670,14 +969,20 @@ try{
             $provider_name = isset($_REQUEST['name'])
                 ? trim($_REQUEST['name'])
                 : (($owner_user && isset($owner_user['nombre'])) ? trim((string)$owner_user['nombre']) : '');
+            $owner_email_to_persist = $owner_email !== ''
+                ? $owner_email
+                : (($owner_user && isset($owner_user['email'])) ? trim((string)$owner_user['email']) : null);
             
             if($owner_user_id > 0){
-                update_provider_owner_user($conexion, $owner_user_id, $id, $username, $provider_name, $password);
+                update_provider_owner_user($conexion, $owner_user_id, $id, $username, $owner_email_to_persist, $provider_name, $password);
             } else {
                 if($password === ''){
                     throw new Exception('Se requiere contraseña para crear el owner/admin inicial');
                 }
-                $owner_user_id = create_provider_owner_user($conexion, $id, $username, $password, $provider_name);
+                if($owner_email_to_persist === null || $owner_email_to_persist === ''){
+                    throw new Exception('Se requiere email para crear el owner/admin inicial');
+                }
+                $owner_user_id = create_provider_owner_user($conexion, $id, $username, $owner_email_to_persist, $password, $provider_name);
             }
 
             ensure_provider_owner_mapping($conexion, $id, $owner_user_id);

@@ -3,6 +3,21 @@ $(document).ready(function(){
     const urlCats = 'ajax/service_categories.php';
     const urlServices = 'ajax/service_catalog.php';
     var currentOwnerState = 'new';
+    var providerMultiSelectNeedsInit = false;
+
+    function providerToast(type, message, title){
+        if(!window.toastr){
+            return;
+        }
+        toastr.options = {
+            closeButton: true,
+            newestOnTop: true,
+            progressBar: true,
+            positionClass: 'toast-top-right',
+            timeOut: type === 'error' ? '6000' : '3200'
+        };
+        toastr[type](message, title || '');
+    }
 
     function escapeHtml(text){
         if(!text) return '';
@@ -13,8 +28,86 @@ $(document).ready(function(){
         return 'Prestador medico';
     }
 
+    function isValidEmail(email){
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
+    }
+
+    function providerMultiSelectContainerSelector(fieldSelector){
+        return fieldSelector === '#prov-categories' ? '#ms-prov-categories' : '#ms-prov-services';
+    }
+
+    function hasProviderMultiSelectRendered(fieldSelector){
+        return $(providerMultiSelectContainerSelector(fieldSelector)).length > 0 || $(fieldSelector).next('.ms-container').length > 0;
+    }
+
+    function destroyProviderMultiSelect(fieldSelector){
+        const $field = $(fieldSelector);
+        $(providerMultiSelectContainerSelector(fieldSelector)).remove();
+        $field.next('.ms-container').remove();
+        if($field.length && typeof $.fn.multiSelect === 'function' && $field.data('multiselect')){
+            $field.multiSelect('destroy');
+        }
+        $field.css('position', '').css('left', '');
+    }
+
+    function buildServiceOptionGroups(services){
+        const groups = [];
+        let currentGroup = null;
+
+        services.forEach(function(service){
+            const groupName = $.trim(service.category_name || 'Sin categoría');
+            if(!currentGroup || currentGroup.name !== groupName){
+                currentGroup = { name: groupName, options: [] };
+                groups.push(currentGroup);
+            }
+            currentGroup.options.push(
+                '<option value="' + escapeHtml(service.id) + '">' + escapeHtml(service.name) + ' (' + escapeHtml(service.category_name || '') + ')</option>'
+            );
+        });
+
+        return groups.map(function(group){
+            return '<optgroup label="' + escapeHtml(group.name) + '">' + group.options.join('') + '</optgroup>';
+        }).join('');
+    }
+
+    function initProviderMultiSelect(fieldSelector){
+        const $field = $(fieldSelector);
+        if(!$field.length || typeof $.fn.multiSelect !== 'function' || !$field.find('option').length){
+            return;
+        }
+
+        destroyProviderMultiSelect(fieldSelector);
+        $field.multiSelect({
+            selectableOptgroup: true,
+            selectableHeader: '<div class="provider-multiselect-header">Disponibles</div>',
+            selectionHeader: '<div class="provider-multiselect-header">Seleccionados</div>'
+        });
+    }
+
+    function ensureProviderMultiSelectRendered(){
+        const $modal = $('#providerModal');
+        ['#prov-categories', '#prov-services'].forEach(function(fieldSelector){
+            const $field = $(fieldSelector);
+            if(!$field.length || !$field.find('option').length){
+                return;
+            }
+            if(hasProviderMultiSelectRendered(fieldSelector)){
+                return;
+            }
+            if(!$modal.is(':visible')){
+                providerMultiSelectNeedsInit = true;
+                return;
+            }
+            initProviderMultiSelect(fieldSelector);
+        });
+        providerMultiSelectNeedsInit = false;
+    }
+
     function loadLists(onComplete){
         let pending = 2;
+
+        destroyProviderMultiSelect('#prov-categories');
+        destroyProviderMultiSelect('#prov-services');
 
         function done(){
             pending -= 1;
@@ -36,10 +129,8 @@ $(document).ready(function(){
 
         $.post(urlServices, { tipo: 'list' }, function(res){
             if(res && res.ok){
-                let opts = '';
-                res.data.forEach(function(s){
-                    if(s.is_active == 1) opts += '<option value="' + s.id + '">' + escapeHtml(s.name) + ' (' + escapeHtml(s.category_name || '') + ')</option>';
-                });
+                let activeServices = res.data.filter(function(s){ return s.is_active == 1; });
+                let opts = buildServiceOptionGroups(activeServices);
                 $('#prov-services').html(opts);
             }
             done();
@@ -111,6 +202,16 @@ $(document).ready(function(){
         $('#password-help').text(helpText);
     }
 
+    function setOwnerEmailRequirement(required, helpText){
+        $('#prov-owner-email').val($('#prov-owner-email').val() || '').prop('required', required);
+        if(required){
+            $('#owner-email-required').show();
+        } else {
+            $('#owner-email-required').hide();
+        }
+        $('#owner-email-help').text(helpText);
+    }
+
     function setOwnerSummary(state, title, message, alertClass){
         currentOwnerState = state;
         $('#owner-summary')
@@ -125,12 +226,16 @@ $(document).ready(function(){
         $('#form-provider')[0].reset();
         $('#prov-id').val('');
         $('#prov-username').val('').prop('required', true);
+        $('#prov-owner-email').val('');
+        destroyProviderMultiSelect('#prov-categories');
+        destroyProviderMultiSelect('#prov-services');
         $('#prov-categories option').prop('selected', false);
         $('#prov-services option').prop('selected', false);
         $('#provider-modal-title').text('Alta de prestador medico');
         $('#provider-modal-intro').html('Este flujo crea el <strong>prestador medico</strong> y su <strong>cuenta owner/admin inicial</strong>.');
         $('#prov-save').text('Crear prestador medico');
         $('#username-help').text('Esta sera la cuenta principal de acceso administrativo del prestador medico.');
+        setOwnerEmailRequirement(true, 'Este email se usa para enviar el acceso inicial del owner/admin y no reemplaza el email general del prestador.');
         setKindPresentation();
         setPasswordRequirement(true, 'Define la contrasena inicial de la cuenta owner/admin.');
         setOwnerSummary(
@@ -148,7 +253,7 @@ $(document).ready(function(){
         const ux = res.data.ux || {};
 
         if((p.kind || 'medical') !== 'medical'){
-            alert('Este registro pertenece al dominio complementario y debe administrarse desde providers_complementary.php.');
+            providerToast('warning', 'Este registro pertenece al dominio complementario y debe administrarse desde providers_complementary.php.', 'Dominio incorrecto');
             return;
         }
 
@@ -165,6 +270,10 @@ $(document).ready(function(){
         $('#prov-verified').prop('checked', p.is_verified == 1);
         $('#prov-active').prop('checked', p.is_active == 1);
         $('#prov-username').val(user && user.usuario ? user.usuario : '').prop('required', true);
+        $('#prov-owner-email').val(user && user.email ? user.email : '');
+
+        destroyProviderMultiSelect('#prov-categories');
+        destroyProviderMultiSelect('#prov-services');
 
         if(Array.isArray(res.data.category_ids)){
             $('#prov-categories').val(res.data.category_ids.map(String));
@@ -177,6 +286,7 @@ $(document).ready(function(){
         $('#provider-modal-intro').html('Aqui editas el <strong>prestador medico</strong> y su <strong>cuenta owner/admin inicial</strong>.');
         $('#prov-save').text('Guardar cambios');
         $('#username-help').text('Username de acceso de la cuenta owner/admin inicial del prestador medico.');
+        setOwnerEmailRequirement(false, 'Si lo completas, este email quedara asociado explicitamente al owner/admin inicial. Si lo dejas en blanco, se conserva el email actual del owner/admin cuando exista.');
         setKindPresentation();
 
         if(ux.owner_state === 'missing'){
@@ -216,28 +326,49 @@ $(document).ready(function(){
         openCreateModal();
     });
 
+    $('#providerModal').on('shown.bs.modal', function(){
+        if(providerMultiSelectNeedsInit || !hasProviderMultiSelectRendered('#prov-categories') || !hasProviderMultiSelectRendered('#prov-services')){
+            ensureProviderMultiSelectRendered();
+        }
+    });
+
+    $('#providerModal').on('hidden.bs.modal', function(){
+        destroyProviderMultiSelect('#prov-categories');
+        destroyProviderMultiSelect('#prov-services');
+        providerMultiSelectNeedsInit = false;
+    });
+
     $('#prov-save').click(function(){
         let id = $('#prov-id').val();
         let type = $('#prov-type').val();
         let name = $('#prov-name').val().trim();
         let username = $('#prov-username').val().trim();
+        let ownerEmail = $('#prov-owner-email').val().trim();
         let password = $('#prov-password').val();
         let selectedKind = 'medical';
 
         if(!type || !name){
-            alert('Tipo y nombre del prestador medico son requeridos');
+            providerToast('warning', 'Tipo y nombre del prestador medico son requeridos', 'Validacion');
             return;
         }
         if(!username){
-            alert('El username del owner/admin inicial es requerido');
+            providerToast('warning', 'El username del owner/admin inicial es requerido', 'Validacion');
+            return;
+        }
+        if(!id && !ownerEmail){
+            providerToast('warning', 'El email del owner/admin inicial es requerido al crear un nuevo prestador medico', 'Validacion');
+            return;
+        }
+        if(ownerEmail && !isValidEmail(ownerEmail)){
+            providerToast('warning', 'El email del owner/admin inicial no es valido', 'Validacion');
             return;
         }
         if(!id && !password){
-            alert('La contrasena del owner/admin inicial es requerida al crear un nuevo prestador medico');
+            providerToast('warning', 'La contrasena del owner/admin inicial es requerida al crear un nuevo prestador medico', 'Validacion');
             return;
         }
         if(id && currentOwnerState === 'missing' && !password){
-            alert('Este prestador no tiene owner/admin inicial. Debes definir una contrasena para crear esa cuenta al guardar.');
+            providerToast('warning', 'Este prestador no tiene owner/admin inicial. Debes definir una contrasena para crear esa cuenta al guardar.', 'Validacion');
             return;
         }
         let data = {
@@ -246,6 +377,7 @@ $(document).ready(function(){
             name: name,
             legal_name: $('#prov-legal-name').val().trim(),
             username: username,
+            owner_email: ownerEmail,
             description: $('#prov-desc').val().trim(),
             city: $('#prov-city').val().trim(),
             address: $('#prov-address').val().trim(),
@@ -282,11 +414,17 @@ $(document).ready(function(){
             if(res && res.ok){
                 $('#providerModal').modal('hide');
                 loadProviders();
-                alert(res.message || 'Guardado exitosamente');
+                providerToast('success', res.message || 'Guardado exitosamente', 'Providers');
             } else {
-                alert('Error: ' + (res && res.message ? res.message : (res && res.error ? res.error : 'unknown')));
+                providerToast('error', res && res.message ? res.message : (res && res.error ? res.error : 'unknown'), 'Providers');
             }
-        }, 'json');
+        }, 'json').fail(function(xhr){
+            let message = 'Error de conexion al guardar el provider';
+            if(xhr && xhr.responseJSON && xhr.responseJSON.message){
+                message = xhr.responseJSON.message;
+            }
+            providerToast('error', message, 'Providers');
+        });
     });
 
     $('#tbl-providers').on('click', '.edit', function(){
@@ -298,18 +436,26 @@ $(document).ready(function(){
                     openEditModal(res);
                 });
             } else {
-                alert('No encontrado');
+                providerToast('error', 'No encontrado', 'Providers');
             }
-        }, 'json');
+        }, 'json').fail(function(){
+            providerToast('error', 'Error de conexion al cargar el provider', 'Providers');
+        });
     });
 
     $('#tbl-providers').on('click', '.soft-delete', function(){
         if(!confirm('¿Deseas eliminar (soft)?')) return;
         let id = $(this).closest('tr').data('id');
         $.post(url, { tipo: 'soft_delete', id: id }, function(res){
-            if(res && res.ok) loadProviders();
-            else alert('Error');
-        }, 'json');
+            if(res && res.ok){
+                loadProviders();
+                providerToast('success', res.message || 'Prestador eliminado', 'Providers');
+            } else {
+                providerToast('error', res && res.message ? res.message : 'Error', 'Providers');
+            }
+        }, 'json').fail(function(){
+            providerToast('error', 'Error de conexion al eliminar el provider', 'Providers');
+        });
     });
 
     $('#tbl-providers').on('click', '.toggle-active', function(){
@@ -318,8 +464,14 @@ $(document).ready(function(){
         let val = btn.data('val');
         if(parseInt(val, 10) === 0 && !confirm('¿Deseas desactivar?')) return;
         $.post(url, { tipo: 'toggle', id: id, val: val }, function(res){
-            if(res && res.ok) loadProviders();
-            else alert('Error');
-        }, 'json');
+            if(res && res.ok){
+                loadProviders();
+                providerToast('success', 'Estado actualizado', 'Providers');
+            } else {
+                providerToast('error', res && res.message ? res.message : 'Error', 'Providers');
+            }
+        }, 'json').fail(function(){
+            providerToast('error', 'Error de conexion al actualizar el estado', 'Providers');
+        });
     });
 });

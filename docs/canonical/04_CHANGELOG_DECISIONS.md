@@ -1,5 +1,28 @@
 # Changelog Decisions
 
+## 2026-03-22 — Regla canónica de notificaciones admin con Metronic
+
+**Outcome**
+- El admin de MedTravel adopta oficialmente `toastr` de Metronic, o un wrapper equivalente sobre ese mismo sistema, como mecanismo estándar de feedback al usuario.
+- Queda prohibido usar `alert()` u otros popups nativos del navegador para feedback normal de usuario en el admin.
+- La regla aplica a errores, warnings, success e info.
+- `admin/js/providers.js` queda registrado como caso ya corregido y alineado a esta decisión.
+
+**Decision**
+- Toda notificación visible del admin debe emitirse mediante el sistema estándar ya adoptado por la plantilla.
+- No se admite introducir nuevos módulos admin con `alert()` como UX de operación normal.
+- Cuando un módulo legacy todavía use `alert()`, eso debe tratarse como deuda técnica de migración y no como patrón válido.
+- Los mensajes técnicos siguen siendo válidos para depuración, pero deben presentarse con `toastr` o wrapper equivalente cuando formen parte del flujo normal del usuario.
+
+**Transition note**
+- Esta decisión no obliga a una migración masiva inmediata de todos los módulos legacy.
+- La migración puede hacerse de forma progresiva por frentes, empezando por los módulos que se toquen por trabajo funcional o correctivo.
+- `providers.js` queda asentado como implementación ya ejecutada bajo esta regla.
+
+**Operational effect**
+- Las futuras correcciones y features del admin deben reutilizar `toastr` o el helper local equivalente ya presente en el proyecto.
+- Cualquier uso residual de `alert()` en módulos legacy queda explícitamente catalogado como backlog de hardening UX del admin.
+
 ## 2026-03-21 — Formalizacion oficial del onboarding medico, ownership del provider e identidad administrativa
 
 **Outcome**

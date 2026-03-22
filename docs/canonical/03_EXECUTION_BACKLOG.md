@@ -68,6 +68,20 @@ Alias al backlog / pasos de ejecución canónico.
 - [ ] Revisar labels, ayudas y mensajes de validacion en `providers`, `Mis Servicios`, `Mis Ofertas` y `Staff`
 - [ ] Alinear textos de ayuda con la clasificacion futura por nivel de atencion y tipo asistencial
 
+### Frente transversal — UX tecnica de notificaciones admin
+
+#### Canon cerrado
+
+- DONE 2026-03-22: el admin adopta oficialmente `toastr` de Metronic, o wrapper equivalente, como sistema estándar exclusivo para feedback de usuario
+- DONE 2026-03-22: queda prohibido introducir `alert()` o popups nativos para errores, warnings, success e info en flujos normales del admin
+- DONE 2026-03-22: `providers.js` queda alineado como caso implementado de esta regla
+
+#### Deuda tecnica de migracion
+
+- [ ] Migrar progresivamente modulos legacy del admin que todavia usan `alert()` hacia `toastr` o wrapper equivalente
+- [ ] Priorizar la migracion en modulos que se toquen por fixes o evolutivos para evitar refactors amplios sin necesidad
+- [ ] Revisar consistencia de severidades y titulos de notificacion entre modulos admin ya migrados
+
 ### Frente especifico — Onboarding medico, ownership e identidad administrativa
 
 #### Canon cerrado
