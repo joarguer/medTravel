@@ -74,6 +74,37 @@ $(function(){
         );
     }
 
+    function buildStaffAssignmentUrl(providerCatalogServiceId, serviceId){
+        var params = ['action=assign_staff'];
+        if (providerCatalogServiceId > 0) {
+            params.push('provider_catalog_service_id=' + encodeURIComponent(providerCatalogServiceId));
+        }
+        if (serviceId > 0) {
+            params.push('service_id=' + encodeURIComponent(serviceId));
+        }
+        return 'staff_medico.php?' + params.join('&');
+    }
+
+    function updateNextStepCta(serviceName, providerCatalogServiceId, serviceId, mode){
+        var cta = $('#offer-next-step-cta');
+        if (!cta.length || isAdminMedical || providerCatalogServiceId <= 0) {
+            cta.hide().empty();
+            return;
+        }
+
+        var buttonLabel = mode === 'create' ? 'Continuar: asignar a staff' : 'Asignar a staff';
+        var message = mode === 'create'
+            ? 'Siguiente paso recomendado para el servicio habilitado <strong>' + escapeHtml(serviceName || ('#' + providerCatalogServiceId)) + '</strong>: asignarlo al staff médico que podrá atenderlo.'
+            : 'Puedes continuar con la asignación clínica del servicio habilitado <strong>' + escapeHtml(serviceName || ('#' + providerCatalogServiceId)) + '</strong> al staff médico.';
+
+        cta
+            .html(
+                message +
+                ' <a class="btn btn-sm btn-info pull-right" href="' + buildStaffAssignmentUrl(providerCatalogServiceId, serviceId) + '">' + buttonLabel + '</a>'
+            )
+            .show();
+    }
+
     function updateAdminContextState(){
         if(!isAdminMedical){
             return;
@@ -128,6 +159,7 @@ $(function(){
             ? 'Mostrando las ofertas asociadas al servicio habilitado <strong>' + escapeHtml(serviceName || ('#' + deepLinkedProviderCatalogServiceId)) + '</strong>.'
             : 'Estás entrando desde Mis Servicios para crear la primera oferta comercial del servicio habilitado <strong>' + escapeHtml(serviceName || ('#' + deepLinkedProviderCatalogServiceId)) + '</strong>.';
         $('#offer-context-note').html(message).show();
+        updateNextStepCta(serviceName, deepLinkedProviderCatalogServiceId, 0, offerCount > 0 ? 'view' : 'create');
     }
 
     function withProviderContext(data){
@@ -326,6 +358,8 @@ $(function(){
             if(!filteredData.length){
                 if (deepLinkedProviderCatalogServiceId > 0) {
                     updateDeepLinkContextMessage('', 0);
+                } else {
+                    updateNextStepCta('', 0, 0, '');
                 }
                 renderEmptyState(
                     deepLinkedProviderCatalogServiceId > 0
@@ -340,6 +374,8 @@ $(function(){
             }
             if (deepLinkedProviderCatalogServiceId > 0) {
                 updateDeepLinkContextMessage(filteredData[0].service_name || '', filteredData.length);
+            } else {
+                updateNextStepCta('', 0, 0, '');
             }
             $.each(filteredData, function(i,row){
                 var tr = $('<tr>');
@@ -350,6 +386,9 @@ $(function(){
                 var actions = $('<td>');
                 actions.append($('<button class="btn btn-xs btn-primary mr5">Editar</button>').click(function(){ openEdit(row.id); }));
                 actions.append($('<button class="btn btn-xs btn-warning mr5">Fotos</button>').click(function(){ loadGallery(row.id); }));
+                if (!isAdminMedical && parseInt(row.provider_catalog_service_id || 0, 10) > 0) {
+                    actions.append($('<a class="btn btn-xs btn-info mr5">Asignar a staff</a>').attr('href', buildStaffAssignmentUrl(parseInt(row.provider_catalog_service_id || 0, 10), parseInt(row.service_id || 0, 10))));
+                }
                 var toggleLabel = (row.is_active==1) ? 'Desactivar' : 'Activar';
                 actions.append($('<button class="btn btn-xs btn-default">'+toggleLabel+'</button>').click(function(){ toggle(row.id); }));
                 tr.append(actions);
@@ -415,6 +454,8 @@ $(function(){
             if (providerCatalogServiceId > 0) {
                 setServiceSelectValue(providerCatalogServiceId, '');
                 updateServiceHelp('La oferta comercial se construye sobre un servicio ya habilitado en Mis Servicios. Llegaste aquí desde el servicio seleccionado.', false);
+                var option = $('#offer-service option:selected');
+                updateNextStepCta($.trim(option.text() || ''), providerCatalogServiceId, parseInt(option.data('service-id') || 0, 10) || 0, 'create');
             }
         });
     }

@@ -15,6 +15,17 @@
     var currentItems = [];
     var MANAGE_DISABLED_BY_CONTEXT = false;
     var serviceMultiSelectNeedsInit = false;
+    var pageParams = (function () {
+        try {
+            return new URLSearchParams(window.location.search || '');
+        } catch (e) {
+            return { get: function () { return ''; } };
+        }
+    }());
+    var deepLinkedProviderCatalogServiceId = parseInt(pageParams.get('provider_catalog_service_id') || '0', 10) || 0;
+    var deepLinkedServiceId = parseInt(pageParams.get('service_id') || '0', 10) || 0;
+    var deepLinkedAction = $.trim(pageParams.get('action') || '').toLowerCase();
+    var deepLinkHandled = false;
     var emailValidationRequest = null;
     var emailValidationTimer = null;
     var emailValidationState = {
@@ -981,11 +992,76 @@
     }
 
     function openCreateModal() {
+        return openCreateModalWithService([], []);
+    }
+
+    function resolveDeepLinkedServiceSelection(items) {
+        var selectedProviderCatalogServiceIds = [];
+        var selectedServiceIds = [];
+
+        if (!Array.isArray(items) || !items.length) {
+            return {
+                providerCatalogServiceIds: selectedProviderCatalogServiceIds,
+                serviceIds: selectedServiceIds,
+                item: null
+            };
+        }
+
+        var matchedItem = null;
+        items.some(function (item) {
+            var providerCatalogServiceId = parseInt(item.provider_catalog_service_id || item.id, 10) || 0;
+            var serviceId = parseInt(item.service_id || 0, 10) || 0;
+            if (deepLinkedProviderCatalogServiceId > 0 && providerCatalogServiceId === deepLinkedProviderCatalogServiceId) {
+                matchedItem = item;
+                return true;
+            }
+            if (deepLinkedProviderCatalogServiceId <= 0 && deepLinkedServiceId > 0 && serviceId === deepLinkedServiceId) {
+                matchedItem = item;
+                return true;
+            }
+            return false;
+        });
+
+        if (matchedItem) {
+            var matchedProviderCatalogServiceId = parseInt(matchedItem.provider_catalog_service_id || matchedItem.id, 10) || 0;
+            var matchedServiceId = parseInt(matchedItem.service_id || 0, 10) || 0;
+            if (matchedProviderCatalogServiceId > 0) {
+                selectedProviderCatalogServiceIds.push(matchedProviderCatalogServiceId);
+            }
+            if (matchedServiceId > 0) {
+                selectedServiceIds.push(matchedServiceId);
+            }
+        }
+
+        return {
+            providerCatalogServiceIds: selectedProviderCatalogServiceIds,
+            serviceIds: selectedServiceIds,
+            item: matchedItem
+        };
+    }
+
+    function updateServiceContextNote(selectedItem) {
+        var $note = $('#staff-service-context-note');
+        if (!$note.length) {
+            return;
+        }
+        if (!selectedItem) {
+            $note.hide().empty();
+            return;
+        }
+
+        var label = $.trim(selectedItem.label || selectedItem.service_name || '');
+        $note
+            .html('Llegaste desde Mis Servicios para asignar el servicio habilitado <strong>' + escapeHtml(label || ('#' + (selectedItem.provider_catalog_service_id || selectedItem.id || ''))) + '</strong> a uno o más miembros del staff médico.')
+            .show();
+    }
+
+    function openCreateModalWithService(selectedProviderCatalogServiceIds, selectedServiceIds) {
         resetForm();
         $.when(
             loadStaffCatalogs(),
             loadProviderClinics(''),
-            loadProviderServices([], []),
+            loadProviderServices(selectedProviderCatalogServiceIds || [], selectedServiceIds || []),
             loadLinkableUsers(0, 0)
         ).always(function () {
             $('#providerMedicalStaffModal').modal('show');
@@ -1225,6 +1301,15 @@
         MANAGE_DISABLED_BY_CONTEXT = !CAN_MANAGE_STAFF;
 
         loadStaffList();
+
+        if (!deepLinkHandled && deepLinkedAction === 'assign_staff' && CAN_MANAGE_STAFF) {
+            deepLinkHandled = true;
+            loadProviderServices([], []).always(function () {
+                var resolvedSelection = resolveDeepLinkedServiceSelection(providerServices);
+                updateServiceContextNote(resolvedSelection.item);
+                openCreateModalWithService(resolvedSelection.providerCatalogServiceIds, resolvedSelection.serviceIds);
+            });
+        }
 
         $('#btn-add-medical-staff').on('click', openCreateModal);
         $('#btn-save-medical-staff').on('click', function () {

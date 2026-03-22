@@ -73,6 +73,22 @@ $(document).ready(function(){
         return 'provider_offers.php' + (params.length ? ('?' + params.join('&')) : '');
     }
 
+    function buildStaffAssignmentAction(serviceId, providerCatalogServiceId){
+        if (isAdminMedical) {
+            return '<button type="button" class="btn btn-sm btn-default mr5" disabled title="Disponible desde la vista del prestador.">Asignar a staff</button>';
+        }
+
+        var params = ['action=assign_staff'];
+        if (providerCatalogServiceId > 0) {
+            params.push('provider_catalog_service_id=' + encodeURIComponent(providerCatalogServiceId));
+        }
+        if (serviceId > 0) {
+            params.push('service_id=' + encodeURIComponent(serviceId));
+        }
+
+        return '<a class="btn btn-sm btn-info mr5" href="staff_medico.php?' + params.join('&') + '">Asignar a staff</a>';
+    }
+
     function renderEmptyState(message){
         $('#tbl-services tbody').html(
             '<tr><td colspan="6" class="text-center text-muted" style="padding:24px 12px;">'
@@ -192,6 +208,7 @@ $(document).ready(function(){
             updateAdminContextState(res.provider_name || '');
             let tbody = '';
             res.data.forEach(function(r){
+                const serviceId = r.id ? parseInt(r.id, 10) : 0;
                 const categoryId = r.category_id ? parseInt(r.category_id, 10) : 0;
                 const rowProviderId = r.provider_id ? parseInt(r.provider_id, 10) : providerId;
                 const providerCatalogServiceId = r.provider_catalog_service_id ? parseInt(r.provider_catalog_service_id, 10) : 0;
@@ -199,13 +216,14 @@ $(document).ready(function(){
                 const offersUrl = buildOffersUrl(rowProviderId, providerCatalogServiceId, offerCount);
                 const offersLabel = offerCount > 0 ? ('Ver ofertas' + (offerCount > 1 ? ' (' + offerCount + ')' : '')) : 'Crear oferta';
                 const offersClass = offerCount > 0 ? 'btn btn-sm btn-default' : 'btn btn-sm btn-success';
+                const staffAction = buildStaffAssignmentAction(serviceId, providerCatalogServiceId);
                 tbody += '<tr data-id="'+r.id+'" data-category-id="'+categoryId+'" data-provider-id="'+rowProviderId+'" data-short-description="'+escapeHtml(r.short_description || '')+'">';
                 tbody += '<td>'+escapeHtml(r.category_name || '')+'</td>';
                 tbody += '<td>'+escapeHtml(r.name)+'</td>';
                 tbody += '<td>'+escapeHtml(r.slug)+'</td>';
                 tbody += '<td>'+r.sort_order+'</td>';
                 tbody += '<td>'+(r.is_active == 1 ? '<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>' : '<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>';
-                tbody += '<td><a class="'+offersClass+' mr5" href="'+offersUrl+'">'+offersLabel+'</a> <button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Eliminar</button></td>';
+                tbody += '<td><a class="'+offersClass+' mr5" href="'+offersUrl+'">'+offersLabel+'</a> ' + staffAction + ' <button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Eliminar</button></td>';
                 tbody += '</tr>';
             });
             $('#tbl-services tbody').html(tbody || '<tr><td colspan="6" class="text-center text-muted" style="padding:24px 12px;">No hay servicios habilitados para el prestador seleccionado.</td></tr>');

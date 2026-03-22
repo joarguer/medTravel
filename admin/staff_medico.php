@@ -202,6 +202,7 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                             <p class="text-muted" style="max-width:840px;">
                                                 Registra y gestiona el equipo médico de tu empresa. Cada integrante puede tener cargo, especialidad y foto, y en el futuro podrá asignarse a citas o servicios específicos.
                                             </p>
+                                            <div class="alert alert-info" id="staff-service-context-note" style="display:none; margin-bottom:16px;"></div>
                                             <?php if (!$can_manage_staff): ?>
                                             <div class="alert alert-info">
                                                 <i class="fa fa-info-circle"></i> Tu perfil puede consultar el staff médico, pero no administrarlo.

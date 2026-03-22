@@ -126,6 +126,7 @@ $new_offer_label = $is_admin ? 'Nueva oferta comercial' : 'Nueva oferta';
                                         si un servicio no está habilitado en esa lista, no aparecerá como opción aquí.
                                         <?php endif; ?>
                                     </p>
+                                    <div class="alert alert-info" id="offer-next-step-cta" style="display:none; margin-bottom:16px;"></div>
                                     <?php if ($is_admin): ?>
                                     <div class="form-inline margin-bottom-10">
                                         <label>Prestador médico:&nbsp;</label>
