@@ -313,6 +313,7 @@ function pms_fetch_provider_owner_user($conexion, $providerId)
         pms_table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
         pms_table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
         pms_table_has_column($conexion, 'usuarios', 'email') ? 'u.email' : "'' AS email",
+        pms_table_has_column($conexion, 'usuarios', 'telefono') ? 'u.telefono' : "'' AS telefono",
         pms_table_has_column($conexion, 'usuarios', 'activo') ? 'u.activo' : '1 AS activo',
         pms_table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
         pms_table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
@@ -423,6 +424,7 @@ function pms_provider_owner_list_item($conexion, $providerId)
     $fullName = trim((string)($owner['nombre'] ?? ''));
     $username = trim((string)($owner['usuario'] ?? ''));
     $email = trim((string)($owner['email'] ?? ''));
+    $phone = trim((string)($owner['telefono'] ?? ''));
     if ($fullName === '') {
         $fullName = $email !== '' ? $email : ($username !== '' ? $username : ('Owner #' . $ownerUserId));
     }
@@ -443,7 +445,7 @@ function pms_provider_owner_list_item($conexion, $providerId)
         'provider_id' => (int)$providerId,
         'full_name' => $fullName,
         'email' => $email,
-        'phone' => '',
+        'phone' => $phone,
         'photo' => '',
         'role_title' => 'Owner / admin inicial',
         'specialty' => 'Gestión del prestador',
@@ -2554,6 +2556,22 @@ switch ($action) {
                 $linkedUserId = $currentLinkedUserId;
             }
         }
+
+        if ($linkedUserId > 0) {
+            $linkedElsewhere = pms_validate_user_not_linked_elsewhere($conexion, $linkedUserId, $staffId);
+            if (($linkedElsewhere['error'] ?? '') === 'user_already_linked_to_other_staff') {
+                $linkedStaffName = trim((string)($linkedElsewhere['linked_staff']['full_name'] ?? ''));
+                $message = 'El usuario seleccionado ya está vinculado a otro miembro del staff.';
+                if ($linkedStaffName !== '') {
+                    $message .= ' Staff actual: ' . $linkedStaffName . '.';
+                }
+                pms_err($message, 422, ['status' => 'user_already_linked_to_other_staff']);
+            }
+            if (!empty($linkedElsewhere['error'])) {
+                pms_err((string)$linkedElsewhere['error'], 500);
+            }
+        }
+
         $linkedUserIdSql = $linkedUserId > 0 ? $linkedUserId : 0;
 
         $validatedServices = pms_resolve_requested_provider_services($conexion, $providerId);

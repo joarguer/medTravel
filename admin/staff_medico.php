@@ -272,6 +272,9 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                     <h4 class="modal-title" id="providerMedicalStaffModalLabel"><strong>Agregar staff médico</strong></h4>
                 </div>
                 <div class="modal-body">
+                    <div class="alert alert-info" id="pms-owner-conversion-note" style="display:none; margin-bottom:16px;">
+                        Estás convirtiendo al owner/admin visible en un staff clínico real. Completa la información clínica faltante para crear su registro físico en Staff médico y mantener el vínculo con su usuario actual.
+                    </div>
                     <form id="form-provider-medical-staff">
                         <input type="hidden" id="pms-id" name="id" value="" />
                         <div class="staff-form-section">

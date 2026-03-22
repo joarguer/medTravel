@@ -17,6 +17,7 @@
     };
     var providerClinics = [];
     var ownerAdminListItem = null;
+    var ownerConversionContext = null;
     var currentItems = [];
     var MANAGE_DISABLED_BY_CONTEXT = false;
     var serviceMultiSelectNeedsInit = false;
@@ -472,6 +473,9 @@
         var rows = [];
 
         if (ownerAdminListItem) {
+            var ownerActionsHtml = canManageStaff()
+                ? '<button type="button" class="btn btn-xs btn-primary owner-convert-to-staff"><i class="fa fa-user-md"></i> Convertir en staff</button>'
+                : '<span class="text-muted">Solo lectura</span>';
             rows.push(''
                 + '<tr class="info" data-owner-admin="1">'
                 + '<td class="text-center">' + avatarHtml(ownerAdminListItem) + '</td>'
@@ -493,7 +497,7 @@
                 + '<td><span class="label label-default">No</span></td>'
                 + '<td>' + renderBooleanBadge(parseInt(ownerAdminListItem.is_active || 0, 10) === 1, 'Activo', 'Inactivo') + '</td>'
                 + '<td><strong>#0</strong><div class="text-muted small">Ownership explícito</div></td>'
-                + '<td class="text-right"><span class="text-muted">Solo lectura</span></td>'
+                + '<td class="text-right">' + ownerActionsHtml + '</td>'
                 + '</tr>');
         }
 
@@ -999,6 +1003,35 @@
         });
     }
 
+    function buildOwnerAdminConversionItem(ownerItem) {
+        if (!ownerItem) {
+            return null;
+        }
+
+        return {
+            id: '',
+            full_name: ownerItem.full_name || '',
+            role_title: '',
+            specialty: '',
+            sort_order: '',
+            photo: '',
+            bio_short: '',
+            email: ownerItem.email || ownerItem.linked_user_email || '',
+            phone: ownerItem.phone || '',
+            professional_license: '',
+            clinic_name: '',
+            notes: '',
+            is_active: parseInt(ownerItem.is_active || ownerItem.active || 1, 10) === 1 ? 1 : 0,
+            active: parseInt(ownerItem.is_active || ownerItem.active || 1, 10) === 1 ? 1 : 0,
+            is_primary_doctor: 0,
+            can_access_admin: 1,
+            linked_user_id: parseInt(ownerItem.linked_user_id || 0, 10) || 0,
+            access_status_label: ownerItem.access_status_label || 'Owner/admin con acceso al panel',
+            provider_catalog_service_ids: [],
+            service_ids: []
+        };
+    }
+
     function resetForm() {
         var form = document.getElementById('form-provider-medical-staff');
         if (form) {
@@ -1030,7 +1063,9 @@
             mode: 'empty',
             message: ''
         };
+        ownerConversionContext = null;
         $('#providerMedicalStaffModalLabel').text('Agregar staff médico');
+        $('#pms-owner-conversion-note').hide();
         $('#pms-save-msg').hide().empty();
         // Foto: limpiar preview y campo hidden
         $('#pms-photo').val('');
@@ -1082,7 +1117,8 @@
         $sel.val(value);
     }
 
-    function fillForm(item) {
+    function fillForm(item, options) {
+        options = options || {};
         $('#pms-id').val(item.id || '');
         $('#pms-full-name').val(item.full_name || '');
         // Selects dinámicos (catálogos ya cargados antes de llegar aquí)
@@ -1113,12 +1149,48 @@
         $('#pms-enable-user-access').prop('checked', parseInt(item.can_access_admin, 10) === 1);
         $('#pms-can-access-admin').prop('checked', parseInt(item.can_access_admin, 10) === 1);
         $('input[name="pms_access_level"][value="scoped"]').prop('checked', true);
-        $('input[name="pms_access_level"][value="admin"]').prop('checked', false);
+        $('input[name="pms_access_level"][value="admin"]').prop('checked', parseInt(item.can_access_admin, 10) === 1);
+        $('input[name="pms_access_level"][value="scoped"]').prop('checked', parseInt(item.can_access_admin, 10) === 1 ? false : true);
         renderServiceOptions(providerServices, item.provider_catalog_service_ids || [], item.service_ids || []);
-        $('#providerMedicalStaffModalLabel').text('Editar staff médico');
-        setAccessSectionMode('edit');
+        $('#providerMedicalStaffModalLabel').text(options.title || (item.id ? 'Editar staff médico' : 'Agregar staff médico'));
+        if (options.ownerConversion) {
+            $('#pms-owner-conversion-note').show();
+        }
+        setAccessSectionMode(options.mode || (item.id ? 'edit' : 'create'));
         syncAccessUi(item.access_status_label || '');
         scheduleAccessEmailValidation(true);
+    }
+
+    function openOwnerAdminConversionModal() {
+        var ownerItem = ownerAdminListItem;
+        var ownerAsStaffItem = buildOwnerAdminConversionItem(ownerItem);
+
+        if (!ownerItem || !ownerAsStaffItem || !ownerAsStaffItem.linked_user_id) {
+            toast('No fue posible preparar la conversión del owner/admin a staff.', 'error');
+            return;
+        }
+
+        resetForm();
+        ownerConversionContext = {
+            linkedUserId: ownerAsStaffItem.linked_user_id,
+            ownerItem: ownerItem
+        };
+
+        $.when(
+            loadLinkableUsers(ownerAsStaffItem.linked_user_id || 0, 0),
+            loadProviderServices([], []),
+            loadStaffCatalogs(),
+            loadProviderClinics('')
+        ).always(function () {
+            fillForm(ownerAsStaffItem, {
+                mode: 'create',
+                ownerConversion: true,
+                title: 'Convertir owner/admin en staff clínico'
+            });
+            $('#pms-linked-user-id').val(String(ownerAsStaffItem.linked_user_id));
+            $('#providerMedicalStaffModal').modal('show');
+            window.setTimeout(ensureServiceMultiSelectRendered, 120);
+        });
     }
 
     function findSelectedLinkedUser() {
@@ -1668,6 +1740,13 @@
             if (staffId > 0) {
                 openEditModal(staffId);
             }
+        });
+
+        $('#tbl-provider-medical-staff').on('click', '.owner-convert-to-staff', function () {
+            if (!canManageStaff()) {
+                return;
+            }
+            openOwnerAdminConversionModal();
         });
 
         $('#tbl-provider-medical-staff').on('click', '.staff-toggle', function () {
