@@ -589,7 +589,7 @@ if ($tipo === 'create' || $tipo === 'update') {
         $ok = mysqli_stmt_execute($stmt);
         if (!$ok) json_error('DB_ERR:'.mysqli_error($conexion));
         $new_id = mysqli_insert_id($conexion);
-        echo json_encode(['ok'=>true,'data'=>['id'=>$new_id, 'provider_catalog_service_id' => $provider_catalog_service_id, 'service_id' => $service_id]]);
+        echo json_encode(['ok'=>true,'message'=>'Oferta comercial creada correctamente.','data'=>['id'=>$new_id, 'provider_catalog_service_id' => $provider_catalog_service_id, 'service_id' => $service_id]]);
         exit();
     } else {
         $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
@@ -640,7 +640,7 @@ if ($tipo === 'create' || $tipo === 'update') {
         }
         $ok = mysqli_stmt_execute($stmt);
         if (!$ok) json_error('DB_ERR:'.mysqli_error($conexion));
-        echo json_encode(['ok'=>true]);
+        echo json_encode(['ok'=>true,'message'=>'Oferta comercial actualizada correctamente.']);
         exit();
     }
 }

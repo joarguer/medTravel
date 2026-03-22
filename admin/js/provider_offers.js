@@ -16,6 +16,27 @@ $(function(){
     var deepLinkedAction = String(pageParams.get('action') || '').toLowerCase();
     var deepLinkConsumed = false;
 
+    function initToastr(){
+        if (typeof toastr === 'undefined') {
+            return;
+        }
+        toastr.options = $.extend({}, toastr.options, {
+            closeButton: true,
+            newestOnTop: true,
+            progressBar: true,
+            positionClass: 'toast-top-right',
+            timeOut: 3500
+        });
+    }
+
+    function offersToast(type, message, title){
+        if (typeof toastr !== 'undefined' && toastr[type]) {
+            toastr[type](message, title || 'Mis Ofertas');
+            return;
+        }
+        console[type === 'error' ? 'error' : 'log'](message);
+    }
+
     function escapeHtml(text){
         if (text === null || typeof text === 'undefined') return '';
         return $('<div>').text(String(text)).html();
@@ -167,6 +188,19 @@ $(function(){
         });
     }
 
+    function parseApiError(err, res){
+        if (res && res.message) {
+            return res.message;
+        }
+        if (err === 'NETWORK') {
+            return 'Error de conexión al procesar la operación.';
+        }
+        if (typeof err === 'string' && err.indexOf('DB_ERR:') === 0) {
+            return 'Error de base de datos al guardar la oferta.';
+        }
+        return err || 'Ocurrió un error inesperado.';
+    }
+
     function updateServiceHelp(message, isLocked){
         $('#offer-service-help').text(message || defaultServiceHelp);
         $('#offer-service-lock-note').toggle(!!isLocked);
@@ -258,16 +292,22 @@ $(function(){
         });
     }
 
-    function listOffers(){
+    function listOffers(cb){
         if(isAdminMedical && !hasProviderContext()){
             updateAdminContextState();
+            if (cb) cb(false, null, { require_provider_context: true });
             return;
         }
 
         api({tipo:'list'}, function(err,data,res){
-            if(err) return alert(err);
+            if(err) {
+                offersToast('error', parseApiError(err, res));
+                if (cb) cb(false, data, res);
+                return;
+            }
             if(res && res.require_provider_context){
                 updateAdminContextState();
+                if (cb) cb(false, data, res);
                 return;
             }
 
@@ -295,6 +335,7 @@ $(function(){
                         : 'No hay ofertas comerciales registradas todavía.'
                 );
                 renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
+                if (cb) cb(true, filteredData, res);
                 return;
             }
             if (deepLinkedProviderCatalogServiceId > 0) {
@@ -314,6 +355,7 @@ $(function(){
                 tr.append(actions);
                 tbody.append(tr);
             });
+            if (cb) cb(true, filteredData, res);
         });
     }
 
@@ -339,7 +381,10 @@ $(function(){
         $('#modal-title-text').text('Editar oferta comercial');
         loadServices(function(){
             $.getJSON('ajax/provider_offers.php', withProviderContext({tipo:'get', id:id}), function(res){
-                if(!res.ok) return alert(res.error);
+                if(!res.ok) {
+                    offersToast('error', res.message || res.error || 'No fue posible cargar la oferta.');
+                    return;
+                }
                 var d = res.data;
                 $('#offer-id').val(d.id);
                 setServiceSelectValue(d.provider_catalog_service_id, d.service_id);
@@ -396,41 +441,64 @@ $(function(){
         };
         if(id) data.id = id;
         var selectedFile = ($('#offer-file')[0] && $('#offer-file')[0].files) ? $('#offer-file')[0].files[0] : null;
-        api(data, function(err,d){
-            if(err) return alert(err);
+        api(data, function(err,d,res){
+            if(err) {
+                offersToast('error', parseApiError(err, res));
+                return;
+            }
             var offerId = id || (d && d.id ? d.id : '');
+            var successMessage = (res && res.message) || (id ? 'Oferta comercial actualizada correctamente.' : 'Oferta comercial creada correctamente.');
             if (!offerId) {
                 $('#offerModal').modal('hide');
-                listOffers();
+                listOffers(function(ok){
+                    if (ok) {
+                        offersToast('success', successMessage);
+                        return;
+                    }
+                    offersToast('error', 'La oferta se guardó, pero no fue posible refrescar el listado.');
+                });
                 return;
             }
             $('#offer-id').val(offerId);
             if (!selectedFile) {
                 $('#offerModal').modal('hide');
-                listOffers();
+                listOffers(function(ok){
+                    if (ok) {
+                        offersToast('success', successMessage);
+                        return;
+                    }
+                    offersToast('error', 'La oferta se guardó, pero no fue posible refrescar el listado.');
+                });
                 return;
             }
             uploadForOffer(offerId, selectedFile, function(uploadErr){
-                listOffers();
-                if (uploadErr) return alert(uploadErr);
-                $('#offer-file').val('');
-                // Mantener modal abierto y mostrar pestaña de galería con la imagen recién subida
-                $('.nav-tabs a[href="#tab-gallery"]').tab('show');
+                if (uploadErr) {
+                    offersToast('error', parseApiError(uploadErr, null));
+                    return;
+                }
+                listOffers(function(ok){
+                    if (!ok) {
+                        offersToast('error', 'La oferta se guardó y la imagen se subió, pero no fue posible refrescar el listado.');
+                        return;
+                    }
+                    offersToast('success', successMessage);
+                    $('#offer-file').val('');
+                    // Mantener modal abierto y mostrar pestaña de galería con la imagen recién subida
+                    $('.nav-tabs a[href="#tab-gallery"]').tab('show');
+                });
             });
         });
     }
 
-    function toggle(id){ api({tipo:'toggle',id:id}, function(err,d){ if(err) return alert(err); listOffers(); }); }
+    function toggle(id){ api({tipo:'toggle',id:id}, function(err,d,res){ if(err) return offersToast('error', parseApiError(err, res)); listOffers(); }); }
 
     function upload(){
-        var id = $('#offer-id').val(); if(!id) return alert('Abra o cree la oferta primero');
-        var f = $('#offer-file')[0].files[0]; if(!f) return alert('Seleccione archivo');
+        var id = $('#offer-id').val(); if(!id) return offersToast('warning', 'Abra o cree la oferta primero.');
+        var f = $('#offer-file')[0].files[0]; if(!f) return offersToast('warning', 'Seleccione un archivo.');
         uploadForOffer(id, f, function(err){
-            if (err) return alert(err);
+            if (err) return offersToast('error', parseApiError(err, null));
             $('#offer-file').val('');
-            if (typeof toastr !== 'undefined') {
-                toastr.success('Imagen subida exitosamente', 'Éxito');
-            }
+            offersToast('success', 'Imagen subida exitosamente.', 'Éxito');
         });
     }
 
@@ -479,7 +547,7 @@ $(function(){
     }
 
     function loadGallery(offer_id){
-        $.getJSON('ajax/provider_offers.php', withProviderContext({tipo:'get', id: offer_id}), function(res){ if(!res.ok) return alert(res.error); renderGallery(res.data.media||[], offer_id); });
+        $.getJSON('ajax/provider_offers.php', withProviderContext({tipo:'get', id: offer_id}), function(res){ if(!res.ok) return offersToast('error', res.message || res.error || 'No fue posible cargar la galería.'); renderGallery(res.data.media||[], offer_id); });
     }
 
     function renderGalleryInModal(list, offerId){
@@ -526,23 +594,21 @@ $(function(){
     }
 
     function deleteMedia(mediaId, offerId){
-        if (!mediaId) return alert('INVALID_IMAGE');
-        if (!offerId) return alert('INVALID_OFFER');
+        if (!mediaId) return offersToast('error', 'Imagen inválida.');
+        if (!offerId) return offersToast('error', 'Oferta inválida.');
         if (!window.confirm('¿Desea eliminar esta imagen de la galería?')) return;
-        api({tipo:'delete_media', image_id: mediaId, offer_id: offerId}, function(err){
-            if (err) return alert(err);
+        api({tipo:'delete_media', image_id: mediaId, offer_id: offerId}, function(err, data, res){
+            if (err) return offersToast('error', parseApiError(err, res));
             refreshOfferMedia(offerId, function(refreshErr){
-                if (refreshErr) return alert(refreshErr);
-                if (typeof toastr !== 'undefined') {
-                    toastr.success('Imagen eliminada', 'Éxito');
-                }
+                if (refreshErr) return offersToast('error', parseApiError(refreshErr, null));
+                offersToast('success', 'Imagen eliminada.', 'Éxito');
             });
         });
     }
 
     $('#btn-new-offer').click(function(){ 
         if(isAdminMedical && !hasProviderContext()){
-            alert('Seleccione un prestador médico antes de crear una oferta comercial.');
+            offersToast('warning', 'Seleccione un prestador médico antes de crear una oferta comercial.');
             return;
         }
         loadServices(function(){
@@ -577,6 +643,8 @@ $(function(){
             listOffers();
         }, 'json');
     }
+
+    initToastr();
 
     if(isAdminMedical){
         loadMedicalProviders();
