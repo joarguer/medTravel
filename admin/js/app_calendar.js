@@ -201,7 +201,7 @@
         $wrap.toggle(shouldShow);
         if (!shouldShow) return;
 
-        var html = ['<option value="">Select an ITEM...</option>'];
+        var html = ['<option value="">Selecciona un ITEM...</option>'];
         keys.forEach(function (id) {
             var label = knownItemOptions[id] || ('ITEM #' + id);
             var selected = selectedItemId === id ? ' selected' : '';
@@ -289,12 +289,12 @@
         }
         if (isProviderView()) {
             if (selectedItemId > 0) {
-                $empty.text('No events yet for this item. Click a date to propose one.');
+                $empty.text('Aún no hay citas coordinadas para este item. Haz clic en una fecha para proponer un horario.');
             } else {
-                $empty.text('No events yet. Select an ITEM thread, then click a date/time to propose one.');
+                $empty.text('Aún no hay citas coordinadas. Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario.');
             }
         } else {
-            $empty.text('No events yet.');
+            $empty.text('Aún no hay citas coordinadas.');
         }
         $empty.show();
     }
@@ -399,9 +399,9 @@
             var label = knownItemOptions[itemId] || ('ITEM #' + itemId);
             var itemMeta = knownItemMeta[itemId] || {};
             var resolvedRequestId = parseInt(itemMeta.requestId || requestId || '0', 10) || 0;
-            var text = 'Thread: ITEM #' + itemId;
+            var text = 'Hilo: ITEM #' + itemId;
             if (resolvedRequestId > 0) {
-                text += ' — Request #' + resolvedRequestId;
+                text += ' — Solicitud #' + resolvedRequestId;
             }
             text += ' — ' + label;
             $summary.text(text).show();
@@ -409,7 +409,7 @@
         }
 
         if (eventType === 'CARE' && requestId > 0) {
-            $summary.text('Thread: CARE:' + requestId + ' — Request #' + requestId).show();
+            $summary.text('Hilo: CARE:' + requestId + ' — Solicitud #' + requestId).show();
             return;
         }
 
@@ -419,8 +419,8 @@
     function updateCreateHeaderAndButtons() {
         var isProvider = isProviderView();
         var status = String($('#admin-calendar-create-form [name="status"]').val() || 'scheduled').toLowerCase();
-        var submitLabel = isProvider ? 'Send proposal' : 'Create event';
-        $('#admin-calendar-create-title').text(isProvider ? 'Propose schedule' : 'Create event');
+        var submitLabel = isProvider ? 'Enviar propuesta' : 'Registrar cita coordinada';
+        $('#admin-calendar-create-title').text(isProvider ? 'Proponer horario' : 'Registrar cita coordinada');
         $('#admin-calendar-create-submit').text(submitLabel).data('default-label', submitLabel);
         if (status === 'proposed') {
             $('#admin-calendar-create-subtitle').show();
@@ -442,7 +442,7 @@
         $('#admin-calendar-create-item-group').toggle(isItem);
         $('#admin-calendar-create-request-group').toggle(!isItem && !isProvider);
         $('#admin-calendar-create-type-readonly').text(isItem ? 'ITEM' : 'CARE');
-        $('#admin-calendar-create-status-readonly').text('Proposed');
+        $('#admin-calendar-create-status-readonly').text('Propuesta enviada');
 
         if (isProvider) {
             $form.find('[name="event_type"]').val('ITEM').prop('disabled', true);
@@ -489,22 +489,22 @@
         var hasError = false;
 
         if (eventType === 'ITEM' && itemId <= 0) {
-            setCreateFieldError('admin-calendar-create-item-error', 'Item is required for ITEM events.');
+            setCreateFieldError('admin-calendar-create-item-error', 'Debes seleccionar un item para coordinar esta cita.');
             hasError = true;
         }
         if (eventType === 'CARE' && !isProviderView() && requestId <= 0) {
-            setCreateFieldError('admin-calendar-create-request-error', 'Booking request is required for CARE events.');
+            setCreateFieldError('admin-calendar-create-request-error', 'Debes seleccionar una solicitud para este evento CARE.');
             hasError = true;
         }
         if (startAt === '') {
-            setCreateFieldError('admin-calendar-create-start-error', 'Start time is required.');
+            setCreateFieldError('admin-calendar-create-start-error', 'Debes indicar la fecha y hora de inicio.');
             hasError = true;
         }
         if (startAt !== '' && endAt !== '') {
             var mStart = moment(startAt);
             var mEnd = moment(endAt);
             if (mStart.isValid() && mEnd.isValid() && !mEnd.isAfter(mStart)) {
-                setCreateFieldError('admin-calendar-create-end-error', 'End time must be after start time.');
+                setCreateFieldError('admin-calendar-create-end-error', 'La fecha y hora de fin debe ser posterior al inicio.');
                 hasError = true;
             }
         }
@@ -518,11 +518,11 @@
             if (!$btn.data('default-label')) {
                 $btn.data('default-label', $btn.text());
             }
-            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Sending...');
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Guardando...');
             return;
         }
         var label = String($btn.data('default-label') || '');
-        $btn.prop('disabled', false).text(label !== '' ? label : 'Create event');
+        $btn.prop('disabled', false).text(label !== '' ? label : 'Registrar cita coordinada');
     }
 
     function openCreateModal(start, end, allDay, options) {
@@ -908,7 +908,7 @@
             }, function (res) {
                 setCreateSubmittingState(false);
                 $('#admin-calendar-create-modal').modal('hide');
-                toastr.success(isProviderView() ? 'Proposal sent' : 'Event created');
+                toastr.success(isProviderView() ? 'Propuesta registrada' : 'Cita coordinada registrada');
                 var createdEventId = parseInt((res && res.event && res.event.id) ? res.event.id : '0', 10) || 0;
                 if (createdEventId > 0) {
                     pendingOpenEventId = createdEventId;

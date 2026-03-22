@@ -56,26 +56,26 @@ $can_delete = $can_admin_view;
                     <div class="portlet-title">
                         <div class="caption">
                             <i class="icon-calendar font-blue"></i>
-                            <span class="caption-subject font-blue bold uppercase">Booking Calendar</span>
+                            <span class="caption-subject font-blue bold uppercase">Agenda de coordinación</span>
                         </div>
                         <div class="actions">
                             <?php if ($can_admin_view): ?>
                             <select id="admin-calendar-filter" class="form-control input-sm" style="min-width:180px;">
-                                <option value="ALL">All events</option>
-                                <option value="CARE">CARE threads</option>
-                                <option value="ITEM">ITEM threads</option>
+                                <option value="ALL">Todos los eventos</option>
+                                <option value="CARE">Hilos CARE</option>
+                                <option value="ITEM">Hilos ITEM</option>
                             </select>
                             <?php endif; ?>
                         </div>
                     </div>
                     <div class="portlet-body">
                         <div id="admin-calendar-provider-guide" class="alert alert-info" style="display:none; margin-bottom:15px;">
-                            Select an ITEM thread, then click a date/time to propose a schedule.
+                            Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario coordinado.
                         </div>
                         <div id="admin-calendar-item-selector-wrap" style="display:none; margin-bottom:15px;">
-                            <label for="admin-calendar-item-select" style="font-weight:600; margin-right:8px;">ITEM thread</label>
+                            <label for="admin-calendar-item-select" style="font-weight:600; margin-right:8px;">Hilo ITEM</label>
                             <select id="admin-calendar-item-select" class="form-control input-sm" style="display:inline-block; min-width:260px; max-width:420px;">
-                                <option value="">Select an ITEM...</option>
+                                <option value="">Selecciona un ITEM...</option>
                             </select>
                         </div>
                         <div id="admin-calendar-empty-state" class="alert alert-warning" style="display:none; margin-bottom:15px;"></div>
@@ -94,24 +94,24 @@ $can_delete = $can_admin_view;
             <form id="admin-calendar-create-form">
                 <div class="modal-header">
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
-                    <h4 class="modal-title"><i class="icon-calendar"></i> <span id="admin-calendar-create-title">Create event</span></h4>
-                    <p id="admin-calendar-create-subtitle" class="help-block" style="margin:8px 0 0; display:none;">This will notify the patient for confirmation.</p>
+                    <h4 class="modal-title"><i class="icon-calendar"></i> <span id="admin-calendar-create-title">Proponer horario</span></h4>
+                    <p id="admin-calendar-create-subtitle" class="help-block" style="margin:8px 0 0; display:none;">Esta propuesta se enviará al paciente para su revisión.</p>
                 </div>
                 <div class="modal-body">
                     <div id="admin-calendar-create-summary" class="alert alert-info" style="display:none; margin-bottom:15px;"></div>
                     <div class="row">
                         <div class="col-sm-6">
-                            <h5 style="margin-top:0; margin-bottom:12px;">Event details</h5>
+                            <h5 style="margin-top:0; margin-bottom:12px;">Detalle de coordinación</h5>
                             <div class="form-group">
-                                <label>Title</label>
+                                <label>Título</label>
                                 <input type="text" class="form-control" name="title" required maxlength="255">
                             </div>
                             <div class="form-group">
-                                <label>Description</label>
+                                <label>Descripción</label>
                                 <textarea class="form-control" name="description" rows="4"></textarea>
                             </div>
                             <div class="form-group" id="admin-calendar-create-status-group">
-                                <label>Status</label>
+                                <label>Estado</label>
                                 <select class="form-control" name="status" id="admin-calendar-create-status">
                                     <option value="scheduled">scheduled</option>
                                     <option value="proposed">proposed</option>
@@ -120,15 +120,15 @@ $can_delete = $can_admin_view;
                                 </select>
                             </div>
                             <div class="form-group" id="admin-calendar-create-status-readonly-group" style="display:none;">
-                                <label>Status</label>
-                                <p class="form-control-static" id="admin-calendar-create-status-readonly" style="font-weight:600;">Proposed</p>
-                                <small class="text-muted">The patient will need to accept this schedule.</small>
+                                <label>Estado</label>
+                                <p class="form-control-static" id="admin-calendar-create-status-readonly" style="font-weight:600;">Propuesta enviada</p>
+                                <small class="text-muted">El paciente deberá revisar esta propuesta de horario.</small>
                             </div>
                         </div>
                         <div class="col-sm-6">
-                            <h5 style="margin-top:0; margin-bottom:12px;">Schedule</h5>
+                            <h5 style="margin-top:0; margin-bottom:12px;">Horario</h5>
                             <div class="form-group" id="admin-calendar-create-type-group">
-                                <label>Event type</label>
+                                <label>Tipo de evento</label>
                                 <select class="form-control" name="event_type" id="admin-calendar-create-type">
                                     <?php if ($can_admin_view): ?>
                                     <option value="CARE">CARE</option>
@@ -137,28 +137,28 @@ $can_delete = $can_admin_view;
                                 </select>
                             </div>
                             <div class="form-group" id="admin-calendar-create-type-readonly-group" style="display:none;">
-                                <label>Event type</label>
+                                <label>Tipo de evento</label>
                                 <p class="form-control-static" id="admin-calendar-create-type-readonly" style="font-weight:600;">ITEM</p>
                             </div>
                             <div class="form-group" id="admin-calendar-create-item-group">
-                                <label>Item (required)</label>
+                                <label>Item (obligatorio)</label>
                                 <select class="form-control" name="item_id" id="admin-calendar-create-item-select">
-                                    <option value="">Select item (required)</option>
+                                    <option value="">Selecciona un item (obligatorio)</option>
                                 </select>
-                                <small class="text-muted">Select item (required)</small>
+                                <small class="text-muted">Selecciona el item al que pertenece esta coordinación.</small>
                                 <div class="help-block text-danger" id="admin-calendar-create-item-error" style="display:none;"></div>
                             </div>
                             <div class="form-group" id="admin-calendar-create-request-group">
-                                <label>Booking request</label>
+                                <label>Solicitud</label>
                                 <select class="form-control" name="request_id" id="admin-calendar-create-request-select">
-                                    <option value="">Select booking request</option>
+                                    <option value="">Selecciona una solicitud</option>
                                 </select>
                                 <div class="help-block text-danger" id="admin-calendar-create-request-error" style="display:none;"></div>
                             </div>
                             <div class="row">
                                 <div class="col-sm-6">
                                     <div class="form-group">
-                                        <label>Start time</label>
+                                        <label>Fecha y hora de inicio</label>
                                         <div class="input-group">
                                             <span class="input-group-addon"><i class="fa fa-calendar"></i></span>
                                             <input type="datetime-local" class="form-control" name="start_at" required>
@@ -168,7 +168,7 @@ $can_delete = $can_admin_view;
                                 </div>
                                 <div class="col-sm-6">
                                     <div class="form-group">
-                                        <label>End time</label>
+                                        <label>Fecha y hora de fin</label>
                                         <div class="input-group">
                                             <span class="input-group-addon"><i class="fa fa-calendar-o"></i></span>
                                             <input type="datetime-local" class="form-control" name="end_at">
@@ -179,7 +179,7 @@ $can_delete = $can_admin_view;
                             </div>
                             <div class="form-group">
                                 <label class="mt-checkbox mt-checkbox-outline">
-                                    <input type="checkbox" name="all_day" value="1"> All-day event
+                                    <input type="checkbox" name="all_day" value="1"> Evento de todo el día
                                     <span></span>
                                 </label>
                             </div>
@@ -187,8 +187,8 @@ $can_delete = $can_admin_view;
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn default" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn blue" id="admin-calendar-create-submit">Create event</button>
+                    <button type="button" class="btn default" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn blue" id="admin-calendar-create-submit">Proponer horario</button>
                 </div>
             </form>
         </div>
@@ -202,23 +202,23 @@ $can_delete = $can_admin_view;
                 <input type="hidden" name="id" id="admin-calendar-detail-id">
                 <div class="modal-header">
                     <button type="button" class="close" data-dismiss="modal" aria-hidden="true"></button>
-                    <h4 class="modal-title">Event detail</h4>
+                    <h4 class="modal-title">Detalle de cita coordinada</h4>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>Title</label>
+                        <label>Título</label>
                         <input type="text" class="form-control" name="title" id="admin-calendar-detail-title" required maxlength="255">
                     </div>
                     <div class="row">
                         <div class="col-sm-6">
                             <div class="form-group">
-                                <label>Start</label>
+                                <label>Inicio</label>
                                 <input type="datetime-local" class="form-control" name="start_at" id="admin-calendar-detail-start" required>
                             </div>
                         </div>
                         <div class="col-sm-6">
                             <div class="form-group">
-                                <label>End</label>
+                                <label>Fin</label>
                                 <input type="datetime-local" class="form-control" name="end_at" id="admin-calendar-detail-end">
                             </div>
                         </div>
@@ -226,25 +226,25 @@ $can_delete = $can_admin_view;
                     <div class="row">
                         <div class="col-sm-4">
                             <div class="form-group">
-                                <label>Type</label>
+                                <label>Tipo</label>
                                 <input type="text" class="form-control" id="admin-calendar-detail-type" readonly>
                             </div>
                         </div>
                         <div class="col-sm-4">
                             <div class="form-group">
-                                <label>Request ID</label>
+                                <label>Solicitud</label>
                                 <input type="number" class="form-control" name="request_id" id="admin-calendar-detail-request">
                             </div>
                         </div>
                         <div class="col-sm-4">
                             <div class="form-group">
-                                <label>Item ID</label>
+                                <label>Item</label>
                                 <input type="number" class="form-control" name="item_id" id="admin-calendar-detail-item">
                             </div>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Status</label>
+                        <label>Estado</label>
                         <select class="form-control" name="status" id="admin-calendar-detail-status">
                             <option value="scheduled">scheduled</option>
                             <option value="proposed">proposed</option>
@@ -253,22 +253,22 @@ $can_delete = $can_admin_view;
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Description</label>
+                        <label>Descripción</label>
                         <textarea class="form-control" name="description" id="admin-calendar-detail-description" rows="3"></textarea>
                     </div>
                     <div class="checkbox">
-                        <label><input type="checkbox" name="all_day" id="admin-calendar-detail-allday" value="1"> All day</label>
+                        <label><input type="checkbox" name="all_day" id="admin-calendar-detail-allday" value="1"> Todo el día</label>
                     </div>
                     <hr>
                     <p style="margin-bottom:0;">
-                        <a href="#" id="admin-calendar-open-request" target="_blank">Open Request</a> |
-                        <a href="#" id="admin-calendar-open-inbox" target="_blank">Open Inbox thread</a>
+                        <a href="#" id="admin-calendar-open-request" target="_blank">Abrir solicitud</a> |
+                        <a href="#" id="admin-calendar-open-inbox" target="_blank">Abrir hilo en Inbox</a>
                     </p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn default" data-dismiss="modal">Close</button>
-                    <button type="button" class="btn red" id="admin-calendar-delete-btn" <?php echo $can_delete ? '' : 'style="display:none;"'; ?>>Delete</button>
-                    <button type="submit" class="btn blue" <?php echo $can_update ? '' : 'style="display:none;"'; ?>>Save</button>
+                    <button type="button" class="btn default" data-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn red" id="admin-calendar-delete-btn" <?php echo $can_delete ? '' : 'style="display:none;"'; ?>>Eliminar</button>
+                    <button type="submit" class="btn blue" <?php echo $can_update ? '' : 'style="display:none;"'; ?>>Guardar</button>
                 </div>
             </form>
         </div>

@@ -477,6 +477,7 @@
         var html = '<div class="mt-panel">';
         html += '<h5 class="mt-panel-title">Acciones rápidas</h5>';
         html += '<p class="mt-panel-subtitle">Gestiona aquí solo la decisión operativa del caso. La conversación y la agenda se continúan desde sus módulos dedicados.</p>';
+        html += '<p class="mt-actions-note" style="margin-top:0;">Estas decisiones corresponden al prestador y su equipo tratante. MedTravel facilita la coordinación operativa.</p>';
 
         if (hasActions) {
             html += '<div class="mt-quick-actions">';

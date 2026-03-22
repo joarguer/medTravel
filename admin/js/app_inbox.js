@@ -35,12 +35,12 @@
     var quickReplies = {
         DATES_AVAILABLE: 'Dates available',
         DATES_NOT_AVAILABLE: 'Dates not available',
-        REQUEST_MEDICAL_HISTORY: 'REQUEST HISTORY',
-        REQUEST_LABS: 'REQUEST LABS',
-        REQUEST_IMAGING: 'REQUEST IMAGING',
-        REQUEST_PHOTOS: 'REQUEST PHOTOS',
-        FINAL_APPROVED: 'FINAL_APPROVED',
-        FINAL_NOT_ELIGIBLE: 'FINAL_NOT_ELIGIBLE'
+        REQUEST_MEDICAL_HISTORY: 'Solicitud del provider: historia clínica',
+        REQUEST_LABS: 'Solicitud del provider: laboratorios',
+        REQUEST_IMAGING: 'Solicitud del provider: imágenes diagnósticas',
+        REQUEST_PHOTOS: 'Solicitud del provider: fotografías clínicas',
+        FINAL_APPROVED: 'Respuesta clínica del provider: caso viable',
+        FINAL_NOT_ELIGIBLE: 'Respuesta clínica del provider: caso no viable'
     };
 
     function esc(value) {
@@ -1242,7 +1242,7 @@
                 payUrl += '?request_id=' + encodeURIComponent(String(bookingId));
             }
             messageHtml += '<div style="margin-top:8px;">' +
-                '<a class="btn btn-xs btn-success" href="' + esc(payUrl) + '">Proceed to pay Coordination Fee</a>' +
+                '<a class="btn btn-xs btn-success" href="' + esc(payUrl) + '">Continuar con pago de coordinación</a>' +
                 '</div>';
         }
 
@@ -1326,32 +1326,32 @@
         }
 
         if (normalized.indexOf('[REQUEST_INFO]') === 0) {
-            return 'requested additional information';
+            return 'solicitó información adicional';
         }
         if (normalized.indexOf('[PROPOSE_QUOTE]') === 0) {
-            return 'sent quote adjustment';
+            return 'envió ajuste de propuesta';
         }
         if (normalized.indexOf('[PROPOSAL_RESPONSE]') === 0) {
             var proposalPayload = parseStructuredJson('[PROPOSAL_RESPONSE]', normalized);
             var proposalAction = String(proposalPayload && proposalPayload.action_type || '').toUpperCase();
-            if (proposalAction === 'ACCEPT_PROPOSAL') return 'accepted proposal';
-            if (proposalAction === 'REQUEST_CHANGES') return 'requested changes';
-            if (proposalAction === 'REJECT_PROPOSAL') return 'rejected proposal';
-            if (proposalAction === 'DOCS_NOT_AVAILABLE') return 'documents unavailable';
-            return 'sent proposal response';
+            if (proposalAction === 'ACCEPT_PROPOSAL') return 'aceptó la propuesta';
+            if (proposalAction === 'REQUEST_CHANGES') return 'solicitó cambios';
+            if (proposalAction === 'REJECT_PROPOSAL') return 'rechazó la propuesta';
+            if (proposalAction === 'DOCS_NOT_AVAILABLE') return 'indicó documentos no disponibles';
+            return 'envió respuesta a la propuesta';
         }
 
         normalized = normalized.replace(/^\[(ACTION|REPLY)\]\s*/i, '').trim();
 
         var quickReplyPreviewMap = {
-            DATES_AVAILABLE: 'dates available',
-            DATES_NOT_AVAILABLE: 'dates unavailable',
-            REQUEST_MEDICAL_HISTORY: 'requested medical history',
-            REQUEST_LABS: 'requested labs',
-            REQUEST_IMAGING: 'requested imaging',
-            REQUEST_PHOTOS: 'requested photos',
-            FINAL_APPROVED: 'case approved',
-            FINAL_NOT_ELIGIBLE: 'case not eligible'
+            DATES_AVAILABLE: 'fechas disponibles',
+            DATES_NOT_AVAILABLE: 'fechas no disponibles',
+            REQUEST_MEDICAL_HISTORY: 'provider solicitó historia clínica',
+            REQUEST_LABS: 'provider solicitó laboratorios',
+            REQUEST_IMAGING: 'provider solicitó imágenes diagnósticas',
+            REQUEST_PHOTOS: 'provider solicitó fotografías clínicas',
+            FINAL_APPROVED: 'provider indicó caso viable',
+            FINAL_NOT_ELIGIBLE: 'provider indicó caso no viable'
         };
         var quickReplyKey = normalized.toUpperCase().replace(/\s+/g, '_');
         if (quickReplyPreviewMap[quickReplyKey]) {
