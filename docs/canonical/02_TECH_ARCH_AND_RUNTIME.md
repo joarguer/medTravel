@@ -110,6 +110,35 @@ Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
 - Cuando falten campos dedicados, el sistema debe soportar derivacion segura o alias logicos sin inventar una tabla definitiva que aun no exista.
 - La separacion operativa canonica ya es obligatoria a nivel de documentacion, aunque la persistencia siga madurando por fases.
 
+### Capacidad global de concurrencia en agenda (`calendar_capacity`)
+
+- El runtime actual expone `calendar_capacity` como un atributo configurable del provider en `Mi Empresa`.
+- Hoy su semantica real es estrictamente tecnica y operativa: limite global de eventos de agenda tipo `ITEM` que pueden solaparse al mismo tiempo para el provider.
+- El valor se persiste en:
+  - `providers.calendar_capacity`
+  - `service_providers.calendar_capacity`
+- Hoy se usa en `admin/ajax/calendar.php` para validar conflictos de concurrencia al crear o editar eventos `ITEM`.
+- Si el numero de eventos solapados es mayor o igual a `calendar_capacity`, el runtime devuelve conflicto `409`.
+
+#### Lo que SI significa hoy
+
+- control grueso de concurrencia del prestador en agenda
+- limite global por provider para solapamiento de eventos `ITEM`
+- guardrail operativo minimo mientras no existe agenda fina por staff / servicio
+
+#### Lo que NO significa todavia
+
+- no equivale a disponibilidad por medico individual
+- no equivale a capacidad por staff medico
+- no equivale a capacidad por sede o branch formal
+- no equivale a capacidad por servicio habilitado
+- no redefine por si sola la logica de booking ni la asignacion de staff
+
+#### Tension de arquitectura reconocida
+
+- Esta capacidad global convive hoy con un canon que empuja hacia un modelo mas fino por staff, servicios habilitados y asignacion por item.
+- Por tanto, `calendar_capacity` debe tratarse como compatibilidad operativa actual y no como modelo final de capacidad medica del provider.
+
 ## Servicios medicos, servicios habilitados del provider y ofertas
 
 Este frente queda documentado en cuatro capas: estado actual real, decision canónica, deuda tecnica y transicion esperada.

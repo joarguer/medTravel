@@ -376,7 +376,7 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                                                                min="1" max="50" step="1"
                                                                                value="<?php echo max(1, (int)$company['calendar_capacity']); ?>" />
                                                                     </div>
-                                                                    <span class="help-block">1 = un médico / sede (sin traslapes). Valores mayores para clínicas con varias citas simultáneas.</span>
+                                                                    <span class="help-block">Define cuántos eventos de agenda tipo cita pueden solaparse al mismo tiempo para tu empresa. Hoy este valor funciona como un límite global del prestador en la agenda y no equivale todavía a disponibilidad por médico, staff o sede.</span>
                                                                 </div>
                                                             </div>
                                                         </div>

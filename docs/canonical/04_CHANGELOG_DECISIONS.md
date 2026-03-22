@@ -1,5 +1,25 @@
 # Changelog Decisions
 
+## 2026-03-22 — `calendar_capacity` se documenta como limite global de concurrencia en agenda
+
+**Outcome**
+- Se explicita en canon que `calendar_capacity` ya tiene efecto real en runtime.
+- Se aclara que hoy funciona como limite global de concurrencia por provider en agenda para eventos tipo `ITEM`.
+- Se evita seguir presentandolo como si ya modelara capacidad fina por medico, staff o sede.
+
+**Decision**
+- `calendar_capacity` debe describirse hoy como control grueso de concurrencia del provider en agenda.
+- No debe venderse en UI ni en documentacion como disponibilidad fina por staff, medico, sede o servicio.
+- Mientras no exista agenda fina por staff / servicio, este campo se mantiene como guardrail operativo global y compatibilidad runtime.
+
+**Transition note**
+- Esta decision no cambia la logica operativa actual de `admin/ajax/calendar.php`.
+- La tension con el modelo canónico mas fino por staff y servicios queda reconocida como deuda funcional futura.
+
+**Operational effect**
+- El copy de `Mi Empresa` y la documentacion deben reflejar que el campo limita solapamientos globales de agenda para el provider.
+- Las futuras iteraciones deben decidir si este control convive con capacidad fina por staff / servicio o migra hacia ese modelo.
+
 ## 2026-03-22 — Onboarding owner/admin de providers alineado a email-first
 
 **Outcome**

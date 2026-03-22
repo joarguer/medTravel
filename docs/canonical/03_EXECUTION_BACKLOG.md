@@ -42,6 +42,7 @@ Alias al backlog / pasos de ejecución canónico.
   - tipo de servicio asistencial
 - [ ] Resolver que la clasificacion operativa efectiva viva en el servicio habilitado del provider y no solo en el catalogo maestro global
 - [ ] Formalizar la nocion de sede / branch a nivel de servicio habilitado cuando corresponda
+- [ ] Evaluar convivencia o migracion entre `calendar_capacity` global del provider y una futura capacidad fina por staff / servicio para agenda y solapamientos
 
 #### Tareas de transicion
 
@@ -67,6 +68,7 @@ Alias al backlog / pasos de ejecución canónico.
 - [ ] Ajustar copy de `Staff` para reforzar que atiende servicios reales del provider
 - [ ] Revisar labels, ayudas y mensajes de validacion en `providers`, `Mis Servicios`, `Mis Ofertas` y `Staff`
 - [ ] Alinear textos de ayuda con la clasificacion futura por nivel de atencion y tipo asistencial
+- [ ] Mantener alineado el copy de `calendar_capacity` con su semantica real actual: limite global de concurrencia en agenda, no capacidad por medico / staff / sede
 
 ### Frente transversal — UX tecnica de notificaciones admin
 
