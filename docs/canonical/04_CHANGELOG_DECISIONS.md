@@ -144,6 +144,7 @@
 - El AJAX `list_staff_catalogs` sirve desde BD con fallback a arrays hardcoded si las tablas no existen aun.
 - Los campos `role_title` y `specialty` de `provider_medical_staff` se mantienen como VARCHAR por compatibilidad legacy. El valor guardado es el `.name` del catalogo, sin FK todavia.
 - Las entradas de sistema no son editables ni eliminables por el proveedor desde la UI (proteccion a nivel AJAX: UPDATE/DELETE filtran por `provider_id = ?`).
+- `save_staff` trata el catalogo como fuente autoritativa para altas y ediciones normales: solo acepta valores presentes en el catalogo activo o, en modo compatibilidad, el valor legacy ya existente del registro editado.
 
 **Validation**
 - Pendiente smoke test funcional post-migracion: alta de entradas personalizadas, disponibilidad en modal, proteccion de entradas de sistema.

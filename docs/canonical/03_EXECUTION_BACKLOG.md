@@ -136,6 +136,7 @@ Alias al backlog / pasos de ejecución canónico.
 - SUPERSEDED 2026-03-21 por canon formal: `Mis Servicios` ya no debe describirse como simple catalogo habilitado del proveedor, sino como capacidad medica real habilitada con `provider_catalog_services` como entidad canónica objetivo
 - DONE 2026-03-20 (commit `0e5a97f`): catalogos de roles y especialidades del modal de staff alineados con servicios reales del proveedor y servidos por AJAX
 - DONE 2026-03-20 (commit `183c84d`): persistencia de catalogos por proveedor mediante `provider_staff_roles` y `provider_staff_specialties`. Entradas de sistema (provider_id=NULL) y personalizadas por proveedor. CRUD admin en `staff_catalogs.php`. Fallback a arrays hardcoded si las tablas no existen
+- DONE 2026-03-22: `save_staff` valida `role_title` y `specialty` contra catalogo activo del prestador/sistema; registros legacy pueden conservar su valor historico en edicion, pero ya no se aceptan nuevos valores libres fuera de catalogo
 - DONE 2026-03-20: foto del profesional reemplaza campo texto por upload real de archivo (JPG/PNG/WebP ≤ 2 MB), validacion MIME via finfo, preview en modal y almacenamiento en `uploads/staff_photos/`
 - Scope MVP cerrado:
   - sin agenda compleja
