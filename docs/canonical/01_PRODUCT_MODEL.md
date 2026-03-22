@@ -13,9 +13,53 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - El eje primario del producto es el caso operativo del paciente, no la comision.
 - Caso, item de servicio, cita y coordinacion/pago son dimensiones distintas y deben poder evolucionar por separado.
 - Prestador y medico o staff medico interno del prestador no son la misma entidad operativa.
+- MedTravel actua como intermediario / facilitador operativo entre paciente y provider; no es prestador directo de actos medicos.
+- MedTravel no integra el staff medico del provider, no toma decisiones clinicas y no sustituye la relacion clinica entre paciente y medico / provider tratante.
 - La UI operativa debe mostrar estados visibles de negocio comprensibles para operacion, aunque existan estados tecnicos internos adicionales.
 - La trazabilidad de cada item debe soportar historial operativo, responsables, citas y eventos relevantes.
 - La comision o coordination gate es una capacidad comercial complementaria y configurable, no una regla universal del sistema.
+
+### Fundamento de experiencia del paciente internacional
+
+- MedTravel no debe modelarse como simple catalogo ni como booking aislado de servicios.
+- El paciente internacional no confia a MedTravel solo una cita o un procedimiento; confia su salud, su tiempo, su dinero, su viaje y su seguridad operativa.
+- Esa confianza no convierte a MedTravel en actor clinico tratante; el limite canónico del producto sigue siendo coordinacion, acompañamiento, orden y trazabilidad operativa.
+- La propuesta de valor real del producto se fundamenta en:
+  - confianza
+  - acompañamiento
+  - coordinacion medica
+  - coordinacion logistica
+  - claridad del proceso
+  - seguridad operativa
+  - continuidad antes, durante y despues del viaje
+- La experiencia objetivo del paciente debe ofrecer como minimo:
+  - claridad de quien lo atendera
+  - claridad del servicio o proceso clinico
+  - trazabilidad del caso
+  - comunicacion humana y simple
+  - agenda ordenada
+  - continuidad del tratamiento
+  - no solapamientos ni errores operativos evitables
+  - posibilidad de multiples medicos y multiples citas cuando el proceso lo requiera
+- Las capacidades actuales del producto ya cubren parcialmente esa promesa mediante provider identificado, servicio y oferta enlazados, staff real asignable, detalle de caso, Inbox, Calendar, asignacion de staff y trazabilidad basica.
+- Las futuras decisiones de arquitectura, UX y operacion no deben degradar MedTravel a un simple marketplace transaccional; el norte canónico es una plataforma confiable de coordinacion de procesos medicos internacionales.
+
+### Frontera canónica entre coordinacion y acto medico
+
+- MedTravel no es prestador directo de servicios medicos.
+- MedTravel no hace parte del staff medico del provider ni del equipo tratante del paciente.
+- MedTravel no presta actos medicos, no emite criterio clinico y no interviene en decisiones medicas.
+- Las decisiones medicas pertenecen al provider y al medico / staff tratante responsable del caso o del item clinico.
+- MedTravel si coordina y facilita, como minimo:
+  - booking
+  - comunicacion
+  - agenda
+  - documentacion operativa
+  - trazabilidad
+  - acompañamiento logistico / operativo
+- Toda futura UX, funcionalidad, integracion o copy debe respetar esta frontera.
+- Esta regla aplica especialmente a booking, asignacion de staff, agenda, Google Calendar / Meet, patient journey, comunicaciones y textos del producto.
+- Esta frontera debe verificarse de forma recurrente en labels, mensajes guia, nombres de acciones, estados visibles y textos operativos del producto.
 
 ### Separacion formal de entidades operativas
 
@@ -34,8 +78,21 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 #### Cita
 
 - Es un evento operativo separado del item.
+- Un caso NO equivale a una sola cita.
+- Un caso puede contener multiples citas a lo largo de su evolucion clinica u operativa.
 - Una cita puede ser propuesta, confirmada, reprogramada o cancelada sin redefinir por si sola todo el caso.
+- Cada cita debe poder asociarse como minimo a:
+  - item clinico
+  - medico / staff asignado
+  - provider responsable
+  - fecha y hora
+  - modalidad presencial o virtual
+  - event id externo de Google Calendar cuando exista integracion
+  - Meet link cuando la modalidad o el flujo lo requiera
 - El sistema debe soportar trazabilidad entre item y cita aunque la implementacion tecnica siga evolucionando.
+- Google Calendar y Google Meet no constituyen un modulo aparte del producto; se integran como capacidad de la cita dentro del dominio Agenda.
+- La validacion futura de disponibilidad y no solapamiento debe evolucionar desde control global por provider hacia control por medico / staff asignado.
+- Un mismo caso puede involucrar varias citas, varios medicos y, cuando el proceso clinico lo requiera, varios providers.
 
 #### Coordinacion / Pago
 
@@ -133,6 +190,20 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - Medico / Staff interno
 - Conversacion
 - Event log / timeline
+
+### Regla canónica de comunicacion vs agenda
+
+- Inbox sigue siendo el canal oficial de comunicacion del caso.
+- Calendar sigue siendo el modulo oficial de agenda y gestion de citas.
+- La propuesta, confirmacion, reprogramacion o cancelacion de una cita debe entenderse como accion del dominio Agenda, aunque su contexto tambien deba reflejarse en Inbox y en la trazabilidad del caso.
+- Google Calendar y Google Meet deben integrarse como extensiones de la capacidad de cita dentro de Calendar, no como un producto o modulo independiente.
+
+### Regla canónica de relacion caso -> items -> citas
+
+- Un caso puede agrupar multiples items medicos y/o complementarios.
+- Un item clinico puede requerir cero, una o multiples citas.
+- Una cita pertenece al contexto operativo de un item clinico concreto, aunque el caso completo pueda involucrar varios items y varios responsables.
+- El paciente no debe asumirse ligado a un unico medico ni a un unico provider durante toda la vida del caso.
 
 ### Estados visibles oficiales del item
 

@@ -16,6 +16,48 @@ Alias al backlog / pasos de ejecución canónico.
   - `provider_catalog_services` = entidad canónica objetivo de `Mis Servicios`
   - `provider_service_offers` = capa comercial / publicable
   - `Staff` = capacidad humana asociada a servicios reales del provider, no a ofertas
+- DONE 2026-03-22: queda cerrado a nivel canónico que caso e item no equivalen a una unica cita
+- DONE 2026-03-22: queda cerrado a nivel canónico que un caso puede contener multiples citas y multiples responsables clinicos
+- DONE 2026-03-22: Google Calendar y Google Meet se canonizan como capacidad de cita dentro de Agenda, no como modulo aparte
+- DONE 2026-03-22: queda cerrado a nivel canónico que MedTravel no se diseña como simple booking de servicios sino como plataforma de coordinacion confiable para el paciente internacional
+- DONE 2026-03-22: queda cerrada a nivel canónico la frontera de MedTravel como intermediario / facilitador y no como actor clinico tratante
+
+### Frente transversal — Frontera producto vs acto medico
+
+#### Canon cerrado
+
+- DONE 2026-03-22: MedTravel no es prestador directo de servicios medicos
+- DONE 2026-03-22: MedTravel no integra el staff medico ni sustituye la relacion clinica paciente-provider
+- DONE 2026-03-22: MedTravel no toma decisiones clinicas; esas decisiones pertenecen al provider y al staff tratante
+- DONE 2026-03-22: MedTravel si coordina booking, comunicacion, agenda, documentacion operativa, trazabilidad y acompañamiento logistico / operativo
+- DONE 2026-03-22: toda futura UX, copy o funcionalidad debe respetar esta frontera
+
+#### Frentes pendientes de alineacion
+
+- [ ] Revisar que booking y detalle de caso no proyecten a MedTravel como actor clinico tratante
+- [ ] Revisar que asignacion de staff siga representando decision / estructura del provider y no intervencion clinica de MedTravel
+- [ ] Revisar que agenda, Google Calendar y Google Meet se presenten como herramientas de coordinacion de cita y no como sustitutos de la relacion clinica
+- [ ] Revisar que patient journey, Inbox y textos de producto mantengan explicita la frontera entre coordinacion operativa y decision medica
+- [ ] Aplicar revision continua de labels, mensajes guia, CTAs y estados visibles contra esta frontera antes de cerrar cambios funcionales relevantes
+
+### Frente transversal — Experiencia del paciente internacional
+
+#### Canon cerrado
+
+- DONE 2026-03-22: la base del producto se define desde la perspectiva del paciente internacional y no desde el servicio aislado
+- DONE 2026-03-22: la propuesta de valor canonica incluye confianza, acompañamiento, coordinacion medica, coordinacion logistica, claridad del proceso, seguridad operativa y continuidad
+- DONE 2026-03-22: se reconoce canónicamente que el paciente puede requerir multiples medicos, multiples citas y continuidad antes, durante y despues del viaje
+- DONE 2026-03-22: se deja asentado que el runtime actual ya cubre parcialmente esta promesa con provider identificado, staff asignable, Inbox, Calendar, detalle de caso y trazabilidad basica
+
+#### Frentes pendientes para completar la promesa de experiencia
+
+- [ ] Resolver multiples citas por caso como capacidad operativa nativa
+- [ ] Evolucionar agenda fina por medico / staff asignado
+- [ ] Integrar Google Calendar y Google Meet como extensiones de la cita
+- [ ] Soportar coordinacion multi-medico y multi-provider cuando el caso lo requiera
+- [ ] Dar mayor claridad al journey completo del paciente antes, durante y despues del viaje
+- [ ] Mejorar la explicacion visible de quien atiende, como avanza el caso y cual es el siguiente paso para el paciente
+- [ ] Endurecer controles para reducir solapamientos, errores de agenda y quiebres de continuidad clinica u operativa
 
 ### Frente especifico — Servicios medicos, staff y ofertas
 
@@ -43,6 +85,37 @@ Alias al backlog / pasos de ejecución canónico.
 - [ ] Resolver que la clasificacion operativa efectiva viva en el servicio habilitado del provider y no solo en el catalogo maestro global
 - [ ] Formalizar la nocion de sede / branch a nivel de servicio habilitado cuando corresponda
 - [ ] Evaluar convivencia o migracion entre `calendar_capacity` global del provider y una futura capacidad fina por staff / servicio para agenda y solapamientos
+
+### Frente especifico — Citas, agenda y capacidades externas
+
+#### Canon cerrado
+
+- DONE 2026-03-22: una solicitud / caso no equivale a una sola cita
+- DONE 2026-03-22: un caso puede contener multiples citas
+- DONE 2026-03-22: cada cita debe poder asociarse a item clinico, staff asignado, provider, fecha/hora y modalidad
+- DONE 2026-03-22: Google Calendar event y Google Meet link se canonizan como atributos / capacidades de cita cuando aplique
+- DONE 2026-03-22: Inbox sigue siendo comunicacion y Calendar sigue siendo agenda
+- DONE 2026-03-22: la validacion futura de agenda debe operar por medico / staff asignado y no solo por provider global
+- DONE 2026-03-22: un caso puede involucrar varios medicos y, si aplica, varios providers
+
+#### Deuda de modelo
+
+- [ ] Definir entidad canonica de cita preparada para multiples citas por item clinico
+- [ ] Formalizar relacion cita -> item clinico -> staff asignado -> provider
+- [ ] Incorporar modalidad de cita presencial / virtual como atributo estructural
+- [ ] Preparar soporte para referencia externa de Google Calendar por cita
+- [ ] Preparar soporte para Meet link por cita cuando corresponda
+- [ ] Resolver trazabilidad entre acciones del Inbox y estados de cita sin mezclar dominios
+- [ ] Definir politica canonica de no solapamiento por medico / staff asignado
+- [ ] Definir convivencia transitoria entre `calendar_capacity` global y futura disponibilidad fina por staff
+
+#### Tareas de transicion
+
+- [ ] Evolucionar agenda desde foco global por provider hacia foco operativo por medico / staff asignado
+- [ ] Asegurar que una futura cita pueda existir sin asumir unicidad por caso
+- [ ] Asegurar que un caso pueda mantener varias citas activas o historicas sin romper Inbox ni timeline
+- [ ] Diseñar integracion con Google Calendar / Meet como extension del flujo de cita, no como modulo paralelo
+- [ ] Definir estrategia de compatibilidad con runtime actual de `app_calendar.php` y `admin/ajax/calendar.php`
 
 #### Tareas de transicion
 

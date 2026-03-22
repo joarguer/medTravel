@@ -1,5 +1,88 @@
 # Changelog Decisions
 
+## 2026-03-22 — MedTravel se canoniza como intermediario / facilitador y no como actor clinico tratante
+
+**Outcome**
+- Se deja explicito que MedTravel no es prestador directo de servicios medicos.
+- Se deja asentado que MedTravel no integra el staff medico ni sustituye la relacion clinica entre paciente y provider / medico tratante.
+- Se explicita que MedTravel no presta actos medicos, no toma decisiones clinicas y no reemplaza el criterio del provider tratante.
+- Se ratifica que el valor de MedTravel esta en coordinar, ordenar, acompañar, reducir friccion, dar trazabilidad operativa y facilitar la interaccion entre las partes.
+- Se deja asentado que esta frontera aplica transversalmente a booking, asignacion de staff, agenda, Google Calendar / Meet, patient journey, comunicaciones y copy del producto.
+
+**Decision**
+- MedTravel se modela canónicamente como intermediario / facilitador operativo entre paciente y provider.
+- El producto no debe presentarse ni diseñarse como prestador medico directo.
+- Las decisiones medicas pertenecen al provider y al staff clinico tratante responsable del caso o del item.
+- Las capacidades de MedTravel deben mantenerse dentro de coordinacion, comunicacion, agenda, documentacion operativa, trazabilidad y acompañamiento logistico / operativo.
+- Ninguna futura UX, integracion o funcionalidad debe cruzar esa frontera ni implicar que MedTravel sustituye criterio medico o relacion clinica tratante.
+
+**Transition note**
+- Esta decision es transversal y de producto; no implica runtime nuevo.
+- El objetivo es proteger el limite del negocio y evitar que evolutivos futuros desplacen a MedTravel desde coordinacion operativa hacia rol clinico impropio.
+
+**Operational effect**
+- La documentacion, el copy y las futuras decisiones de UX deben reforzar siempre la frontera entre coordinacion MedTravel y acto medico del provider.
+- Las futuras iteraciones en booking, agenda, Inbox, Google Calendar / Meet y patient journey deben revisarse contra esta regla antes de consolidarse como canon o runtime.
+- La revision de esta frontera no debe quedar solo como criterio conceptual; debe aplicarse de forma continua sobre labels, estados visibles, CTAs, mensajes guia y copy operativo.
+
+## 2026-03-22 — MedTravel se define como plataforma de coordinacion confiable para el paciente internacional
+
+**Outcome**
+- Se deja explicito que MedTravel no debe diseñarse como simple catalogo o booking aislado de servicios.
+- Se canoniza que la base del producto es la experiencia del paciente internacional y la coordinacion confiable de su proceso medico.
+- Se reconoce que el paciente deposita en MedTravel confianza sobre salud, tiempo, dinero, viaje y seguridad operativa.
+- Se deja asentado que la promesa real del producto incluye confianza, acompañamiento, coordinacion medica, coordinacion logistica, claridad del proceso, seguridad operativa y continuidad.
+- Se reconoce que el runtime actual ya cubre parcialmente esa promesa mediante provider identificado, servicio y oferta enlazados, staff real asignable, detalle de caso, Inbox, Calendar, asignacion de staff y trazabilidad basica.
+- Se deja explicito que todavia faltan capacidades para completar plenamente esa experiencia, incluyendo multiples citas por caso, agenda fina por staff, integracion Google Calendar / Meet, coordinacion multi-medico / multi-provider y mayor claridad del journey completo del paciente.
+
+**Decision**
+- MedTravel no se modela canónicamente como un simple marketplace de servicios medicos ni como un booking engine de citas aisladas.
+- El producto se define como plataforma de coordinacion confiable de procesos medicos internacionales centrada en el paciente.
+- La unidad de valor no es solo el servicio vendido, sino la capacidad de ordenar y dar continuidad al proceso completo del paciente.
+- Inbox, Calendar, detalle de caso, asignacion de staff y trazabilidad deben evolucionar como capacidades al servicio de esa experiencia integral y no como modulos desconectados.
+- Las futuras decisiones de producto, UX y arquitectura no deben degradar la experiencia a una logica de transaccion simple por servicio.
+
+**Transition note**
+- Esta decision es de producto y de canon, no implica implementacion runtime inmediata.
+- El estado actual del sistema ya apunta en esa direccion, pero todavia no cumple de forma plena toda la promesa de experiencia internacional.
+- El backlog debe seguir cerrando la brecha entre la promesa canónica y la capacidad operativa real del runtime.
+
+**Operational effect**
+- La documentacion futura debe describir MedTravel desde la perspectiva del paciente internacional y no desde el servicio aislado.
+- Las futuras iteraciones deben priorizar continuidad operativa, claridad del journey, agenda confiable y coordinacion multi-actor como parte del core del producto.
+
+## 2026-03-22 — Modelo canónico minimo de citas y agenda futura
+
+**Outcome**
+- Se explicita que una solicitud / caso no equivale a una sola cita.
+- Se deja asentado que un caso puede contener multiples citas a lo largo de su evolucion operativa y clinica.
+- Se declara que cada cita debe poder asociarse a item clinico, medico / staff asignado, provider, fecha/hora y modalidad presencial o virtual.
+- Se deja explicito que Google Calendar y Google Meet se integran como capacidad de cita dentro del dominio Agenda y no como modulo aparte.
+- Se ratifica que Inbox sigue siendo comunicacion y Calendar sigue siendo agenda.
+- Se deja asentado que la validacion futura de agenda debe evolucionar desde provider global hacia medico / staff asignado.
+- Se reconoce que un mismo caso puede involucrar varios medicos y, si aplica, varios providers.
+
+**Decision**
+- Caso, item y cita siguen siendo entidades operativas distintas.
+- Un caso puede agrupar multiples items y cada item clinico puede requerir cero, una o multiples citas.
+- La cita es la unidad operativa sobre la cual debe vivir la integracion futura con Google Calendar event y Meet link cuando aplique.
+- Google Calendar / Meet no deben modelarse como modulo funcional independiente; son capacidad integrada del dominio de citas dentro de Calendar.
+- Inbox no reemplaza Agenda y Agenda no reemplaza Inbox:
+  - Inbox = comunicacion y seguimiento conversacional
+  - Calendar = gestion operativa de citas
+- La logica futura de disponibilidad, no solapamiento y validacion de agenda debe anclarse en el medico / staff asignado y no quedarse solo en `provider_id`.
+- El modelo no debe asumir exclusividad de un solo medico ni de un solo provider por caso.
+
+**Transition note**
+- Esta decision es canónica y de producto; no implica todavia runtime nuevo.
+- El runtime actual puede seguir operando con agenda simplificada mientras se prepara la entidad de cita y su integracion externa.
+- La compatibilidad con `calendar_capacity` global del provider se mantiene como transicion, pero deja explicitamente de representar el modelo final deseado.
+
+**Operational effect**
+- La documentacion y el backlog futuro deben describir Agenda como dominio de citas multiples por caso / item.
+- Las futuras implementaciones de Google Calendar y Google Meet deben colgarse de la cita, no del caso completo ni de Inbox.
+- Las futuras validaciones de agenda deben migrar hacia chequeos por staff asignado, manteniendo compatibilidad transitoria con controles globales legacy.
+
 ## 2026-03-22 — Owner/admin visible no equivale a staff clínico asignable
 
 **Outcome**
