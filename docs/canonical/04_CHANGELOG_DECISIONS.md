@@ -1,5 +1,38 @@
 # Changelog Decisions
 
+## 2026-03-22 — Owner/admin visible no equivale a staff clínico asignable
+
+**Outcome**
+- Se explicita que la fila sintética del owner/admin en `staff_medico.php` resuelve solo visibilidad operativa del equipo.
+- Se deja asentado que esa fila no alcanza para booking asignable ni para el runtime clínico real.
+- Se declara como representación válida para asignación clínica el registro físico en `provider_medical_staff` enlazado por `linked_user_id`.
+- Se deja explícito que `providers.php` no es una UX donde el provider se agregue manualmente a sí mismo como staff.
+- Se recomienda como mínimo espejo automático para providers de tipo `medico` / persona cuando el owner/admin deba actuar como recurso clínico asignable.
+- Se deja explícito que providers de tipo `clinica` no deben auto-materializar por defecto al owner/admin como staff clínico.
+
+**Decision**
+- Owner/admin y staff siguen siendo entidades distintas en el modelo de MedTravel.
+- La fila sintética del owner/admin no reemplaza ni materializa staff; solo mejora visibilidad operativa en el listado.
+- Para booking asignable, enrichment clínico y scope futuro de staff, la representación válida sigue siendo `provider_medical_staff` físico.
+- `providers.php` queda reservado al onboarding administrativo central de MedTravel y no debe operar como UX del provider para autoconvertirse en staff.
+- Cuando el provider sea de tipo `medico` / persona, el owner/admin debe materializarse automáticamente como espejo operativo en `provider_medical_staff`, vinculado por `linked_user_id`.
+- Cuando el provider sea de tipo `clinica`, no debe asumirse automáticamente que el owner/admin atiende pacientes ni materializarlo por defecto como staff clínico.
+- Para `clinica`, esa conversión queda como acción explícita futura dentro del dominio provider, no en onboarding central.
+- Este espejo no elimina la separación conceptual owner/admin vs staff; solo resuelve interoperabilidad clínica y de booking.
+
+**Transition note**
+- La decisión canónica queda cerrada aunque el runtime todavía no implemente ese espejo de forma completa.
+- El criterio mínimo recomendado es cubrir automáticamente al menos providers de tipo `medico` / persona.
+- La siguiente validación funcional debe comprobar que booking y asignación de oferta usen efectivamente esa representación física.
+- Para `clinica`, el siguiente frente funcional debe definir una UX operativa explícita para declarar que el administrador también atiende pacientes cuando eso aplique.
+
+**Operational effect**
+- `staff_medico.php` puede seguir mostrando owner/admin como fila informativa de solo lectura.
+- Las futuras implementaciones de booking asignable no deben tratar esa fila sintética como recurso clínico real.
+- La interoperabilidad clínica debe anclarse en `provider_medical_staff.id` y `provider_medical_staff.linked_user_id`.
+- El onboarding central de `providers.php` materializa automáticamente el espejo solo para `medico` / persona.
+- La conversión equivalente para `clinica` queda fuera de `providers.php` y pendiente de UX explícita del dominio provider.
+
 ## 2026-03-22 — `calendar_capacity` se documenta como limite global de concurrencia en agenda
 
 **Outcome**
@@ -145,7 +178,8 @@
 - Los campos `role_title` y `specialty` de `provider_medical_staff` se mantienen como VARCHAR por compatibilidad legacy. El valor guardado es el `.name` del catalogo, sin FK todavia.
 - Las entradas de sistema no son editables ni eliminables por el proveedor desde la UI (proteccion a nivel AJAX: UPDATE/DELETE filtran por `provider_id = ?`).
 - `save_staff` trata el catalogo como fuente autoritativa para altas y ediciones normales: solo acepta valores presentes en el catalogo activo o, en modo compatibilidad, el valor legacy ya existente del registro editado.
-- El owner/admin inicial del provider se mantiene como identidad distinta del staff canónico, pero `staff_medico.php` puede exponerlo en el listado como fila sintética de solo lectura para visibilidad operativa sin materializar espejo en `provider_medical_staff`.
+- El owner/admin inicial del provider se mantiene como identidad distinta del staff canónico, pero `staff_medico.php` puede exponerlo en el listado como fila sintética de solo lectura para visibilidad operativa.
+- Esa visibilidad sintética no debe reinterpretarse como representación válida para booking asignable; ese criterio queda cerrado por la decisión específica del 2026-03-22 sobre owner/admin y staff clínico asignable.
 
 **Validation**
 - Pendiente smoke test funcional post-migracion: alta de entradas personalizadas, disponibilidad en modal, proteccion de entradas de sistema.

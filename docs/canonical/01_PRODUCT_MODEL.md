@@ -79,7 +79,14 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - Su alta canónica nace desde `staff_medico.php`.
 - Si necesita acceso al panel, ese acceso debe aprovisionarse desde el flujo de staff.
 - Su relacion de identidad se formaliza por `provider_medical_staff.linked_user_id`.
-- El owner/admin inicial puede mostrarse en el listado operativo de `staff_medico.php` como fila de solo lectura por visibilidad del equipo, sin convertirse por ello en alta canónica de staff ni duplicarse en `provider_medical_staff`.
+- El owner/admin inicial puede mostrarse en el listado operativo de `staff_medico.php` como fila de solo lectura por visibilidad del equipo.
+- Esa fila sintética resuelve solo visibilidad operativa y no constituye representación clínica asignable.
+- Para booking asignable, enrichment clínico y scope futuro de staff, la representación válida sigue siendo un registro físico en `provider_medical_staff` vinculado por `linked_user_id`.
+- El owner/admin NO se asigna manualmente a sí mismo como staff desde `providers.php`; ese flujo pertenece al onboarding administrativo central de MedTravel y no a una UX operativa del provider.
+- Cuando el provider sea de tipo `medico` / persona, el sistema debe materializar automáticamente al owner/admin como espejo operativo en `provider_medical_staff` para volverlo recurso clínico asignable.
+- Cuando el provider sea de tipo `clinica`, no debe asumirse automáticamente que el owner/admin atiende pacientes ni materializarlo como staff clínico por defecto.
+- Para `clinica`, esa conversión queda como acción explícita futura del dominio provider en un módulo operativo como `staff_medico.php` o `mi_empresa.php`, no en onboarding central.
+- Ese espejo no reemplaza la separación conceptual owner/admin vs staff; solo resuelve interoperabilidad clínica y de booking.
 
 ### Cliente / paciente
 
@@ -95,7 +102,7 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 
 ### Flujo canónico por dominio
 
-- `providers.php` es el flujo canónico para alta inicial del provider medico.
+- `providers.php` es el flujo canónico para alta inicial del provider medico y queda reservado a MedTravel admin.
 - `providers.php` debe crear o dejar explicitada la cuenta owner/admin inicial del provider medico.
 - `staff_medico.php` es el flujo canónico para alta de staff medico, asignacion de servicios del staff y aprovisionamiento de acceso del staff cuando aplique.
 - `crear_usuario.php` NO es onboarding canónico del dominio medico principal.

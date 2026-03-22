@@ -138,10 +138,23 @@ Alias al backlog / pasos de ejecución canónico.
 - DONE 2026-03-20 (commit `183c84d`): persistencia de catalogos por proveedor mediante `provider_staff_roles` y `provider_staff_specialties`. Entradas de sistema (provider_id=NULL) y personalizadas por proveedor. CRUD admin en `staff_catalogs.php`. Fallback a arrays hardcoded si las tablas no existen
 - DONE 2026-03-22: `save_staff` valida `role_title` y `specialty` contra catalogo activo del prestador/sistema; registros legacy pueden conservar su valor historico en edicion, pero ya no se aceptan nuevos valores libres fuera de catalogo
 - DONE 2026-03-20: foto del profesional reemplaza campo texto por upload real de archivo (JPG/PNG/WebP ≤ 2 MB), validacion MIME via finfo, preview en modal y almacenamiento en `uploads/staff_photos/`
+- DONE 2026-03-22: se cierra a nivel canónico que la fila sintética del owner/admin en `staff_medico.php` sirve solo para visibilidad operativa; no alcanza para booking asignable porque `booking_request_items.assigned_staff_id`, el enrichment clínico y el scope futuro de staff dependen de `provider_medical_staff` físico enlazado por `linked_user_id`
+- DONE 2026-03-22: se cierra a nivel canónico que `providers.php` no es UX del provider para autoconvertirse en staff; en provider tipo `medico` / persona el espejo owner/admin → `provider_medical_staff` debe materializarse automáticamente como efecto interno del onboarding administrativo central
+- DONE 2026-03-22: se cierra a nivel canónico que en provider tipo `clinica` no debe materializarse automáticamente al owner/admin como staff clínico; esa conversión queda como acción explícita futura del dominio provider
 - Scope MVP cerrado:
   - sin agenda compleja
   - sin calendar sync
   - sin cambios al commission system fuera de compatibilidad legacy
+
+#### Siguiente frente funcional de transicion
+
+- [ ] Implementar espejo operativo del owner/admin en `provider_medical_staff` cuando deba ser recurso clínico asignable
+- [ ] Recomendacion mínima: espejo automático al menos para providers de tipo `medico` / persona
+- [ ] Validar end-to-end booking asignable usando esa representación física
+- [ ] Garantizar que la oferta / item quede asignado al staff correcto mediante `booking_request_items.assigned_staff_id`
+- [ ] Mantener explícita la separación conceptual entre owner/admin y staff aunque exista espejo operativo
+- [ ] Definir para providers tipo `clinica` una UX operativa explícita para convertir owner/admin en staff clínico cuando aplique
+- [ ] Evaluar copy y acción futura tipo `Agregarme como staff` o `Este administrador también atiende pacientes` en `staff_medico.php` o `mi_empresa.php`
 
 ### Paso 6 — Acceso del staff al panel admin (PENDIENTE — siguiente frente)
 
