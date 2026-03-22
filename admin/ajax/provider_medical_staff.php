@@ -21,6 +21,10 @@ require_once '../include/password_utils.php';
 require_once '../include/email_config.php';
 require_once '../../inc/email_template.php';
 
+if (!defined('ROLE_PROVIDER')) {
+    require_once '../include/roles.php';
+}
+
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 
@@ -276,6 +280,193 @@ function pms_validate_user_not_linked_elsewhere($conexion, $userId, $currentStaf
         return ['error' => 'user_already_linked_to_other_staff', 'linked_staff' => $row];
     }
     return null;
+}
+
+function pms_owner_mapping_table_ready($conexion)
+{
+    return pms_catalog_table_ready($conexion, 'provider_users')
+        && pms_table_has_column($conexion, 'provider_users', 'provider_id')
+        && pms_table_has_column($conexion, 'provider_users', 'user_id')
+        && pms_table_has_column($conexion, 'provider_users', 'role_in_provider');
+}
+
+function pms_owner_role_priority_sql()
+{
+    return "CASE LOWER(COALESCE(NULLIF(TRIM(pu.role_in_provider), ''), 'owner'))
+                WHEN 'owner' THEN 0
+                WHEN 'primary' THEN 1
+                WHEN 'principal' THEN 2
+                WHEN 'admin' THEN 3
+                WHEN 'administrator' THEN 4
+                ELSE 10
+            END";
+}
+
+function pms_fetch_provider_owner_user($conexion, $providerId)
+{
+    if ($providerId <= 0 || !pms_table_has_column($conexion, 'usuarios', 'id')) {
+        return null;
+    }
+
+    $select = [
+        'u.id',
+        pms_table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
+        pms_table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
+        pms_table_has_column($conexion, 'usuarios', 'email') ? 'u.email' : "'' AS email",
+        pms_table_has_column($conexion, 'usuarios', 'activo') ? 'u.activo' : '1 AS activo',
+        pms_table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
+        pms_table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
+        pms_table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
+        pms_table_has_column($conexion, 'usuarios', 'rol') ? 'u.rol' : 'NULL AS rol',
+        pms_table_has_column($conexion, 'usuarios', 'ppal') ? 'u.ppal' : '0 AS ppal',
+    ];
+
+    if (pms_owner_mapping_table_ready($conexion)) {
+        $sql = 'SELECT ' . implode(', ', $select) . ', pu.role_in_provider
+                  FROM provider_users pu
+                  INNER JOIN usuarios u ON u.id = pu.user_id
+                 WHERE pu.provider_id = ?
+                   AND u.id <> 1';
+        if (pms_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+            $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
+        }
+        if (pms_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+            $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
+        }
+        $sql .= ' ORDER BY ' . pms_owner_role_priority_sql() . ', u.id ASC LIMIT 1';
+
+        $stmt = mysqli_prepare($conexion, $sql);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $providerId);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $row = $res ? mysqli_fetch_assoc($res) : null;
+            mysqli_stmt_close($stmt);
+            if ($row) {
+                $row['owner_source'] = 'provider_users';
+                return $row;
+            }
+        }
+    }
+
+    if (!pms_table_has_column($conexion, 'usuarios', 'provider_id')) {
+        return null;
+    }
+
+    $sql = 'SELECT ' . implode(', ', $select) . "
+              FROM usuarios u
+             WHERE u.provider_id = ?
+               AND u.id <> 1";
+    if (pms_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
+    }
+    if (pms_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
+    }
+
+    $ppalPriority = pms_table_has_column($conexion, 'usuarios', 'ppal')
+        ? 'CASE WHEN COALESCE(u.ppal, 0) = 1 THEN 0 ELSE 1 END'
+        : '1';
+    $rolePriority = pms_table_has_column($conexion, 'usuarios', 'role_id')
+        ? 'CASE WHEN u.role_id = ' . (int)ROLE_PROVIDER_ADMIN . ' THEN 0 WHEN u.role_id = ' . (int)ROLE_PROVIDER . ' THEN 1 ELSE 5 END'
+        : '5';
+    $sql .= ' ORDER BY ' . $ppalPriority . ', ' . $rolePriority . ', u.id ASC LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $providerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    if ($row) {
+        $row['owner_source'] = 'legacy_fallback';
+    }
+    return $row ?: null;
+}
+
+function pms_find_staff_by_linked_user_id($conexion, $providerId, $userId)
+{
+    if ($providerId <= 0 || $userId <= 0 || !pms_has_access_columns($conexion)) {
+        return null;
+    }
+    $stmt = mysqli_prepare($conexion, 'SELECT id FROM provider_medical_staff WHERE provider_id = ? AND linked_user_id = ? LIMIT 1');
+    if (!$stmt) {
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'ii', $providerId, $userId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ? (int)$row['id'] : null;
+}
+
+function pms_provider_owner_list_item($conexion, $providerId)
+{
+    $owner = pms_fetch_provider_owner_user($conexion, $providerId);
+    if (!$owner || empty($owner['id'])) {
+        return null;
+    }
+
+    $ownerUserId = (int)$owner['id'];
+    if ($ownerUserId <= 0) {
+        return null;
+    }
+
+    if (pms_find_staff_by_linked_user_id($conexion, $providerId, $ownerUserId)) {
+        return null;
+    }
+
+    $fullName = trim((string)($owner['nombre'] ?? ''));
+    $username = trim((string)($owner['usuario'] ?? ''));
+    $email = trim((string)($owner['email'] ?? ''));
+    if ($fullName === '') {
+        $fullName = $email !== '' ? $email : ($username !== '' ? $username : ('Owner #' . $ownerUserId));
+    }
+
+    $linkedUserLabelParts = [];
+    if ($fullName !== '') {
+        $linkedUserLabelParts[] = $fullName;
+    }
+    if ($username !== '') {
+        $linkedUserLabelParts[] = '@' . $username;
+    }
+    if ($email !== '') {
+        $linkedUserLabelParts[] = $email;
+    }
+
+    return [
+        'id' => 0,
+        'provider_id' => (int)$providerId,
+        'full_name' => $fullName,
+        'email' => $email,
+        'phone' => '',
+        'photo' => '',
+        'role_title' => 'Owner / admin inicial',
+        'specialty' => 'Gestión del prestador',
+        'bio_short' => '',
+        'bio_short_preview' => '',
+        'service_summary' => 'Owner/admin del provider',
+        'sort_order' => 0,
+        'is_primary_doctor' => 0,
+        'is_active' => (int)($owner['activo'] ?? 1),
+        'active' => (int)($owner['activo'] ?? 1),
+        'created_at' => '',
+        'updated_at' => '',
+        'linked_user_id' => $ownerUserId,
+        'linked_user_name' => $fullName,
+        'linked_username' => $username,
+        'linked_user_email' => $email,
+        'linked_user_active' => (int)($owner['activo'] ?? 1),
+        'linked_user_label' => implode(' · ', array_filter($linkedUserLabelParts)),
+        'can_access_admin' => 1,
+        'access_status_label' => ((int)($owner['activo'] ?? 1) === 1) ? 'Owner/admin con acceso al panel' : 'Owner/admin inactivo',
+        'owner_source' => (string)($owner['owner_source'] ?? ''),
+        'is_provider_owner_admin' => 1,
+    ];
 }
 
 function pms_user_is_sensitive_owner_account($row)
@@ -1844,11 +2035,24 @@ switch ($action) {
             }
         }
 
+        $ownerItem = pms_provider_owner_list_item($conexion, $providerId);
+        $totalUniverse = count($rows);
+        $activeUniverse = $activeCount;
+        if ($ownerItem) {
+            $totalUniverse++;
+            if ((int)($ownerItem['is_active'] ?? 0) === 1) {
+                $activeUniverse++;
+            }
+        }
+
         pms_ok([
             'provider' => $provider,
             'items' => $rows,
+            'owner_admin_item' => $ownerItem,
             'total' => count($rows),
             'active_total' => $activeCount,
+            'total_universe' => $totalUniverse,
+            'active_total_universe' => $activeUniverse,
         ]);
     }
 

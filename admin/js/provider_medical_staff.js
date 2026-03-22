@@ -16,6 +16,7 @@
         specialties: { table_ready: true, real_count: 0, uses_fallback: false }
     };
     var providerClinics = [];
+    var ownerAdminListItem = null;
     var currentItems = [];
     var MANAGE_DISABLED_BY_CONTEXT = false;
     var serviceMultiSelectNeedsInit = false;
@@ -460,14 +461,43 @@
             : '<span class="label label-default">' + escapeHtml(falseLabel) + '</span>';
     }
 
-    function renderRows(items) {
+    function renderRows(items, ownerItem) {
         currentItems = Array.isArray(items) ? items.slice() : [];
-        if (!currentItems.length) {
+        ownerAdminListItem = ownerItem || null;
+        if (!currentItems.length && !ownerAdminListItem) {
             renderEmpty('Aún no hay staff médico registrado para este prestador.');
             return;
         }
 
-        var rows = currentItems.map(function (item, index) {
+        var rows = [];
+
+        if (ownerAdminListItem) {
+            rows.push(''
+                + '<tr class="info" data-owner-admin="1">'
+                + '<td class="text-center">' + avatarHtml(ownerAdminListItem) + '</td>'
+                + '<td>'
+                + '<strong>' + escapeHtml(withFallback(ownerAdminListItem.full_name, 'Owner / admin inicial')) + '</strong> '
+                + '<span class="label label-info">Owner/admin</span>'
+                + '<div class="text-muted small">' + escapeHtml(withFallback(ownerAdminListItem.email, 'Sin correo')) + ' · ' + escapeHtml(withFallback(ownerAdminListItem.phone, 'Sin teléfono')) + '</div>'
+                + '<div class="small"><span class="label label-default">Owner/admin del provider</span></div>'
+                + '</td>'
+                + '<td>'
+                + '<div>' + escapeHtml(withFallback(ownerAdminListItem.role_title, 'Owner / admin inicial')) + '</div>'
+                + '<div class="text-muted small">' + escapeHtml(ownerAdminListItem.linked_user_label || 'Usuario owner/admin vinculado') + '</div>'
+                + '<div class="small"><span class="label ' + (parseInt(ownerAdminListItem.is_active || 0, 10) === 1 ? 'label-success' : 'label-default') + '">' + escapeHtml(ownerAdminListItem.access_status_label || 'Owner/admin del provider') + '</span></div>'
+                + '</td>'
+                + '<td>'
+                + '<div>' + escapeHtml(withFallback(ownerAdminListItem.specialty, 'Gestión del prestador')) + '</div>'
+                + '<div class="text-muted small">Visible en este listado por alcance operativo; no nace desde el alta de staff.</div>'
+                + '</td>'
+                + '<td><span class="label label-default">No</span></td>'
+                + '<td>' + renderBooleanBadge(parseInt(ownerAdminListItem.is_active || 0, 10) === 1, 'Activo', 'Inactivo') + '</td>'
+                + '<td><strong>#0</strong><div class="text-muted small">Ownership explícito</div></td>'
+                + '<td class="text-right"><span class="text-muted">Solo lectura</span></td>'
+                + '</tr>');
+        }
+
+        rows = rows.concat(currentItems.map(function (item, index) {
             var active = parseInt(item.is_active || item.active, 10) === 1;
             var isPrimary = parseInt(item.is_primary_doctor, 10) === 1;
             var roleTitle = withFallback(item.role_title, 'Sin cargo definido');
@@ -531,9 +561,9 @@
                 + '</td>'
                 + '<td class="text-right">' + actionsHtml + '</td>'
                 + '</tr>';
-        }).join('');
+            }));
 
-        $('#tbl-provider-medical-staff tbody').html(rows);
+            $('#tbl-provider-medical-staff tbody').html(rows.join(''));
     }
 
     function setAccessSectionMode(mode) {
@@ -1199,8 +1229,8 @@
                 renderEmpty('No fue posible cargar el staff médico.');
                 return;
             }
-            setTabCount(res.total || 0, res.active_total || 0);
-            renderRows(res.items || []);
+            setTabCount(res.total_universe || res.total || 0, res.active_total_universe || res.active_total || 0);
+            renderRows(res.items || [], res.owner_admin_item || null);
         }).fail(function (xhr) {
             var message = 'No fue posible cargar el staff médico.';
             if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
@@ -1519,10 +1549,11 @@
             }
             toast(res.message || 'Orden actualizado', 'success');
             if (Array.isArray(res.items)) {
-                renderRows(res.items);
-                setTabCount(res.items.length, res.items.filter(function (item) {
+                var ownerItem = res.owner_admin_item || ownerAdminListItem || null;
+                renderRows(res.items, ownerItem);
+                setTabCount((res.total_universe || (res.items.length + (ownerItem ? 1 : 0))), (res.active_total_universe || (res.items.filter(function (item) {
                     return parseInt(item.is_active || item.active, 10) === 1;
-                }).length);
+                }).length + ((ownerItem && parseInt(ownerItem.is_active || 0, 10) === 1) ? 1 : 0))));
             } else {
                 loadStaffList();
             }

@@ -79,6 +79,7 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - Su alta canónica nace desde `staff_medico.php`.
 - Si necesita acceso al panel, ese acceso debe aprovisionarse desde el flujo de staff.
 - Su relacion de identidad se formaliza por `provider_medical_staff.linked_user_id`.
+- El owner/admin inicial puede mostrarse en el listado operativo de `staff_medico.php` como fila de solo lectura por visibilidad del equipo, sin convertirse por ello en alta canónica de staff ni duplicarse en `provider_medical_staff`.
 
 ### Cliente / paciente
 
