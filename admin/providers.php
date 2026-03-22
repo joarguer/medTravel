@@ -205,33 +205,14 @@ include('include/include.php');
                                 </div>
                             </div>
                             <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Username owner/admin inicial <span class="required">*</span></label>
-                                        <input type="text" class="form-control" name="username" id="prov-username" placeholder="Username de acceso del owner/admin inicial" required />
-                                        <span class="help-block" id="username-help">Esta será la cuenta principal de acceso administrativo del prestador médico.</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
+                                <div class="col-md-12">
                                     <div class="form-group">
                                         <label>Email owner/admin inicial <span class="required" id="owner-email-required">*</span></label>
                                         <div class="input-group">
                                             <span class="input-group-addon"><i class="fa fa-envelope"></i></span>
                                             <input type="email" class="form-control" name="owner_email" id="prov-owner-email" placeholder="Email personal del owner/admin inicial" />
                                         </div>
-                                        <span class="help-block" id="owner-email-help">Este email se usa para enviar el acceso inicial del owner/admin. No reemplaza el email general del prestador.</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label>Contraseña owner/admin inicial <span class="required" id="password-required">*</span></label>
-                                        <div class="input-group">
-                                            <span class="input-group-addon"><i class="fa fa-lock"></i></span>
-                                            <input type="password" class="form-control" name="password" id="prov-password" placeholder="Contraseña" />
-                                        </div>
-                                        <span class="help-block" id="password-help">Dejar en blanco al editar para mantener la contraseña actual</span>
+                                        <span class="help-block" id="owner-email-help">Este email será la identidad de acceso del owner/admin y se usará para enviar la invitación segura de set-password. No reemplaza el email general del prestador.</span>
                                     </div>
                                 </div>
                             </div>

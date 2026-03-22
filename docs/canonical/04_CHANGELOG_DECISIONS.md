@@ -1,5 +1,26 @@
 # Changelog Decisions
 
+## 2026-03-22 — Onboarding owner/admin de providers alineado a email-first
+
+**Outcome**
+- El alta inicial de owner/admin en `providers.php` queda alineada al patrón email-first ya usado en otros flujos de acceso con invitación segura.
+- El formulario de onboarding de providers deja de pedir credenciales manuales inconsistentes para el owner/admin inicial.
+- El acceso inicial del owner/admin pasa a depender del email y del enlace seguro de `set_password.php`.
+
+**Decision**
+- El onboarding inicial del owner/admin de providers no debe pedir `username` manual ni `password` manual en la UI.
+- La identidad de acceso expuesta al usuario debe ser el email owner/admin.
+- Si el runtime necesita valores internos de compatibilidad para `usuarios.usuario` o `usuarios.password`, esos valores deben resolverse internamente sin exponerse en el formulario.
+- `providers.php` queda alineado a este patrón y no debe reintroducir credenciales manuales en futuras iteraciones.
+
+**Transition note**
+- Esta decisión no mezcla el flujo de providers con el flujo de staff; solo alinea el onboarding inicial del owner/admin del provider al mismo principio de acceso por email + set-password.
+- En runtime legacy, la compatibilidad con campos internos de `usuarios` puede seguir existiendo, pero deja de ser parte del contrato visible del formulario.
+
+**Operational effect**
+- El alta de providers crea la cuenta owner/admin inicial a partir del email owner/admin y envía la invitación segura de acceso.
+- Update mantiene el owner/admin sin exponer edición de username ni password manuales en el modal.
+
 ## 2026-03-22 — Regla canónica de notificaciones admin con Metronic
 
 **Outcome**

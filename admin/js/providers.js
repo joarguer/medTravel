@@ -192,16 +192,6 @@ $(document).ready(function(){
         $('#prov-kind-help').text('Este onboarding canonico crea y administra exclusivamente prestadores medicos.');
     }
 
-    function setPasswordRequirement(required, helpText){
-        $('#prov-password').val('').prop('required', required);
-        if(required){
-            $('#password-required').show();
-        } else {
-            $('#password-required').hide();
-        }
-        $('#password-help').text(helpText);
-    }
-
     function setOwnerEmailRequirement(required, helpText){
         $('#prov-owner-email').val($('#prov-owner-email').val() || '').prop('required', required);
         if(required){
@@ -225,7 +215,6 @@ $(document).ready(function(){
     function openCreateModal(){
         $('#form-provider')[0].reset();
         $('#prov-id').val('');
-        $('#prov-username').val('').prop('required', true);
         $('#prov-owner-email').val('');
         destroyProviderMultiSelect('#prov-categories');
         destroyProviderMultiSelect('#prov-services');
@@ -234,14 +223,12 @@ $(document).ready(function(){
         $('#provider-modal-title').text('Alta de prestador medico');
         $('#provider-modal-intro').html('Este flujo crea el <strong>prestador medico</strong> y su <strong>cuenta owner/admin inicial</strong>.');
         $('#prov-save').text('Crear prestador medico');
-        $('#username-help').text('Esta sera la cuenta principal de acceso administrativo del prestador medico.');
-        setOwnerEmailRequirement(true, 'Este email se usa para enviar el acceso inicial del owner/admin y no reemplaza el email general del prestador.');
+        setOwnerEmailRequirement(true, 'Este email sera la identidad de acceso del owner/admin y recibira la invitacion segura para crear su password. No reemplaza el email general del prestador.');
         setKindPresentation();
-        setPasswordRequirement(true, 'Define la contrasena inicial de la cuenta owner/admin.');
         setOwnerSummary(
             'new',
             'Se creara la cuenta owner/admin inicial',
-            'Al guardar este alta se creara tambien la cuenta owner/admin inicial del prestador medico.',
+            'Al guardar este alta se creara tambien la cuenta owner/admin inicial del prestador medico y se enviara una invitacion de acceso por email.',
             'alert-info'
         );
         $('#providerModal').modal('show');
@@ -269,8 +256,7 @@ $(document).ready(function(){
         $('#prov-desc').val(p.description || '');
         $('#prov-verified').prop('checked', p.is_verified == 1);
         $('#prov-active').prop('checked', p.is_active == 1);
-        $('#prov-username').val(user && user.usuario ? user.usuario : '').prop('required', true);
-        $('#prov-owner-email').val(user && user.email ? user.email : '');
+        $('#prov-owner-email').val(user && (user.email || user.usuario) ? (user.email || user.usuario) : '');
 
         destroyProviderMultiSelect('#prov-categories');
         destroyProviderMultiSelect('#prov-services');
@@ -285,35 +271,31 @@ $(document).ready(function(){
         $('#provider-modal-title').text('Editar prestador medico');
         $('#provider-modal-intro').html('Aqui editas el <strong>prestador medico</strong> y su <strong>cuenta owner/admin inicial</strong>.');
         $('#prov-save').text('Guardar cambios');
-        $('#username-help').text('Username de acceso de la cuenta owner/admin inicial del prestador medico.');
-        setOwnerEmailRequirement(false, 'Si lo completas, este email quedara asociado explicitamente al owner/admin inicial. Si lo dejas en blanco, se conserva el email actual del owner/admin cuando exista.');
+        setOwnerEmailRequirement(false, 'Este email queda asociado como identidad de acceso del owner/admin inicial. Si lo dejas en blanco, se conserva el email actual cuando exista.');
         setKindPresentation();
 
         if(ux.owner_state === 'missing'){
             setOwnerSummary(
                 'missing',
                 'Falta la cuenta owner/admin inicial',
-                'Este prestador no tiene una cuenta owner/admin inicial visible. Para guardar cambios debes crearla ahora y definir una contrasena.',
+                'Este prestador no tiene una cuenta owner/admin inicial visible. Al guardar se creara una cuenta basada en email y se enviara una invitacion segura de acceso.',
                 'alert-warning'
             );
-            setPasswordRequirement(true, 'Este prestador no tiene owner/admin inicial. Define la contrasena para crear esa cuenta al guardar.');
         } else if(ux.owner_state === 'legacy_fallback'){
             setOwnerSummary(
                 'legacy_fallback',
                 'Owner/admin detectado por compatibilidad',
-                'Se detecto una cuenta administrativa legacy asociada a este prestador. Si guardas, quedara formalizada como owner/admin inicial explicito.',
+                'Se detecto una cuenta administrativa legacy asociada a este prestador. Si guardas, quedara formalizada como owner/admin inicial explicito usando email como acceso.',
                 'alert-warning'
             );
-            setPasswordRequirement(false, 'Deja en blanco para mantener la contrasena actual de la cuenta owner/admin.');
         } else {
-            const username = user && user.usuario ? escapeHtml(user.usuario) : 'sin username';
+            const accessEmail = user && (user.email || user.usuario) ? escapeHtml(user.email || user.usuario) : 'sin email';
             setOwnerSummary(
                 'explicit',
                 'Owner/admin inicial actual',
-                'Cuenta owner/admin inicial actual: <strong>' + username + '</strong>.',
+                'Cuenta owner/admin inicial actual: <strong>' + accessEmail + '</strong>.',
                 'alert-success'
             );
-            setPasswordRequirement(false, 'Deja en blanco para mantener la contrasena actual de la cuenta owner/admin.');
         }
 
         $('#providerModal').modal('show');
@@ -342,17 +324,11 @@ $(document).ready(function(){
         let id = $('#prov-id').val();
         let type = $('#prov-type').val();
         let name = $('#prov-name').val().trim();
-        let username = $('#prov-username').val().trim();
         let ownerEmail = $('#prov-owner-email').val().trim();
-        let password = $('#prov-password').val();
         let selectedKind = 'medical';
 
         if(!type || !name){
             providerToast('warning', 'Tipo y nombre del prestador medico son requeridos', 'Validacion');
-            return;
-        }
-        if(!username){
-            providerToast('warning', 'El username del owner/admin inicial es requerido', 'Validacion');
             return;
         }
         if(!id && !ownerEmail){
@@ -363,12 +339,8 @@ $(document).ready(function(){
             providerToast('warning', 'El email del owner/admin inicial no es valido', 'Validacion');
             return;
         }
-        if(!id && !password){
-            providerToast('warning', 'La contrasena del owner/admin inicial es requerida al crear un nuevo prestador medico', 'Validacion');
-            return;
-        }
-        if(id && currentOwnerState === 'missing' && !password){
-            providerToast('warning', 'Este prestador no tiene owner/admin inicial. Debes definir una contrasena para crear esa cuenta al guardar.', 'Validacion');
+        if(id && currentOwnerState === 'missing' && !ownerEmail){
+            providerToast('warning', 'Este prestador no tiene owner/admin inicial visible. Debes definir el email para crear esa cuenta al guardar.', 'Validacion');
             return;
         }
         let data = {
@@ -376,7 +348,6 @@ $(document).ready(function(){
             kind: selectedKind,
             name: name,
             legal_name: $('#prov-legal-name').val().trim(),
-            username: username,
             owner_email: ownerEmail,
             description: $('#prov-desc').val().trim(),
             city: $('#prov-city').val().trim(),
@@ -387,10 +358,6 @@ $(document).ready(function(){
             is_verified: $('#prov-verified').is(':checked') ? 1 : 0,
             is_active: $('#prov-active').is(':checked') ? 1 : 0
         };
-
-        if(password){
-            data.password = password;
-        }
 
         let catVals = $('#prov-categories').val() || [];
         let svcVals = $('#prov-services').val() || [];

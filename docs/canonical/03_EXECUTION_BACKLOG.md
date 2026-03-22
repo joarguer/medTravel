@@ -90,6 +90,7 @@ Alias al backlog / pasos de ejecución canónico.
 - DONE 2026-03-21: `staff_medico.php` queda declarado canónicamente como alta de staff medico y de su acceso al panel cuando aplique
 - DONE 2026-03-21: `crear_usuario.php` deja de ser flujo canónico para onboarding del dominio medico principal
 - DONE 2026-03-21: `usuarios.id = 1` queda protegido como superusuario global fuera de flujos de reciclaje / reutilizacion
+- DONE 2026-03-22: el onboarding owner/admin de `providers.php` queda alineado a patrón email-first + invitación de set-password, sin credenciales manuales en el alta
 
 #### Deuda de modelo
 
