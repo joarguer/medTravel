@@ -49,17 +49,27 @@ register_shutdown_function(function () {
 });
 
 set_exception_handler(function ($exception) {
+    $message = is_object($exception) ? $exception->getMessage() : 'unknown';
+    $file = is_object($exception) ? $exception->getFile() : '';
+    $line = is_object($exception) ? $exception->getLine() : 0;
     my_booking_requests_debug_log('uncaught_exception', [
         'type' => is_object($exception) ? get_class($exception) : 'unknown',
-        'message' => is_object($exception) ? $exception->getMessage() : 'unknown',
-        'file' => is_object($exception) ? $exception->getFile() : '',
-        'line' => is_object($exception) ? $exception->getLine() : 0,
+        'message' => $message,
+        'file' => $file,
+        'line' => $line,
     ]);
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: application/json; charset=utf-8');
     }
-    echo json_encode(['ok' => false, 'message' => 'server_exception']);
+    $payload = ['ok' => false, 'message' => 'server_exception'];
+    $appEnv = strtolower((string)(getenv('APP_ENV') ?: getenv('APPLICATION_ENV') ?: ''));
+    if (in_array($appEnv, ['local', 'dev', 'development', 'test', 'testing'], true)) {
+        $payload['debug_detail'] = $message;
+        $payload['debug_file'] = basename((string)$file);
+        $payload['debug_line'] = (int)$line;
+    }
+    echo json_encode($payload);
     exit;
 });
 
@@ -511,15 +521,6 @@ function mask_contact_value($value, $kind)
             $local = $parts[0];
             $domain = $parts[1];
             $visible = strlen($local) > 1 ? substr($local, 0, 1) : '';
-
-    function my_booking_normalize_meeting_integration_mode($value)
-    {
-        $mode = trim((string)$value);
-        if (in_array($mode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
-            return $mode;
-        }
-        return 'calendar_plus_meet';
-    }
             return $visible . '***@' . $domain;
         }
     }
@@ -534,6 +535,15 @@ function mask_contact_value($value, $kind)
         return str_repeat('*', strlen($value));
     }
     return substr($value, 0, 1) . str_repeat('*', max(strlen($value) - 2, 3)) . substr($value, -1);
+}
+
+function my_booking_normalize_meeting_integration_mode($value)
+{
+    $mode = trim((string)$value);
+    if (in_array($mode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
+        return $mode;
+    }
+    return 'calendar_plus_meet';
 }
 
 function resolve_contact_access_state($email, $phone, $functionalFeeStatus, $isAdminSession = false)
@@ -3451,6 +3461,7 @@ if ($action === 'send_quick_reply') {
 }
 
 if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_change', 'update_item_status'], true)) {
+    my_booking_requests_set_debug_branch('provider_action_' . $action);
     $itemId = intval($_POST['item_id'] ?? 0);
     if ($itemId <= 0) {
         json_err('invalid_id');
@@ -3500,7 +3511,11 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     if (!in_array($currentStatus, $canonicalItemStatuses, true)) {
         json_err('invalid_current_status', 409);
     }
-    if ($currentStatus !== 'pending_provider') {
+    $allowedCurrentStatuses = ['pending_provider'];
+    if ($targetStatus === 'provider_proposed_change') {
+        $allowedCurrentStatuses[] = 'provider_proposed_change';
+    }
+    if (!in_array($currentStatus, $allowedCurrentStatuses, true)) {
         json_err('transition_not_allowed_from_' . $currentStatus, 409);
     }
 
