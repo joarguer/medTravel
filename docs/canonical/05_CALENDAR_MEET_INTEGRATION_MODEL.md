@@ -2,7 +2,7 @@
 
 ## 1. Propósito
 
-Este documento fija el modelo canónico de integración con Google Calendar y Google Meet como base del manejo del tiempo limitado de suppliers médicos y de su staff.
+Este documento fija el modelo canónico inicial de integración con Google Calendar y Google Meet para coordinar citas entre paciente y provider / staff clínico, comenzando por operación desde admins autenticados de MedTravel.
 
 La integración no se define como feature cosmética ni como accesorio técnico. Se define como capacidad estructural para coordinar un recurso escaso y crítico: la disponibilidad real de agenda del actor tratante.
 
@@ -12,6 +12,11 @@ MedTravel necesita este modelo porque:
 - la coordinación de citas no puede depender solo de agenda manual o representación interna incompleta
 - una solicitud puede requerir múltiples citas y múltiples actores tratantes
 - la trazabilidad del caso exige orquestar agenda real sin convertir a MedTravel en actor clínico tratante
+
+Este canon también fija una transición explícita por fases:
+
+- Fase 1: integración base con Google Calendar API + generación de Google Meet al crear el evento, con organizer inicial en una cuenta Google conectada por admin de MedTravel.
+- Fase 2: uso posterior de capacidades avanzadas de Google Meet para metadatos extendidos, conference records y trazabilidad enriquecida.
 
 ## 2. Principios rectores
 
@@ -24,8 +29,34 @@ MedTravel necesita este modelo porque:
 - Calendar sigue siendo la vista operativa de agenda.
 - Google Calendar y Google Meet se integran como infraestructura externa de citas, no como módulo aislado del producto.
 - Esta integración no altera la frontera canónica del negocio: MedTravel coordina; el supplier y su staff tratante prestan la atención.
+- La Fase 1 puede arrancar con organizer en una cuenta Google de admin MedTravel sin redefinir la frontera del negocio ni convertir a MedTravel en actor clínico.
+- La evolución futura debe permitir ownership más fino por actor tratante real cuando la madurez operativa y técnica lo justifique.
 
-## 3. Modelo canónico
+## 3. Arquitectura por fases
+
+### Fase 1 — Integración base desde admin MedTravel
+
+- La integración base se implementa con Google Calendar API.
+- El enlace de Google Meet se genera al crear el evento de Calendar.
+- La autenticación se resuelve mediante OAuth 2.0 Web Server Flow.
+- La conexión Google se hace por admin autenticado en MedTravel; no por frontend público ni por paciente.
+- Los tokens quedan separados por admin conectado.
+- El organizer inicial de la reunión es la cuenta Google del admin MedTravel que autorizó la conexión y ejecuta la creación del evento.
+- Paciente y provider / médico / staff se agregan como invitados del evento.
+- MedTravel persiste internamente la trazabilidad operativa de la cita y sus referencias externas.
+
+### Fase 2 — Meet avanzado y trazabilidad extendida
+
+- La Google Meet API avanzada se incorpora después de estabilizar la Fase 1.
+- Esta fase cubre metadatos extendidos y, cuando aplique por permisos y producto:
+  - participantes
+  - duración
+  - conference records
+  - artefactos como recordings o transcripts
+  - eventos y trazabilidad avanzada
+- La Fase 2 no redefine el modelo de cita; lo enriquece.
+
+## 4. Modelo canónico
 
 ### Caso / solicitud
 
@@ -63,11 +94,13 @@ MedTravel necesita este modelo porque:
 ### Cuenta Google conectada
 
 - Representa la identidad externa autorizada para crear, leer o sincronizar eventos reales de agenda.
-- Puede pertenecer a un provider o a un miembro de `provider_medical_staff`, según el nivel de granularidad implementado.
+- En Fase 1 pertenece a un admin autenticado de MedTravel.
+- En fases futuras puede evolucionar hacia granularidad por provider o por miembro de `provider_medical_staff` cuando el modelo de ownership fino de agenda madure.
 
 ### Evento externo Google Calendar
 
 - Es la representación externa de la cita en la agenda real del actor conectado.
+- En Fase 1 ese evento vive en la cuenta Google conectada por un admin MedTravel.
 - MedTravel no reemplaza ese evento; mantiene referencia y trazabilidad sobre él.
 
 ### Meet link
@@ -75,39 +108,67 @@ MedTravel necesita este modelo porque:
 - Es una capacidad de la cita cuando la modalidad o el flujo requiera atención virtual.
 - Debe considerarse derivado del evento o de la integración externa de agenda, no como módulo independiente del producto.
 
-## 4. Regla de ownership de agenda
+## 5. Regla de ownership de agenda
 
-- El evento clínico idealmente debe vivir en el calendar del actor tratante dueño real del tiempo.
-- MedTravel no debe ser dueño único de todas las agendas clínicas.
+- En Fase 1, MedTravel admin puede ser organizer técnico del evento para acelerar la coordinación inicial y centralizar la operación.
+- Ese organizer técnico no implica ownership clínico de la atención ni transforma a MedTravel en prestador.
+- El ownership clínico y la responsabilidad asistencial siguen perteneciendo al provider y al staff tratante.
+- El target de madurez sigue siendo permitir ownership fino del tiempo por actor tratante real cuando el modelo lo soporte.
 - MedTravel sí debe mantener una representación interna consistente de la cita y referencias hacia el evento externo.
-- Cuando todavía no exista ownership fino por staff, el modelo puede convivir transitoriamente con ownership a nivel provider.
-- El target canónico sigue siendo ownership por actor tratante real y no por contenedor administrativo genérico.
+- Cuando todavía no exista ownership fino por staff, el modelo puede convivir transitoriamente con organizer admin MedTravel y con referencias operativas al provider o staff asignado.
 
-## 5. Modelo de integración recomendado
+## 6. Modelo de integración recomendado
 
-La estrategia canónica recomendada es híbrida.
+La estrategia canónica recomendada es progresiva.
 
 ### Fuente de verdad de agenda real
 
-- La cuenta Google del supplier o del staff tratante conectado actúa como fuente de verdad de agenda real.
+- En Fase 1, la fuente técnica inicial del evento es la cuenta Google conectada por el admin MedTravel organizer.
+- La fuente operativa de contexto sigue siendo MedTravel, porque la cita debe quedar vinculada a booking request, request item, actor asignado y timeline interno.
+- En fases posteriores, la fuente de verdad de agenda real puede evolucionar hacia cuentas del provider o del staff tratante conectado.
 
 ### Rol de MedTravel
 
 - MedTravel opera como orquestador central de caso, citas, estado operativo y trazabilidad.
 - MedTravel mantiene la representación interna necesaria para coordinación, Inbox, Calendar, timeline y conciliación.
+- MedTravel no asume rol de prestador médico ni de decisor clínico por crear el evento o el Meet link.
 
 ### Granularidad soportada
 
 - El modelo debe soportar evolución a dos niveles:
-  - nivel provider
-  - nivel `provider_medical_staff`
+  - Fase 1: organizer por admin MedTravel
+  - Fase futura: ownership fino por provider y/o `provider_medical_staff`
 
 ### Google Meet
 
 - Cuando la cita sea virtual o requiera enlace remoto, Google Meet debe generarse desde la cita o el evento externo cuando aplique.
 - Meet se trata como capacidad de la cita, no como producto separado.
 
-## 6. Alcance funcional futuro
+## 7. Reglas de seguridad
+
+- Los tokens OAuth se separan por admin conectado.
+- No se deben mezclar conexiones, tokens ni calendarios entre admins.
+- El refresh token debe almacenarse protegido y cifrado en backend.
+- El flujo OAuth debe validar `state` para prevenir CSRF y callbacks inválidos.
+- Los scopes deben ser mínimos para la Fase 1 y ampliarse solo cuando la Fase 2 lo exija.
+- No se exponen secretos OAuth ni tokens en frontend.
+- La conexión Google se gestiona solo desde backend/admin autenticado.
+
+## 8. Encaje funcional con MedTravel
+
+- Calendar / Meet sigue siendo herramienta de coordinación y agenda.
+- Inbox sigue siendo comunicación y trazabilidad conversacional; no se convierte en scheduler.
+- Cada cita debe quedar vinculada, como mínimo, a:
+  - booking request
+  - request item cuando aplique
+  - provider responsable
+  - `provider_medical_staff` asignado cuando exista
+  - organizer admin MedTravel de Fase 1
+  - referencias externas de Google Calendar / Google Meet
+- La trazabilidad operativa debe persistirse dentro de MedTravel aunque el evento viva en Google Calendar.
+- El modelo no convierte a MedTravel en prestador médico ni redefine la frontera del negocio.
+
+## 9. Alcance funcional futuro
 
 El modelo debe soportar como mínimo:
 
@@ -119,18 +180,27 @@ El modelo debe soportar como mínimo:
 - coordinación de citas con meses de anticipación
 - reprogramaciones y reconciliación de cambios sin perder trazabilidad
 
-## 7. Implicaciones técnicas mínimas
+## 10. Implicaciones técnicas mínimas
 
 Sin definir aún implementación detallada, el canon deja asentado que serán necesarias al menos estas capacidades:
 
-- OAuth por actor conectado, ya sea provider o staff
-- tokens y estado de conexión por actor
+- OAuth 2.0 Web Server Flow por admin conectado en Fase 1
+- tokens y estado de conexión por admin
 - mapping entre cita interna y evento externo
-- storage de `event_id`, `meet_link`, `owner`, `sync_status` y referencias relacionadas
+- storage de `event_id`, `calendar_id`, `meet_link`, `organizer_admin_user_id`, `sync_status` y referencias relacionadas
 - estrategia de fallback cuando no exista calendar conectado
 - conciliación entre cambios hechos en MedTravel y cambios hechos en agenda externa
+- base futura para ampliar metadatos de Meet sin rediseñar el modelo de cita
 
-## 8. Frontera de producto
+## 11. Fuera de Fase 1
+
+- No se canoniza todavía ownership fino de organizer por provider o por `provider_medical_staff` como comportamiento inicial obligatorio.
+- No se canoniza todavía sincronización bidireccional completa ni reconciliación avanzada de cambios.
+- No se canoniza todavía explotación de artefactos avanzados de Meet como recordings, transcripts o conference records.
+- No se canoniza todavía analítica avanzada de participantes y duración.
+- No se canoniza todavía exposición pública o gestión de OAuth desde frontend paciente.
+
+## 12. Frontera de producto
 
 - MedTravel coordina agenda, comunicación y trazabilidad.
 - MedTravel no actúa como prestador clínico.
@@ -138,13 +208,15 @@ Sin definir aún implementación detallada, el canon deja asentado que serán ne
 - La integración con Google Calendar y Google Meet no cambia esa frontera.
 - La agenda clínica real sigue perteneciendo al actor tratante responsable del tiempo y de la atención.
 
-## 9. Backlog derivado
+## 13. Backlog derivado
 
-- modelo de datos de integración calendar / meet
-- UX para conectar cuenta Google por actor
-- selección explícita del actor dueño de la cita
-- no solapamiento por staff
-- múltiples citas por caso
-- Meet por cita virtual
-- sincronización y reconciliación de cambios
-- convivencia transitoria entre agenda general del provider y agenda fina por staff
+- Fase 1: conexión OAuth Google por admin MedTravel
+- Fase 1: modelo de persistencia de tokens por admin con cifrado de refresh token
+- Fase 1: creación de evento Google Calendar con Meet link al crear la cita
+- Fase 1: persistencia de referencias externas y trazabilidad interna en MedTravel
+- Fase 1: invitación de paciente y provider / staff al evento
+- Fase 2: metadatos avanzados de Google Meet
+- Fase 2: conference records y artefactos cuando apliquen
+- Fase futura: ownership fino de agenda por provider o `provider_medical_staff`
+- Fase futura: no solapamiento por staff
+- Fase futura: sincronización y reconciliación avanzada de cambios

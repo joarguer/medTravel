@@ -197,6 +197,8 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - Calendar sigue siendo el modulo oficial de agenda y gestion de citas.
 - La propuesta, confirmacion, reprogramacion o cancelacion de una cita debe entenderse como accion del dominio Agenda, aunque su contexto tambien deba reflejarse en Inbox y en la trazabilidad del caso.
 - Google Calendar y Google Meet deben integrarse como extensiones de la capacidad de cita dentro de Calendar, no como un producto o modulo independiente.
+- En la fase inicial de integracion, el organizer tecnico del evento puede ser un admin autenticado de MedTravel sin alterar la frontera canónica del negocio.
+- Paciente y provider / medico / staff participan como invitados de la cita; MedTravel mantiene la coordinacion y la trazabilidad, no la prestacion medica.
 
 ### Regla canónica de relacion caso -> items -> citas
 

@@ -100,6 +100,9 @@ Documento de referencia:
 - DONE 2026-03-22: Inbox sigue siendo comunicacion y Calendar sigue siendo agenda
 - DONE 2026-03-22: la validacion futura de agenda debe operar por medico / staff asignado y no solo por provider global
 - DONE 2026-03-22: un caso puede involucrar varios medicos y, si aplica, varios providers
+- DONE 2026-03-23: la Fase 1 de integracion Google Calendar / Meet se canoniza con organizer inicial en admin autenticado de MedTravel usando Google Calendar API + Meet al crear evento
+- DONE 2026-03-23: la Fase 2 se reserva para Google Meet API avanzada y metadatos extendidos
+- DONE 2026-03-23: seguridad minima canonizada para OAuth admin: tokens separados por admin, refresh token cifrado, validacion `state`, scopes minimos y sin secretos en frontend
 
 #### Deuda de modelo
 
@@ -108,6 +111,8 @@ Documento de referencia:
 - [ ] Incorporar modalidad de cita presencial / virtual como atributo estructural
 - [ ] Preparar soporte para referencia externa de Google Calendar por cita
 - [ ] Preparar soporte para Meet link por cita cuando corresponda
+- [ ] Persistir organizer admin MedTravel de Fase 1 y referencias externas por cita
+- [ ] Persistir conexiones OAuth Google separadas por admin con cifrado de refresh token
 - [ ] Resolver trazabilidad entre acciones del Inbox y estados de cita sin mezclar dominios
 - [ ] Definir politica canonica de no solapamiento por medico / staff asignado
 - [ ] Definir convivencia transitoria entre `calendar_capacity` global y futura disponibilidad fina por staff
@@ -117,6 +122,10 @@ Documento de referencia:
 - [ ] Evolucionar agenda desde foco global por provider hacia foco operativo por medico / staff asignado
 - [ ] Asegurar que una futura cita pueda existir sin asumir unicidad por caso
 - [ ] Asegurar que un caso pueda mantener varias citas activas o historicas sin romper Inbox ni timeline
+- [ ] Implementar Fase 1 con Google Calendar API + Meet al crear evento desde admin MedTravel
+- [ ] Diseñar storage y callbacks OAuth 2.0 Web Server Flow para admins MedTravel
+- [ ] Invitar a paciente y provider / staff como attendees sin convertir a MedTravel en actor clinico
+- [ ] Diseñar Fase 2 para Google Meet API avanzada sin bloquear la salida de Fase 1
 - [ ] Diseñar integracion con Google Calendar / Meet como extension del flujo de cita, no como modulo paralelo
 - [ ] Definir estrategia de compatibilidad con runtime actual de `app_calendar.php` y `admin/ajax/calendar.php`
 

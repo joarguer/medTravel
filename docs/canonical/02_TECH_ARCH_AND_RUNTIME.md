@@ -104,6 +104,31 @@ Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
 - La UI operativa debe mostrar eventos de negocio, no solo mutaciones tecnicas.
 - Appointment proposal, confirmation, reschedule, cancelacion, solicitud de informacion y desbloqueos comerciales deben poder representarse en timeline.
 
+## Arquitectura inicial canónica para Google Calendar / Google Meet
+
+### Fase 1 — Integración base desde admin MedTravel
+
+- La integracion base se resuelve con Google Calendar API.
+- La autenticacion se modela con OAuth 2.0 Web Server Flow.
+- La conexion Google se establece por admin autenticado en MedTravel.
+- Los tokens deben separarse por admin y no mezclarse entre sesiones o cuentas administrativas.
+- El organizer inicial del evento es la cuenta Google conectada por ese admin MedTravel.
+- Paciente y provider / medico / staff se agregan como invitados del evento.
+- MedTravel persiste internamente la trazabilidad de la cita y sus referencias externas.
+
+### Seguridad mínima obligatoria
+
+- `state` validado en OAuth.
+- refresh token protegido y cifrado en backend.
+- scopes minimos para la fase inicial.
+- secretos y tokens fuera de frontend.
+- aislamiento estricto entre conexiones Google de distintos admins.
+
+### Fase 2 — Capacidades avanzadas posteriores
+
+- Google Meet API avanzada para participantes, duracion, conference records y artefactos cuando aplique.
+- Esta fase amplía metadatos y trazabilidad; no cambia la frontera de producto ni el modelo de cita.
+
 ### Compatibilidad legacy
 
 - El runtime actual puede seguir apoyandose en `booking_requests`, `booking_request_items`, inbox, calendar y componentes auxiliares mientras el modelo evoluciona.

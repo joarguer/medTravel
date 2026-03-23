@@ -1,5 +1,45 @@
 # Changelog Decisions
 
+## 2026-03-23 — Integración inicial Google Calendar / Meet arranca desde admin MedTravel por fases
+
+**Outcome**
+- Se resuelve el conflicto entre el target de agenda fina por actor tratante y la necesidad operativa de arrancar rápido la integración desde admins de MedTravel.
+- Se canoniza que la Fase 1 usa Google Calendar API, genera Google Meet al crear el evento y opera con organizer inicial en una cuenta Google conectada por admin MedTravel.
+- Se deja explícito que paciente y provider / médico / staff participan como invitados al evento.
+- Se deja asentado que la trazabilidad operativa permanece persistida dentro de MedTravel.
+- Se reserva una Fase 2 para Google Meet API avanzada y metadatos extendidos.
+- Se cierran reglas mínimas de seguridad para OAuth por admin.
+
+**Decision**
+- La integración inicial se implementa por fases.
+- Fase 1:
+  - Google Calendar API como base.
+  - Google Meet link generado al crear el evento.
+  - OAuth 2.0 Web Server Flow.
+  - conexión por admin autenticado en MedTravel.
+  - organizer inicial = cuenta Google del admin MedTravel conectado.
+  - paciente y provider / médico / staff = invitados.
+  - persistencia de trazabilidad y referencias externas dentro de MedTravel.
+- Fase 2:
+  - uso de Google Meet API avanzada para participantes, duración, conference records y artefactos si aplica.
+- Seguridad mínima obligatoria:
+  - tokens separados por admin
+  - refresh token protegido / cifrado
+  - validación `state`
+  - scopes mínimos
+  - secretos fuera de frontend
+  - no mezclar conexiones entre admins
+- La integración no altera la frontera canónica del negocio: MedTravel coordina y agenda, pero no se convierte en prestador médico ni decisor clínico.
+
+**Transition note**
+- Esta decisión canónica habilita preparar la implementación, pero no implica que la integración ya exista en runtime.
+- El target futuro de ownership fino por provider o `provider_medical_staff` se mantiene como evolución posterior, no como requisito de salida para la Fase 1.
+
+**Operational effect**
+- El canon de Calendar / Meet debe describir explícitamente Fase 1 y Fase 2.
+- El backlog debe separar implementación base vs capacidades avanzadas de Meet.
+- Las futuras iteraciones de agenda e integración deben mantener vínculo explícito con booking request, request item, staff asignado cuando aplique, Inbox y timeline.
+
 ## 2026-03-22 — MedTravel se canoniza como intermediario / facilitador y no como actor clinico tratante
 
 **Outcome**
