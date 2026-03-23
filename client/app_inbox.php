@@ -492,12 +492,12 @@ if (isset($conexion) && $conexion) {
                                 <?php echo htmlspecialchars($clientCommissionMessage !== '' ? $clientCommissionMessage : 'Provider details and free messaging unlock after the commission payment is completed.', ENT_QUOTES, 'UTF-8'); ?>
                             </div>
                             <div id="client-inbox-structured-alert" class="note note-info" style="display:none; margin-bottom:12px;">
-                                <strong>There are pending structured actions in a service thread.</strong>
+                                <strong>There are formal actions pending in a service thread.</strong>
                                 <a id="client-go-service-thread" class="btn btn-default btn-xs" style="margin-left:10px;" href="#">Go to Service Thread</a>
                             </div>
                             <div id="client-inbox-fee-actions" class="well" style="display:none;margin-bottom:12px;">
-                                <h4 style="margin-top:0;">Quick actions</h4>
-                                <p class="text-muted" style="margin-bottom:10px;">Messaging is limited until the coordination fee is paid.</p>
+                                <h4 style="margin-top:0;">Formal quick actions</h4>
+                                <p class="text-muted" style="margin-bottom:10px;">While the coordination fee is still pending, free-form chat remains blocked. You can still record formal updates below.</p>
                                 <div class="btn-group btn-group-sm" id="client-inbox-quick-actions" role="group" style="margin-bottom:12px;">
                                     <button type="button" class="btn btn-default client-quick-action" data-action="REQUEST_AVAILABILITY">Ask about availability</button>
                                     <button type="button" class="btn btn-default client-quick-action" data-action="DATES_FLEXIBLE">My dates are flexible</button>
@@ -564,7 +564,8 @@ if (isset($conexion) && $conexion) {
                                         <button type="submit" class="btn btn-primary btn-sm" id="client-inbox-send-btn" style="margin-left:auto;" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
                                     </div>
                                     <div id="client-chat-attach-status" class="text-muted"></div>
-                                    <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">Free-form messaging is locked right now. Please use the structured actions above.</div>
+                                    <div class="text-muted" style="margin-top:8px;">Chat is open from the start. Use formal actions when you need to register a decision or a request that should affect the case workflow. Free-form messages do not change status by themselves.</div>
+                                    <div id="client-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;"></div>
                                 </form>
                             </div>
                             <div class="inbox-content" id="client-inbox-empty">

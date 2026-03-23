@@ -169,48 +169,17 @@ function client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate 
     $feeGate = is_array($feeGate) ? $feeGate : client_inbox_fee_gate_state($conexion, $bookingRequestId);
     $feeLocked = !empty($feeGate['fee_locked']);
 
-    $status = 'pending';
-    if ($bookingRequestId > 0 && inbox_table_exists($conexion, 'booking_requests') && client_table_has_column($conexion, 'booking_requests', 'status')) {
-        $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
-        $statusSql = "SELECT status FROM booking_requests WHERE id = ?";
-        if ($hasBookingSoftDelete) {
-            $statusSql .= " AND is_deleted = 0";
-        }
-        $statusSql .= " LIMIT 1";
-
-        $stmtStatus = mysqli_prepare($conexion, $statusSql);
-        if ($stmtStatus) {
-            mysqli_stmt_bind_param($stmtStatus, 'i', $bookingRequestId);
-            if (mysqli_stmt_execute($stmtStatus)) {
-                $statusRes = mysqli_stmt_get_result($stmtStatus);
-                $statusRow = $statusRes ? mysqli_fetch_assoc($statusRes) : null;
-                if ($statusRow) {
-                    $status = client_status_label((string)($statusRow['status'] ?? 'pending'));
-                }
-            }
-            mysqli_stmt_close($stmtStatus);
-        }
-    }
-
-    $stageAllowsFreeMessage = client_status_is_update($status);
-    $canSendFreeMessage = (!$feeLocked && $stageAllowsFreeMessage);
-    $reason = '';
-    if ($feeLocked) {
-        $reason = 'fee_locked';
-    } elseif (!$stageAllowsFreeMessage) {
-        $reason = 'initial_review';
-    }
+    $canSendFreeMessage = !$feeLocked;
+    $reason = $feeLocked ? 'fee_locked' : '';
 
     $notice = '';
     if ($feeLocked) {
-        $notice = 'Free-form messaging is locked until the coordination fee is paid. Please use the structured actions above.';
-    } elseif (!$stageAllowsFreeMessage) {
-        $notice = 'Free-form messaging is locked until the initial review is complete. Please use the structured actions above.';
+        $notice = 'Free-form chat is blocked until the coordination fee is paid. Formal actions remain available where applicable.';
     }
 
     return [
-        'booking_status' => $status,
-        'stage_allows_free_message' => $stageAllowsFreeMessage,
+        'booking_status' => '',
+        'stage_allows_free_message' => true,
         'can_send_free_message' => $canSendFreeMessage,
         'blocked_reason' => $reason,
         'notice' => $notice,

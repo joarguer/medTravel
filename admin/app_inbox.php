@@ -516,16 +516,17 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                     <div class="panel-body" style="padding-top:10px;">
                                         <p style="margin-bottom:8px;"><strong>Guía rápida: cómo usar este Inbox</strong></p>
                                         <ul style="margin:0 0 0 18px; padding:0;">
-                                            <li>Este Inbox funciona por etapas: al inicio NO se permite escribir mensajes libres.</li>
-                                            <li>Usa los botones de “Respuestas rápidas” para avanzar el caso:</li>
+                                            <li>Puedes escribir mensajes libres desde el inicio de la conversación.</li>
+                                            <li>Usa los botones de “Acciones formales” cuando necesites registrar decisiones o solicitudes con efecto operativo:</li>
                                             <li style="list-style:none; margin-left:8px;">• “DATES AVAILABLE / NOT AVAILABLE”: confirma disponibilidad de fechas.</li>
                                             <li style="list-style:none; margin-left:8px;">• “REQUEST HISTORY / LABS / IMAGING / PHOTOS”: solicita información clínica específica.</li>
                                             <li style="list-style:none; margin-left:8px;">• “FINAL APPROVED”: úsalo solo cuando el caso esté listo para aprobación final.</li>
                                             <li style="list-style:none; margin-left:8px;">• “NOT ELIGIBLE”: si el paciente no aplica para el servicio.</li>
-                                            <li>En “Propuestas estructuradas”:</li>
+                                            <li>En “Acciones estructuradas”:</li>
                                             <li style="list-style:none; margin-left:8px;">• “REQUEST ADDITIONAL INFO”: pide documentos o datos faltantes (queda registrado como tarjeta).</li>
                                             <li style="list-style:none; margin-left:8px;">• “PROPOSE QUOTE ADJUSTMENT”: propone ajuste de cotización con justificación.</li>
                                             <li>El paciente responderá con botones (Aceptar / Pedir cambios / Rechazar) o subirá documentos.</li>
+                                            <li>Los mensajes libres no cambian estados por sí solos.</li>
                                             <li>Importante: Mantén toda la comunicación aquí para trazabilidad. No uses mensajes externos.</li>
                                         </ul>
                                     </div>
@@ -549,14 +550,14 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                 <div id="admin-inbox-messages" style="max-height:420px;overflow:auto;border:1px solid #eef1f5;padding:12px;background:#fff;"></div>
                                 <div id="admin-inbox-fee-alert" class="note note-warning" style="display:none;margin-top:12px;">
                                     <strong>Condición de coordinación pendiente.</strong>
-                                    Usa respuestas rápidas mientras se habilita la mensajería.
+                                    La mensajería libre queda bloqueada solo por esta condición comercial. Puedes seguir usando las acciones formales.
                                 </div>
                                 <div id="admin-inbox-commission-alert" class="note note-info" style="display:none;margin-top:12px;">
                                     <strong>Estado de comisión.</strong>
                                     Esta solicitud tiene una condición comercial pendiente.
                                 </div>
                                 <div id="admin-inbox-quick-replies" style="display:none;margin-top:12px;">
-                                    <label>Quick replies</label>
+                                    <label>Acciones formales rápidas</label>
                                     <div class="btn-group btn-group-xs" role="group" style="display:flex;flex-wrap:wrap;gap:6px;">
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="DATES_AVAILABLE">Dates available</button>
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="DATES_NOT_AVAILABLE">Dates not available</button>
@@ -568,7 +569,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="FINAL_NOT_ELIGIBLE">NOT ELIGIBLE</button>
                                     </div>
                                     <div id="admin-inbox-structured-actions" style="display:none;margin-top:10px;">
-                                        <label>Structured proposals</label>
+                                        <label>Acciones estructuradas</label>
                                         <div class="btn-group btn-group-xs" role="group" style="display:flex;flex-wrap:wrap;gap:6px;">
                                             <button type="button" class="btn btn-default btn-xs" id="admin-open-request-info">Request additional info</button>
                                             <button type="button" class="btn btn-default btn-xs" id="admin-open-propose-quote">Propose quote adjustment</button>
@@ -586,7 +587,8 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                         <button type="submit" class="btn btn-primary btn-sm" style="margin-left:auto;"><i class="fa fa-paper-plane"></i> Enviar</button>
                                     </div>
                                     <div id="admin-chat-attach-status" class="text-muted"></div>
-                                    <div id="admin-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;">La mensajería estará disponible después de la revisión inicial. Usa primero las opciones visibles arriba.</div>
+                                    <div class="text-muted" style="margin-top:8px;">El chat queda libre desde el inicio. Usa las acciones formales de arriba cuando necesites registrar una decisión o solicitud con efecto operativo. Los mensajes libres no cambian el estado por sí solos.</div>
+                                    <div id="admin-inbox-compose-note" class="text-muted" style="margin-top:8px;display:none;"></div>
                                 </form>
                             </div>
                             <div class="inbox-content" id="admin-inbox-empty">

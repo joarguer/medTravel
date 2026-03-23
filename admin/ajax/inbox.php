@@ -355,46 +355,15 @@ function admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $f
     $feeLocked = !empty($feeLocked);
     $isAdmin = !empty($scope['is_admin']);
 
-    $status = 'pending';
-    if ($bookingRequestId > 0 && inbox_table_exists($conexion, 'booking_requests') && inbox_table_has_column($conexion, 'booking_requests', 'status')) {
-        $hasRequestsSoftDelete = inbox_table_has_column($conexion, 'booking_requests', 'is_deleted');
-        $statusSql = "SELECT status FROM booking_requests WHERE id = ?";
-        if ($hasRequestsSoftDelete) {
-            $statusSql .= " AND is_deleted = 0";
-        }
-        $statusSql .= " LIMIT 1";
-
-        $stmtStatus = mysqli_prepare($conexion, $statusSql);
-        if ($stmtStatus) {
-            mysqli_stmt_bind_param($stmtStatus, 'i', $bookingRequestId);
-            if (mysqli_stmt_execute($stmtStatus)) {
-                $statusRes = mysqli_stmt_get_result($stmtStatus);
-                $statusRow = $statusRes ? mysqli_fetch_assoc($statusRes) : null;
-                if ($statusRow) {
-                    $status = admin_inbox_status_label((string)($statusRow['status'] ?? 'pending'));
-                }
-            }
-            mysqli_stmt_close($stmtStatus);
-        }
-    }
-
-    $stageAllowsFreeMessage = admin_inbox_status_is_update($status);
-    $canSendFreeMessage = $isAdmin ? true : (!$feeLocked && $stageAllowsFreeMessage);
-    $reason = '';
-    if (!$isAdmin) {
-        if ($feeLocked) {
-            $reason = 'fee_locked';
-        } elseif (!$stageAllowsFreeMessage) {
-            $reason = 'initial_review';
-        }
-    }
+    $canSendFreeMessage = $isAdmin ? true : !$feeLocked;
+    $reason = $feeLocked ? 'fee_locked' : '';
 
     return [
-        'booking_status' => $status,
-        'stage_allows_free_message' => $stageAllowsFreeMessage,
+        'booking_status' => '',
+        'stage_allows_free_message' => true,
         'can_send_free_message' => $canSendFreeMessage,
         'blocked_reason' => $reason,
-        'notice' => $stageAllowsFreeMessage ? '' : 'Messaging will be available after the initial review. Please use the options above.',
+        'notice' => $feeLocked ? 'Free-form messaging is blocked by the coordination condition. Formal actions remain available.' : '',
     ];
 }
 

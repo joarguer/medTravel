@@ -1860,10 +1860,10 @@
                 $note.text(composeBusyMessage || 'Uploading document...');
                 $note.show();
             } else if (commissionGateActive) {
-                $note.text(commissionGateMessage || 'Free-form messaging is locked until the commission payment is completed. Please use the structured actions above.');
+                $note.text(commissionGateMessage || 'Free-form chat is blocked until the commission payment is completed. Formal actions remain available where applicable.');
                 $note.show();
             } else if (!freeMessageAllowed) {
-                $note.text(noticeMessage || lastComposeNotice || 'Free-form messaging is locked right now. Please use the structured actions above.');
+                $note.text(noticeMessage || lastComposeNotice || 'Free-form chat is blocked by a commercial condition. Formal actions remain available where applicable.');
                 $note.show();
             } else {
                 $note.hide();

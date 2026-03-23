@@ -81,6 +81,24 @@
 **Operational effect**
 - La documentacion y el backlog futuro deben describir Agenda como dominio de citas multiples por caso / item.
 - Las futuras implementaciones de Google Calendar y Google Meet deben colgarse de la cita, no del caso completo ni de Inbox.
+
+## 2026-03-23 — Inbox libre desde el inicio; acciones estructuradas siguen siendo formales
+
+**Outcome**
+- Se deja explícito que Inbox queda libre desde el inicio como canal de comunicación tanto en CARE como en ITEM, dentro de los scopes permitidos.
+- Se ratifica que las acciones estructuradas, quick actions y formularios siguen existiendo para registrar decisiones o solicitudes con efecto operativo.
+- Se deja asentado que el mensaje libre no cambia estados por sí solo.
+- Se confirma que los únicos bloqueos conversacionales válidos son comerciales o de alcance: fee gate, commission gate y ownership/scope/asignación.
+
+**Decision**
+- Inbox se trata canónicamente como comunicación libre y trazable, no como compuerta de estado por etapa.
+- Los cambios de estado deben seguir dependiendo de acciones formales explícitas y no del texto libre del chat.
+- La botonera y las tarjetas estructuradas se mantienen como soporte UX recomendado, no como requisito para poder conversar.
+- El runtime no debe usar `booking_requests.status` para bloquear conversación libre por etapa temprana.
+
+**Operational effect**
+- UX, ayudas y mensajes del inbox deben explicar que el chat es libre y que las acciones formales sirven para registrar side effects.
+- La documentación de ejecución y backlog no debe seguir describiendo ITEM como canal estructurado obligatorio en early stage.
 - Las futuras validaciones de agenda deben migrar hacia chequeos por staff asignado, manteniendo compatibilidad transitoria con controles globales legacy.
 
 ## 2026-03-22 — Owner/admin visible no equivale a staff clínico asignable

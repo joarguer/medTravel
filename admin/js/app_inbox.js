@@ -1934,7 +1934,6 @@
     function setFeeGateState(enabled) {
         feeGateActive = !!enabled;
         var $alert = $('#admin-inbox-fee-alert');
-        var $quick = $('#admin-inbox-quick-replies');
 
         if ($alert.length) {
             if (feeGateActive) {
@@ -1942,9 +1941,6 @@
             } else {
                 $alert.hide();
             }
-        }
-        if ($quick.length && feeGateActive) {
-            $quick.show();
         }
     }
 
@@ -1970,6 +1966,7 @@
         freeMessageAllowed = !!canSendFreeMessage;
         var permissionBlocked = feeGateActive || !freeMessageAllowed;
         var composeBlocked = permissionBlocked || composeBusy;
+        var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
 
         var $quick = $('#admin-inbox-quick-replies');
         var $msg = $('#admin-inbox-message');
@@ -1980,7 +1977,7 @@
         var $note = $('#admin-inbox-compose-note');
 
         if ($quick.length) {
-            if (composeBlocked) {
+            if (isItemThread) {
                 $quick.show();
             } else {
                 $quick.hide();
@@ -2010,17 +2007,14 @@
                 $note.text(composeBusyMessage || 'Uploading document...');
                 $note.show();
             } else if (!freeMessageAllowed) {
-                var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
                 var noteText = '';
                 if (feeGateActive) {
-                    noteText = 'La condición de coordinación sigue pendiente.';
+                    noteText = 'La mensajería libre está bloqueada por la condición comercial de coordinación. Puedes seguir usando las acciones formales.';
                 } else if (typeof noticeMessage === 'string' && noticeMessage.trim() !== '') {
                     noteText = noticeMessage;
                     lastComposeNotice = noticeMessage;
                 } else if (lastComposeNotice) {
                     noteText = lastComposeNotice;
-                } else if (!isItemThread) {
-                    noteText = 'Messaging will be available after the initial review. Please use the options above.';
                 }
                 if (noteText) {
                     $note.text(noteText);
@@ -2033,14 +2027,13 @@
             }
         }
 
-        toggleStructuredActionButtons(composeBlocked);
+        toggleStructuredActionButtons(isItemThread);
     }
 
-    function toggleStructuredActionButtons(composeBlocked) {
+    function toggleStructuredActionButtons(isItemThread) {
         var $box = $('#admin-inbox-structured-actions');
         if (!$box.length) return;
-        var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
-        if (composeBlocked && isItemThread) {
+        if (isItemThread) {
             $box.show();
         } else {
             $box.hide();

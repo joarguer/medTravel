@@ -537,25 +537,23 @@ Evidencia:
 ##### CARE (MedTravel Coordination)
 - Canal Cliente ↔ MedTravel.
 - Siempre visible en cliente.
-- En early stage el cliente puede enviar mensajes libres.
-- CARE no aplica stage gate (`FREE_MESSAGE_BLOCKED`).
-- CARE puede quedar sujeto a fee gate (`FEE_REQUIRED`) según la solicitud.
+- El inbox funciona como canal libre de comunicación desde el inicio.
+- CARE no aplica stage gate conversacional.
+- Los cambios de estado no dependen del chat libre.
 
 ##### ITEM (Provider Negotiation)
 - Canal Cliente ↔ Proveedor (médico o complementario).
-- En early stage:
-  - Cliente: solo estructurado.
-  - Proveedor: solo estructurado.
-  - Sin mensaje libre para ITEM.
-- En etapa avanzada del item, se habilita mensaje libre en ITEM.
+- ITEM también queda libre como canal de comunicación desde el inicio.
+- Fee gate, commission gate y scope siguen siendo los bloqueos reales.
+- Las acciones estructuradas se mantienen como vía formal opcional para registrar decisiones o solicitudes con efecto operativo.
 
 #### 2. Early Stage Rules (Canonical)
 
 | Rol | CARE | ITEM |
 |---|---|---|
-| Cliente | Libre (si no hay fee lock) | Estructurado |
-| Proveedor | N/A | Estructurado |
-| Admin | Libre en CARE | Operación por estado del item |
+| Cliente | Libre | Libre |
+| Proveedor | N/A | Libre |
+| Admin | Libre en CARE | Libre dentro de su scope |
 
 #### 3. Structured Negotiation Actions
 
@@ -578,19 +576,22 @@ Evidencia:
 - Efecto de estado:
   - Structured actions de provider llevan ITEM a `awaiting_client`.
   - Respuestas cliente mueven a `client_accepted`, `provider_proposed_change` o `client_rejected`.
+- Mensaje libre:
+  - Sirve para comunicación y trazabilidad conversacional.
+  - No cambia estados por sí solo.
 - Ownership:
   - Validación por `thread_type=ITEM` + scope de proveedor/cliente por `item_id`.
 
 #### 4. UI Canonical Behavior
 
 ##### Provider Inbox
-- Compose bloqueado en early stage para ITEM.
+- Chat libre desde el inicio dentro del scope permitido.
 - Tarjetas estructuradas visuales para mensajes con prefijo.
 - Panel de ayuda colapsable en español.
 
 ##### Client Inbox
-- CARE permite mensaje libre en early stage (si no hay fee lock).
-- ITEM mantiene bloqueo en early stage.
+- Chat libre desde el inicio.
+- Fee gate y commission gate siguen bloqueando mensajería libre cuando apliquen.
 - Encabezados humanizados (sin `Item #X - Request #Y`).
 
 #### 5. Canonical UX Principle
@@ -601,9 +602,9 @@ Evidencia:
 1. Creación de booking por cliente.
 2. Generación y visibilidad de hilos CARE e ITEM.
 3. Coordinación inicial en CARE (cliente-medtravel).
-4. Negociación estructurada por ITEM en etapa temprana.
+4. Comunicación libre por ITEM más acciones formales opcionales.
 5. Respuestas del cliente (acciones y documentos).
-6. Evolución de estado del item y habilitación de mensaje libre al avanzar etapa.
+6. Evolución de estado del item a través de acciones estructuradas y formularios formales.
 
 ### Próximos pasos
 - [ ] Semáforo visual en portal cliente por item.
