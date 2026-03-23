@@ -16,6 +16,7 @@
 - [MODELO DE NEGOCIO actualizado](../../MODELO_NEGOCIO_ACTUALIZADO.md)
 - [NEXT_STEPS_SERVICES (ejecución / backlog)](../../NEXT_STEPS_SERVICES.md)
 - [DEV_CONTEXT (contexto técnico y runtime)](../../DEV_CONTEXT.md)
+- [Modelo canónico de Calendar / Meet](05_CALENDAR_MEET_INTEGRATION_MODEL.md)
 
 ## Docs derivados importantes
 

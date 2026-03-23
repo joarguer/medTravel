@@ -88,6 +88,9 @@ Alias al backlog / pasos de ejecución canónico.
 
 ### Frente especifico — Citas, agenda y capacidades externas
 
+Documento de referencia:
+- Ver [05_CALENDAR_MEET_INTEGRATION_MODEL.md](05_CALENDAR_MEET_INTEGRATION_MODEL.md)
+
 #### Canon cerrado
 
 - DONE 2026-03-22: una solicitud / caso no equivale a una sola cita
