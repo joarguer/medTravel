@@ -1,5 +1,33 @@
 # Changelog Decisions
 
+## 2026-03-23 — Aceptación MedTravel no equivale a consentimiento OAuth Google
+
+**Outcome**
+- Se deja explícita la separación entre consentimiento funcional dentro de MedTravel y autorización técnica sobre Google Calendar.
+- Se resuelve la ambigüedad potencial entre “aceptar una cita” y “autorizar acceso a Google”.
+- Se canoniza que Fase 1 puede operar solo con conexión Google del admin organizer de MedTravel.
+- Se deja explícito que paciente y provider / médico / staff no están obligados a conectar Google para que exista la reunión en Fase 1.
+- Se deja preparada la evolución futura a conexiones OAuth opcionales por actor sin mezclar identidades ni tokens.
+
+**Decision**
+- Aceptar una cita, reunión o slot dentro de MedTravel representa consentimiento funcional del flujo de coordinación, no consentimiento OAuth implícito.
+- El acceso técnico a Google Calendar requiere autorización OAuth explícita del actor titular de la cuenta Google correspondiente.
+- En Fase 1, el sistema debe poder operar aunque solo el admin de MedTravel tenga conexión Google activa.
+- En ese escenario, el admin organizer crea el evento y paciente / provider / médico / staff participan como invitados.
+- En fases posteriores, cada actor podrá conectar opcionalmente su propia cuenta Google y MedTravel solo podrá usarla dentro del alcance autorizado por ese actor y por los scopes concedidos.
+- La aceptación futura de una propuesta de reunión dentro de MedTravel puede disparar sincronización solo si el actor ya conectó Google; si no, la conexión debe pedirse como paso adicional y nunca inferirse.
+- Esta decisión no altera la frontera del producto: Calendar / Meet siguen siendo infraestructura de agenda y coordinación, no atención médica.
+
+**Transition note**
+- Esta decisión cierra una regla de producto y arquitectura; no implica implementación runtime automática de OAuth por actor.
+- La Fase 1 mantiene organizer admin MedTravel como salida mínima viable.
+- La granularidad posterior por actor queda permitida, pero condicionada a conexión explícita y aislamiento técnico por usuario.
+
+**Operational effect**
+- El canon de Calendar / Meet debe describir de forma explícita que aceptación MedTravel != OAuth Google.
+- El backlog debe separar la operación Fase 1 por admin de la futura conexión opcional por actor.
+- Las futuras UX de aceptación, propuesta de cita y sincronización no deben inferir consentimiento técnico desde acciones funcionales internas.
+
 ## 2026-03-23 — Integración inicial Google Calendar / Meet arranca desde admin MedTravel por fases
 
 **Outcome**

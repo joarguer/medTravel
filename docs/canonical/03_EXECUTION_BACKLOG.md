@@ -103,6 +103,9 @@ Documento de referencia:
 - DONE 2026-03-23: la Fase 1 de integracion Google Calendar / Meet se canoniza con organizer inicial en admin autenticado de MedTravel usando Google Calendar API + Meet al crear evento
 - DONE 2026-03-23: la Fase 2 se reserva para Google Meet API avanzada y metadatos extendidos
 - DONE 2026-03-23: seguridad minima canonizada para OAuth admin: tokens separados por admin, refresh token cifrado, validacion `state`, scopes minimos y sin secretos en frontend
+- DONE 2026-03-23: queda canonizado que aceptacion funcional en MedTravel no equivale a consentimiento OAuth Google
+- DONE 2026-03-23: queda canonizado que Fase 1 opera aunque solo admin MedTravel tenga conexion Google; paciente y provider / staff pueden asistir como invitados sin conectar Google
+- DONE 2026-03-23: queda canonizado que fases posteriores pueden habilitar conexion Google opcional por actor con aislamiento por usuario y scopes concedidos
 
 #### Deuda de modelo
 
@@ -113,6 +116,8 @@ Documento de referencia:
 - [ ] Preparar soporte para Meet link por cita cuando corresponda
 - [ ] Persistir organizer admin MedTravel de Fase 1 y referencias externas por cita
 - [ ] Persistir conexiones OAuth Google separadas por admin con cifrado de refresh token
+- [ ] Definir UX canónica para solicitar conexión Google adicional cuando un actor acepte en MedTravel pero aún no haya autorizado OAuth
+- [ ] Definir modelo canónico de conexiones OAuth opcionales por actor manteniendo aislamiento entre admin, provider, staff y paciente
 - [ ] Resolver trazabilidad entre acciones del Inbox y estados de cita sin mezclar dominios
 - [ ] Definir politica canonica de no solapamiento por medico / staff asignado
 - [ ] Definir convivencia transitoria entre `calendar_capacity` global y futura disponibilidad fina por staff
@@ -125,6 +130,7 @@ Documento de referencia:
 - [ ] Implementar Fase 1 con Google Calendar API + Meet al crear evento desde admin MedTravel
 - [ ] Diseñar storage y callbacks OAuth 2.0 Web Server Flow para admins MedTravel
 - [ ] Invitar a paciente y provider / staff como attendees sin convertir a MedTravel en actor clinico
+- [ ] Diseñar el paso adicional de conexion Google cuando un flujo futuro requiera sincronizacion sobre un actor que ya acepto en MedTravel pero no otorgo OAuth
 - [ ] Diseñar Fase 2 para Google Meet API avanzada sin bloquear la salida de Fase 1
 - [ ] Diseñar integracion con Google Calendar / Meet como extension del flujo de cita, no como modulo paralelo
 - [ ] Definir estrategia de compatibilidad con runtime actual de `app_calendar.php` y `admin/ajax/calendar.php`
