@@ -326,8 +326,7 @@ $isConnected = !empty($connection['is_connected']);
         </div>
     </div>
 
-    <?php echo $global_theme_plugins; ?>
-    <?php echo $global_page_level_plugins; ?>
-    <?php echo $theme_global_scripts; ?>
+    <?php echo $theme_global_js; ?>
+    <?php echo $theme_layout_js; ?>
 </body>
 </html>
