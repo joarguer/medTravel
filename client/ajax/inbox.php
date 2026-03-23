@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../inc/email_template.php';
 require_once __DIR__ . '/../../inc/interaction_email.php';
 require_once __DIR__ . '/../../inc/fee_gate.php';
 require_once __DIR__ . '/../../inc/commission_gate.php';
+require_once __DIR__ . '/../../inc/google_calendar.php';
 
 function client_inbox_err($message, $code = 400, $errorCode = '')
 {
@@ -27,6 +28,187 @@ function client_inbox_ok($data = [])
 {
     echo json_encode(array_merge(['ok' => true], $data));
     exit;
+}
+
+function client_inbox_calendar_event_columns($conexion)
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $cache = [
+        'organizer_admin_user_id' => client_table_has_column($conexion, 'calendar_events', 'organizer_admin_user_id'),
+        'google_event_id' => client_table_has_column($conexion, 'calendar_events', 'google_event_id'),
+        'google_html_link' => client_table_has_column($conexion, 'calendar_events', 'google_html_link'),
+        'google_meet_url' => client_table_has_column($conexion, 'calendar_events', 'google_meet_url'),
+        'organizer_email' => client_table_has_column($conexion, 'calendar_events', 'organizer_email'),
+    ];
+
+    return $cache;
+}
+
+function client_inbox_fetch_latest_proposed_meeting($conexion, $itemId, $ownerScope)
+{
+    if (!inbox_table_exists($conexion, 'calendar_events')) {
+        return null;
+    }
+
+    $columns = client_inbox_calendar_event_columns($conexion);
+    $organizerAdminExpr = $columns['organizer_admin_user_id'] ? 'ce.organizer_admin_user_id' : 'NULL';
+    $googleEventExpr = $columns['google_event_id'] ? 'ce.google_event_id' : "''";
+    $googleHtmlExpr = $columns['google_html_link'] ? 'ce.google_html_link' : "''";
+    $googleMeetExpr = $columns['google_meet_url'] ? 'ce.google_meet_url' : "''";
+    $organizerEmailExpr = $columns['organizer_email'] ? 'ce.organizer_email' : "''";
+    $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+
+    $sql = "SELECT ce.id, ce.request_id, ce.item_id, ce.title, ce.description, ce.start_at, ce.end_at, ce.status,
+                   {$organizerAdminExpr} AS organizer_admin_user_id,
+                   {$googleEventExpr} AS google_event_id,
+                   {$googleHtmlExpr} AS google_html_link,
+                   {$googleMeetExpr} AS google_meet_url,
+                   {$organizerEmailExpr} AS organizer_email,
+                   " . (client_table_has_column($conexion, 'booking_requests', 'email') ? 'br.email' : "''") . " AS client_email
+            FROM calendar_events ce
+            INNER JOIN booking_requests br ON br.id = ce.request_id
+            INNER JOIN booking_request_items bri ON bri.id = ce.item_id AND bri.booking_request_id = br.id
+            WHERE ce.event_type = 'ITEM'
+              AND ce.item_id = ?
+              AND ce.status = 'proposed'
+              AND (" . $ownerScope['sql'] . ")";
+    if ($hasItemsSoftDelete) {
+        $sql .= ' AND bri.is_deleted = 0';
+    }
+    if ($hasBookingSoftDelete) {
+        $sql .= ' AND br.is_deleted = 0';
+    }
+    $sql .= ' ORDER BY ce.start_at DESC, ce.id DESC LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+
+    $types = 'i' . $ownerScope['types'];
+    $params = array_merge([$itemId], $ownerScope['params']);
+    if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return null;
+    }
+
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ?: null;
+}
+
+function client_inbox_cancel_proposed_meeting($conexion, $eventId)
+{
+    $eventId = (int)$eventId;
+    if ($eventId <= 0 || !inbox_table_exists($conexion, 'calendar_events')) {
+        return;
+    }
+
+    $stmt = mysqli_prepare($conexion, "UPDATE calendar_events SET status = 'cancelled', updated_at = NOW() WHERE id = ? LIMIT 1");
+    if (!$stmt) {
+        return;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $eventId);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+}
+
+function client_inbox_confirm_google_meeting($conexion, array $eventRow, $requestId, $itemId)
+{
+    $eventId = (int)($eventRow['id'] ?? 0);
+    $organizerAdminUserId = (int)($eventRow['organizer_admin_user_id'] ?? 0);
+    if ($organizerAdminUserId <= 0) {
+        $organizerAdminUserId = (int)google_calendar_pick_connected_admin_user_id($conexion, 0);
+    }
+    if ($organizerAdminUserId <= 0) {
+        return ['ok' => false, 'error' => 'no_google_admin_connected'];
+    }
+
+    $timezone = 'America/Bogota';
+    $attendees = [];
+    $clientEmail = trim((string)($eventRow['client_email'] ?? ''));
+    $providerEmail = function_exists('interaction_email_fetch_provider_email') ? trim((string)interaction_email_fetch_provider_email($conexion, $itemId)) : '';
+    if (filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+        $attendees[] = ['email' => $clientEmail];
+    }
+    if (filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
+        $attendees[] = ['email' => $providerEmail];
+    }
+
+    $startDate = new DateTimeImmutable((string)$eventRow['start_at'], new DateTimeZone($timezone));
+    $endDate = new DateTimeImmutable((string)$eventRow['end_at'], new DateTimeZone($timezone));
+    $result = google_calendar_create_event_with_meet($conexion, $organizerAdminUserId, [
+        'summary' => (string)($eventRow['title'] ?? ('Videollamada MedTravel - Item #' . $itemId)),
+        'description' => (string)($eventRow['description'] ?? ('Solicitud #' . $requestId . ' / Item #' . $itemId)),
+        'start_at' => $startDate->format(DateTimeInterface::RFC3339),
+        'end_at' => $endDate->format(DateTimeInterface::RFC3339),
+        'timezone' => $timezone,
+        'attendees' => $attendees,
+    ]);
+    if (empty($result['ok'])) {
+        return $result;
+    }
+
+    $columns = client_inbox_calendar_event_columns($conexion);
+    $setParts = ["status = 'confirmed'", 'updated_at = NOW()'];
+    $types = '';
+    $params = [];
+    if ($columns['organizer_admin_user_id']) {
+        $setParts[] = 'organizer_admin_user_id = ?';
+        $types .= 'i';
+        $params[] = $organizerAdminUserId;
+    }
+    if ($columns['google_event_id']) {
+        $setParts[] = 'google_event_id = ?';
+        $types .= 's';
+        $params[] = (string)($result['event_id'] ?? '');
+    }
+    if ($columns['google_html_link']) {
+        $setParts[] = 'google_html_link = ?';
+        $types .= 's';
+        $params[] = (string)($result['html_link'] ?? '');
+    }
+    if ($columns['google_meet_url']) {
+        $setParts[] = 'google_meet_url = ?';
+        $types .= 's';
+        $params[] = (string)($result['meet_url'] ?? '');
+    }
+    if ($columns['organizer_email']) {
+        $setParts[] = 'organizer_email = ?';
+        $types .= 's';
+        $params[] = (string)($result['organizer_email'] ?? '');
+    }
+
+    $sql = 'UPDATE calendar_events SET ' . implode(', ', $setParts) . ' WHERE id = ? LIMIT 1';
+    $types .= 'i';
+    $params[] = $eventId;
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return ['ok' => false, 'error' => 'calendar_event_update_prepare_failed'];
+    }
+    if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        return ['ok' => false, 'error' => 'calendar_event_update_failed: ' . $err];
+    }
+    mysqli_stmt_close($stmt);
+
+    return [
+        'ok' => true,
+        'calendar_event_id' => $eventId,
+        'event_id' => (string)($result['event_id'] ?? ''),
+        'html_link' => (string)($result['html_link'] ?? ''),
+        'meet_url' => (string)($result['meet_url'] ?? ''),
+        'organizer_email' => (string)($result['organizer_email'] ?? ''),
+        'start_at' => (string)($eventRow['start_at'] ?? ''),
+        'end_at' => (string)($eventRow['end_at'] ?? ''),
+    ];
 }
 
 function client_inbox_compose_locked($reason, $ctx, $clientUserId)
@@ -1100,6 +1282,13 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
         client_inbox_err('invalid_item_id', 422);
     }
 
+    $meetingRow = client_inbox_fetch_latest_proposed_meeting($conexion, $itemId, $ownerScope);
+    if (!$meetingRow) {
+        client_inbox_err('meeting_proposal_not_found', 409);
+    }
+
+    mysqli_begin_transaction($conexion);
+
     $targetStatus = ($action === 'accept_dates') ? 'awaiting_client' : 'provider_proposed_change';
     $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
@@ -1125,25 +1314,47 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
 
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
+        mysqli_rollback($conexion);
         client_inbox_err('prepare_failed', 500);
     }
     if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
+        mysqli_rollback($conexion);
         client_inbox_err('update_failed: ' . $err, 500);
     }
     $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
     if ($affected <= 0) {
+        mysqli_rollback($conexion);
         client_inbox_err('not_found_or_no_change', 404);
     }
 
+    $confirmedMeeting = null;
+    if ($action === 'accept_dates') {
+        $confirmedMeeting = client_inbox_confirm_google_meeting($conexion, $meetingRow, (int)$ctx['request_id'], $itemId);
+        if (empty($confirmedMeeting['ok'])) {
+            mysqli_rollback($conexion);
+            client_inbox_err((string)($confirmedMeeting['error'] ?? 'meeting_google_create_failed'), 409);
+        }
+    } else {
+        client_inbox_cancel_proposed_meeting($conexion, (int)($meetingRow['id'] ?? 0));
+    }
+
     if (!inbox_table_exists($conexion, 'inbox_messages')) {
+        mysqli_rollback($conexion);
         client_inbox_err('inbox_messages_not_available', 409);
     }
 
     $message = ($action === 'accept_dates')
-        ? '[ACTION] Client accepted proposed dates'
+        ? '[MEETING_CONFIRMED] ' . json_encode([
+            'start_at' => (string)($confirmedMeeting['start_at'] ?? ''),
+            'end_at' => (string)($confirmedMeeting['end_at'] ?? ''),
+            'event_id' => (string)($confirmedMeeting['event_id'] ?? ''),
+            'html_link' => (string)($confirmedMeeting['html_link'] ?? ''),
+            'meet_url' => (string)($confirmedMeeting['meet_url'] ?? ''),
+            'organizer_email' => (string)($confirmedMeeting['organizer_email'] ?? ''),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         : '[ACTION] Client rejected proposed dates';
 
     $stmtMsg = mysqli_prepare(
@@ -1153,6 +1364,7 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
          VALUES (?, ?, ?, ?, 'CLIENT', ?, ?)"
     );
     if (!$stmtMsg) {
+        mysqli_rollback($conexion);
         client_inbox_err('prepare_failed', 500);
     }
     $threadId = (string)$ctx['thread_id'];
@@ -1162,11 +1374,14 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
     if (!mysqli_stmt_execute($stmtMsg)) {
         $err = mysqli_stmt_error($stmtMsg);
         mysqli_stmt_close($stmtMsg);
+        mysqli_rollback($conexion);
         client_inbox_err('insert_failed: ' . $err, 500);
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
     $createdAt = date('Y-m-d H:i:s');
+
+    mysqli_commit($conexion);
 
     client_inbox_ok([
         'thread_id' => $threadId,
@@ -1174,6 +1389,7 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
         'request_id' => $requestId,
         'booking_id' => $requestId,
         'item_id' => $itemId,
+        'meeting' => $confirmedMeeting,
         'message' => [
             'id' => $messageId,
             'sender' => 'client',

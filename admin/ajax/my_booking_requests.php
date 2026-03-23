@@ -6,6 +6,7 @@ require_once '../include/email_config.php';
 require_once __DIR__ . '/../../inc/email_template.php';
 require_once __DIR__ . '/../../inc/inbox_utils.php';
 require_once __DIR__ . '/../../inc/fee_gate.php';
+require_once __DIR__ . '/../../inc/google_calendar.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -135,6 +136,166 @@ function is_valid_date_ymd($value)
         return false;
     }
     return checkdate((int)$parts[1], (int)$parts[2], (int)$parts[0]);
+}
+
+function normalize_datetime_local_to_mysql($value)
+{
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '';
+    }
+
+    $formats = ['Y-m-d\TH:i', 'Y-m-d\TH:i:s', 'Y-m-d H:i', 'Y-m-d H:i:s'];
+    foreach ($formats as $format) {
+        $date = DateTimeImmutable::createFromFormat($format, $value);
+        if ($date instanceof DateTimeImmutable) {
+            return $date->format('Y-m-d H:i:s');
+        }
+    }
+
+    return '';
+}
+
+function my_booking_calendar_event_columns($conexion)
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $cache = [
+        'organizer_admin_user_id' => table_has_column($conexion, 'calendar_events', 'organizer_admin_user_id'),
+        'google_event_id' => table_has_column($conexion, 'calendar_events', 'google_event_id'),
+        'google_html_link' => table_has_column($conexion, 'calendar_events', 'google_html_link'),
+        'google_meet_url' => table_has_column($conexion, 'calendar_events', 'google_meet_url'),
+        'organizer_email' => table_has_column($conexion, 'calendar_events', 'organizer_email'),
+    ];
+
+    return $cache;
+}
+
+function my_booking_pick_operational_admin_user_id($conexion, $preferredAdminUserId = 0)
+{
+    return function_exists('google_calendar_pick_connected_admin_user_id')
+        ? (int)google_calendar_pick_connected_admin_user_id($conexion, (int)$preferredAdminUserId)
+        : 0;
+}
+
+function my_booking_cancel_pending_meeting_events($conexion, $itemId)
+{
+    if (!table_exists($conexion, 'calendar_events')) {
+        return;
+    }
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        "UPDATE calendar_events
+         SET status = 'cancelled', updated_at = NOW()
+         WHERE event_type = 'ITEM'
+           AND item_id = ?
+           AND status IN ('proposed', 'scheduled')"
+    );
+    if (!$stmt) {
+        return;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'i', $itemId);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+}
+
+function my_booking_create_proposed_meeting_event($conexion, array $itemRow, array $meetingData, $preferredAdminUserId = 0)
+{
+    if (!table_exists($conexion, 'calendar_events')) {
+        return ['ok' => false, 'error' => 'calendar_events_not_available'];
+    }
+
+    $itemId = (int)($itemRow['id'] ?? 0);
+    $bookingRequestId = (int)($itemRow['booking_request_id'] ?? 0);
+    $providerId = (int)($itemRow['provider_id'] ?? 0);
+    $clientUserId = (int)($itemRow['client_user_id'] ?? 0);
+    $itemName = trim((string)($itemRow['item_name'] ?? ''));
+    $providerNotes = trim((string)($meetingData['provider_notes'] ?? ''));
+    $startAt = trim((string)($meetingData['start_at'] ?? ''));
+    $endAt = trim((string)($meetingData['end_at'] ?? ''));
+    $timezone = trim((string)($meetingData['timezone'] ?? 'America/Bogota'));
+
+    if ($itemId <= 0 || $bookingRequestId <= 0 || $clientUserId <= 0 || $startAt === '' || $endAt === '') {
+        return ['ok' => false, 'error' => 'invalid_meeting_context'];
+    }
+
+    $organizerAdminUserId = my_booking_pick_operational_admin_user_id($conexion, $preferredAdminUserId);
+    if ($organizerAdminUserId <= 0) {
+        return ['ok' => false, 'error' => 'no_google_admin_connected'];
+    }
+
+    $columns = my_booking_calendar_event_columns($conexion);
+    my_booking_cancel_pending_meeting_events($conexion, $itemId);
+
+    $title = $itemName !== '' ? ('Videollamada MedTravel - ' . $itemName) : ('Videollamada MedTravel - Item #' . $itemId);
+    $description = 'Solicitud #' . $bookingRequestId . "\n"
+        . 'Item #' . $itemId . "\n"
+        . 'Reunión propuesta desde Mis Solicitudes.' . ($providerNotes !== '' ? "\nNotas: " . $providerNotes : '')
+        . "\nZona horaria: " . $timezone;
+    $threadId = inbox_thread_id('ITEM', $bookingRequestId, $itemId);
+    $createdByUserId = current_admin_user_id();
+    $createdByRole = is_role_admin_session() ? 'ADMIN' : 'PROVIDER';
+
+    $insertColumns = [
+        'title', 'description', 'start_at', 'end_at', 'all_day', 'event_type', 'request_id', 'item_id',
+        'thread_id', 'created_by_role', 'created_by_user_id', 'provider_id', 'client_user_id', 'status', 'updated_at'
+    ];
+    $placeholders = ['?', '?', '?', '?', '?', '?', '?', '?', '?', '?', '?', '?', '?', '?', 'NOW()'];
+    $types = 'ssssisiissiiis';
+    $params = [
+        $title,
+        $description,
+        $startAt,
+        $endAt,
+        0,
+        'ITEM',
+        $bookingRequestId,
+        $itemId,
+        $threadId,
+        $createdByRole,
+        $createdByUserId,
+        $providerId,
+        $clientUserId,
+        'proposed',
+    ];
+
+    if ($columns['organizer_admin_user_id']) {
+        $insertColumns[] = 'organizer_admin_user_id';
+        $placeholders[] = '?';
+        $types .= 'i';
+        $params[] = $organizerAdminUserId;
+    }
+
+    $sql = 'INSERT INTO calendar_events (' . implode(', ', $insertColumns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return ['ok' => false, 'error' => 'db_prepare_error'];
+    }
+
+    bind_stmt_params($stmt, $types, $params);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        return ['ok' => false, 'error' => 'db_error: ' . $err];
+    }
+
+    $calendarEventId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+
+    return [
+        'ok' => true,
+        'calendar_event_id' => $calendarEventId,
+        'organizer_admin_user_id' => $organizerAdminUserId,
+        'title' => $title,
+        'start_at' => $startAt,
+        'end_at' => $endAt,
+        'timezone' => $timezone,
+    ];
 }
 
 function normalize_message_text($text)
@@ -530,6 +691,12 @@ function fetch_calendar_event_trace_map($conexion, $itemIds)
         return [];
     }
 
+    $eventColumns = my_booking_calendar_event_columns($conexion);
+    $googleEventExpr = $eventColumns['google_event_id'] ? 'ce.google_event_id' : "''";
+    $googleHtmlLinkExpr = $eventColumns['google_html_link'] ? 'ce.google_html_link' : "''";
+    $googleMeetExpr = $eventColumns['google_meet_url'] ? 'ce.google_meet_url' : "''";
+    $organizerEmailExpr = $eventColumns['organizer_email'] ? 'ce.organizer_email' : "''";
+
     $sql = "SELECT
                 ce.id,
                 ce.item_id,
@@ -538,6 +705,10 @@ function fetch_calendar_event_trace_map($conexion, $itemIds)
                 ce.start_at,
                 ce.end_at,
                 ce.status,
+                {$googleEventExpr} AS google_event_id,
+                {$googleHtmlLinkExpr} AS google_html_link,
+                {$googleMeetExpr} AS google_meet_url,
+                {$organizerEmailExpr} AS organizer_email,
                 ce.created_at,
                 ce.updated_at
             FROM calendar_events ce
@@ -621,6 +792,10 @@ function fetch_calendar_event_trace_map($conexion, $itemIds)
                 'title' => (string)($nextEvent['title'] ?? ''),
                 'start_at' => (string)($nextEvent['start_at'] ?? ''),
                 'status' => (string)($nextEvent['status'] ?? ''),
+                'google_event_id' => (string)($nextEvent['google_event_id'] ?? ''),
+                'google_html_link' => (string)($nextEvent['google_html_link'] ?? ''),
+                'google_meet_url' => (string)($nextEvent['google_meet_url'] ?? ''),
+                'organizer_email' => (string)($nextEvent['organizer_email'] ?? ''),
             ] : null,
             'appointment_status' => $appointmentStatus,
             'reschedule_count' => $rescheduleCount,
@@ -1043,18 +1218,24 @@ function build_medical_provider_scope($conexion, $providerId)
 function fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete)
 {
     $assignedStaffExpr = table_has_column($conexion, 'booking_request_items', 'assigned_staff_id') ? 'bri.assigned_staff_id' : 'NULL';
+    $providerIdExpr = table_has_column($conexion, 'booking_request_items', 'provider_id') ? 'bri.provider_id' : 'NULL';
+    $clientUserIdExpr = table_has_column($conexion, 'booking_requests', 'client_user_id') ? 'br.client_user_id' : 'NULL';
     $sql = "SELECT
                 bri.id,
                 bri.booking_request_id,
+                {$providerIdExpr} AS provider_id,
+                {$clientUserIdExpr} AS client_user_id,
                 {$assignedStaffExpr} AS assigned_staff_id,
                 CASE
                     WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
                     ELSE bri.item_status
                 END AS current_status,
-                COALESCE(NULLIF(bri.currency, ''), NULLIF(o.currency, ''), NULLIF(ms.currency, ''), 'USD') AS base_currency
+                COALESCE(NULLIF(bri.currency, ''), NULLIF(o.currency, ''), NULLIF(ms.currency, ''), 'USD') AS base_currency,
+                COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name
             FROM booking_request_items bri
             INNER JOIN booking_requests br ON br.id = bri.booking_request_id
             LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+            LEFT JOIN service_catalog sc ON sc.id = o.service_id
             LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
             WHERE bri.id = ?";
 
@@ -2894,19 +3075,32 @@ if ($action === 'propose_dates') {
     $finalTypes = $types . $scopeTypes;
     $finalParams = array_merge($params, $scopeParams);
 
+    if ($targetStatus === 'provider_proposed_change') {
+        mysqli_begin_transaction($conexion);
+    }
+
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
+        if ($targetStatus === 'provider_proposed_change') {
+            mysqli_rollback($conexion);
+        }
         json_err('db_prepare_error', 500);
     }
     bind_stmt_params($stmt, $finalTypes, $finalParams);
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
+        if ($targetStatus === 'provider_proposed_change') {
+            mysqli_rollback($conexion);
+        }
         json_err('db_error: ' . $err, 500);
     }
     $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
     if ($affected <= 0) {
+        if ($targetStatus === 'provider_proposed_change') {
+            mysqli_rollback($conexion);
+        }
         json_err('not_found_or_no_change', 404);
     }
 
@@ -3280,6 +3474,8 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         $providerResponseBy = null;
     }
 
+    $meetingResult = null;
+
     $setParts = ['bri.item_status = ?'];
     $types = 's';
     $params = [$targetStatus];
@@ -3325,10 +3521,35 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
             json_err('provider_notes_required', 422);
         }
 
+        $meetingStartRaw = trim((string)($_POST['proposed_start_at'] ?? ''));
+        $meetingEndRaw = trim((string)($_POST['proposed_end_at'] ?? ''));
+        $meetingStart = normalize_datetime_local_to_mysql($meetingStartRaw);
+        $meetingEnd = normalize_datetime_local_to_mysql($meetingEndRaw);
+        $meetingTimezone = trim((string)($itemRow['timezone'] ?? 'America/Bogota'));
+        if ($meetingTimezone === '') {
+            $meetingTimezone = 'America/Bogota';
+        }
+        if ($meetingStart === '' || $meetingEnd === '') {
+            json_err('meeting_schedule_required', 422);
+        }
+        if (strtotime($meetingEnd) <= strtotime($meetingStart)) {
+            json_err('invalid_meeting_range', 422);
+        }
+        if (my_booking_pick_operational_admin_user_id($conexion, current_admin_user_id()) <= 0) {
+            json_err('no_google_admin_connected', 409);
+        }
+
         $dateFrom = trim((string)($_POST['proposed_date_from'] ?? ''));
         $dateTo = trim((string)($_POST['proposed_date_to'] ?? ''));
         $priceRaw = trim((string)($_POST['proposed_price'] ?? ''));
         $currency = strtoupper(trim((string)($_POST['proposed_currency'] ?? '')));
+
+        if ($dateFrom === '') {
+            $dateFrom = substr($meetingStart, 0, 10);
+        }
+        if ($dateTo === '') {
+            $dateTo = substr($meetingEnd, 0, 10);
+        }
 
         if (!is_valid_date_ymd($dateFrom) || !is_valid_date_ymd($dateTo)) {
             json_err('invalid_proposed_dates', 422);
@@ -3459,6 +3680,46 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     if ($bookingRequestId > 0) {
         sync_booking_fee_gate_state($conexion, $bookingRequestId, $hasRequestsSoftDelete);
         rollup_booking_status($conexion, $bookingRequestId, $hasRequestsSoftDelete);
+    }
+
+    if ($targetStatus === 'provider_proposed_change') {
+        $meetingResult = my_booking_create_proposed_meeting_event($conexion, [
+            'id' => $itemId,
+            'booking_request_id' => $bookingRequestId,
+            'provider_id' => (int)($itemRow['provider_id'] ?? 0),
+            'client_user_id' => (int)($itemRow['client_user_id'] ?? 0),
+            'item_name' => (string)($itemRow['item_name'] ?? ''),
+        ], [
+            'provider_notes' => $providerNotes,
+            'start_at' => $meetingStart,
+            'end_at' => $meetingEnd,
+            'timezone' => $meetingTimezone,
+        ], current_admin_user_id());
+
+        if (empty($meetingResult['ok'])) {
+            mysqli_rollback($conexion);
+            json_err((string)($meetingResult['error'] ?? 'meeting_schedule_create_failed'), 409);
+        }
+
+        if (inbox_table_exists($conexion, 'inbox_messages')) {
+            $threadId = inbox_thread_id('ITEM', $bookingRequestId, $itemId);
+            $senderRole = $isAdminSession ? 'ADMIN' : 'PROVIDER';
+            $senderUserId = current_admin_user_id();
+            $proposalMessage = '[REPLY] PROPOSED_DATES ' . $meetingStart . ' to ' . $meetingEnd;
+            $stmtMsg = mysqli_prepare(
+                $conexion,
+                "INSERT INTO inbox_messages
+                    (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+                 VALUES (?, 'ITEM', ?, ?, ?, ?, ?)"
+            );
+            if ($stmtMsg) {
+                mysqli_stmt_bind_param($stmtMsg, 'siisis', $threadId, $bookingRequestId, $itemId, $senderRole, $senderUserId, $proposalMessage);
+                mysqli_stmt_execute($stmtMsg);
+                mysqli_stmt_close($stmtMsg);
+            }
+        }
+
+        mysqli_commit($conexion);
     }
 
     try {
@@ -3626,7 +3887,11 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         error_log('provider_action_email_error item_id=' . $itemId . ' action=' . $action . ' msg=' . $e->getMessage());
     }
 
-    json_ok(['message' => 'Respuesta guardada', 'status' => $targetStatus]);
+    json_ok([
+        'message' => 'Respuesta guardada',
+        'status' => $targetStatus,
+        'meeting' => $meetingResult,
+    ]);
 }
 
 json_err('invalid_action');

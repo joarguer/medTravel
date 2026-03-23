@@ -414,14 +414,14 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
                 <div class="row">
                     <div class="col-sm-6">
                         <div class="form-group">
-                            <label for="provider_proposed_date_from">Fecha propuesta desde (opcional)</label>
-                            <input type="date" class="form-control" id="provider_proposed_date_from">
+                            <label for="provider_proposed_start_at">Inicio de la reunión (obligatorio)</label>
+                            <input type="datetime-local" class="form-control" id="provider_proposed_start_at">
                         </div>
                     </div>
                     <div class="col-sm-6">
                         <div class="form-group">
-                            <label for="provider_proposed_date_to">Fecha propuesta hasta (opcional)</label>
-                            <input type="date" class="form-control" id="provider_proposed_date_to">
+                            <label for="provider_proposed_end_at">Fin de la reunión (obligatorio)</label>
+                            <input type="datetime-local" class="form-control" id="provider_proposed_end_at">
                         </div>
                     </div>
                 </div>

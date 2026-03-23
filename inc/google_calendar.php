@@ -374,6 +374,35 @@ function google_calendar_get_connection($conexion, $adminUserId, $includeSecrets
     return $row;
 }
 
+function google_calendar_pick_connected_admin_user_id($conexion, $preferredAdminUserId = 0)
+{
+    $preferredAdminUserId = (int)$preferredAdminUserId;
+    if ($preferredAdminUserId > 0) {
+        $preferred = google_calendar_get_connection($conexion, $preferredAdminUserId, false);
+        if (!empty($preferred['is_connected'])) {
+            return $preferredAdminUserId;
+        }
+    }
+
+    if (!$conexion || !google_calendar_table_exists($conexion, 'admin_google_calendar_connections')) {
+        return 0;
+    }
+
+    $sql = "SELECT admin_user_id
+            FROM admin_google_calendar_connections
+            WHERE COALESCE(refresh_token_encrypted, '') <> ''
+              AND (disconnected_at IS NULL OR disconnected_at = '0000-00-00 00:00:00')
+            ORDER BY COALESCE(updated_at, connected_at) DESC, id DESC
+            LIMIT 1";
+    $res = mysqli_query($conexion, $sql);
+    if (!$res) {
+        return 0;
+    }
+
+    $row = mysqli_fetch_assoc($res) ?: null;
+    return $row ? (int)($row['admin_user_id'] ?? 0) : 0;
+}
+
 function google_calendar_upsert_connection($conexion, $adminUserId, array $tokenPayload, array $profile)
 {
     $config = google_calendar_get_config();

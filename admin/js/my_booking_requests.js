@@ -102,16 +102,22 @@
         $('#btn-provider-propose-save').on('click', function () {
             var itemId = parseInt($('#provider_propose_item_id').val(), 10) || 0;
             var notes = ($('#provider_proposed_notes').val() || '').trim();
+            var startAt = ($('#provider_proposed_start_at').val() || '').trim();
+            var endAt = ($('#provider_proposed_end_at').val() || '').trim();
             if (itemId <= 0) return;
             if (!notes) {
                 toastr.error('Debes ingresar notas para proponer una cita');
                 return;
             }
+            if (!startAt || !endAt) {
+                toastr.error('Debes definir inicio y fin de la reunión');
+                return;
+            }
 
             sendProviderAction('provider_propose_change', {
                 item_id: itemId,
-                proposed_date_from: ($('#provider_proposed_date_from').val() || '').trim(),
-                proposed_date_to: ($('#provider_proposed_date_to').val() || '').trim(),
+                proposed_start_at: startAt,
+                proposed_end_at: endAt,
                 proposed_price: ($('#provider_proposed_price').val() || '').trim(),
                 proposed_currency: ($('#provider_proposed_currency').val() || 'USD').trim(),
                 provider_notes: notes
@@ -141,8 +147,8 @@
                 currency = 'USD';
             }
             $('#provider_propose_item_id').val(activeDetailItemId);
-            $('#provider_proposed_date_from').val('');
-            $('#provider_proposed_date_to').val('');
+            $('#provider_proposed_start_at').val('');
+            $('#provider_proposed_end_at').val('');
             $('#provider_proposed_price').val('');
             $('#provider_proposed_currency').val(currency);
             $('#provider_proposed_notes').val('');
@@ -661,6 +667,8 @@
     function renderAppointmentSection(d) {
         var nextAppointment = d.next_appointment && d.next_appointment.start_at ? d.next_appointment.start_at : '';
         var appointmentLabel = d.appointment_status_label_es || d.medical_coordination_status_label_es || genericStatusLabelEs(d.appointment_status || d.medical_coordination_status || '');
+        var meetUrl = d.next_appointment && d.next_appointment.google_meet_url ? d.next_appointment.google_meet_url : '';
+        var calendarUrl = d.next_appointment && d.next_appointment.google_html_link ? d.next_appointment.google_html_link : '';
         var html = '<section class="mt-section">';
         html += '<div class="mt-section-head"><h5>Cita</h5></div>';
         html += '<div class="row">';
@@ -673,6 +681,17 @@
         html += '<p><strong>Estado de la cita:</strong> ' + renderStatusBadge(d.appointment_status || d.medical_coordination_status || 'pending', { label: appointmentLabel || 'Pendiente' }) + '</p>';
         html += renderKeyValue('Ubicación / sede', d.location || 'Sin definir');
         html += renderKeyValue('Zona horaria', d.timezone || 'Sin definir');
+        if (meetUrl || calendarUrl) {
+            html += '<div class="mt-inline-actions" style="margin-top:8px;">';
+            html += '<span class="mt-inline-label">Enlaces de la reunión</span>';
+            if (meetUrl) {
+                html += '<a class="btn btn-success btn-xs" href="' + escapeHtml(meetUrl) + '" target="_blank" rel="noopener"><i class="fa fa-video-camera"></i> Abrir Meet</a>';
+            }
+            if (calendarUrl) {
+                html += '<a class="btn btn-default btn-xs" href="' + escapeHtml(calendarUrl) + '" target="_blank" rel="noopener"><i class="fa fa-calendar"></i> Abrir evento</a>';
+            }
+            html += '</div>';
+        }
         html += '</div>';
         html += '</div>';
         html += '</section>';
@@ -1046,6 +1065,9 @@
     function formatStructuredBody(body) {
         var text = String(body || '');
         var trimmed = text.trim();
+        if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
+            return renderMeetingConfirmedBody(trimmed.replace(/^\[MEETING_CONFIRMED\]\s*/i, ''));
+        }
         var prefix = '';
         if (trimmed.indexOf('[ACTION]') === 0) {
             prefix = '<span class="label label-primary" style="margin-right:6px;">ACCIÓN</span>';
@@ -1055,6 +1077,41 @@
             trimmed = trimmed.replace(/^\[REPLY\]\s*/i, '');
         }
         return prefix + '<span style="white-space:pre-wrap;">' + escapeHtml(trimmed || text) + '</span>';
+    }
+
+    function renderMeetingConfirmedBody(jsonText) {
+        var payload = null;
+        try {
+            payload = JSON.parse(jsonText);
+        } catch (e) {
+            payload = null;
+        }
+        if (!payload || typeof payload !== 'object') {
+            return '<span style="white-space:pre-wrap;">' + escapeHtml(jsonText) + '</span>';
+        }
+
+        var html = '<div class="panel panel-success" style="margin:0;">';
+        html += '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión confirmada</strong></div>';
+        html += '<div class="panel-body" style="padding:10px;">';
+        if (payload.start_at) {
+            html += '<p style="margin:0 0 6px;"><strong>Inicio:</strong> ' + escapeHtml(formatDateTime(payload.start_at)) + '</p>';
+        }
+        if (payload.end_at) {
+            html += '<p style="margin:0 0 6px;"><strong>Fin:</strong> ' + escapeHtml(formatDateTime(payload.end_at)) + '</p>';
+        }
+        if (payload.organizer_email) {
+            html += '<p style="margin:0 0 6px;"><strong>Organizador:</strong> ' + escapeHtml(payload.organizer_email) + '</p>';
+        }
+        html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">';
+        if (payload.meet_url) {
+            html += '<a class="btn btn-success btn-xs" href="' + escapeHtml(payload.meet_url) + '" target="_blank" rel="noopener">Abrir Meet</a>';
+        }
+        if (payload.html_link) {
+            html += '<a class="btn btn-default btn-xs" href="' + escapeHtml(payload.html_link) + '" target="_blank" rel="noopener">Abrir evento</a>';
+        }
+        html += '</div>';
+        html += '</div></div>';
+        return html;
     }
 
     function formatDateTime(value) {

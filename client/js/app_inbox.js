@@ -1939,6 +1939,9 @@
         if (trimmed.indexOf('[PROPOSAL_RESPONSE]') === 0) {
             return renderProposalResponseCard(trimmed);
         }
+        if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
+            return renderMeetingConfirmedCard(trimmed);
+        }
 
         var label = '';
         var isReply = false;
@@ -1987,11 +1990,6 @@
             }
 
             var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
-            if (structuredReplyUpper.indexOf('DATES AVAILABLE') !== -1 && isItemThread) {
-                messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT THESE DATES</button>' +
-                    '</div>';
-            }
             if (structuredReplyUpper.indexOf('DATES NOT AVAILABLE') !== -1 && isItemThread) {
                 messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
                     '<button type="button" class="btn btn-default btn-xs client-propose-new-dates" title="Propose new dates">' +
@@ -2125,6 +2123,32 @@
             '<div class="panel-body" style="padding:10px;">' +
                 '<div><strong>Action:</strong> ' + esc(actionType || 'UNKNOWN') + '</div>' +
                 (notes ? '<div style="margin-top:8px;"><strong>Notes:</strong> ' + esc(notes) + '</div>' : '') +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderMeetingConfirmedCard(fullText) {
+        var payload = parseStructuredJson('[MEETING_CONFIRMED]', fullText);
+        if (!payload) {
+            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+        }
+
+        var actionsHtml = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">';
+        if (payload.meet_url) {
+            actionsHtml += '<a class="btn btn-success btn-xs" href="' + esc(payload.meet_url) + '" target="_blank" rel="noopener">OPEN MEET</a>';
+        }
+        if (payload.html_link) {
+            actionsHtml += '<a class="btn btn-default btn-xs" href="' + esc(payload.html_link) + '" target="_blank" rel="noopener">OPEN EVENT</a>';
+        }
+        actionsHtml += '</div>';
+
+        return '<div class="panel panel-success" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Meeting confirmed</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                (payload.start_at ? '<div><strong>Start:</strong> ' + esc(formatDateTime(payload.start_at)) + '</div>' : '') +
+                (payload.end_at ? '<div style="margin-top:6px;"><strong>End:</strong> ' + esc(formatDateTime(payload.end_at)) + '</div>' : '') +
+                (payload.organizer_email ? '<div style="margin-top:6px;"><strong>Organizer:</strong> ' + esc(payload.organizer_email) + '</div>' : '') +
+                actionsHtml +
             '</div>' +
         '</div>';
     }
