@@ -1939,6 +1939,9 @@
         if (trimmed.indexOf('[PROPOSAL_RESPONSE]') === 0) {
             return renderProposalResponseCard(trimmed);
         }
+        if (trimmed.indexOf('[MEETING_PROPOSAL]') === 0) {
+            return renderMeetingProposalCard(trimmed, currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0);
+        }
         if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
             return renderMeetingConfirmedCard(trimmed);
         }
@@ -2056,6 +2059,31 @@
         });
     }
 
+    function meetingIntegrationMeta(mode) {
+        var normalized = String(mode || 'calendar_plus_meet').trim().toLowerCase();
+        var map = {
+            internal_only: {
+                label: 'Reunión interna MedTravel',
+                hint: 'No crea Google Calendar ni Google Meet.',
+                badge: 'MedTravel',
+                badgeClass: 'label-default'
+            },
+            calendar_only: {
+                label: 'Reunión con Google Calendar',
+                hint: 'Al aceptar se creará un evento en Google Calendar, sin Meet.',
+                badge: 'Calendar',
+                badgeClass: 'label-info'
+            },
+            calendar_plus_meet: {
+                label: 'Reunión con Google Meet',
+                hint: 'Al aceptar se creará un evento en Google Calendar con Google Meet.',
+                badge: 'Calendar + Meet',
+                badgeClass: 'label-success'
+            }
+        };
+        return map[normalized] || map.calendar_plus_meet;
+    }
+
     function parseMeetingProposalText(text) {
         var source = String(text || '').trim();
         var match = source.match(/^PROPOSED_DATES\s+(.+?)\s+to\s+(.+)$/i);
@@ -2068,11 +2096,37 @@
         };
     }
 
+    function parseMeetingProposalPayload(fullText) {
+        if (String(fullText || '').indexOf('[MEETING_PROPOSAL]') === 0) {
+            var payload = parseStructuredJson('[MEETING_PROPOSAL]', fullText);
+            if (payload) {
+                return {
+                    startAt: String(payload.start_at || '').trim(),
+                    endAt: String(payload.end_at || '').trim(),
+                    note: String(payload.note || '').trim(),
+                    integrationMode: String(payload.integration_mode || 'calendar_plus_meet').trim().toLowerCase()
+                };
+            }
+        }
+
+        var proposal = parseMeetingProposalText(String(fullText || '').replace(/^\[REPLY\]\s*/i, ''));
+        if (!proposal) {
+            return null;
+        }
+        return {
+            startAt: proposal.startAt,
+            endAt: proposal.endAt,
+            note: '',
+            integrationMode: 'calendar_plus_meet'
+        };
+    }
+
     function renderMeetingProposalCard(fullText, actionable) {
-        var proposal = parseMeetingProposalText(fullText);
+        var proposal = parseMeetingProposalPayload(fullText);
         if (!proposal) {
             return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
         }
+        var integration = meetingIntegrationMeta(proposal.integrationMode);
 
         var actionsHtml = '';
         if (actionable) {
@@ -2083,11 +2137,12 @@
         }
 
         return '<div class="panel panel-warning" style="margin:0;">' +
-            '<div class="panel-heading" style="padding:8px 10px;"><strong>Propuesta de reunión</strong></div>' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>' + esc(integration.label) + '</strong> <span class="label ' + esc(integration.badgeClass) + '" style="margin-left:6px;">' + esc(integration.badge) + '</span></div>' +
             '<div class="panel-body" style="padding:10px;">' +
                 '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(proposal.startAt)) + '</div>' +
                 '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(proposal.endAt)) + '</div>' +
-                '<div class="text-muted" style="margin-top:8px;">Esta es una propuesta real de reunión para este item.</div>' +
+                (proposal.note ? '<div style="margin-top:6px;"><strong>Nota:</strong> ' + esc(proposal.note) + '</div>' : '') +
+                '<div class="text-muted" style="margin-top:8px;">' + esc(integration.hint) + '</div>' +
                 actionsHtml +
             '</div>' +
         '</div>';
@@ -2196,6 +2251,7 @@
         if (!payload) {
             return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
         }
+        var integration = meetingIntegrationMeta(payload.integration_mode || (payload.meet_url ? 'calendar_plus_meet' : (payload.html_link ? 'calendar_only' : 'internal_only')));
 
         var actionsHtml = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">';
         if (payload.meet_url) {
@@ -2207,11 +2263,13 @@
         actionsHtml += '</div>';
 
         return '<div class="panel panel-success" style="margin:0;">' +
-            '<div class="panel-heading" style="padding:8px 10px;"><strong>Meeting confirmed</strong></div>' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Meeting confirmed</strong> <span class="label ' + esc(integration.badgeClass) + '" style="margin-left:6px;">' + esc(integration.badge) + '</span></div>' +
             '<div class="panel-body" style="padding:10px;">' +
                 (payload.start_at ? '<div><strong>Start:</strong> ' + esc(formatInboxDateTime(payload.start_at)) + '</div>' : '') +
                 (payload.end_at ? '<div style="margin-top:6px;"><strong>End:</strong> ' + esc(formatInboxDateTime(payload.end_at)) + '</div>' : '') +
+                '<div style="margin-top:6px;"><strong>Type:</strong> ' + esc(integration.label) + '</div>' +
                 (payload.organizer_email ? '<div style="margin-top:6px;"><strong>Organizer:</strong> ' + esc(payload.organizer_email) + '</div>' : '') +
+                '<div class="text-muted" style="margin-top:8px;">' + esc(integration.hint) + '</div>' +
                 actionsHtml +
             '</div>' +
         '</div>';

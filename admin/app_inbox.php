@@ -754,9 +754,10 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title">Proponer reunión real</h4>
+                <h4 class="modal-title">Proponer reunión en MedTravel</h4>
             </div>
             <div class="modal-body">
+                <p class="help-block" style="margin-top:0;">La propuesta base siempre queda registrada dentro de MedTravel. Google Calendar y Google Meet son opcionales.</p>
                 <div class="row">
                     <div class="col-sm-6">
                         <div class="form-group">
@@ -775,7 +776,14 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                     <label for="admin-meeting-note">Nota opcional</label>
                     <textarea class="form-control" id="admin-meeting-note" rows="3" maxlength="500" placeholder="Contexto adicional para la propuesta de reunión"></textarea>
                 </div>
-                <p class="help-block" style="margin-bottom:0;">Esta acción reutiliza el flujo operativo existente. El paciente podrá aceptar la reunión o pedir cambio desde su Inbox ITEM.</p>
+                <div class="form-group" style="margin-top:15px;margin-bottom:0;">
+                    <label>Integraciones opcionales al aceptar</label>
+                    <div class="checkbox-list">
+                        <label><input type="checkbox" id="admin-meeting-enable-calendar"> Agregar evento a Google Calendar</label>
+                        <label><input type="checkbox" id="admin-meeting-enable-meet"> Crear enlace de Google Meet</label>
+                    </div>
+                    <p class="help-block" id="admin-meeting-integration-help" style="margin-bottom:0;">Si no marcas ninguna opción, la propuesta quedará solo en MedTravel.</p>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>

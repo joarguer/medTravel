@@ -88,6 +88,31 @@
         });
     }
 
+    function meetingIntegrationMeta(mode) {
+        var normalized = String(mode || 'calendar_plus_meet').trim().toLowerCase();
+        var map = {
+            internal_only: {
+                label: 'Reunión interna MedTravel',
+                hint: 'Se confirma solo dentro de MedTravel. No crea Google Calendar ni Google Meet.',
+                badge: 'MedTravel',
+                badgeClass: 'label-default'
+            },
+            calendar_only: {
+                label: 'Reunión con Google Calendar',
+                hint: 'Al aceptar se crea un evento en Google Calendar, sin enlace Meet.',
+                badge: 'Calendar',
+                badgeClass: 'label-info'
+            },
+            calendar_plus_meet: {
+                label: 'Reunión con Google Meet',
+                hint: 'Al aceptar se crea un evento en Google Calendar con enlace de Google Meet.',
+                badge: 'Calendar + Meet',
+                badgeClass: 'label-success'
+            }
+        };
+        return map[normalized] || map.calendar_plus_meet;
+    }
+
     function parseMeetingProposalText(text) {
         var source = String(text || '').trim();
         var match = source.match(/^PROPOSED_DATES\s+(.+?)\s+to\s+(.+)$/i);
@@ -100,18 +125,46 @@
         };
     }
 
+    function parseMeetingProposalPayload(fullText) {
+        if (String(fullText || '').indexOf('[MEETING_PROPOSAL]') === 0) {
+            var payload = parseStructuredJson('[MEETING_PROPOSAL]', fullText);
+            if (payload) {
+                return {
+                    startAt: String(payload.start_at || '').trim(),
+                    endAt: String(payload.end_at || '').trim(),
+                    note: String(payload.note || '').trim(),
+                    integrationMode: String(payload.integration_mode || 'calendar_plus_meet').trim().toLowerCase()
+                };
+            }
+        }
+
+        var proposal = parseMeetingProposalText(String(fullText || '').replace(/^\[REPLY\]\s*/i, ''));
+        if (!proposal) {
+            return null;
+        }
+        return {
+            startAt: proposal.startAt,
+            endAt: proposal.endAt,
+            note: '',
+            integrationMode: 'calendar_plus_meet'
+        };
+    }
+
     function renderMeetingProposalCard(text) {
-        var proposal = parseMeetingProposalText(text);
+        var proposal = parseMeetingProposalPayload(text);
         if (!proposal) {
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
+        var integration = meetingIntegrationMeta(proposal.integrationMode);
 
         return '<div class="panel panel-warning" style="margin:0;">' +
-            '<div class="panel-heading" style="padding:8px 10px;"><strong>Propuesta real de reunión</strong></div>' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>' + esc(integration.label) + '</strong> <span class="label ' + esc(integration.badgeClass) + '" style="margin-left:6px;">' + esc(integration.badge) + '</span></div>' +
             '<div class="panel-body" style="padding:10px;">' +
                 '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(proposal.startAt)) + '</div>' +
                 '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(proposal.endAt)) + '</div>' +
-                '<div class="text-muted" style="margin-top:8px;">Pendiente de respuesta del paciente.</div>' +
+                (proposal.note ? '<div style="margin-top:6px;"><strong>Nota:</strong> ' + esc(proposal.note) + '</div>' : '') +
+                '<div class="text-muted" style="margin-top:8px;">' + esc(integration.hint) + '</div>' +
+                '<div class="text-muted" style="margin-top:4px;">Pendiente de respuesta del paciente.</div>' +
             '</div>' +
         '</div>';
     }
@@ -121,6 +174,7 @@
         if (!payload) {
             return renderStructuredParseFallback('[MEETING_CONFIRMED]');
         }
+        var integration = meetingIntegrationMeta(payload.integration_mode || (payload.meet_url ? 'calendar_plus_meet' : (payload.html_link ? 'calendar_only' : 'internal_only')));
 
         var actionsHtml = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">';
         if (payload.meet_url) {
@@ -132,11 +186,13 @@
         actionsHtml += '</div>';
 
         return '<div class="panel panel-success" style="margin:0;">' +
-            '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión confirmada</strong></div>' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión confirmada</strong> <span class="label ' + esc(integration.badgeClass) + '" style="margin-left:6px;">' + esc(integration.badge) + '</span></div>' +
             '<div class="panel-body" style="padding:10px;">' +
                 (payload.start_at ? '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(payload.start_at)) + '</div>' : '') +
                 (payload.end_at ? '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(payload.end_at)) + '</div>' : '') +
+                '<div style="margin-top:6px;"><strong>Tipo:</strong> ' + esc(integration.label) + '</div>' +
                 (payload.organizer_email ? '<div style="margin-top:6px;"><strong>Organizador:</strong> ' + esc(payload.organizer_email) + '</div>' : '') +
+                '<div class="text-muted" style="margin-top:8px;">' + esc(integration.hint) + '</div>' +
                 actionsHtml +
             '</div>' +
         '</div>';
@@ -1257,6 +1313,9 @@
         }
         if (trimmed.indexOf('[PROPOSAL_RESPONSE]') === 0) {
             return renderStructuredProposalResponse(trimmed);
+        }
+        if (trimmed.indexOf('[MEETING_PROPOSAL]') === 0) {
+            return renderMeetingProposalCard(trimmed);
         }
         if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
             return renderMeetingConfirmedCard(trimmed);
@@ -2518,7 +2577,37 @@
         return map[code] || code || 'No se pudo enviar la propuesta de reunión';
     }
 
-    function sendMeetingProposal(startAt, endAt, note) {
+    function updateMeetingIntegrationUi() {
+        var calendarChecked = $('#admin-meeting-enable-calendar').is(':checked');
+        var meetChecked = $('#admin-meeting-enable-meet').is(':checked');
+
+        if (meetChecked && !calendarChecked) {
+            $('#admin-meeting-enable-calendar').prop('checked', true);
+            calendarChecked = true;
+        }
+
+        $('#admin-meeting-enable-calendar').prop('disabled', meetChecked);
+
+        var helpText = 'Si no marcas ninguna opción, la propuesta quedará solo en MedTravel.';
+        if (meetChecked) {
+            helpText = 'Google Meet requiere Google Calendar. Calendar se marcó automáticamente.';
+        } else if (calendarChecked) {
+            helpText = 'Al aceptar, se creará un evento en Google Calendar sin enlace Meet.';
+        }
+        $('#admin-meeting-integration-help').text(helpText);
+    }
+
+    function resolveMeetingIntegrationMode() {
+        if ($('#admin-meeting-enable-meet').is(':checked')) {
+            return 'calendar_plus_meet';
+        }
+        if ($('#admin-meeting-enable-calendar').is(':checked')) {
+            return 'calendar_only';
+        }
+        return 'internal_only';
+    }
+
+    function sendMeetingProposal(startAt, endAt, note, integrationMode) {
         if (!currentThread || !currentThread.thread_id) {
             toastr.warning('Selecciona primero un hilo antes de enviar');
             return false;
@@ -2542,7 +2631,12 @@
             return false;
         }
 
-        var pendingId = addPendingMessage('[REPLY] PROPOSED_DATES ' + startValue.replace('T', ' ') + ' to ' + endValue.replace('T', ' '));
+        var pendingId = addPendingMessage('[MEETING_PROPOSAL] ' + JSON.stringify({
+            start_at: startValue.replace('T', ' '),
+            end_at: endValue.replace('T', ' '),
+            note: String(note || ''),
+            integration_mode: String(integrationMode || 'calendar_plus_meet')
+        }));
         setComposeBusy(true, 'Enviando propuesta de reunión...');
 
         $.ajax({
@@ -2556,7 +2650,8 @@
                 proposed_end_at: endValue,
                 proposed_date_from: startValue.substring(0, 10),
                 proposed_date_to: endValue.substring(0, 10),
-                provider_notes: String(note || '')
+                provider_notes: String(note || ''),
+                integration_mode: String(integrationMode || 'calendar_plus_meet')
             }
         }).done(function (res) {
             setComposeBusy(false, '');
@@ -2767,18 +2862,26 @@
             $('#admin-meeting-start-at').val('');
             $('#admin-meeting-end-at').val('');
             $('#admin-meeting-note').val('');
+            $('#admin-meeting-enable-calendar').prop('checked', true).prop('disabled', false);
+            $('#admin-meeting-enable-meet').prop('checked', true);
+            updateMeetingIntegrationUi();
             $('#adminProposeMeetingModal').modal('show');
+        });
+
+        $('#admin-meeting-enable-calendar, #admin-meeting-enable-meet').on('change', function () {
+            updateMeetingIntegrationUi();
         });
 
         $('#admin-submit-propose-meeting').on('click', function () {
             var startAt = $.trim($('#admin-meeting-start-at').val() || '');
             var endAt = $.trim($('#admin-meeting-end-at').val() || '');
             var note = $.trim($('#admin-meeting-note').val() || '');
+            var integrationMode = resolveMeetingIntegrationMode();
             if (note.length > 500) {
                 toastr.warning('La nota es demasiado larga');
                 return;
             }
-            if (sendMeetingProposal(startAt, endAt, note)) {
+            if (sendMeetingProposal(startAt, endAt, note, integrationMode)) {
                 $('#adminProposeMeetingModal').modal('hide');
             }
         });

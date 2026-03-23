@@ -1065,6 +1065,9 @@
     function formatStructuredBody(body) {
         var text = String(body || '');
         var trimmed = text.trim();
+        if (trimmed.indexOf('[MEETING_PROPOSAL]') === 0) {
+            return renderMeetingProposalBody(trimmed.replace(/^\[MEETING_PROPOSAL\]\s*/i, ''));
+        }
         if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
             return renderMeetingConfirmedBody(trimmed.replace(/^\[MEETING_CONFIRMED\]\s*/i, ''));
         }
@@ -1079,7 +1082,17 @@
         return prefix + '<span style="white-space:pre-wrap;">' + escapeHtml(trimmed || text) + '</span>';
     }
 
-    function renderMeetingConfirmedBody(jsonText) {
+    function meetingIntegrationMeta(mode) {
+        var normalized = String(mode || 'calendar_plus_meet').trim().toLowerCase();
+        var map = {
+            internal_only: { label: 'Reunión interna MedTravel', badge: 'MedTravel', badgeClass: 'label-default' },
+            calendar_only: { label: 'Reunión con Google Calendar', badge: 'Calendar', badgeClass: 'label-info' },
+            calendar_plus_meet: { label: 'Reunión con Google Meet', badge: 'Calendar + Meet', badgeClass: 'label-success' }
+        };
+        return map[normalized] || map.calendar_plus_meet;
+    }
+
+    function renderMeetingProposalBody(jsonText) {
         var payload = null;
         try {
             payload = JSON.parse(jsonText);
@@ -1090,8 +1103,9 @@
             return '<span style="white-space:pre-wrap;">' + escapeHtml(jsonText) + '</span>';
         }
 
-        var html = '<div class="panel panel-success" style="margin:0;">';
-        html += '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión confirmada</strong></div>';
+        var integration = meetingIntegrationMeta(payload.integration_mode || 'calendar_plus_meet');
+        var html = '<div class="panel panel-warning" style="margin:0;">';
+        html += '<div class="panel-heading" style="padding:8px 10px;"><strong>' + escapeHtml(integration.label) + '</strong> <span class="label ' + escapeHtml(integration.badgeClass) + '" style="margin-left:6px;">' + escapeHtml(integration.badge) + '</span></div>';
         html += '<div class="panel-body" style="padding:10px;">';
         if (payload.start_at) {
             html += '<p style="margin:0 0 6px;"><strong>Inicio:</strong> ' + escapeHtml(formatDateTime(payload.start_at)) + '</p>';
@@ -1099,6 +1113,35 @@
         if (payload.end_at) {
             html += '<p style="margin:0 0 6px;"><strong>Fin:</strong> ' + escapeHtml(formatDateTime(payload.end_at)) + '</p>';
         }
+        if (payload.note) {
+            html += '<p style="margin:0 0 6px;"><strong>Nota:</strong> ' + escapeHtml(payload.note) + '</p>';
+        }
+        html += '</div></div>';
+        return html;
+    }
+
+    function renderMeetingConfirmedBody(jsonText) {
+        var payload = null;
+        try {
+            payload = JSON.parse(jsonText);
+        } catch (e) {
+            payload = null;
+        }
+        if (!payload || typeof payload !== 'object') {
+            return '<span style="white-space:pre-wrap;">' + escapeHtml(jsonText) + '</span>';
+        }
+        var integration = meetingIntegrationMeta(payload.integration_mode || (payload.meet_url ? 'calendar_plus_meet' : (payload.html_link ? 'calendar_only' : 'internal_only')));
+
+        var html = '<div class="panel panel-success" style="margin:0;">';
+        html += '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión confirmada</strong> <span class="label ' + escapeHtml(integration.badgeClass) + '" style="margin-left:6px;">' + escapeHtml(integration.badge) + '</span></div>';
+        html += '<div class="panel-body" style="padding:10px;">';
+        if (payload.start_at) {
+            html += '<p style="margin:0 0 6px;"><strong>Inicio:</strong> ' + escapeHtml(formatDateTime(payload.start_at)) + '</p>';
+        }
+        if (payload.end_at) {
+            html += '<p style="margin:0 0 6px;"><strong>Fin:</strong> ' + escapeHtml(formatDateTime(payload.end_at)) + '</p>';
+        }
+        html += '<p style="margin:0 0 6px;"><strong>Tipo:</strong> ' + escapeHtml(integration.label) + '</p>';
         if (payload.organizer_email) {
             html += '<p style="margin:0 0 6px;"><strong>Organizador:</strong> ' + escapeHtml(payload.organizer_email) + '</p>';
         }

@@ -165,6 +165,7 @@ function my_booking_calendar_event_columns($conexion)
 
     $cache = [
         'organizer_admin_user_id' => table_has_column($conexion, 'calendar_events', 'organizer_admin_user_id'),
+        'integration_mode' => table_has_column($conexion, 'calendar_events', 'integration_mode'),
         'google_event_id' => table_has_column($conexion, 'calendar_events', 'google_event_id'),
         'google_html_link' => table_has_column($conexion, 'calendar_events', 'google_html_link'),
         'google_meet_url' => table_has_column($conexion, 'calendar_events', 'google_meet_url'),
@@ -219,23 +220,38 @@ function my_booking_create_proposed_meeting_event($conexion, array $itemRow, arr
     $startAt = trim((string)($meetingData['start_at'] ?? ''));
     $endAt = trim((string)($meetingData['end_at'] ?? ''));
     $timezone = trim((string)($meetingData['timezone'] ?? 'America/Bogota'));
+    $integrationMode = trim((string)($meetingData['integration_mode'] ?? 'calendar_plus_meet'));
+
+    if (!in_array($integrationMode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
+        $integrationMode = 'calendar_plus_meet';
+    }
 
     if ($itemId <= 0 || $bookingRequestId <= 0 || $clientUserId <= 0 || $startAt === '' || $endAt === '') {
         return ['ok' => false, 'error' => 'invalid_meeting_context'];
     }
 
-    $organizerAdminUserId = my_booking_pick_operational_admin_user_id($conexion, $preferredAdminUserId);
-    if ($organizerAdminUserId <= 0) {
+    $organizerAdminUserId = 0;
+    if ($integrationMode !== 'internal_only') {
+        $organizerAdminUserId = my_booking_pick_operational_admin_user_id($conexion, $preferredAdminUserId);
+    }
+    if ($integrationMode !== 'internal_only' && $organizerAdminUserId <= 0) {
         return ['ok' => false, 'error' => 'no_google_admin_connected'];
     }
 
     $columns = my_booking_calendar_event_columns($conexion);
     my_booking_cancel_pending_meeting_events($conexion, $itemId);
 
-    $title = $itemName !== '' ? ('Videollamada MedTravel - ' . $itemName) : ('Videollamada MedTravel - Item #' . $itemId);
+    $title = $itemName !== '' ? ('Reunión MedTravel - ' . $itemName) : ('Reunión MedTravel - Item #' . $itemId);
+    $integrationSummaryMap = [
+        'internal_only' => 'Tipo: propuesta interna MedTravel.',
+        'calendar_only' => 'Tipo: propuesta con evento de Google Calendar.',
+        'calendar_plus_meet' => 'Tipo: propuesta con Google Calendar y Google Meet.',
+    ];
     $description = 'Solicitud #' . $bookingRequestId . "\n"
         . 'Item #' . $itemId . "\n"
-        . 'Reunión propuesta desde Mis Solicitudes.' . ($providerNotes !== '' ? "\nNotas: " . $providerNotes : '')
+        . 'Reunión propuesta desde Mis Solicitudes.'
+        . "\n" . ($integrationSummaryMap[$integrationMode] ?? $integrationSummaryMap['calendar_plus_meet'])
+        . ($providerNotes !== '' ? "\nNotas: " . $providerNotes : '')
         . "\nZona horaria: " . $timezone;
     $threadId = inbox_thread_id('ITEM', $bookingRequestId, $itemId);
     $createdByUserId = current_admin_user_id();
@@ -269,6 +285,12 @@ function my_booking_create_proposed_meeting_event($conexion, array $itemRow, arr
         $placeholders[] = '?';
         $types .= 'i';
         $params[] = $organizerAdminUserId;
+    }
+    if ($columns['integration_mode']) {
+        $insertColumns[] = 'integration_mode';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $integrationMode;
     }
 
     $sql = 'INSERT INTO calendar_events (' . implode(', ', $insertColumns) . ') VALUES (' . implode(', ', $placeholders) . ')';
@@ -489,6 +511,15 @@ function mask_contact_value($value, $kind)
             $local = $parts[0];
             $domain = $parts[1];
             $visible = strlen($local) > 1 ? substr($local, 0, 1) : '';
+
+    function my_booking_normalize_meeting_integration_mode($value)
+    {
+        $mode = trim((string)$value);
+        if (in_array($mode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
+            return $mode;
+        }
+        return 'calendar_plus_meet';
+    }
             return $visible . '***@' . $domain;
         }
     }
@@ -3521,6 +3552,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
 
     if ($targetStatus === 'provider_proposed_change') {
         $providerNotes = trim((string)($_POST['provider_notes'] ?? ''));
+        $integrationMode = my_booking_normalize_meeting_integration_mode($_POST['integration_mode'] ?? 'calendar_plus_meet');
 
         $meetingStartRaw = trim((string)($_POST['proposed_start_at'] ?? ''));
         $meetingEndRaw = trim((string)($_POST['proposed_end_at'] ?? ''));
@@ -3536,7 +3568,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         if (strtotime($meetingEnd) <= strtotime($meetingStart)) {
             json_err('invalid_meeting_range', 422);
         }
-        if (my_booking_pick_operational_admin_user_id($conexion, current_admin_user_id()) <= 0) {
+        if ($integrationMode !== 'internal_only' && my_booking_pick_operational_admin_user_id($conexion, current_admin_user_id()) <= 0) {
             json_err('no_google_admin_connected', 409);
         }
 
@@ -3695,6 +3727,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
             'start_at' => $meetingStart,
             'end_at' => $meetingEnd,
             'timezone' => $meetingTimezone,
+            'integration_mode' => $integrationMode,
         ], current_admin_user_id());
 
         if (empty($meetingResult['ok'])) {
@@ -3706,7 +3739,12 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
             $threadId = inbox_thread_id('ITEM', $bookingRequestId, $itemId);
             $senderRole = $isAdminSession ? 'ADMIN' : 'PROVIDER';
             $senderUserId = current_admin_user_id();
-            $proposalMessage = '[REPLY] PROPOSED_DATES ' . $meetingStart . ' to ' . $meetingEnd;
+            $proposalMessage = '[MEETING_PROPOSAL] ' . json_encode([
+                'start_at' => $meetingStart,
+                'end_at' => $meetingEnd,
+                'note' => $providerNotes,
+                'integration_mode' => $integrationMode,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $stmtMsg = mysqli_prepare(
                 $conexion,
                 "INSERT INTO inbox_messages

@@ -660,7 +660,7 @@ function google_calendar_extract_meet_url($event)
     return '';
 }
 
-function google_calendar_create_event_with_meet($conexion, $adminUserId, array $payload)
+function google_calendar_create_event($conexion, $adminUserId, array $payload)
 {
     $tokenState = google_calendar_ensure_valid_access_token($conexion, $adminUserId);
     if (!$tokenState['ok']) {
@@ -676,7 +676,7 @@ function google_calendar_create_event_with_meet($conexion, $adminUserId, array $
 
     $timezone = trim((string)($payload['timezone'] ?? 'America/Bogota'));
     $calendarId = trim((string)($payload['calendar_id'] ?? 'primary'));
-    $conferenceRequestId = bin2hex(random_bytes(12));
+    $createMeet = !isset($payload['create_meet']) || !empty($payload['create_meet']);
     $eventBody = [
         'summary' => $summary,
         'description' => trim((string)($payload['description'] ?? '')),
@@ -688,13 +688,17 @@ function google_calendar_create_event_with_meet($conexion, $adminUserId, array $
             'dateTime' => $endAt,
             'timeZone' => $timezone,
         ],
-        'conferenceData' => [
+    ];
+
+    if ($createMeet) {
+        $conferenceRequestId = bin2hex(random_bytes(12));
+        $eventBody['conferenceData'] = [
             'createRequest' => [
                 'requestId' => $conferenceRequestId,
                 'conferenceSolutionKey' => ['type' => 'hangoutsMeet'],
             ],
-        ],
-    ];
+        ];
+    }
 
     $location = trim((string)($payload['location'] ?? ''));
     if ($location !== '') {
@@ -709,7 +713,10 @@ function google_calendar_create_event_with_meet($conexion, $adminUserId, array $
     $config = google_calendar_get_config();
     $eventUrl = $config['calendar_base_url']
         . '/calendars/' . rawurlencode($calendarId)
-        . '/events?conferenceDataVersion=1&sendUpdates=all';
+        . '/events?sendUpdates=all';
+    if ($createMeet) {
+        $eventUrl .= '&conferenceDataVersion=1';
+    }
     $response = google_calendar_http_request('POST', $eventUrl, [
         'Authorization: Bearer ' . $tokenState['access_token'],
         'Accept: application/json',
@@ -733,11 +740,17 @@ function google_calendar_create_event_with_meet($conexion, $adminUserId, array $
         'ok' => true,
         'event_id' => (string)($event['id'] ?? ''),
         'html_link' => (string)($event['htmlLink'] ?? ''),
-        'meet_url' => google_calendar_extract_meet_url($event),
+        'meet_url' => $createMeet ? google_calendar_extract_meet_url($event) : '',
         'organizer_email' => (string)($event['organizer']['email'] ?? $tokenState['connection']['google_email'] ?? ''),
         'start' => (array)($event['start'] ?? []),
         'end' => (array)($event['end'] ?? []),
         'attendees' => (array)($event['attendees'] ?? []),
         'raw_event' => $event,
     ];
+}
+
+function google_calendar_create_event_with_meet($conexion, $adminUserId, array $payload)
+{
+    $payload['create_meet'] = true;
+    return google_calendar_create_event($conexion, $adminUserId, $payload);
 }

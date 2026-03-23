@@ -39,6 +39,7 @@ function client_inbox_calendar_event_columns($conexion)
 
     $cache = [
         'organizer_admin_user_id' => client_table_has_column($conexion, 'calendar_events', 'organizer_admin_user_id'),
+        'integration_mode' => client_table_has_column($conexion, 'calendar_events', 'integration_mode'),
         'google_event_id' => client_table_has_column($conexion, 'calendar_events', 'google_event_id'),
         'google_html_link' => client_table_has_column($conexion, 'calendar_events', 'google_html_link'),
         'google_meet_url' => client_table_has_column($conexion, 'calendar_events', 'google_meet_url'),
@@ -56,6 +57,7 @@ function client_inbox_fetch_latest_proposed_meeting($conexion, $itemId, $ownerSc
 
     $columns = client_inbox_calendar_event_columns($conexion);
     $organizerAdminExpr = $columns['organizer_admin_user_id'] ? 'ce.organizer_admin_user_id' : 'NULL';
+    $integrationModeExpr = $columns['integration_mode'] ? 'ce.integration_mode' : "'calendar_plus_meet'";
     $googleEventExpr = $columns['google_event_id'] ? 'ce.google_event_id' : "''";
     $googleHtmlExpr = $columns['google_html_link'] ? 'ce.google_html_link' : "''";
     $googleMeetExpr = $columns['google_meet_url'] ? 'ce.google_meet_url' : "''";
@@ -65,6 +67,7 @@ function client_inbox_fetch_latest_proposed_meeting($conexion, $itemId, $ownerSc
 
     $sql = "SELECT ce.id, ce.request_id, ce.item_id, ce.title, ce.description, ce.start_at, ce.end_at, ce.status,
                    {$organizerAdminExpr} AS organizer_admin_user_id,
+                   {$integrationModeExpr} AS integration_mode,
                    {$googleEventExpr} AS google_event_id,
                    {$googleHtmlExpr} AS google_html_link,
                    {$googleMeetExpr} AS google_meet_url,
@@ -122,6 +125,37 @@ function client_inbox_cancel_proposed_meeting($conexion, $eventId)
 function client_inbox_confirm_google_meeting($conexion, array $eventRow, $requestId, $itemId)
 {
     $eventId = (int)($eventRow['id'] ?? 0);
+    $integrationMode = trim((string)($eventRow['integration_mode'] ?? 'calendar_plus_meet'));
+    if (!in_array($integrationMode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
+        $integrationMode = 'calendar_plus_meet';
+    }
+
+    if ($integrationMode === 'internal_only') {
+        $stmtInternal = mysqli_prepare($conexion, "UPDATE calendar_events SET status = 'confirmed', updated_at = NOW() WHERE id = ? LIMIT 1");
+        if (!$stmtInternal) {
+            return ['ok' => false, 'error' => 'calendar_event_update_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmtInternal, 'i', $eventId);
+        if (!mysqli_stmt_execute($stmtInternal)) {
+            $err = mysqli_stmt_error($stmtInternal);
+            mysqli_stmt_close($stmtInternal);
+            return ['ok' => false, 'error' => 'calendar_event_update_failed: ' . $err];
+        }
+        mysqli_stmt_close($stmtInternal);
+
+        return [
+            'ok' => true,
+            'calendar_event_id' => $eventId,
+            'event_id' => '',
+            'html_link' => '',
+            'meet_url' => '',
+            'organizer_email' => '',
+            'integration_mode' => $integrationMode,
+            'start_at' => (string)($eventRow['start_at'] ?? ''),
+            'end_at' => (string)($eventRow['end_at'] ?? ''),
+        ];
+    }
+
     $organizerAdminUserId = (int)($eventRow['organizer_admin_user_id'] ?? 0);
     if ($organizerAdminUserId <= 0) {
         $organizerAdminUserId = (int)google_calendar_pick_connected_admin_user_id($conexion, 0);
@@ -143,13 +177,14 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
 
     $startDate = new DateTimeImmutable((string)$eventRow['start_at'], new DateTimeZone($timezone));
     $endDate = new DateTimeImmutable((string)$eventRow['end_at'], new DateTimeZone($timezone));
-    $result = google_calendar_create_event_with_meet($conexion, $organizerAdminUserId, [
+    $result = google_calendar_create_event($conexion, $organizerAdminUserId, [
         'summary' => (string)($eventRow['title'] ?? ('Videollamada MedTravel - Item #' . $itemId)),
         'description' => (string)($eventRow['description'] ?? ('Solicitud #' . $requestId . ' / Item #' . $itemId)),
         'start_at' => $startDate->format(DateTimeInterface::RFC3339),
         'end_at' => $endDate->format(DateTimeInterface::RFC3339),
         'timezone' => $timezone,
         'attendees' => $attendees,
+        'create_meet' => $integrationMode === 'calendar_plus_meet',
     ]);
     if (empty($result['ok'])) {
         return $result;
@@ -163,6 +198,11 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
         $setParts[] = 'organizer_admin_user_id = ?';
         $types .= 'i';
         $params[] = $organizerAdminUserId;
+    }
+    if ($columns['integration_mode']) {
+        $setParts[] = 'integration_mode = ?';
+        $types .= 's';
+        $params[] = $integrationMode;
     }
     if ($columns['google_event_id']) {
         $setParts[] = 'google_event_id = ?';
@@ -206,6 +246,7 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
         'html_link' => (string)($result['html_link'] ?? ''),
         'meet_url' => (string)($result['meet_url'] ?? ''),
         'organizer_email' => (string)($result['organizer_email'] ?? ''),
+        'integration_mode' => $integrationMode,
         'start_at' => (string)($eventRow['start_at'] ?? ''),
         'end_at' => (string)($eventRow['end_at'] ?? ''),
     ];
@@ -776,6 +817,7 @@ if ($action === 'list_messages') {
                             AND (" . $ownerScope['sql'] . ")
                             AND (
                                 im.body LIKE '[REPLY] PROPOSED_DATES%'
+                                OR im.body LIKE '[MEETING_PROPOSAL] %'
                                 OR im.body LIKE '[REPLY] FINAL_APPROVED%'
                                 OR im.body LIKE '[REQUEST_INFO] %'
                                 OR im.body LIKE '[PROPOSE_QUOTE] %'
@@ -1350,6 +1392,7 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
         ? '[MEETING_CONFIRMED] ' . json_encode([
             'start_at' => (string)($confirmedMeeting['start_at'] ?? ''),
             'end_at' => (string)($confirmedMeeting['end_at'] ?? ''),
+            'integration_mode' => (string)($confirmedMeeting['integration_mode'] ?? ''),
             'event_id' => (string)($confirmedMeeting['event_id'] ?? ''),
             'html_link' => (string)($confirmedMeeting['html_link'] ?? ''),
             'meet_url' => (string)($confirmedMeeting['meet_url'] ?? ''),
