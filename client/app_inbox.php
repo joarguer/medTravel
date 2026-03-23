@@ -481,7 +481,7 @@ if (isset($conexion) && $conexion) {
                         </div>
                         <div class="col-md-9 inbox-body">
                             <div class="inbox-header">
-                                <div id="client-inbox-title">Select a thread</div>
+                                <div id="client-inbox-title">Select a MedTravel or Medical Provider thread</div>
                             </div>
                             <div id="client-inbox-fee-alert" class="note note-warning" style="<?php echo $clientFeeGateActive ? '' : 'display:none;'; ?>">
                                 <strong>Coordination Fee required.</strong>
@@ -569,7 +569,7 @@ if (isset($conexion) && $conexion) {
                                 </form>
                             </div>
                             <div class="inbox-content" id="client-inbox-empty">
-                                <div class="note note-info" style="margin:0;">Select a thread from the left panel.</div>
+                                <div class="note note-info" style="margin:0;">Select a MedTravel Coordination or Medical Provider thread from the left panel.</div>
                             </div>
                         </div>
                     </div>

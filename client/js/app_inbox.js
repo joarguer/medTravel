@@ -1410,11 +1410,43 @@
     function cleanServiceTitle(rawTitle) {
         var title = String(rawTitle || '').trim();
         if (!title) {
-            return 'Servicio';
+            return 'Service';
         }
         title = title.replace(/\s*-\s*Request\s*#\d+\s*$/i, '').trim();
         title = title.replace(/\s*-\s*Solicitud\s*#\d+\s*$/i, '').trim();
-        return title || 'Servicio';
+        return title || 'Service';
+    }
+
+    function clientThreadKindLabel(threadType) {
+        var type = String(threadType || 'CARE').toUpperCase();
+        return type === 'ITEM' ? 'MEDICAL PROVIDER' : 'MEDTRAVEL';
+    }
+
+    function clientThreadAudienceText(threadType) {
+        var type = String(threadType || 'CARE').toUpperCase();
+        if (type === 'ITEM') {
+            return 'Medical provider communication for this requested service.';
+        }
+        return 'Questions about coordination, documents, travel support, and case guidance.';
+    }
+
+    function clientThreadHeading(thread) {
+        var type = String(thread && thread.thread_type || 'CARE').toUpperCase();
+        if (type === 'ITEM') {
+            var serviceTitle = cleanServiceTitle(thread && thread.thread_title || thread && thread.title || '');
+            return serviceTitle || 'Talk to your Medical Provider';
+        }
+        return careDisplayTitle();
+    }
+
+    function clientThreadSubtitle(thread) {
+        var type = String(thread && thread.thread_type || 'CARE').toUpperCase();
+        var parts = [clientThreadAudienceText(type)];
+        var location = String(thread && (thread.thread_subtitle || thread.subtitle) || '').trim();
+        if (location) {
+            parts.push(location);
+        }
+        return parts.join(' • ');
     }
 
     function isSpanishClientUi() {
@@ -1432,7 +1464,7 @@
         var requestLabel = parseInt(requestId || 0, 10);
         var safeRequest = requestLabel > 0 ? String(requestLabel) : '-';
         var subtitleText = String(subtitle || '').trim();
-        var smallText = 'Solicitud #' + esc(safeRequest);
+        var smallText = 'Request #' + esc(safeRequest);
         if (subtitleText !== '') {
             smallText += ' • ' + esc(subtitleText);
         }
@@ -1497,15 +1529,15 @@
             var unread = parseInt(thread.unread_count || 0, 10);
             var active = (threadId === selectedKey);
             var threadTypeRaw = String(thread.thread_type || 'CARE').toUpperCase();
-            var threadTypeSub = (threadTypeRaw === 'CARE') ? 'MEDTRAVEL' : threadTypeRaw;
+            var threadTypeBadge = clientThreadKindLabel(threadTypeRaw);
             var requestId = parseInt(thread.booking_id || thread.request_id || 0, 10);
-            var displayTitle = String(thread.title || 'Thread');
-            if (threadTypeRaw === 'CARE') {
-                displayTitle = requestId > 0
-                    ? ('MedTravel Coordination - Request #' + requestId)
-                    : 'MedTravel Coordination';
+            var displayTitle = threadTypeRaw === 'CARE'
+                ? 'MedTravel Coordination'
+                : cleanServiceTitle(thread.title || '');
+            if (!displayTitle) {
+                displayTitle = threadTypeRaw === 'CARE' ? 'MedTravel Coordination' : 'Talk to your Medical Provider';
             }
-            var location = String(thread.subtitle || '').trim();
+            var supportingText = clientThreadAudienceText(threadTypeRaw);
             var timeLabel = formatThreadTime(thread.updated_at || '');
             var previewText = getThreadPreviewText(thread);
             var unreadMeta = unread > 0 ? '<span class="badge badge-danger mt-unread">' + unread + '</span>' : '';
@@ -1525,13 +1557,12 @@
                         '<div class="mt-thread-sub">' +
                             '<span class="mt-thread-request">Request #' + esc(requestId > 0 ? String(requestId) : '-') + '</span>' +
                             '<span class="mt-dot">•</span>' +
-                            '<span class="mt-thread-type">' + esc(threadTypeSub) + '</span>' +
-                            (location ? '<span class="mt-dot">•</span><span class="mt-thread-location">' + esc(location) + '</span>' : '') +
+                            '<span class="mt-thread-type">' + esc(supportingText) + '</span>' +
                         '</div>' +
                         previewHtml +
                     '</div>' +
                     '<div class="mt-thread-meta">' +
-                        '<span class="badge badge-info mt-badge">' + esc(threadTypeRaw) + '</span>' +
+                        '<span class="badge badge-info mt-badge">' + esc(threadTypeBadge) + '</span>' +
                         unreadMeta +
                         timeHtml +
                     '</div>' +
@@ -2253,10 +2284,12 @@
             currentDocuments = freshDocs.concat(localOnly);
             syncThreadDocumentsPanel();
 
-            var isItemThread = String(currentThread.thread_type || '').toUpperCase() === 'ITEM';
-            var headingText = isItemThread ? cleanServiceTitle(currentThread.thread_title || '') : careDisplayTitle();
-            var secondarySubtitle = isItemThread ? String(currentThread.thread_subtitle || '') : '';
-            renderInboxHeader($('#client-inbox-title'), headingText, currentThread.booking_id, secondarySubtitle);
+            renderInboxHeader(
+                $('#client-inbox-title'),
+                clientThreadHeading(currentThread),
+                currentThread.booking_id,
+                clientThreadSubtitle(currentThread)
+            );
             renderMessages(res.messages || []);
             markCurrentThreadRead();
         }).fail(function (xhr) {
@@ -2265,7 +2298,12 @@
             if (res && res.code === 'FEE_REQUIRED') {
                 setFeeGateState(true, 'Unlock after Coordination Fee.');
                 setComposeGateState(true, '');
-                renderInboxHeader($('#client-inbox-title'), careDisplayTitle(), currentThread && currentThread.booking_id ? currentThread.booking_id : 0, '');
+                renderInboxHeader(
+                    $('#client-inbox-title'),
+                    careDisplayTitle(),
+                    currentThread && currentThread.booking_id ? currentThread.booking_id : 0,
+                    clientThreadAudienceText('CARE')
+                );
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
