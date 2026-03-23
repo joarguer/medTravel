@@ -1942,6 +1942,9 @@
         if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
             return renderMeetingConfirmedCard(trimmed);
         }
+        if (/^\[ACTION\]\s*Client rejected proposed dates$/i.test(trimmed)) {
+            return renderMeetingChangeRequestedCard();
+        }
 
         var label = '';
         var isReply = false;
@@ -1963,6 +1966,11 @@
                 return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries);
             }
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+        }
+
+        var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+        if (isReply && trimmed.toUpperCase().indexOf('PROPOSED_DATES') === 0) {
+            return renderMeetingProposalCard(trimmed, isItemThread);
         }
 
         var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(trimmed);
@@ -1988,8 +1996,6 @@
                     '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="history">UPLOAD HISTORY</button>' +
                     '</div>';
             }
-
-            var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
             if (structuredReplyUpper.indexOf('DATES NOT AVAILABLE') !== -1 && isItemThread) {
                 messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
                     '<button type="button" class="btn btn-default btn-xs client-propose-new-dates" title="Propose new dates">' +
@@ -1997,13 +2003,6 @@
                     '</button>' +
                     '</div>';
             }
-        }
-
-        if (isReply && structuredReplyUpper.indexOf('PROPOSED_DATES') !== -1) {
-            messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT DATES</button>' +
-                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">REJECT DATES</button>' +
-                '</div>';
         }
 
         if (isReply && structuredReplyUpper.indexOf('FINAL_APPROVED') !== -1 && feeGateActive) {
@@ -2036,6 +2035,71 @@
         } catch (e) {
             return null;
         }
+    }
+
+    function formatInboxDateTime(value) {
+        var raw = String(value || '').trim();
+        if (!raw) {
+            return '';
+        }
+        var normalized = raw.replace(' ', 'T');
+        var parsed = new Date(normalized);
+        if (isNaN(parsed.getTime())) {
+            return raw;
+        }
+        return parsed.toLocaleString('es-CO', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function parseMeetingProposalText(text) {
+        var source = String(text || '').trim();
+        var match = source.match(/^PROPOSED_DATES\s+(.+?)\s+to\s+(.+)$/i);
+        if (!match) {
+            return null;
+        }
+        return {
+            startAt: String(match[1] || '').trim(),
+            endAt: String(match[2] || '').trim()
+        };
+    }
+
+    function renderMeetingProposalCard(fullText, actionable) {
+        var proposal = parseMeetingProposalText(fullText);
+        if (!proposal) {
+            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+        }
+
+        var actionsHtml = '';
+        if (actionable) {
+            actionsHtml = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
+                '<button type="button" class="btn btn-success btn-xs client-date-action" data-action="accept_dates">ACEPTAR REUNIÓN</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">PEDIR CAMBIO</button>' +
+                '</div>';
+        }
+
+        return '<div class="panel panel-warning" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Propuesta de reunión</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(proposal.startAt)) + '</div>' +
+                '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(proposal.endAt)) + '</div>' +
+                '<div class="text-muted" style="margin-top:8px;">Esta es una propuesta real de reunión para este item.</div>' +
+                actionsHtml +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderMeetingChangeRequestedCard() {
+        return '<div class="panel panel-info" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Cambio solicitado</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                '<div>Has pedido ajustar la propuesta de reunión. El proveedor podrá enviarte una nueva fecha desde Inbox ITEM.</div>' +
+            '</div>' +
+        '</div>';
     }
 
     function normalizeDocTypeLabel(t) {
@@ -2145,8 +2209,8 @@
         return '<div class="panel panel-success" style="margin:0;">' +
             '<div class="panel-heading" style="padding:8px 10px;"><strong>Meeting confirmed</strong></div>' +
             '<div class="panel-body" style="padding:10px;">' +
-                (payload.start_at ? '<div><strong>Start:</strong> ' + esc(formatDateTime(payload.start_at)) + '</div>' : '') +
-                (payload.end_at ? '<div style="margin-top:6px;"><strong>End:</strong> ' + esc(formatDateTime(payload.end_at)) + '</div>' : '') +
+                (payload.start_at ? '<div><strong>Start:</strong> ' + esc(formatInboxDateTime(payload.start_at)) + '</div>' : '') +
+                (payload.end_at ? '<div style="margin-top:6px;"><strong>End:</strong> ' + esc(formatInboxDateTime(payload.end_at)) + '</div>' : '') +
                 (payload.organizer_email ? '<div style="margin-top:6px;"><strong>Organizer:</strong> ' + esc(payload.organizer_email) + '</div>' : '') +
                 actionsHtml +
             '</div>' +

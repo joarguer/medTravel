@@ -3028,7 +3028,11 @@ if ($action === 'propose_dates') {
     }
 
     $currentStatus = normalize_legacy_item_status($itemRow['current_status'] ?? '');
-    if ($currentStatus !== 'pending_provider') {
+    $allowedCurrentStatuses = ['pending_provider'];
+    if ($targetStatus === 'provider_proposed_change') {
+        $allowedCurrentStatuses[] = 'provider_proposed_change';
+    }
+    if (!in_array($currentStatus, $allowedCurrentStatuses, true)) {
         json_err('transition_not_allowed_from_' . $currentStatus, 409);
     }
 
@@ -3517,9 +3521,6 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
 
     if ($targetStatus === 'provider_proposed_change') {
         $providerNotes = trim((string)($_POST['provider_notes'] ?? ''));
-        if ($providerNotes === '') {
-            json_err('provider_notes_required', 422);
-        }
 
         $meetingStartRaw = trim((string)($_POST['proposed_start_at'] ?? ''));
         $meetingEndRaw = trim((string)($_POST['proposed_end_at'] ?? ''));

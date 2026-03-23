@@ -525,6 +525,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                             <li>En “Acciones estructuradas”:</li>
                                             <li style="list-style:none; margin-left:8px;">• “SOLICITAR INFORMACIÓN ADICIONAL”: pide documentos o datos faltantes (queda registrado como tarjeta).</li>
                                             <li style="list-style:none; margin-left:8px;">• “PROPONER AJUSTE DE COTIZACIÓN”: propone ajuste de cotización con justificación.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “PROPONER REUNIÓN”: agenda una propuesta real con fecha y hora para que el paciente la acepte o pida cambio.</li>
                                             <li>El paciente responderá con botones (Aceptar / Pedir cambios / Rechazar) o subirá documentos.</li>
                                             <li>Los mensajes libres no cambian estados por sí solos.</li>
                                             <li>Importante: Mantén toda la comunicación aquí para trazabilidad. No uses mensajes externos.</li>
@@ -573,6 +574,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                         <div class="btn-group btn-group-xs" role="group" style="display:flex;flex-wrap:wrap;gap:6px;">
                                             <button type="button" class="btn btn-default btn-xs" id="admin-open-request-info">SOLICITAR INFORMACIÓN ADICIONAL</button>
                                             <button type="button" class="btn btn-default btn-xs" id="admin-open-propose-quote">PROPONER AJUSTE DE COTIZACIÓN</button>
+                                            <button type="button" class="btn btn-default btn-xs" id="admin-open-propose-meeting">PROPONER REUNIÓN</button>
                                         </div>
                                     </div>
                                 </div>
@@ -742,6 +744,42 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" id="admin-submit-propose-quote">Enviar propuesta</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="adminProposeMeetingModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">Proponer reunión real</h4>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <div class="form-group">
+                            <label for="admin-meeting-start-at">Inicio</label>
+                            <input type="datetime-local" class="form-control" id="admin-meeting-start-at">
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="form-group">
+                            <label for="admin-meeting-end-at">Fin</label>
+                            <input type="datetime-local" class="form-control" id="admin-meeting-end-at">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="admin-meeting-note">Nota opcional</label>
+                    <textarea class="form-control" id="admin-meeting-note" rows="3" maxlength="500" placeholder="Contexto adicional para la propuesta de reunión"></textarea>
+                </div>
+                <p class="help-block" style="margin-bottom:0;">Esta acción reutiliza el flujo operativo existente. El paciente podrá aceptar la reunión o pedir cambio desde su Inbox ITEM.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="admin-submit-propose-meeting">Enviar propuesta</button>
             </div>
         </div>
     </div>

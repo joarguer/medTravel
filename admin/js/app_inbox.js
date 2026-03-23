@@ -69,6 +69,88 @@
             .replace(/'/g, '&#039;');
     }
 
+    function formatInboxDateTime(value) {
+        var raw = String(value || '').trim();
+        if (!raw) {
+            return '';
+        }
+        var normalized = raw.replace(' ', 'T');
+        var parsed = new Date(normalized);
+        if (isNaN(parsed.getTime())) {
+            return raw;
+        }
+        return parsed.toLocaleString('es-CO', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function parseMeetingProposalText(text) {
+        var source = String(text || '').trim();
+        var match = source.match(/^PROPOSED_DATES\s+(.+?)\s+to\s+(.+)$/i);
+        if (!match) {
+            return null;
+        }
+        return {
+            startAt: String(match[1] || '').trim(),
+            endAt: String(match[2] || '').trim()
+        };
+    }
+
+    function renderMeetingProposalCard(text) {
+        var proposal = parseMeetingProposalText(text);
+        if (!proposal) {
+            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+        }
+
+        return '<div class="panel panel-warning" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Propuesta real de reunión</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(proposal.startAt)) + '</div>' +
+                '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(proposal.endAt)) + '</div>' +
+                '<div class="text-muted" style="margin-top:8px;">Pendiente de respuesta del paciente.</div>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderMeetingConfirmedCard(fullText) {
+        var payload = parseStructuredJson('[MEETING_CONFIRMED]', fullText);
+        if (!payload) {
+            return renderStructuredParseFallback('[MEETING_CONFIRMED]');
+        }
+
+        var actionsHtml = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">';
+        if (payload.meet_url) {
+            actionsHtml += '<a class="btn btn-success btn-xs" href="' + esc(payload.meet_url) + '" target="_blank" rel="noopener">ABRIR MEET</a>';
+        }
+        if (payload.html_link) {
+            actionsHtml += '<a class="btn btn-default btn-xs" href="' + esc(payload.html_link) + '" target="_blank" rel="noopener">ABRIR EVENTO</a>';
+        }
+        actionsHtml += '</div>';
+
+        return '<div class="panel panel-success" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión confirmada</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                (payload.start_at ? '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(payload.start_at)) + '</div>' : '') +
+                (payload.end_at ? '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(payload.end_at)) + '</div>' : '') +
+                (payload.organizer_email ? '<div style="margin-top:6px;"><strong>Organizador:</strong> ' + esc(payload.organizer_email) + '</div>' : '') +
+                actionsHtml +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderMeetingChangeRequestedCard() {
+        return '<div class="panel panel-info" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Cambio solicitado</strong></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                '<div>El paciente pidió ajustar la propuesta de reunión desde Inbox ITEM.</div>' +
+            '</div>' +
+        '</div>';
+    }
+
     function resetAttachDocumentModal() {
         var $form = $('#admin-attach-document-form');
         if ($form.length && $form[0]) {
@@ -1176,6 +1258,12 @@
         if (trimmed.indexOf('[PROPOSAL_RESPONSE]') === 0) {
             return renderStructuredProposalResponse(trimmed);
         }
+        if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
+            return renderMeetingConfirmedCard(trimmed);
+        }
+        if (/^\[ACTION\]\s*Client rejected proposed dates$/i.test(trimmed)) {
+            return renderMeetingChangeRequestedCard();
+        }
 
         var label = '';
         var isReply = false;
@@ -1197,6 +1285,10 @@
                 return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries);
             }
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+        }
+
+        if (isReply && trimmed.toUpperCase().indexOf('PROPOSED_DATES') === 0) {
+            return renderMeetingProposalCard(trimmed);
         }
 
         var visibleQuickReplyLabel = adminVisibleQuickReplyLabel(trimmed);
@@ -1224,27 +1316,6 @@
                     '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="history">SUBIR HISTORIA CLÍNICA</button>' +
                     '</div>';
             }
-
-            var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
-            if (structuredReplyUpper.indexOf('DATES AVAILABLE') !== -1 && isItemThread) {
-                messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACEPTAR ESTAS FECHAS</button>' +
-                    '</div>';
-            }
-            if (structuredReplyUpper.indexOf('DATES NOT AVAILABLE') !== -1 && isItemThread) {
-                messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-propose-new-dates" title="Proponer nuevas fechas">' +
-                        'PROPONER NUEVAS FECHAS' +
-                    '</button>' +
-                    '</div>';
-            }
-        }
-
-        if (isReply && structuredReplyUpper.indexOf('PROPOSED_DATES') !== -1) {
-            messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACEPTAR FECHAS</button>' +
-                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">RECHAZAR FECHAS</button>' +
-                '</div>';
         }
 
         if (isReply && structuredReplyUpper.indexOf('FINAL_APPROVED') !== -1 && feeGateActive) {
@@ -2434,6 +2505,80 @@
         });
     }
 
+    function describeMeetingProposalError(res) {
+        var code = String((res && res.message) || '').trim();
+        var map = {
+            no_google_admin_connected: 'No hay un administrador conectado a Google Calendar para organizar la reunión.',
+            meeting_schedule_required: 'Debes indicar inicio y fin de la reunión.',
+            invalid_meeting_range: 'La fecha final debe ser posterior a la fecha inicial.',
+            transition_not_allowed_from_provider_proposed_change: 'El caso ya está en reprogramación. Puedes enviar una nueva propuesta.',
+            transition_not_allowed_from_awaiting_client: 'La reunión ya fue confirmada o cambió de estado operativo.',
+            transition_not_allowed_from_client_accepted: 'La reunión ya fue aceptada por el paciente.'
+        };
+        return map[code] || code || 'No se pudo enviar la propuesta de reunión';
+    }
+
+    function sendMeetingProposal(startAt, endAt, note) {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Selecciona primero un hilo antes de enviar');
+            return false;
+        }
+        if (String(currentThread.thread_type || '').toUpperCase() !== 'ITEM' || parseInt(currentThread.item_id || 0, 10) <= 0) {
+            toastr.warning('La propuesta de reunión solo aplica a hilos ITEM');
+            return false;
+        }
+
+        var startValue = String(startAt || '').trim();
+        var endValue = String(endAt || '').trim();
+        if (!startValue || !endValue) {
+            toastr.warning('Debes indicar inicio y fin de la reunión');
+            return false;
+        }
+
+        var startDate = new Date(startValue);
+        var endDate = new Date(endValue);
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate.getTime() <= startDate.getTime()) {
+            toastr.warning('La fecha final debe ser posterior a la fecha inicial');
+            return false;
+        }
+
+        var pendingId = addPendingMessage('[REPLY] PROPOSED_DATES ' + startValue.replace('T', ' ') + ' to ' + endValue.replace('T', ' '));
+        setComposeBusy(true, 'Enviando propuesta de reunión...');
+
+        $.ajax({
+            url: 'ajax/my_booking_requests.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'provider_propose_change',
+                item_id: parseInt(currentThread.item_id || 0, 10),
+                proposed_start_at: startValue,
+                proposed_end_at: endValue,
+                proposed_date_from: startValue.substring(0, 10),
+                proposed_date_to: endValue.substring(0, 10),
+                provider_notes: String(note || '')
+            }
+        }).done(function (res) {
+            setComposeBusy(false, '');
+            if (!res || res.ok !== true) {
+                updatePendingStatus(pendingId, 'Falló');
+                toastr.error(describeMeetingProposalError(res));
+                return;
+            }
+            removePendingMessage(pendingId);
+            toastr.success('Propuesta de reunión enviada');
+            loadMessages();
+            loadThreads();
+        }).fail(function (xhr) {
+            setComposeBusy(false, '');
+            updatePendingStatus(pendingId, 'Falló');
+            var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            toastr.error(describeMeetingProposalError(res));
+        });
+
+        return true;
+    }
+
     $(function () {
         var params = new URLSearchParams(window.location.search);
         var threadId = String(params.get('thread_id') || '');
@@ -2612,6 +2757,30 @@
                 notes: notes
             });
             $('#adminProposeQuoteModal').modal('hide');
+        });
+
+        $('#admin-open-propose-meeting').on('click', function () {
+            if (!currentThread || String(currentThread.thread_type || '').toUpperCase() !== 'ITEM' || parseInt(currentThread.item_id || 0, 10) <= 0) {
+                toastr.warning('Open a service thread first');
+                return;
+            }
+            $('#admin-meeting-start-at').val('');
+            $('#admin-meeting-end-at').val('');
+            $('#admin-meeting-note').val('');
+            $('#adminProposeMeetingModal').modal('show');
+        });
+
+        $('#admin-submit-propose-meeting').on('click', function () {
+            var startAt = $.trim($('#admin-meeting-start-at').val() || '');
+            var endAt = $.trim($('#admin-meeting-end-at').val() || '');
+            var note = $.trim($('#admin-meeting-note').val() || '');
+            if (note.length > 500) {
+                toastr.warning('La nota es demasiado larga');
+                return;
+            }
+            if (sendMeetingProposal(startAt, endAt, note)) {
+                $('#adminProposeMeetingModal').modal('hide');
+            }
         });
 
         bindInboxHelpPanel();
