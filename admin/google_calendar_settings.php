@@ -12,6 +12,9 @@ $adminUserId = current_admin_user_id();
 $config = google_calendar_get_config();
 $connection = google_calendar_get_connection($conexion, $adminUserId, false);
 $flash = google_calendar_pop_flash();
+$testEventResult = isset($flash['details']['test_event']) && is_array($flash['details']['test_event'])
+    ? $flash['details']['test_event']
+    : null;
 $scopeList = $connection && !empty($connection['scope_text'])
     ? preg_split('/\s+/', trim((string)$connection['scope_text']))
     : $config['scopes'];
@@ -91,6 +94,12 @@ $isConnected = !empty($connection['is_connected']);
             margin-top: 10px;
             color: #64748b;
         }
+        .test-result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -121,6 +130,49 @@ $isConnected = !empty($connection['is_connected']);
                 <?php if ($flash): ?>
                     <div class="alert alert-<?php echo $flash['type'] === 'success' ? 'success' : ($flash['type'] === 'warning' ? 'warning' : 'danger'); ?>">
                         <?php echo htmlspecialchars((string)$flash['message'], ENT_QUOTES, 'UTF-8'); ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($testEventResult): ?>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="portlet light bordered">
+                                <div class="portlet-title">
+                                    <div class="caption">
+                                        <i class="fa fa-flask"></i>
+                                        <span class="caption-subject bold">Resultado del evento de prueba</span>
+                                    </div>
+                                </div>
+                                <div class="portlet-body">
+                                    <div class="test-result-grid">
+                                        <div class="status-item">
+                                            <span class="label">Estado</span>
+                                            <strong><?php echo !empty($testEventResult['ok']) ? 'Éxito' : 'Error'; ?></strong>
+                                        </div>
+                                        <div class="status-item">
+                                            <span class="label">Event ID</span>
+                                            <strong><?php echo !empty($testEventResult['event_id']) ? htmlspecialchars((string)$testEventResult['event_id'], ENT_QUOTES, 'UTF-8') : 'No disponible'; ?></strong>
+                                        </div>
+                                        <div class="status-item">
+                                            <span class="label">HTML Link</span>
+                                            <?php if (!empty($testEventResult['html_link'])): ?>
+                                                <strong><a href="<?php echo htmlspecialchars((string)$testEventResult['html_link'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">Abrir evento</a></strong>
+                                            <?php else: ?>
+                                                <strong>No disponible</strong>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="status-item">
+                                            <span class="label">Meet URL</span>
+                                            <?php if (!empty($testEventResult['meet_url'])): ?>
+                                                <strong><a href="<?php echo htmlspecialchars((string)$testEventResult['meet_url'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">Abrir Meet</a></strong>
+                                            <?php else: ?>
+                                                <strong>No disponible</strong>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 <?php endif; ?>
 
@@ -186,6 +238,12 @@ $isConnected = !empty($connection['is_connected']);
                                         </a>
                                         <?php if ($isConnected): ?>
                                             <form method="post" action="google_calendar_oauth.php" style="display:inline-block;">
+                                                <input type="hidden" name="action" value="create_test_event">
+                                                <button type="submit" class="btn btn-success">
+                                                    <i class="fa fa-flask"></i> Crear evento de prueba con Meet
+                                                </button>
+                                            </form>
+                                            <form method="post" action="google_calendar_oauth.php" style="display:inline-block;">
                                                 <input type="hidden" name="action" value="disconnect">
                                                 <button type="submit" class="btn btn-danger" onclick="return confirm('Se eliminará la conexión Google guardada para este admin. ¿Deseas continuar?');">
                                                     <i class="fa fa-unlink"></i> Desconectar
@@ -210,6 +268,12 @@ $isConnected = !empty($connection['is_connected']);
                                     <div class="alert alert-danger" style="margin-top:20px;">
                                         <strong>Último error registrado:</strong>
                                         <?php echo htmlspecialchars((string)$connection['last_error'], ENT_QUOTES, 'UTF-8'); ?>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php if ($isConnected): ?>
+                                    <div class="alert alert-info" style="margin-top:20px;">
+                                        <strong>Prueba técnica controlada:</strong> el botón de prueba crea un evento real llamado <strong>MedTravel Test Meeting</strong> en el Google Calendar del admin conectado, con inicio en ahora + 30 minutos, fin en ahora + 60 minutos y generación de Google Meet.
                                     </div>
                                 <?php endif; ?>
                             </div>

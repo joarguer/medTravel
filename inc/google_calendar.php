@@ -189,11 +189,12 @@ function google_calendar_http_request($method, $url, $headers = [], $body = null
     ];
 }
 
-function google_calendar_set_flash($type, $message)
+function google_calendar_set_flash($type, $message, array $details = [])
 {
     $_SESSION['google_calendar_flash'] = [
         'type' => trim((string)$type),
         'message' => trim((string)$message),
+        'details' => $details,
     ];
 }
 

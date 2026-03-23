@@ -14,6 +14,63 @@ $adminUserId = current_admin_user_id();
 $config = google_calendar_get_config();
 $action = trim((string)($_POST['action'] ?? $_GET['action'] ?? ''));
 
+if ($action === 'create_test_event') {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo 'Método no permitido';
+        exit;
+    }
+
+    if (!$config['enabled']) {
+        google_calendar_set_flash('danger', 'La configuración backend de Google no está completa todavía.');
+        header('Location: google_calendar_settings.php');
+        exit;
+    }
+
+    $connection = google_calendar_get_connection($conexion, $adminUserId, false);
+    if (empty($connection['is_connected'])) {
+        google_calendar_set_flash('danger', 'El admin autenticado no tiene una conexión Google activa.');
+        header('Location: google_calendar_settings.php');
+        exit;
+    }
+
+    $startAt = new DateTimeImmutable('now', new DateTimeZone('America/Bogota'));
+    $startAt = $startAt->modify('+30 minutes');
+    $endAt = $startAt->modify('+30 minutes');
+
+    $result = google_calendar_create_event_with_meet($conexion, $adminUserId, [
+        'summary' => 'MedTravel Test Meeting',
+        'description' => 'Evento técnico de prueba creado manualmente desde google_calendar_settings.php para validar Calendar + Meet.',
+        'start_at' => $startAt->format(DateTimeInterface::RFC3339),
+        'end_at' => $endAt->format(DateTimeInterface::RFC3339),
+        'timezone' => 'America/Bogota',
+    ]);
+
+    if (!$result['ok']) {
+        google_calendar_set_flash('danger', (string)($result['error'] ?? 'No fue posible crear el evento de prueba en Google Calendar.'), [
+            'test_event' => [
+                'ok' => false,
+                'event_id' => (string)($result['event_id'] ?? ''),
+                'html_link' => (string)($result['html_link'] ?? ''),
+                'meet_url' => (string)($result['meet_url'] ?? ''),
+            ],
+        ]);
+        header('Location: google_calendar_settings.php');
+        exit;
+    }
+
+    google_calendar_set_flash('success', 'Evento de prueba creado correctamente en Google Calendar del admin conectado.', [
+        'test_event' => [
+            'ok' => true,
+            'event_id' => (string)($result['event_id'] ?? ''),
+            'html_link' => (string)($result['html_link'] ?? ''),
+            'meet_url' => (string)($result['meet_url'] ?? ''),
+        ],
+    ]);
+    header('Location: google_calendar_settings.php');
+    exit;
+}
+
 if ($action === 'start') {
     if (!$config['enabled']) {
         google_calendar_set_flash('danger', 'La configuración backend de Google no está completa todavía.');
