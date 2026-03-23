@@ -61,6 +61,8 @@ function get_required_permission_for_script($script_name) {
         // Reportes / configuración
         'informes.php' => PERM_REPORTS_VIEW,
         'email_settings.php' => PERM_SETTINGS_MANAGE,
+        'google_calendar_settings.php' => PERM_SETTINGS_MANAGE,
+        'google_calendar_oauth.php' => PERM_SETTINGS_MANAGE,
         'data_deletion_requests.php' => PERM_SETTINGS_MANAGE,
         'create_bd.php' => PERM_SETTINGS_MANAGE,
 

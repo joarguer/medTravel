@@ -11,6 +11,18 @@
 
 - Las decisiones y la arquitectura se actualizan **solo** en documentos canónicos. Los documentos derivados deben referenciar a los canónicos y no redefinir decisiones.
 
+## Integración Google Calendar / Meet base técnica
+
+- La base técnica mínima para admin ya existe en `admin/google_calendar_settings.php` y `admin/google_calendar_oauth.php`.
+- El backend reusable quedó en `inc/google_calendar.php`.
+- La persistencia requiere ejecutar la migración `sql/2026_03_23_admin_google_calendar_connections.sql`.
+- Variables de entorno requeridas para habilitar la conexión OAuth:
+  - `GOOGLE_OAUTH_CLIENT_ID`
+  - `GOOGLE_OAUTH_CLIENT_SECRET`
+  - `GOOGLE_OAUTH_REDIRECT_URI`
+  - `GOOGLE_OAUTH_ENCRYPTION_KEY`
+- La `GOOGLE_OAUTH_REDIRECT_URI` debe apuntar al callback real del panel admin, por ejemplo la ruta de `admin/google_calendar_oauth.php?action=callback` en el dominio operativo.
+
 
 ---
 
