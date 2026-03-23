@@ -33,15 +33,32 @@
     var composeBusy = false;
     var composeBusyMessage = '';
     var quickReplies = {
-        DATES_AVAILABLE: 'Dates available',
-        DATES_NOT_AVAILABLE: 'Dates not available',
-        REQUEST_MEDICAL_HISTORY: 'Solicitud del provider: historia clínica',
-        REQUEST_LABS: 'Solicitud del provider: laboratorios',
-        REQUEST_IMAGING: 'Solicitud del provider: imágenes diagnósticas',
-        REQUEST_PHOTOS: 'Solicitud del provider: fotografías clínicas',
-        FINAL_APPROVED: 'Respuesta clínica del provider: caso viable',
-        FINAL_NOT_ELIGIBLE: 'Respuesta clínica del provider: caso no viable'
+        DATES_AVAILABLE: 'Fechas disponibles',
+        DATES_NOT_AVAILABLE: 'Fechas no disponibles',
+        REQUEST_MEDICAL_HISTORY: 'Solicitar historia clínica',
+        REQUEST_LABS: 'Solicitar laboratorios',
+        REQUEST_IMAGING: 'Solicitar imágenes',
+        REQUEST_PHOTOS: 'Solicitar fotografías',
+        FINAL_APPROVED: 'Aprobación final',
+        FINAL_NOT_ELIGIBLE: 'No elegible'
     };
+
+    function adminVisibleQuickReplyLabel(rawValue) {
+        var normalized = String(rawValue || '').trim().toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
+        var map = {
+            DATES_AVAILABLE: 'FECHAS DISPONIBLES',
+            DATES_NOT_AVAILABLE: 'FECHAS NO DISPONIBLES',
+            REQUEST_MEDICAL_HISTORY: 'SOLICITAR HISTORIA CLÍNICA',
+            REQUEST_HISTORY: 'SOLICITAR HISTORIA CLÍNICA',
+            REQUEST_LABS: 'SOLICITAR LABORATORIOS',
+            REQUEST_IMAGING: 'SOLICITAR IMÁGENES',
+            REQUEST_PHOTOS: 'SOLICITAR FOTOGRAFÍAS',
+            FINAL_APPROVED: 'APROBACIÓN FINAL',
+            FINAL_NOT_ELIGIBLE: 'NO ELEGIBLE',
+            NOT_ELIGIBLE: 'NO ELEGIBLE'
+        };
+        return map[normalized] || '';
+    }
 
     function esc(value) {
         return String(value || '')
@@ -1048,7 +1065,7 @@
         if (normalized === 'PROPOSE_QUOTE_ADJUSTMENT') {
             return '[PROPOSE_QUOTE] ' + JSON.stringify(payload || {});
         }
-        return 'Sending structured action…';
+        return 'Enviando acción estructurada…';
     }
 
     function formatCurrencyAmount(amount, currency) {
@@ -1081,18 +1098,18 @@
             ? ('<ul class="admin-structured-list">' + requiredTypes.map(function (t) {
                 return '<li>' + esc(docTypeLabel(t)) + '</li>';
             }).join('') + '</ul>')
-            : '<div class="text-muted">No document types specified.</div>';
+            : '<div class="text-muted">No se especificaron tipos de documento.</div>';
 
         return '<div class="admin-structured-card admin-structured-request">' +
             '<div class="admin-structured-header">' +
                 '<i class="fa fa-file-medical-o admin-structured-icon" aria-hidden="true"></i>' +
-                '<span class="admin-structured-title">Additional Information Requested</span>' +
-                '<span class="label label-warning admin-structured-badge">Awaiting Client</span>' +
+                '<span class="admin-structured-title">Información adicional solicitada</span>' +
+                '<span class="label label-warning admin-structured-badge">En espera del cliente</span>' +
             '</div>' +
             '<div class="admin-structured-body">' +
-                '<div><strong>Requested types</strong></div>' +
+                '<div><strong>Tipos solicitados</strong></div>' +
                 listHtml +
-                (note ? '<div class="admin-structured-note"><strong>Note:</strong> ' + esc(note) + '</div>' : '') +
+                (note ? '<div class="admin-structured-note"><strong>Nota:</strong> ' + esc(note) + '</div>' : '') +
             '</div>' +
         '</div>';
     }
@@ -1109,12 +1126,12 @@
         return '<div class="admin-structured-card admin-structured-proposal">' +
             '<div class="admin-structured-header">' +
                 '<i class="fa fa-money admin-structured-icon" aria-hidden="true"></i>' +
-                '<span class="admin-structured-title">Quote Adjustment Proposal</span>' +
-                '<span class="label label-warning admin-structured-badge">Awaiting Client Response</span>' +
+                '<span class="admin-structured-title">Propuesta de ajuste de cotización</span>' +
+                '<span class="label label-warning admin-structured-badge">En espera de respuesta del cliente</span>' +
             '</div>' +
             '<div class="admin-structured-body">' +
-                '<div><strong>Amount:</strong> ' + esc(amount) + '</div>' +
-                (notes ? '<div class="admin-structured-note"><strong>Justification:</strong> ' + esc(notes) + '</div>' : '') +
+                '<div><strong>Monto:</strong> ' + esc(amount) + '</div>' +
+                (notes ? '<div class="admin-structured-note"><strong>Justificación:</strong> ' + esc(notes) + '</div>' : '') +
             '</div>' +
         '</div>';
     }
@@ -1128,21 +1145,21 @@
         var action = String(payload.action_type || '').toUpperCase();
         var notes = String(payload.notes || '').trim();
         var map = {
-            ACCEPT_PROPOSAL: { cls: 'success', label: 'Accepted' },
-            REQUEST_CHANGES: { cls: 'warning', label: 'Changes Requested' },
-            REJECT_PROPOSAL: { cls: 'danger', label: 'Rejected' },
-            DOCS_NOT_AVAILABLE: { cls: 'default', label: 'Documents Not Available' }
+            ACCEPT_PROPOSAL: { cls: 'success', label: 'Aceptada' },
+            REQUEST_CHANGES: { cls: 'warning', label: 'Cambios solicitados' },
+            REJECT_PROPOSAL: { cls: 'danger', label: 'Rechazada' },
+            DOCS_NOT_AVAILABLE: { cls: 'default', label: 'Documentos no disponibles' }
         };
-        var badge = map[action] || { cls: 'default', label: action || 'Response' };
+        var badge = map[action] || { cls: 'default', label: action || 'Respuesta' };
 
         return '<div class="admin-structured-card admin-structured-response">' +
             '<div class="admin-structured-header">' +
                 '<i class="fa fa-check-circle admin-structured-icon" aria-hidden="true"></i>' +
-                '<span class="admin-structured-title">Proposal Response</span>' +
+                '<span class="admin-structured-title">Respuesta a la propuesta</span>' +
                 '<span class="label label-' + esc(badge.cls) + ' admin-structured-badge">' + esc(badge.label) + '</span>' +
             '</div>' +
             '<div class="admin-structured-body">' +
-                (notes ? '<div class="admin-structured-note"><strong>Note:</strong> ' + esc(notes) + '</div>' : '<div class="text-muted">No additional notes.</div>') +
+                (notes ? '<div class="admin-structured-note"><strong>Nota:</strong> ' + esc(notes) + '</div>' : '<div class="text-muted">Sin notas adicionales.</div>') +
             '</div>' +
         '</div>';
     }
@@ -1163,10 +1180,10 @@
         var label = '';
         var isReply = false;
         if (trimmed.indexOf('[ACTION]') === 0) {
-            label = 'Action';
+            label = 'Acción';
             trimmed = trimmed.replace(/^\[ACTION\]\s*/i, '');
         } else if (trimmed.indexOf('[REPLY]') === 0) {
-            label = 'Reply';
+            label = 'Respuesta';
             trimmed = trimmed.replace(/^\[REPLY\]\s*/i, '');
             isReply = true;
         }
@@ -1182,40 +1199,42 @@
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
 
-        var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(trimmed);
+        var visibleQuickReplyLabel = adminVisibleQuickReplyLabel(trimmed);
+        var visibleBody = visibleQuickReplyLabel || trimmed;
+        var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(visibleBody);
         var structuredReplyUpper = trimmed.toUpperCase();
         if (isReply) {
             if (structuredReplyUpper.indexOf('REQUEST LABS') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="labs">UPLOAD LABS</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="labs">SUBIR LABORATORIOS</button>' +
                     '</div>';
             }
             if (structuredReplyUpper.indexOf('REQUEST IMAGING') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="imaging">UPLOAD IMAGING</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="imaging">SUBIR IMÁGENES</button>' +
                     '</div>';
             }
             if (structuredReplyUpper.indexOf('REQUEST PHOTOS') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="photos">UPLOAD PHOTOS</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="photos">SUBIR FOTOGRAFÍAS</button>' +
                     '</div>';
             }
             if (structuredReplyUpper.indexOf('REQUEST HISTORY') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="history">UPLOAD HISTORY</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="history">SUBIR HISTORIA CLÍNICA</button>' +
                     '</div>';
             }
 
             var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
             if (structuredReplyUpper.indexOf('DATES AVAILABLE') !== -1 && isItemThread) {
                 messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT THESE DATES</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACEPTAR ESTAS FECHAS</button>' +
                     '</div>';
             }
             if (structuredReplyUpper.indexOf('DATES NOT AVAILABLE') !== -1 && isItemThread) {
                 messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-propose-new-dates" title="Propose new dates">' +
-                        'PROPOSE NEW DATES' +
+                    '<button type="button" class="btn btn-default btn-xs client-propose-new-dates" title="Proponer nuevas fechas">' +
+                        'PROPONER NUEVAS FECHAS' +
                     '</button>' +
                     '</div>';
             }
@@ -1223,15 +1242,15 @@
 
         if (isReply && structuredReplyUpper.indexOf('PROPOSED_DATES') !== -1) {
             messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACCEPT DATES</button>' +
-                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">REJECT DATES</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="accept_dates">ACEPTAR FECHAS</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">RECHAZAR FECHAS</button>' +
                 '</div>';
         }
 
         if (isReply && structuredReplyUpper.indexOf('FINAL_APPROVED') !== -1 && feeGateActive) {
             messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_accept_and_pay">ACCEPT & PAY</button>' +
-                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_decline">DECLINE</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_accept_and_pay">ACEPTAR Y PAGAR</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_decline">DECLINAR</button>' +
                 '</div>';
         }
 
@@ -2341,7 +2360,7 @@
         if (!currentThread || !currentThread.thread_id) return;
         var key = (replyKey || '').toString().toUpperCase();
         if (!quickReplies[key]) {
-            toastr.error('Invalid quick reply');
+            toastr.error('Acción rápida no válida');
             return;
         }
 
@@ -2359,19 +2378,19 @@
             }
         }).done(function (res) {
             if (!res || res.ok !== true) {
-                toastr.error((res && res.message) ? res.message : 'Could not send quick reply');
+                toastr.error((res && res.message) ? res.message : 'No se pudo enviar la acción rápida');
                 updatePendingStatus(pendingId, 'Failed');
                 return;
             }
             markSentFromResponse(res);
             removePendingMessage(pendingId);
             realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
-            toastr.success('Quick reply sent');
+            toastr.success('Acción rápida enviada');
             loadMessages();
             loadThreads();
         }).fail(function () {
             updatePendingStatus(pendingId, 'Failed');
-            toastr.error('Could not send quick reply');
+            toastr.error('No se pudo enviar la acción rápida');
         });
     }
 
@@ -2381,7 +2400,7 @@
             return;
         }
         if (String(currentThread.thread_type || '').toUpperCase() !== 'ITEM') {
-            toastr.warning('Structured proposals are only available in service threads');
+            toastr.warning('Las acciones estructuradas solo están disponibles en hilos de servicio');
             return;
         }
 

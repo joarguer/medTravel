@@ -518,13 +518,13 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                         <ul style="margin:0 0 0 18px; padding:0;">
                                             <li>Puedes escribir mensajes libres desde el inicio de la conversación.</li>
                                             <li>Usa los botones de “Acciones formales” cuando necesites registrar decisiones o solicitudes con efecto operativo:</li>
-                                            <li style="list-style:none; margin-left:8px;">• “DATES AVAILABLE / NOT AVAILABLE”: confirma disponibilidad de fechas.</li>
-                                            <li style="list-style:none; margin-left:8px;">• “REQUEST HISTORY / LABS / IMAGING / PHOTOS”: solicita información clínica específica.</li>
-                                            <li style="list-style:none; margin-left:8px;">• “FINAL APPROVED”: úsalo solo cuando el caso esté listo para aprobación final.</li>
-                                            <li style="list-style:none; margin-left:8px;">• “NOT ELIGIBLE”: si el paciente no aplica para el servicio.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “FECHAS DISPONIBLES / FECHAS NO DISPONIBLES”: confirma disponibilidad de fechas.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “SOLICITAR HISTORIA CLÍNICA / LABORATORIOS / IMÁGENES / FOTOGRAFÍAS”: solicita información clínica específica.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “APROBACIÓN FINAL”: úsalo solo cuando el caso esté listo para aprobación final.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “NO ELEGIBLE”: si el paciente no aplica para el servicio.</li>
                                             <li>En “Acciones estructuradas”:</li>
-                                            <li style="list-style:none; margin-left:8px;">• “REQUEST ADDITIONAL INFO”: pide documentos o datos faltantes (queda registrado como tarjeta).</li>
-                                            <li style="list-style:none; margin-left:8px;">• “PROPOSE QUOTE ADJUSTMENT”: propone ajuste de cotización con justificación.</li>
+                                            <li style="list-style:none; margin-left:8px;">• “SOLICITAR INFORMACIÓN ADICIONAL”: pide documentos o datos faltantes (queda registrado como tarjeta).</li>
+                                            <li style="list-style:none; margin-left:8px;">• “PROPONER AJUSTE DE COTIZACIÓN”: propone ajuste de cotización con justificación.</li>
                                             <li>El paciente responderá con botones (Aceptar / Pedir cambios / Rechazar) o subirá documentos.</li>
                                             <li>Los mensajes libres no cambian estados por sí solos.</li>
                                             <li>Importante: Mantén toda la comunicación aquí para trazabilidad. No uses mensajes externos.</li>
@@ -559,20 +559,20 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                 <div id="admin-inbox-quick-replies" style="display:none;margin-top:12px;">
                                     <label>Acciones formales rápidas</label>
                                     <div class="btn-group btn-group-xs" role="group" style="display:flex;flex-wrap:wrap;gap:6px;">
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="DATES_AVAILABLE">Dates available</button>
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="DATES_NOT_AVAILABLE">Dates not available</button>
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_MEDICAL_HISTORY">REQUEST HISTORY</button>
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_LABS">REQUEST LABS</button>
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_IMAGING">REQUEST IMAGING</button>
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_PHOTOS">REQUEST PHOTOS</button>
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="FINAL_APPROVED">FINAL APPROVED</button>
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="FINAL_NOT_ELIGIBLE">NOT ELIGIBLE</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="DATES_AVAILABLE">FECHAS DISPONIBLES</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="DATES_NOT_AVAILABLE">FECHAS NO DISPONIBLES</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_MEDICAL_HISTORY">SOLICITAR HISTORIA CLÍNICA</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_LABS">SOLICITAR LABORATORIOS</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_IMAGING">SOLICITAR IMÁGENES</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_PHOTOS">SOLICITAR FOTOGRAFÍAS</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="FINAL_APPROVED">APROBACIÓN FINAL</button>
+                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="FINAL_NOT_ELIGIBLE">NO ELEGIBLE</button>
                                     </div>
                                     <div id="admin-inbox-structured-actions" style="display:none;margin-top:10px;">
                                         <label>Acciones estructuradas</label>
                                         <div class="btn-group btn-group-xs" role="group" style="display:flex;flex-wrap:wrap;gap:6px;">
-                                            <button type="button" class="btn btn-default btn-xs" id="admin-open-request-info">Request additional info</button>
-                                            <button type="button" class="btn btn-default btn-xs" id="admin-open-propose-quote">Propose quote adjustment</button>
+                                            <button type="button" class="btn btn-default btn-xs" id="admin-open-request-info">SOLICITAR INFORMACIÓN ADICIONAL</button>
+                                            <button type="button" class="btn btn-default btn-xs" id="admin-open-propose-quote">PROPONER AJUSTE DE COTIZACIÓN</button>
                                         </div>
                                     </div>
                                 </div>
@@ -686,27 +686,27 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title">Request additional info</h4>
+                <h4 class="modal-title">Solicitar información adicional</h4>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Required documents</label>
+                    <label>Documentos requeridos</label>
                     <div class="checkbox-list" id="admin-request-info-types">
-                        <label><input type="checkbox" value="labs"> Labs</label>
-                        <label><input type="checkbox" value="imaging"> Imaging</label>
-                        <label><input type="checkbox" value="photos"> Photos</label>
-                        <label><input type="checkbox" value="medical_history"> Medical history</label>
-                        <label><input type="checkbox" value="other"> Other</label>
+                        <label><input type="checkbox" value="labs"> Laboratorios</label>
+                        <label><input type="checkbox" value="imaging"> Imágenes</label>
+                        <label><input type="checkbox" value="photos"> Fotografías</label>
+                        <label><input type="checkbox" value="medical_history"> Historia clínica</label>
+                        <label><input type="checkbox" value="other"> Otro</label>
                     </div>
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
-                    <label for="admin-request-info-note">Short note</label>
-                    <textarea class="form-control" id="admin-request-info-note" rows="3" maxlength="500" placeholder="What do you need from the client?"></textarea>
+                    <label for="admin-request-info-note">Nota breve</label>
+                    <textarea class="form-control" id="admin-request-info-note" rows="3" maxlength="500" placeholder="¿Qué necesitas del cliente?"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="admin-submit-request-info">Send request</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="admin-submit-request-info">Enviar solicitud</button>
             </div>
         </div>
     </div>
@@ -717,31 +717,31 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                <h4 class="modal-title">Propose quote adjustment</h4>
+                <h4 class="modal-title">Proponer ajuste de cotización</h4>
             </div>
             <div class="modal-body">
                 <div class="row">
                     <div class="col-sm-6">
                         <div class="form-group">
-                            <label for="admin-propose-amount">Amount</label>
+                            <label for="admin-propose-amount">Monto</label>
                             <input type="number" class="form-control" id="admin-propose-amount" min="0" step="0.01" placeholder="0.00">
                         </div>
                     </div>
                     <div class="col-sm-6">
                         <div class="form-group">
-                            <label for="admin-propose-currency">Currency</label>
+                            <label for="admin-propose-currency">Moneda</label>
                             <input type="text" class="form-control" id="admin-propose-currency" maxlength="10" value="USD">
                         </div>
                     </div>
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
-                    <label for="admin-propose-notes">Justification / notes</label>
-                    <textarea class="form-control" id="admin-propose-notes" rows="3" maxlength="500" placeholder="Explain why this adjustment is needed"></textarea>
+                    <label for="admin-propose-notes">Justificación / notas</label>
+                    <textarea class="form-control" id="admin-propose-notes" rows="3" maxlength="500" placeholder="Explica por qué se necesita este ajuste"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="admin-submit-propose-quote">Send proposal</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="admin-submit-propose-quote">Enviar propuesta</button>
             </div>
         </div>
     </div>

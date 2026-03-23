@@ -363,7 +363,7 @@ function admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $f
         'stage_allows_free_message' => true,
         'can_send_free_message' => $canSendFreeMessage,
         'blocked_reason' => $reason,
-        'notice' => $feeLocked ? 'Free-form messaging is blocked by the coordination condition. Formal actions remain available.' : '',
+        'notice' => $feeLocked ? 'La mensajería libre está bloqueada por la condición de coordinación. Las acciones formales siguen disponibles.' : '',
     ];
 }
 
