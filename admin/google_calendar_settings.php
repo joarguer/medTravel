@@ -326,6 +326,8 @@ $isConnected = !empty($connection['is_connected']);
         </div>
     </div>
 
+    <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
+    <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
     <?php echo $theme_global_js; ?>
     <?php echo $theme_layout_js; ?>
 </body>
