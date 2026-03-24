@@ -19,7 +19,7 @@ if (!isset($conexion) || !$conexion) {
     admin_realtime_err('db_not_available', 500);
 }
 
-$scope = admin_inbox_build_scope();
+$scope = admin_inbox_build_scope($conexion);
 if (empty($scope['ok'])) {
     admin_realtime_err((string)($scope['message'] ?? 'forbidden'), (int)($scope['status'] ?? 403));
 }

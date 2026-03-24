@@ -372,7 +372,7 @@ function admin_inbox_linked_staff_scope_clause()
     return "(bri.assigned_staff_id = ? OR (COALESCE(bri.assigned_staff_id, 0) = 0 AND (bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review'))))";
 }
 
-function admin_inbox_build_scope()
+function admin_inbox_build_scope($conexion)
 {
     $providerId = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
     $serviceProviderId = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
@@ -602,7 +602,7 @@ if (!inbox_table_exists($conexion, 'booking_requests') || !inbox_table_exists($c
     admin_inbox_err('booking_tables_not_available', 409);
 }
 
-$scope = admin_inbox_build_scope();
+$scope = admin_inbox_build_scope($conexion);
 if (empty($scope['ok'])) {
     admin_inbox_err((string)($scope['message'] ?? 'forbidden'), (int)($scope['status'] ?? 403));
 }
