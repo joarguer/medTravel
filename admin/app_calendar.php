@@ -30,6 +30,29 @@ $can_cancel = $can_update;
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
     <link href="/assets/global/plugins/fullcalendar/fullcalendar.min.css" rel="stylesheet" type="text/css" />
+    <style>
+        #admin-calendar-create-modal .modal-dialog {
+            width: 760px;
+            max-width: calc(100% - 30px);
+        }
+
+        #admin-calendar-create-modal .input-group {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        #admin-calendar-create-modal .input-group .form-control,
+        #admin-calendar-create-modal input[type="datetime-local"].form-control {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        #admin-calendar-create-modal .input-group-addon {
+            width: 1%;
+            white-space: nowrap;
+        }
+    </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
 <div class="wrapper">
