@@ -884,6 +884,8 @@ $footer =  '<p class="copyright"> '.date('Y').' &copy; GRODEV Dev By
             <i class="icon-arrow-up"></i>
             </a>';
 
+require_once __DIR__ . '/provider_medical_staff_helpers.php';
+
 
 // ── Quick sidebar: pre-cargar staff del prestador médico ─────────────────────
 $_qs_staff_rows   = [];
@@ -918,15 +920,16 @@ if ($es_prestador && $_qs_provider_id > 0 && isset($conexion) && $conexion
 ob_start();
 if ($es_prestador && $_qs_provider_id > 0) {
     if (empty($_qs_staff_rows)) {
-        echo '<div style="padding:28px 18px; text-align:center; color:#888;">';
-        echo '<i class="fa fa-user-md" style="font-size:32px; margin-bottom:12px; display:block; opacity:.4;"></i>';
-        echo '<p style="font-size:13px; line-height:1.5; margin-bottom:16px;">';
-        echo 'A&uacute;n no has registrado personal m&eacute;dico.<br>Agrega tu equipo cl&iacute;nico para organizar mejor la atenci&oacute;n.';
+        echo '<div class="inner-content" style="text-align:center; padding-top:10px;">';
+        echo '<i class="fa fa-user-md" style="font-size:36px; color:#4a6070; display:block; margin-bottom:10px;"></i>';
+        echo '<p style="color:#6c8296; font-size:12px; line-height:1.5; margin-bottom:14px;">';
+        echo 'A&uacute;n no has registrado personal m&eacute;dico.<br>';
+        echo 'Agrega tu equipo cl&iacute;nico para organizar la atenci&oacute;n.';
         echo '</p>';
-        echo '<a href="staff_medico.php" class="btn btn-sm btn-primary btn-block">';
-        echo '<i class="fa fa-plus"></i> Agregar personal</a>';
+        echo '<a href="staff_medico.php" class="btn btn-sm btn-primary btn-block"><i class="fa fa-plus"></i> Agregar personal</a>';
         echo '</div>';
     } else {
+        $_qs_avatar_default = '../assets/layouts/layout6/img/avatar1.jpg';
         foreach ($_qs_staff_rows as $_qs_m) {
             $__name    = htmlspecialchars((string)($_qs_m['full_name'] ?? ''), ENT_QUOTES);
             $__role    = htmlspecialchars((string)($_qs_m['role_title'] ?? ''), ENT_QUOTES);
@@ -935,56 +938,48 @@ if ($es_prestador && $_qs_provider_id > 0) {
             $__primary = ((int)($_qs_m['is_primary_doctor'] ?? 0) === 1);
             $__id      = (int)($_qs_m['id'] ?? 0);
             $__photo   = trim((string)($_qs_m['photo'] ?? ''));
-            $__photo_src = '';
+            $__photo_src = $_qs_avatar_default;
             if ($__photo !== '') {
                 $_candidate = 'img/staff/' . $_qs_provider_id . '/' . $__photo;
                 if (file_exists(dirname(__FILE__, 2) . '/' . $_candidate)) {
                     $__photo_src = '../' . $_candidate;
                 }
             }
-            echo '<li class="media" style="padding:10px 15px; border-bottom:1px solid #f0f0f0; margin:0;">';
-            echo '<div style="display:flex; align-items:center; gap:10px;">';
-            echo '<div style="flex-shrink:0; width:38px; height:38px; border-radius:50%; background:#e8e8e8; overflow:hidden; display:flex; align-items:center; justify-content:center;">';
-            if ($__photo_src !== '') {
-                echo '<img src="' . htmlspecialchars($__photo_src, ENT_QUOTES) . '" alt="' . $__name . '" style="width:38px; height:38px; object-fit:cover;" />';
-            } else {
-                echo '<i class="fa fa-user-md" style="color:#aaa; font-size:16px;"></i>';
-            }
-            echo '</div>';
-            echo '<div style="flex:1; min-width:0;">';
-            echo '<div style="font-size:13px; font-weight:600; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">';
-            echo $__name;
+            $__badge_class = $__active ? 'badge-success' : 'badge-default';
+            $__badge_label = $__active ? 'Activo' : 'Inactivo';
+            echo '<li class="media">';
+            echo '<img class="media-object" src="' . htmlspecialchars($__photo_src, ENT_QUOTES) . '" alt="' . $__name . '">';
+            echo '<div class="media-body">';
+            echo '<h4 class="media-heading">' . $__name;
             if ($__primary) {
                 echo ' <span class="badge badge-primary" style="font-size:9px;">Principal</span>';
             }
-            echo '</div>';
+            echo '</h4>';
             if ($__role !== '') {
-                echo '<div style="font-size:11px; color:#777; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' . $__role . '</div>';
+                echo '<div class="media-heading-sub">' . $__role . '</div>';
             }
             if ($__spec !== '') {
-                echo '<div style="font-size:11px; color:#999; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' . $__spec . '</div>';
+                echo '<div class="media-heading-small">' . $__spec . '</div>';
             }
             echo '</div>';
-            echo '<div style="flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:3px;">';
-            $__badge_class = $__active ? 'badge-success' : 'badge-default';
-            $__badge_label = $__active ? 'Activo' : 'Inactivo';
-            echo '<span class="badge ' . $__badge_class . '" style="font-size:9px;">' . $__badge_label . '</span>';
-            echo '<a href="staff_medico.php?edit=' . $__id . '" title="Editar ' . $__name . '" style="font-size:10px; color:#888;">';
-            echo '<i class="fa fa-pencil"></i></a>';
-            echo '</div>';
+            echo '<div class="media-status">';
+            echo '<span class="badge ' . $__badge_class . '">' . $__badge_label . '</span>';
+            if ($__id > 0) {
+                echo '<br><a href="staff_medico.php?edit=' . $__id . '" title="Editar ' . $__name . '" style="color:#6c8296; font-size:10px;"><i class="fa fa-pencil"></i></a>';
+            }
             echo '</div>';
             echo '</li>';
         }
-        echo '<li style="padding:12px 15px; background:#f8f8f8; border-top:1px solid #e5e5e5;">';
-        echo '<div style="display:flex; gap:6px;">';
+        echo '<li>';
+        echo '<div class="inner-content" style="display:flex; gap:6px;">';
         echo '<a href="staff_medico.php?action=new" class="btn btn-xs btn-primary" style="flex:1; text-align:center;"><i class="fa fa-plus"></i> Agregar</a>';
         echo '<a href="staff_medico.php" class="btn btn-xs btn-default" style="flex:1; text-align:center;"><i class="fa fa-th-list"></i> Ver todo</a>';
         echo '</div></li>';
     }
 } else {
-    echo '<div style="padding:20px 15px; color:#aaa; font-size:12px; text-align:center;">';
-    echo '<i class="fa fa-user-md" style="font-size:28px; display:block; margin-bottom:8px; opacity:.3;"></i>';
-    echo 'Este panel solo est&aacute; disponible para prestadores m&eacute;dicos.';
+    echo '<div class="inner-content" style="text-align:center;">';
+    echo '<i class="fa fa-user-md" style="font-size:28px; color:#4a6070; display:block; margin-bottom:8px;"></i>';
+    echo '<span style="color:#6c8296; font-size:12px;">Este panel solo est&aacute; disponible para prestadores m&eacute;dicos.</span>';
     echo '</div>';
 }
 $_qs_staff_html  = ob_get_clean();
