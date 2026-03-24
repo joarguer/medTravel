@@ -963,6 +963,12 @@ if (!$_qs_hide_for_linked_staff && $es_prestador && $_qs_provider_id > 0 && !emp
             $_qs_has_provider_id = true;
         }
 
+        $_qs_has_offer_provider_id = false;
+        $_qs_offer_provider_col_check = mysqli_query($conexion, "SHOW COLUMNS FROM provider_service_offers LIKE 'provider_id'");
+        if ($_qs_offer_provider_col_check && mysqli_num_rows($_qs_offer_provider_col_check) > 0) {
+            $_qs_has_offer_provider_id = true;
+        }
+
         $_qs_has_items_soft_delete = false;
         $_qs_items_soft_delete_check = mysqli_query($conexion, "SHOW COLUMNS FROM booking_request_items LIKE 'is_deleted'");
         if ($_qs_items_soft_delete_check && mysqli_num_rows($_qs_items_soft_delete_check) > 0) {
@@ -999,7 +1005,7 @@ if (!$_qs_hide_for_linked_staff && $es_prestador && $_qs_provider_id > 0 && !emp
             $_qs_has_created_at = true;
         }
 
-        if ($_qs_has_assigned_staff_id && $_qs_has_provider_id) {
+        if ($_qs_has_assigned_staff_id && ($_qs_has_provider_id || $_qs_has_offer_provider_id)) {
             $_qs_item_status_expr = $_qs_has_item_status
                 ? "CASE WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin','pending_review') THEN 'pending_provider' ELSE bri.item_status END"
                 : "'pending_provider'";
@@ -1008,6 +1014,14 @@ if (!$_qs_hide_for_linked_staff && $es_prestador && $_qs_provider_id > 0 && !emp
                 : "CONCAT('Paciente #', br.id)";
             $_qs_destination_expr = $_qs_has_destination ? 'br.destination' : "''";
             $_qs_created_at_expr = $_qs_has_created_at ? 'br.created_at' : 'NULL';
+            $_qs_order_created_expr = $_qs_has_created_at ? 'br.created_at' : 'bri.id';
+            if ($_qs_has_provider_id && $_qs_has_offer_provider_id) {
+                $_qs_provider_scope_expr = 'COALESCE(NULLIF(bri.provider_id, 0), o.provider_id)';
+            } elseif ($_qs_has_provider_id) {
+                $_qs_provider_scope_expr = 'bri.provider_id';
+            } else {
+                $_qs_provider_scope_expr = 'o.provider_id';
+            }
             $_qs_in_placeholders = implode(', ', array_fill(0, count($_qs_staff_ids), '?'));
             $_qs_cases_sql = "SELECT
                                 bri.assigned_staff_id,
@@ -1022,7 +1036,7 @@ if (!$_qs_hide_for_linked_staff && $es_prestador && $_qs_provider_id > 0 && !emp
                              INNER JOIN booking_requests br ON br.id = bri.booking_request_id
                              LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
                              LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
-                             WHERE bri.provider_id = ?
+                             WHERE {$_qs_provider_scope_expr} = ?
                                AND bri.item_type = 'medical_offer'
                                AND bri.assigned_staff_id IN ({$_qs_in_placeholders})";
             if ($_qs_has_items_soft_delete) {
@@ -1031,7 +1045,7 @@ if (!$_qs_hide_for_linked_staff && $es_prestador && $_qs_provider_id > 0 && !emp
             if ($_qs_has_requests_soft_delete) {
                 $_qs_cases_sql .= ' AND br.is_deleted = 0';
             }
-            $_qs_cases_sql .= ' ORDER BY br.created_at DESC, bri.id DESC';
+            $_qs_cases_sql .= " ORDER BY {$_qs_order_created_expr} DESC, bri.id DESC";
 
             $_qs_cases_stmt = mysqli_prepare($conexion, $_qs_cases_sql);
             if ($_qs_cases_stmt) {
@@ -1096,6 +1110,7 @@ if ($es_prestador && $_qs_provider_id > 0) {
         echo '</div>';
     } elseif (!$_qs_hide_for_linked_staff) {
         $_qs_avatar_default = '../assets/layouts/layout6/img/avatar1.jpg';
+        $_qs_case_avatar_default = '../assets/layouts/layout/img/avatar.png';
         $_qs_staff_detail_templates = '';
         foreach ($_qs_staff_rows as $_qs_m) {
             $__name    = htmlspecialchars((string)($_qs_m['full_name'] ?? ''), ENT_QUOTES);
@@ -1126,7 +1141,9 @@ if ($es_prestador && $_qs_provider_id > 0) {
                         }
                         $_qs_photo_disk_path = dirname(__DIR__) . '/' . $_qs_photo_candidate;
                         if (is_file($_qs_photo_disk_path)) {
-                            $__photo_src = $_qs_photo_candidate;
+                            $__photo_src = strpos($_qs_photo_candidate, '../') === 0
+                                ? $_qs_photo_candidate
+                                : $_qs_photo_candidate;
                             break;
                         }
                     }
@@ -1137,7 +1154,7 @@ if ($es_prestador && $_qs_provider_id > 0) {
             $__case_total = (int)($_qs_staff_case_totals[$__id] ?? 0);
             $__case_pending = (int)($_qs_staff_case_pending[$__id] ?? 0);
             $__meta_line = trim(htmlspecialchars_decode($__role, ENT_QUOTES) . (htmlspecialchars_decode($__spec, ENT_QUOTES) !== '' ? ' · ' . htmlspecialchars_decode($__spec, ENT_QUOTES) : ''));
-            echo '<li class="media qs-staff-row" data-staff-id="' . $__id . '" data-staff-name="' . $__name . '" data-staff-meta="' . htmlspecialchars($__meta_line, ENT_QUOTES) . '" data-edit-url="' . $__edit_url . '">';
+            echo '<li class="media qs-staff-row" data-staff-id="' . $__id . '" data-staff-name="' . $__name . '" data-staff-meta="' . htmlspecialchars($__meta_line, ENT_QUOTES) . '" data-staff-role="' . $__role . '" data-staff-specialty="' . $__spec . '" data-staff-photo="' . htmlspecialchars($__photo_src, ENT_QUOTES) . '" data-staff-status="' . htmlspecialchars($__badge_label, ENT_QUOTES) . '" data-staff-cases="' . $__case_total . '" data-staff-pending="' . $__case_pending . '" data-edit-url="' . $__edit_url . '">';
             echo '<img class="media-object" src="' . htmlspecialchars($__photo_src, ENT_QUOTES) . '" alt="' . $__name . '">';
             echo '<div class="media-body">';
             echo '<h4 class="media-heading">' . $__name;
@@ -1167,27 +1184,6 @@ if ($es_prestador && $_qs_provider_id > 0) {
 
             ob_start();
             echo '<div class="qs-staff-template" data-staff-id="' . $__id . '">';
-            echo '<div class="post in">';
-            echo '<img class="avatar" alt="' . $__name . '" src="' . htmlspecialchars($__photo_src, ENT_QUOTES) . '">';
-            echo '<div class="message">';
-            echo '<span class="arrow"></span>';
-            echo '<span class="name">' . $__name . '</span>&nbsp;';
-            echo '<span class="datetime">' . $__badge_label . '</span>';
-            echo '<span class="body">';
-            if ($__role !== '') {
-                echo 'Cargo: ' . $__role . '<br>';
-            }
-            if ($__spec !== '') {
-                echo 'Especialidad: ' . $__spec . '<br>';
-            }
-            echo 'Casos asignados: ' . $__case_total;
-            if ($__case_pending > 0) {
-                echo ' · Pendientes: ' . $__case_pending;
-            }
-            echo '</span>';
-            echo '</div>';
-            echo '</div>';
-
             if (!empty($_qs_staff_cases[$__id])) {
                 foreach ($_qs_staff_cases[$__id] as $_qs_case_item) {
                     $_qs_case_name = htmlspecialchars((string)($_qs_case_item['client_name'] ?? 'Paciente sin nombre'), ENT_QUOTES);
@@ -1208,7 +1204,7 @@ if ($es_prestador && $_qs_provider_id > 0) {
                     }
 
                     echo '<div class="post in">';
-                    echo '<img class="avatar" alt="Caso asignado" src="' . htmlspecialchars($_qs_avatar_default, ENT_QUOTES) . '">';
+                    echo '<img class="avatar" alt="Caso asignado" src="' . htmlspecialchars($_qs_case_avatar_default, ENT_QUOTES) . '">';
                     echo '<div class="message">';
                     echo '<span class="arrow"></span>';
                     echo '<span class="name">' . $_qs_case_name . '</span>&nbsp;';
@@ -1225,7 +1221,7 @@ if ($es_prestador && $_qs_provider_id > 0) {
                 }
             } else {
                 echo '<div class="post in">';
-                echo '<img class="avatar" alt="Sin casos" src="' . htmlspecialchars($_qs_avatar_default, ENT_QUOTES) . '">';
+                echo '<img class="avatar" alt="Sin casos" src="' . htmlspecialchars($_qs_case_avatar_default, ENT_QUOTES) . '">';
                 echo '<div class="message">';
                 echo '<span class="arrow"></span>';
                 echo '<span class="name">Sin casos asignados</span>&nbsp;';
@@ -1248,9 +1244,20 @@ if ($es_prestador && $_qs_provider_id > 0) {
         echo '<div id="qs-staff-detail-subtitle" style="font-size:11px; color:#6c8296; margin-top:3px;">Selecciona un profesional para ver sus casos asignados.</div>';
         echo '</div>';
         echo '</div>';
+        echo '<div id="qs-staff-detail-header" style="padding:0 10px 10px 10px; border-bottom:1px solid #31404a; margin-bottom:4px; display:none;">';
+        echo '<div style="display:flex; align-items:flex-start; gap:10px;">';
+        echo '<img id="qs-staff-detail-photo" alt="Staff médico" src="' . htmlspecialchars($_qs_avatar_default, ENT_QUOTES) . '" style="width:45px; height:45px; border-radius:50%; object-fit:cover; opacity:.9;">';
+        echo '<div style="min-width:0; flex:1;">';
+        echo '<div id="qs-staff-detail-name" style="font-size:14px; color:#d7e1ea; font-weight:600; line-height:1.2;">Staff médico</div>';
+        echo '<div id="qs-staff-detail-role" style="font-size:11px; color:#8496a7; text-transform:uppercase; margin-top:2px;"></div>';
+        echo '<div id="qs-staff-detail-specialty" style="font-size:10px; color:#6c8296; margin-top:2px;"></div>';
+        echo '<div id="qs-staff-detail-stats" style="font-size:10px; color:#90a1af; margin-top:6px;"></div>';
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
         echo '<div class="page-quick-sidebar-chat-user-messages" id="qs-staff-detail-messages">';
         echo '<div class="post in">';
-        echo '<img class="avatar" alt="Staff médico" src="' . htmlspecialchars($_qs_avatar_default, ENT_QUOTES) . '">';
+        echo '<img class="avatar" alt="Staff médico" src="' . htmlspecialchars($_qs_case_avatar_default, ENT_QUOTES) . '">';
         echo '<div class="message">';
         echo '<span class="arrow"></span>';
         echo '<span class="name">Staff médico</span>&nbsp;';
@@ -1318,122 +1325,8 @@ if (!$_qs_hide_for_linked_staff) {
 $sider_bar = ob_get_clean();
 
 if ($_qs_staff_detail_templates !== '') {
-    $_qs_staff_sidebar_config = [
-        'wrapperSelector' => '.page-quick-sidebar-wrapper',
-        'chatSelector' => '#quick_sidebar_tab_1.page-quick-sidebar-chat',
-        'panelSelector' => '#qs-staff-detail-panel',
-        'messagesSelector' => '#qs-staff-detail-messages',
-        'templatesSelector' => '#qs-staff-templates',
-        'rowSelector' => '#qs-staff-list > li.qs-staff-row',
-        'editLinkSelector' => '.qs-staff-edit-link, #qs-staff-detail-edit',
-        'backSelector' => '#qs-staff-detail-panel .page-quick-sidebar-back-to-list',
-        'detailTitleSelector' => '#qs-staff-detail-title',
-        'detailSubtitleSelector' => '#qs-staff-detail-subtitle',
-        'detailEditSelector' => '#qs-staff-detail-edit',
-        'templateSelectorPrefix' => '.qs-staff-template[data-staff-id="',
-        'templateSelectorSuffix' => '"]',
-        'defaultDetailTitle' => 'Detalle del staff',
-        'defaultDetailSubtitle' => 'Casos e items asignados',
-        'defaultEditUrl' => 'staff_medico.php',
-        'shownClass' => 'page-quick-sidebar-content-item-shown',
-        'activeClass' => 'active',
-        'resizeNamespace' => 'resize.qsStaffSidebar',
-    ];
-    $_qs_staff_sidebar_config_json = json_encode(
-        $_qs_staff_sidebar_config,
-        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-    );
-
-    $sider_bar .= <<<HTML
-<script type="text/javascript">
-(function (window, $) {
-    'use strict';
-
-    if (!$ || typeof $.fn === 'undefined') {
-        return;
-    }
-
-    var config = {$_qs_staff_sidebar_config_json};
-
-    $(function () {
-        var $wrapper = $(config.wrapperSelector);
-        var $chat = $(config.chatSelector);
-        var $panel = $(config.panelSelector);
-        var $messages = $(config.messagesSelector);
-        var $templates = $(config.templatesSelector);
-
-        if (!$wrapper.length || !$panel.length || !$messages.length || !$templates.length) {
-            return;
-        }
-
-        function getTemplateSelector(staffId) {
-            return config.templateSelectorPrefix + staffId + config.templateSelectorSuffix;
-        }
-
-        function refreshStaffDetailScroll() {
-            if (typeof App === 'undefined' || !App || typeof App.destroySlimScroll !== 'function' || typeof App.initSlimScroll !== 'function') {
-                return;
-            }
-
-            var chatUsersHeight = $wrapper.height() - ($wrapper.find('.nav-tabs').outerHeight(true) || 0);
-            var navHeight = $panel.find('.page-quick-sidebar-nav').outerHeight(true) || 0;
-            var formHeight = $panel.find('.page-quick-sidebar-chat-user-form').outerHeight(true) || 0;
-            var messagesHeight = chatUsersHeight - navHeight - formHeight;
-
-            if (messagesHeight < 120) {
-                messagesHeight = 120;
-            }
-
-            App.destroySlimScroll($messages);
-            $messages.attr('data-height', messagesHeight);
-            App.initSlimScroll($messages);
-        }
-
-        $(document).on('click', config.rowSelector, function (e) {
-            if ($(e.target).closest('.qs-staff-edit-link').length) {
-                return;
-            }
-
-            var $item = $(this);
-            var staffId = parseInt($item.data('staffId'), 10) || 0;
-            if (!staffId) {
-                return;
-            }
-
-            var $template = $templates.find(getTemplateSelector(staffId)).first();
-            if (!$template.length) {
-                return;
-            }
-
-            $(config.rowSelector).removeClass(config.activeClass);
-            $item.addClass(config.activeClass);
-            $(config.detailTitleSelector).text($item.data('staffName') || config.defaultDetailTitle);
-            $(config.detailSubtitleSelector).text($item.data('staffMeta') || config.defaultDetailSubtitle);
-            $(config.detailEditSelector).attr('href', $item.data('editUrl') || config.defaultEditUrl);
-            $messages.html($template.html());
-
-            refreshStaffDetailScroll();
-
-            if (typeof $messages.slimScroll === 'function') {
-                $messages.slimScroll({ scrollTo: '0px' });
-            }
-
-            $chat.addClass(config.shownClass);
-        });
-
-        $(document).on('click', config.editLinkSelector, function (e) {
-            e.stopPropagation();
-        });
-
-        $(document).on('click', config.backSelector, function () {
-            $(config.rowSelector).removeClass(config.activeClass);
-        });
-
-        $(window).off(config.resizeNamespace).on(config.resizeNamespace, refreshStaffDetailScroll);
-    });
-}(window, window.jQuery));
-</script>
-HTML;
+    $theme_layout_script .= "\n<script src=\"js/quick_sidebar_staff.js\" type=\"text/javascript\"></script>";
+    $theme_layout_js .= "\n<script src=\"js/quick_sidebar_staff.js\" type=\"text/javascript\"></script>";
 }
 
 
