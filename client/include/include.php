@@ -6,7 +6,30 @@ include_once __DIR__ . '/../../admin/include/conexion.php';
 require_once __DIR__ . '/client_notifications.php';
 
 $title = 'MedTravel Client Portal';
-$currentScript = basename($_SERVER['PHP_SELF']);
+
+function client_current_script()
+{
+    static $current = null;
+    if ($current !== null) {
+        return $current;
+    }
+
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+    $current = basename((string)$path);
+
+    if ($current === '' || $current === '.' || $current === '/') {
+        $fallback = parse_url($_SERVER['PHP_SELF'] ?? '', PHP_URL_PATH);
+        $current = basename((string)$fallback);
+    }
+
+    if ($current === '' || $current === '.' || $current === '/') {
+        $current = 'index.php';
+    }
+
+    return $current;
+}
+
+$currentScript = client_current_script();
 $clientUserId = get_client_user_id();
 $clientName = htmlspecialchars((string)($_SESSION['nombre_usuario'] ?? 'Client'), ENT_QUOTES, 'UTF-8');
 $avatarRaw = trim((string)($_SESSION['avatar'] ?? ''));
@@ -47,7 +70,7 @@ if (!empty($notifPayload['items'])) {
 function client_menu_li_class($script, $extraClass = '')
 {
     $scripts = is_array($script) ? $script : [$script];
-    $current = basename($_SERVER['PHP_SELF']);
+    $current = client_current_script();
     $isActive = in_array($current, $scripts, true);
     $classes = [];
     if ($extraClass !== '') {
@@ -55,6 +78,8 @@ function client_menu_li_class($script, $extraClass = '')
     }
     if ($isActive) {
         $classes[] = 'active';
+        $classes[] = 'selected';
+        $classes[] = 'open';
     }
     return empty($classes) ? '' : ' class="' . implode(' ', $classes) . '"';
 }
