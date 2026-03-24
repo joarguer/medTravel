@@ -19,6 +19,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
 $can_create = $can_admin_view || $provider_id > 0 || $service_provider_id > 0;
 $can_update = $can_create;
 $can_delete = $can_admin_view;
+$can_cancel = $can_update;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -256,6 +257,7 @@ $can_delete = $can_admin_view;
                         <label>Descripción</label>
                         <textarea class="form-control" name="description" id="admin-calendar-detail-description" rows="3"></textarea>
                     </div>
+                    <div id="admin-calendar-detail-sync-note" class="alert alert-warning" style="display:none; margin-bottom:15px;"></div>
                     <div class="checkbox">
                         <label><input type="checkbox" name="all_day" id="admin-calendar-detail-allday" value="1"> Todo el día</label>
                     </div>
@@ -267,7 +269,7 @@ $can_delete = $can_admin_view;
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn default" data-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn red" id="admin-calendar-delete-btn" <?php echo $can_delete ? '' : 'style="display:none;"'; ?>>Eliminar</button>
+                    <button type="button" class="btn red" id="admin-calendar-delete-btn" <?php echo $can_cancel ? '' : 'style="display:none;"'; ?>>Cancelar evento</button>
                     <button type="submit" class="btn blue" <?php echo $can_update ? '' : 'style="display:none;"'; ?>>Guardar</button>
                 </div>
             </form>
@@ -284,6 +286,7 @@ window.AdminCalendarConfig = {
     isProvider: <?php echo (!$can_admin_view && ($provider_id > 0 || $service_provider_id > 0)) ? 'true' : 'false'; ?>,
     canCreate: <?php echo $can_create ? 'true' : 'false'; ?>,
     canUpdate: <?php echo $can_update ? 'true' : 'false'; ?>,
+    canCancel: <?php echo $can_cancel ? 'true' : 'false'; ?>,
     canDelete: <?php echo $can_delete ? 'true' : 'false'; ?>,
     listUrl: 'ajax/calendar.php',
     inboxBase: 'app_inbox.php',

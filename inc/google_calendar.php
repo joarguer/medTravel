@@ -12,6 +12,21 @@ function google_calendar_table_exists($conexion, $table)
     return $cache[$table];
 }
 
+function google_calendar_table_has_column($conexion, $table, $column)
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+    $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$key];
+}
+
 function google_calendar_admin_can_manage()
 {
     return function_exists('user_can')
@@ -622,6 +637,7 @@ function google_calendar_ensure_valid_access_token($conexion, $adminUserId)
 function google_calendar_normalize_attendees($attendees)
 {
     $normalized = [];
+    $seen = [];
     if (!is_array($attendees)) {
         return $normalized;
     }
@@ -630,10 +646,14 @@ function google_calendar_normalize_attendees($attendees)
         if (!is_array($attendee)) {
             continue;
         }
-        $email = trim((string)($attendee['email'] ?? ''));
+        $email = strtolower(trim((string)($attendee['email'] ?? '')));
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             continue;
         }
+        if (isset($seen[$email])) {
+            continue;
+        }
+        $seen[$email] = true;
         $entry = ['email' => $email];
         $displayName = trim((string)($attendee['displayName'] ?? $attendee['name'] ?? ''));
         if ($displayName !== '') {
@@ -753,4 +773,476 @@ function google_calendar_create_event_with_meet($conexion, $adminUserId, array $
 {
     $payload['create_meet'] = true;
     return google_calendar_create_event($conexion, $adminUserId, $payload);
+}
+
+function google_calendar_delete_event($conexion, $adminUserId, $eventId, array $options = [])
+{
+    $adminUserId = (int)$adminUserId;
+    $eventId = trim((string)$eventId);
+    if ($adminUserId <= 0) {
+        return ['ok' => false, 'error' => 'No se pudo resolver el organizer_admin_user_id para cancelar el evento.'];
+    }
+    if ($eventId === '') {
+        return ['ok' => false, 'error' => 'google_event_id es obligatorio para cancelar el evento.'];
+    }
+
+    $tokenState = google_calendar_ensure_valid_access_token($conexion, $adminUserId);
+    if (!$tokenState['ok']) {
+        return $tokenState;
+    }
+
+    $calendarId = trim((string)($options['calendar_id'] ?? 'primary'));
+    if ($calendarId === '') {
+        $calendarId = 'primary';
+    }
+
+    $config = google_calendar_get_config();
+    $eventUrl = $config['calendar_base_url']
+        . '/calendars/' . rawurlencode($calendarId)
+        . '/events/' . rawurlencode($eventId)
+        . '?sendUpdates=all';
+
+    $response = google_calendar_http_request('DELETE', $eventUrl, [
+        'Authorization: Bearer ' . $tokenState['access_token'],
+        'Accept: application/json',
+    ]);
+
+    if (!$response['ok']) {
+        $errorText = 'No fue posible cancelar el evento de Google Calendar.';
+        if (!empty($response['json']['error']['message'])) {
+            $errorText = (string)$response['json']['error']['message'];
+        } elseif ((int)($response['status'] ?? 0) === 404) {
+            $errorText = 'Google Calendar indicó que el evento ya no existe o no es accesible para esta cuenta.';
+        } elseif (!empty($response['error'])) {
+            $errorText = (string)$response['error'];
+        }
+        google_calendar_update_last_error($conexion, $adminUserId, $errorText);
+        return [
+            'ok' => false,
+            'error' => $errorText,
+            'status' => (int)($response['status'] ?? 0),
+            'response' => $response['json'],
+        ];
+    }
+
+    google_calendar_update_last_error($conexion, $adminUserId, '');
+    return [
+        'ok' => true,
+        'status' => (int)($response['status'] ?? 0),
+        'event_id' => $eventId,
+        'calendar_id' => $calendarId,
+    ];
+}
+
+function google_calendar_event_columns($conexion)
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $cache = [
+        'organizer_admin_user_id' => google_calendar_table_has_column($conexion, 'calendar_events', 'organizer_admin_user_id'),
+        'integration_mode' => google_calendar_table_has_column($conexion, 'calendar_events', 'integration_mode'),
+        'google_event_id' => google_calendar_table_has_column($conexion, 'calendar_events', 'google_event_id'),
+        'google_html_link' => google_calendar_table_has_column($conexion, 'calendar_events', 'google_html_link'),
+        'google_meet_url' => google_calendar_table_has_column($conexion, 'calendar_events', 'google_meet_url'),
+        'organizer_email' => google_calendar_table_has_column($conexion, 'calendar_events', 'organizer_email'),
+    ];
+
+    return $cache;
+}
+
+function google_calendar_fetch_latest_confirmed_item_event($conexion, $itemId)
+{
+    $itemId = (int)$itemId;
+    if ($itemId <= 0 || !google_calendar_table_exists($conexion, 'calendar_events')) {
+        return null;
+    }
+
+    $columns = google_calendar_event_columns($conexion);
+    $organizerAdminExpr = $columns['organizer_admin_user_id'] ? 'ce.organizer_admin_user_id' : 'NULL';
+    $integrationModeExpr = $columns['integration_mode'] ? 'ce.integration_mode' : "'calendar_plus_meet'";
+    $googleEventExpr = $columns['google_event_id'] ? 'ce.google_event_id' : "''";
+    $googleHtmlExpr = $columns['google_html_link'] ? 'ce.google_html_link' : "''";
+    $googleMeetExpr = $columns['google_meet_url'] ? 'ce.google_meet_url' : "''";
+    $organizerEmailExpr = $columns['organizer_email'] ? 'ce.organizer_email' : "''";
+
+    $sql = "SELECT ce.id, ce.request_id, ce.item_id, ce.thread_id, ce.title, ce.description, ce.start_at, ce.end_at, ce.status,
+                   {$organizerAdminExpr} AS organizer_admin_user_id,
+                   {$integrationModeExpr} AS integration_mode,
+                   {$googleEventExpr} AS google_event_id,
+                   {$googleHtmlExpr} AS google_html_link,
+                   {$googleMeetExpr} AS google_meet_url,
+                   {$organizerEmailExpr} AS organizer_email
+            FROM calendar_events ce
+            WHERE ce.event_type = 'ITEM'
+              AND ce.item_id = ?
+              AND ce.status = 'confirmed'
+            ORDER BY ce.start_at DESC, ce.id DESC
+            LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'i', $itemId);
+    $row = null;
+    if (mysqli_stmt_execute($stmt)) {
+        $res = mysqli_stmt_get_result($stmt);
+        if ($res) {
+            $row = mysqli_fetch_assoc($res) ?: null;
+        }
+    }
+    mysqli_stmt_close($stmt);
+    return $row ?: null;
+}
+
+function google_calendar_normalize_integration_mode_value($value)
+{
+    $integrationMode = strtolower(trim((string)$value));
+    if (!in_array($integrationMode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
+        return 'internal_only';
+    }
+    return $integrationMode;
+}
+
+function google_calendar_normalize_thread_type_value($value)
+{
+    $threadType = strtoupper(trim((string)$value));
+    return in_array($threadType, ['ITEM', 'CARE'], true) ? $threadType : '';
+}
+
+function google_calendar_insert_cancelled_message($conexion, array $eventRow, $integrationMode, $googleEventId, array $actor = [])
+{
+    if (!google_calendar_table_exists($conexion, 'inbox_messages')) {
+        return [
+            'message_id' => 0,
+            'message_body' => '',
+            'message_payload' => [],
+        ];
+    }
+
+    $eventId = (int)($eventRow['id'] ?? 0);
+    $requestId = (int)($eventRow['request_id'] ?? 0);
+    $itemId = (int)($eventRow['item_id'] ?? 0);
+    $threadType = google_calendar_normalize_thread_type_value($eventRow['event_type'] ?? '');
+    if ($threadType === '' || $requestId <= 0) {
+        return [
+            'message_id' => 0,
+            'message_body' => '',
+            'message_payload' => [],
+        ];
+    }
+
+    $threadId = trim((string)($eventRow['thread_id'] ?? ''));
+    if ($threadId === '' && function_exists('inbox_thread_id')) {
+        $threadId = (string)inbox_thread_id($threadType, $requestId, $threadType === 'ITEM' ? $itemId : 0);
+    }
+    if ($threadId === '') {
+        $threadId = ($threadType === 'ITEM' && $itemId > 0)
+            ? ('ITEM:' . $requestId . ':' . $itemId)
+            : ('CARE:' . $requestId);
+    }
+
+    $actorRole = strtoupper(trim((string)($actor['role'] ?? 'SYSTEM')));
+    if ($actorRole === '') {
+        $actorRole = 'SYSTEM';
+    }
+    $actorUserId = (int)($actor['user_id'] ?? 0);
+    $cancelReason = trim((string)($actor['reason'] ?? ''));
+    if (strlen($cancelReason) > 255) {
+        $cancelReason = substr($cancelReason, 0, 255);
+    }
+
+    $payload = [
+        'event_id' => (string)$googleEventId,
+        'calendar_event_id' => $eventId,
+        'start_at' => (string)($eventRow['start_at'] ?? ''),
+        'end_at' => (string)($eventRow['end_at'] ?? ''),
+        'integration_mode' => (string)$integrationMode,
+        'cancelled_by_role' => $actorRole,
+        'cancelled_by_user_id' => $actorUserId,
+        'reason' => $cancelReason,
+    ];
+    $body = '[MEETING_CANCELLED] ' . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $stmtMsg = mysqli_prepare(
+        $conexion,
+        "INSERT INTO inbox_messages
+            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+         VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+    if (!$stmtMsg) {
+        return [
+            'message_id' => 0,
+            'message_body' => '',
+            'message_payload' => [],
+            'error' => 'inbox_message_prepare_failed',
+        ];
+    }
+
+    $senderUserId = $actorUserId > 0 ? $actorUserId : null;
+    mysqli_stmt_bind_param($stmtMsg, 'ssiisis', $threadId, $threadType, $requestId, $itemId, $actorRole, $senderUserId, $body);
+    if (!mysqli_stmt_execute($stmtMsg)) {
+        $err = mysqli_stmt_error($stmtMsg);
+        mysqli_stmt_close($stmtMsg);
+        return [
+            'message_id' => 0,
+            'message_body' => '',
+            'message_payload' => [],
+            'error' => 'inbox_message_insert_failed: ' . $err,
+        ];
+    }
+
+    $messageId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmtMsg);
+
+    return [
+        'message_id' => $messageId,
+        'message_body' => $body,
+        'message_payload' => $payload,
+    ];
+}
+
+function google_calendar_cancel_calendar_event($conexion, array $eventRow, array $actor = [])
+{
+    $eventId = (int)($eventRow['id'] ?? 0);
+    if ($eventId <= 0) {
+        return ['ok' => false, 'error' => 'invalid_event_id'];
+    }
+    if (!google_calendar_table_exists($conexion, 'calendar_events')) {
+        return ['ok' => false, 'error' => 'calendar_events_not_available'];
+    }
+
+    $status = strtolower(trim((string)($eventRow['status'] ?? 'scheduled')));
+    if ($status === 'cancelled') {
+        return ['ok' => false, 'error' => 'calendar_event_already_cancelled_or_missing'];
+    }
+
+    $eventType = google_calendar_normalize_thread_type_value($eventRow['event_type'] ?? '');
+    $itemId = (int)($eventRow['item_id'] ?? 0);
+    if ($eventType === 'ITEM' && $itemId > 0 && $status === 'confirmed') {
+        return google_calendar_cancel_item_meeting($conexion, $itemId, $actor);
+    }
+
+    $googleEventId = trim((string)($eventRow['google_event_id'] ?? ''));
+    $integrationMode = google_calendar_normalize_integration_mode_value($eventRow['integration_mode'] ?? '');
+    if ($integrationMode === 'internal_only' && $googleEventId !== '') {
+        $integrationMode = trim((string)($eventRow['google_meet_url'] ?? '')) !== '' ? 'calendar_plus_meet' : 'calendar_only';
+    }
+    $googleDeleteResult = [
+        'ok' => true,
+        'status' => 0,
+        'event_id' => $googleEventId,
+        'calendar_id' => 'primary',
+    ];
+
+    if ($integrationMode !== 'internal_only' && $googleEventId !== '') {
+        $organizerAdminUserId = (int)($eventRow['organizer_admin_user_id'] ?? 0);
+        if ($organizerAdminUserId <= 0) {
+            return ['ok' => false, 'error' => 'missing_organizer_admin_user_id'];
+        }
+        $googleDeleteResult = google_calendar_delete_event($conexion, $organizerAdminUserId, $googleEventId, [
+            'calendar_id' => 'primary',
+        ]);
+        if (empty($googleDeleteResult['ok'])) {
+            return $googleDeleteResult;
+        }
+    }
+
+    mysqli_begin_transaction($conexion);
+
+    $stmtUpdate = mysqli_prepare(
+        $conexion,
+        "UPDATE calendar_events
+         SET status = 'cancelled', updated_at = NOW()
+         WHERE id = ?
+           AND COALESCE(status, 'scheduled') <> 'cancelled'
+         LIMIT 1"
+    );
+    if (!$stmtUpdate) {
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => 'calendar_event_cancel_prepare_failed'];
+    }
+    mysqli_stmt_bind_param($stmtUpdate, 'i', $eventId);
+    if (!mysqli_stmt_execute($stmtUpdate)) {
+        $err = mysqli_stmt_error($stmtUpdate);
+        mysqli_stmt_close($stmtUpdate);
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => 'calendar_event_cancel_failed: ' . $err];
+    }
+    $affected = mysqli_stmt_affected_rows($stmtUpdate);
+    mysqli_stmt_close($stmtUpdate);
+    if ($affected <= 0) {
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => 'calendar_event_already_cancelled_or_missing'];
+    }
+
+    $messageResult = google_calendar_insert_cancelled_message($conexion, $eventRow, $integrationMode, $googleEventId, $actor);
+    if (!empty($messageResult['error'])) {
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => (string)$messageResult['error']];
+    }
+
+    mysqli_commit($conexion);
+
+    return [
+        'ok' => true,
+        'calendar_event_id' => $eventId,
+        'google_event_id' => $googleEventId,
+        'request_id' => (int)($eventRow['request_id'] ?? 0),
+        'item_id' => $itemId,
+        'start_at' => (string)($eventRow['start_at'] ?? ''),
+        'end_at' => (string)($eventRow['end_at'] ?? ''),
+        'integration_mode' => $integrationMode,
+        'google_result' => $googleDeleteResult,
+        'message_id' => (int)($messageResult['message_id'] ?? 0),
+        'message_body' => (string)($messageResult['message_body'] ?? ''),
+        'message_payload' => (array)($messageResult['message_payload'] ?? []),
+        'cancelled_by_role' => strtoupper(trim((string)($actor['role'] ?? 'SYSTEM'))),
+    ];
+}
+
+function google_calendar_cancel_item_meeting($conexion, $itemId, array $actor = [])
+{
+    $itemId = (int)$itemId;
+    if ($itemId <= 0) {
+        return ['ok' => false, 'error' => 'invalid_item_id'];
+    }
+    if (!google_calendar_table_exists($conexion, 'calendar_events')) {
+        return ['ok' => false, 'error' => 'calendar_events_not_available'];
+    }
+
+    $eventRow = google_calendar_fetch_latest_confirmed_item_event($conexion, $itemId);
+    if (!$eventRow) {
+        return ['ok' => false, 'error' => 'confirmed_meeting_not_found'];
+    }
+
+    $integrationMode = trim((string)($eventRow['integration_mode'] ?? 'calendar_plus_meet'));
+    if (!in_array($integrationMode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
+        $integrationMode = 'calendar_plus_meet';
+    }
+
+    $organizerAdminUserId = (int)($eventRow['organizer_admin_user_id'] ?? 0);
+    $googleEventId = trim((string)($eventRow['google_event_id'] ?? ''));
+    $googleDeleteResult = [
+        'ok' => true,
+        'status' => 0,
+        'event_id' => $googleEventId,
+        'calendar_id' => 'primary',
+    ];
+
+    if ($integrationMode !== 'internal_only') {
+        if ($organizerAdminUserId <= 0) {
+            return ['ok' => false, 'error' => 'missing_organizer_admin_user_id'];
+        }
+        if ($googleEventId === '') {
+            return ['ok' => false, 'error' => 'missing_google_event_id'];
+        }
+        $googleDeleteResult = google_calendar_delete_event($conexion, $organizerAdminUserId, $googleEventId, [
+            'calendar_id' => 'primary',
+        ]);
+        if (empty($googleDeleteResult['ok'])) {
+            return $googleDeleteResult;
+        }
+    }
+
+    $actorRole = strtoupper(trim((string)($actor['role'] ?? 'SYSTEM')));
+    if ($actorRole === '') {
+        $actorRole = 'SYSTEM';
+    }
+    $actorUserId = (int)($actor['user_id'] ?? 0);
+    $cancelReason = trim((string)($actor['reason'] ?? ''));
+    if (strlen($cancelReason) > 255) {
+        $cancelReason = substr($cancelReason, 0, 255);
+    }
+
+    mysqli_begin_transaction($conexion);
+
+    $eventId = (int)($eventRow['id'] ?? 0);
+    $stmtUpdate = mysqli_prepare($conexion, "UPDATE calendar_events SET status = 'cancelled', updated_at = NOW() WHERE id = ? AND status = 'confirmed' LIMIT 1");
+    if (!$stmtUpdate) {
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => 'calendar_event_cancel_prepare_failed'];
+    }
+    mysqli_stmt_bind_param($stmtUpdate, 'i', $eventId);
+    if (!mysqli_stmt_execute($stmtUpdate)) {
+        $err = mysqli_stmt_error($stmtUpdate);
+        mysqli_stmt_close($stmtUpdate);
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => 'calendar_event_cancel_failed: ' . $err];
+    }
+    $affected = mysqli_stmt_affected_rows($stmtUpdate);
+    mysqli_stmt_close($stmtUpdate);
+    if ($affected <= 0) {
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => 'calendar_event_already_cancelled_or_missing'];
+    }
+
+    $messageId = 0;
+    $messageBody = '';
+    $messagePayload = [];
+    if (google_calendar_table_exists($conexion, 'inbox_messages')) {
+        $threadId = trim((string)($eventRow['thread_id'] ?? ''));
+        if ($threadId === '' && function_exists('inbox_thread_id')) {
+            $threadId = (string)inbox_thread_id('ITEM', (int)($eventRow['request_id'] ?? 0), $itemId);
+        }
+        if ($threadId === '') {
+            $threadId = 'ITEM:' . (int)($eventRow['request_id'] ?? 0) . ':' . $itemId;
+        }
+
+        $payload = [
+            'event_id' => $googleEventId,
+            'calendar_event_id' => $eventId,
+            'start_at' => (string)($eventRow['start_at'] ?? ''),
+            'end_at' => (string)($eventRow['end_at'] ?? ''),
+            'integration_mode' => $integrationMode,
+            'cancelled_by_role' => $actorRole,
+            'cancelled_by_user_id' => $actorUserId,
+            'reason' => $cancelReason,
+        ];
+        $body = '[MEETING_CANCELLED] ' . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $messagePayload = $payload;
+        $messageBody = $body;
+        $stmtMsg = mysqli_prepare(
+            $conexion,
+            "INSERT INTO inbox_messages
+                (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+             VALUES (?, 'ITEM', ?, ?, ?, ?, ?)"
+        );
+        if (!$stmtMsg) {
+            mysqli_rollback($conexion);
+            return ['ok' => false, 'error' => 'inbox_message_prepare_failed'];
+        }
+        $requestId = (int)($eventRow['request_id'] ?? 0);
+        $senderUserId = $actorUserId > 0 ? $actorUserId : null;
+        mysqli_stmt_bind_param($stmtMsg, 'siisis', $threadId, $requestId, $itemId, $actorRole, $senderUserId, $body);
+        if (!mysqli_stmt_execute($stmtMsg)) {
+            $err = mysqli_stmt_error($stmtMsg);
+            mysqli_stmt_close($stmtMsg);
+            mysqli_rollback($conexion);
+            return ['ok' => false, 'error' => 'inbox_message_insert_failed: ' . $err];
+        }
+        $messageId = (int)mysqli_insert_id($conexion);
+        mysqli_stmt_close($stmtMsg);
+    }
+
+    mysqli_commit($conexion);
+
+    return [
+        'ok' => true,
+        'calendar_event_id' => $eventId,
+        'google_event_id' => $googleEventId,
+        'request_id' => (int)($eventRow['request_id'] ?? 0),
+        'item_id' => $itemId,
+        'start_at' => (string)($eventRow['start_at'] ?? ''),
+        'end_at' => (string)($eventRow['end_at'] ?? ''),
+        'integration_mode' => $integrationMode,
+        'google_result' => $googleDeleteResult,
+        'message_id' => $messageId,
+        'message_body' => $messageBody,
+        'message_payload' => $messagePayload,
+        'cancelled_by_role' => $actorRole,
+    ];
 }

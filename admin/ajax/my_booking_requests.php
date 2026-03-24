@@ -3460,6 +3460,50 @@ if ($action === 'send_quick_reply') {
     ]);
 }
 
+if ($action === 'cancel_meeting') {
+    my_booking_requests_set_debug_branch('provider_action_cancel_meeting');
+
+    $itemId = intval($_POST['item_id'] ?? 0);
+    if ($itemId <= 0) {
+        json_err('invalid_id');
+    }
+
+    $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
+    if (!$itemRow) {
+        json_err('not_found', 404);
+    }
+
+    $actorRole = $isAdminSession ? 'ADMIN' : 'PROVIDER';
+    $actorUserId = current_admin_user_id();
+    $cancelResult = google_calendar_cancel_item_meeting($conexion, $itemId, [
+        'role' => $actorRole,
+        'user_id' => $actorUserId,
+    ]);
+    if (empty($cancelResult['ok'])) {
+        json_err((string)($cancelResult['error'] ?? 'meeting_cancel_failed'), 409);
+    }
+
+    json_ok([
+        'item_id' => $itemId,
+        'request_id' => (int)($cancelResult['request_id'] ?? 0),
+        'meeting' => [
+            'status' => 'cancelled',
+            'calendar_event_id' => (int)($cancelResult['calendar_event_id'] ?? 0),
+            'event_id' => (string)($cancelResult['google_event_id'] ?? ''),
+            'start_at' => (string)($cancelResult['start_at'] ?? ''),
+            'end_at' => (string)($cancelResult['end_at'] ?? ''),
+            'integration_mode' => (string)($cancelResult['integration_mode'] ?? ''),
+            'cancelled_by_role' => (string)($cancelResult['cancelled_by_role'] ?? $actorRole),
+        ],
+        'message' => [
+            'id' => (int)($cancelResult['message_id'] ?? 0),
+            'sender' => strtolower($actorRole),
+            'body' => (string)($cancelResult['message_body'] ?? ''),
+            'time' => date('Y-m-d H:i:s'),
+        ],
+    ]);
+}
+
 if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_change', 'update_item_status'], true)) {
     my_booking_requests_set_debug_branch('provider_action_' . $action);
     $itemId = intval($_POST['item_id'] ?? 0);

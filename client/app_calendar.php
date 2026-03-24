@@ -72,6 +72,7 @@ if (isset($conexion) && $conexion) {
             </div>
             <div class="modal-body">
                 <p><strong>Status:</strong> <span id="client-calendar-detail-status"></span></p>
+                <div id="client-calendar-detail-sync-note" class="note note-warning" style="display:none; margin-bottom:15px;"></div>
                 <p><strong>Start:</strong> <span id="client-calendar-detail-start"></span></p>
                 <p><strong>End:</strong> <span id="client-calendar-detail-end"></span></p>
                 <p><strong>Type:</strong> <span id="client-calendar-detail-type"></span></p>
@@ -85,6 +86,7 @@ if (isset($conexion) && $conexion) {
             <div class="modal-footer">
                 <button type="button" class="btn green-jungle" id="client-calendar-accept-btn" style="display:none;">Accept</button>
                 <a href="#" id="client-calendar-request-change-btn" class="btn blue" style="display:none;" target="_blank">Request change</a>
+                <button type="button" class="btn red" id="client-calendar-cancel-btn" style="display:none;">Cancel meeting</button>
                 <button type="button" class="btn default" data-dismiss="modal">Close</button>
             </div>
         </div>
@@ -99,6 +101,7 @@ if (isset($conexion) && $conexion) {
 window.ClientCalendarConfig = {
     listUrl: '/client/ajax/calendar.php',
     acceptUrl: '/client/ajax/calendar.php',
+    cancelUrl: '/client/ajax/calendar.php',
     requestBase: '/client/request_detail.php',
     inboxBase: '/client/app_inbox.php',
     feeGateActive: <?php echo $clientFeeGateActive ? 'true' : 'false'; ?>

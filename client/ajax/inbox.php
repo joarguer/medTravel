@@ -106,6 +106,62 @@ function client_inbox_fetch_latest_proposed_meeting($conexion, $itemId, $ownerSc
     return $row ?: null;
 }
 
+function client_inbox_fetch_latest_confirmed_meeting($conexion, $itemId, $ownerScope)
+{
+    if (!inbox_table_exists($conexion, 'calendar_events')) {
+        return null;
+    }
+
+    $columns = client_inbox_calendar_event_columns($conexion);
+    $organizerAdminExpr = $columns['organizer_admin_user_id'] ? 'ce.organizer_admin_user_id' : 'NULL';
+    $integrationModeExpr = $columns['integration_mode'] ? 'ce.integration_mode' : "'calendar_plus_meet'";
+    $googleEventExpr = $columns['google_event_id'] ? 'ce.google_event_id' : "''";
+    $googleHtmlExpr = $columns['google_html_link'] ? 'ce.google_html_link' : "''";
+    $googleMeetExpr = $columns['google_meet_url'] ? 'ce.google_meet_url' : "''";
+    $organizerEmailExpr = $columns['organizer_email'] ? 'ce.organizer_email' : "''";
+    $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+
+    $sql = "SELECT ce.id, ce.request_id, ce.item_id, ce.title, ce.description, ce.start_at, ce.end_at, ce.status,
+                   {$organizerAdminExpr} AS organizer_admin_user_id,
+                   {$integrationModeExpr} AS integration_mode,
+                   {$googleEventExpr} AS google_event_id,
+                   {$googleHtmlExpr} AS google_html_link,
+                   {$googleMeetExpr} AS google_meet_url,
+                   {$organizerEmailExpr} AS organizer_email
+            FROM calendar_events ce
+            INNER JOIN booking_requests br ON br.id = ce.request_id
+            INNER JOIN booking_request_items bri ON bri.id = ce.item_id AND bri.booking_request_id = br.id
+            WHERE ce.event_type = 'ITEM'
+              AND ce.item_id = ?
+              AND ce.status = 'confirmed'
+              AND (" . $ownerScope['sql'] . ")";
+    if ($hasItemsSoftDelete) {
+        $sql .= ' AND bri.is_deleted = 0';
+    }
+    if ($hasBookingSoftDelete) {
+        $sql .= ' AND br.is_deleted = 0';
+    }
+    $sql .= ' ORDER BY ce.start_at DESC, ce.id DESC LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+
+    $types = 'i' . $ownerScope['types'];
+    $params = array_merge([$itemId], $ownerScope['params']);
+    if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return null;
+    }
+
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ?: null;
+}
+
 function client_inbox_cancel_proposed_meeting($conexion, $eventId)
 {
     $eventId = (int)$eventId;
@@ -719,7 +775,7 @@ if ($action === 'list_threads') {
     ]);
 }
 
-if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_message' || $action === 'send_quick_action' || $action === 'send_structured_action' || $action === 'accept_dates' || $action === 'reject_dates' || $action === 'final_accept_and_pay' || $action === 'final_decline') {
+if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_message' || $action === 'send_quick_action' || $action === 'send_structured_action' || $action === 'accept_dates' || $action === 'reject_dates' || $action === 'cancel_meeting' || $action === 'final_accept_and_pay' || $action === 'final_decline') {
     $threadIdInput = (string)($_GET['thread_id'] ?? $_POST['thread_id'] ?? '');
     $threadType = (string)($_GET['thread_type'] ?? $_POST['thread_type'] ?? '');
     $requestId = (int)($_GET['request_id'] ?? $_POST['request_id'] ?? $_GET['booking_id'] ?? $_POST['booking_id'] ?? 0);
@@ -1421,6 +1477,7 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
 
     $message = ($action === 'accept_dates')
         ? '[MEETING_CONFIRMED] ' . json_encode([
+            'calendar_event_id' => (int)($confirmedMeeting['calendar_event_id'] ?? 0),
             'start_at' => (string)($confirmedMeeting['start_at'] ?? ''),
             'end_at' => (string)($confirmedMeeting['end_at'] ?? ''),
             'integration_mode' => (string)($confirmedMeeting['integration_mode'] ?? ''),
@@ -1469,6 +1526,57 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
             'sender' => 'client',
             'body' => $message,
             'time' => $createdAt,
+        ],
+    ]);
+}
+
+if ($action === 'cancel_meeting') {
+    if (!inbox_table_exists($conexion, 'booking_request_items')) {
+        client_inbox_err('booking_items_not_available', 409);
+    }
+
+    if (strtoupper((string)($ctx['thread_type'] ?? '')) !== 'ITEM') {
+        client_inbox_err('invalid_thread_type', 422);
+    }
+
+    $itemId = (int)($ctx['item_id'] ?? 0);
+    if ($itemId <= 0) {
+        client_inbox_err('invalid_item_id', 422);
+    }
+
+    $meetingRow = client_inbox_fetch_latest_confirmed_meeting($conexion, $itemId, $ownerScope);
+    if (!$meetingRow) {
+        client_inbox_err('confirmed_meeting_not_found', 409);
+    }
+
+    $cancelResult = google_calendar_cancel_item_meeting($conexion, $itemId, [
+        'role' => 'CLIENT',
+        'user_id' => $clientUserId,
+    ]);
+    if (empty($cancelResult['ok'])) {
+        client_inbox_err((string)($cancelResult['error'] ?? 'meeting_cancel_failed'), 409);
+    }
+
+    client_inbox_ok([
+        'thread_id' => (string)($ctx['thread_id'] ?? ''),
+        'thread_type' => (string)($ctx['thread_type'] ?? 'ITEM'),
+        'request_id' => (int)($ctx['request_id'] ?? 0),
+        'booking_id' => (int)($ctx['request_id'] ?? 0),
+        'item_id' => $itemId,
+        'meeting' => [
+            'status' => 'cancelled',
+            'calendar_event_id' => (int)($cancelResult['calendar_event_id'] ?? 0),
+            'event_id' => (string)($cancelResult['google_event_id'] ?? ''),
+            'start_at' => (string)($cancelResult['start_at'] ?? ''),
+            'end_at' => (string)($cancelResult['end_at'] ?? ''),
+            'integration_mode' => (string)($cancelResult['integration_mode'] ?? ''),
+            'cancelled_by_role' => (string)($cancelResult['cancelled_by_role'] ?? 'CLIENT'),
+        ],
+        'message' => [
+            'id' => (int)($cancelResult['message_id'] ?? 0),
+            'sender' => 'client',
+            'body' => (string)($cancelResult['message_body'] ?? ''),
+            'time' => date('Y-m-d H:i:s'),
         ],
     ]);
 }

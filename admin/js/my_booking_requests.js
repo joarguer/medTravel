@@ -2,6 +2,7 @@
     var table = null;
     var activeDetailItemId = 0;
     var activeDetailData = null;
+    var cancelledMeetingKeys = {};
 
     $(document).ready(function () {
         initTable();
@@ -153,6 +154,12 @@
             $('#provider_proposed_currency').val(currency);
             $('#provider_proposed_notes').val('');
             $('#provider_propose_modal').modal('show');
+        });
+
+        $('#my_booking_detail_modal').on('click', '#btn-modal-cancel-meeting', function () {
+            if (!activeDetailItemId) return;
+            if (!confirm('¿Cancelar esta reunión? El caso seguirá activo para poder reagendar.')) return;
+            sendProviderAction('cancel_meeting', { item_id: activeDetailItemId }, reloadActiveDetail, 'Reunión cancelada');
         });
 
         $('#my_booking_detail_modal').on('click', '#btn-modal-assign-staff', function () {
@@ -666,9 +673,11 @@
 
     function renderAppointmentSection(d) {
         var nextAppointment = d.next_appointment && d.next_appointment.start_at ? d.next_appointment.start_at : '';
+        var nextAppointmentStatus = d.next_appointment && d.next_appointment.status ? String(d.next_appointment.status).toLowerCase() : '';
         var appointmentLabel = d.appointment_status_label_es || d.medical_coordination_status_label_es || genericStatusLabelEs(d.appointment_status || d.medical_coordination_status || '');
         var meetUrl = d.next_appointment && d.next_appointment.google_meet_url ? d.next_appointment.google_meet_url : '';
         var calendarUrl = d.next_appointment && d.next_appointment.google_html_link ? d.next_appointment.google_html_link : '';
+        var canCancelMeeting = nextAppointment && nextAppointmentStatus === 'confirmed';
         var html = '<section class="mt-section">';
         html += '<div class="mt-section-head"><h5>Cita</h5></div>';
         html += '<div class="row">';
@@ -690,6 +699,14 @@
             if (calendarUrl) {
                 html += '<a class="btn btn-default btn-xs" href="' + escapeHtml(calendarUrl) + '" target="_blank" rel="noopener"><i class="fa fa-calendar"></i> Abrir evento</a>';
             }
+            if (canCancelMeeting) {
+                html += '<button type="button" class="btn btn-danger btn-xs" id="btn-modal-cancel-meeting"><i class="fa fa-times"></i> Cancelar reunión</button>';
+            }
+            html += '</div>';
+        } else if (canCancelMeeting) {
+            html += '<div class="mt-inline-actions" style="margin-top:8px;">';
+            html += '<span class="mt-inline-label">Reunión confirmada</span>';
+            html += '<button type="button" class="btn btn-danger btn-xs" id="btn-modal-cancel-meeting"><i class="fa fa-times"></i> Cancelar reunión</button>';
             html += '</div>';
         }
         html += '</div>';
@@ -863,10 +880,12 @@
         var $log = $('#provider-conversation-log');
         if (!$log.length) return;
         if (!messages || !messages.length) {
+            cancelledMeetingKeys = {};
             $log.html('<p class="text-muted" style="margin:0;">Sin mensajes todavía.</p>');
             return;
         }
 
+        cancelledMeetingKeys = collectCancelledMeetingKeys(messages);
         var html = '';
         messages.forEach(function (m) {
             var role = String(m.display_role || detectRoleFromSender(m.sender || '')).toUpperCase();
@@ -1071,6 +1090,9 @@
         if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
             return renderMeetingConfirmedBody(trimmed.replace(/^\[MEETING_CONFIRMED\]\s*/i, ''));
         }
+        if (trimmed.indexOf('[MEETING_CANCELLED]') === 0) {
+            return renderMeetingCancelledBody(trimmed.replace(/^\[MEETING_CANCELLED\]\s*/i, ''));
+        }
         var prefix = '';
         if (trimmed.indexOf('[ACTION]') === 0) {
             prefix = '<span class="label label-primary" style="margin-right:6px;">ACCIÓN</span>';
@@ -1090,6 +1112,46 @@
             calendar_plus_meet: { label: 'Reunión con Google Meet', badge: 'Calendar + Meet', badgeClass: 'label-success' }
         };
         return map[normalized] || map.calendar_plus_meet;
+    }
+
+    function meetingEventKeyFromPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return '';
+        }
+        var eventId = String(payload.event_id || '').trim();
+        if (eventId) {
+            return 'g:' + eventId;
+        }
+        var calendarEventId = parseInt(payload.calendar_event_id || 0, 10) || 0;
+        if (calendarEventId > 0) {
+            return 'c:' + String(calendarEventId);
+        }
+        return '';
+    }
+
+    function collectCancelledMeetingKeys(messages) {
+        var map = {};
+        (messages || []).forEach(function (message) {
+            var payload = null;
+            var raw = String(message && message.body ? message.body : '').trim();
+            if (raw.indexOf('[MEETING_CANCELLED]') === 0) {
+                try {
+                    payload = JSON.parse(raw.replace(/^\[MEETING_CANCELLED\]\s*/i, ''));
+                } catch (e) {
+                    payload = null;
+                }
+            }
+            var key = meetingEventKeyFromPayload(payload);
+            if (key) {
+                map[key] = true;
+            }
+        });
+        return map;
+    }
+
+    function isMeetingCancelledPayload(payload) {
+        var key = meetingEventKeyFromPayload(payload);
+        return !!(key && cancelledMeetingKeys[key]);
     }
 
     function renderMeetingProposalBody(jsonText) {
@@ -1131,9 +1193,10 @@
             return '<span style="white-space:pre-wrap;">' + escapeHtml(jsonText) + '</span>';
         }
         var integration = meetingIntegrationMeta(payload.integration_mode || (payload.meet_url ? 'calendar_plus_meet' : (payload.html_link ? 'calendar_only' : 'internal_only')));
+        var isCancelled = isMeetingCancelledPayload(payload);
 
-        var html = '<div class="panel panel-success" style="margin:0;">';
-        html += '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión confirmada</strong> <span class="label ' + escapeHtml(integration.badgeClass) + '" style="margin-left:6px;">' + escapeHtml(integration.badge) + '</span></div>';
+        var html = '<div class="panel ' + (isCancelled ? 'panel-warning' : 'panel-success') + '" style="margin:0;">';
+        html += '<div class="panel-heading" style="padding:8px 10px;"><strong>' + escapeHtml(isCancelled ? 'Reunión cancelada' : 'Reunión confirmada') + '</strong> <span class="label ' + escapeHtml(integration.badgeClass) + '" style="margin-left:6px;">' + escapeHtml(integration.badge) + '</span></div>';
         html += '<div class="panel-body" style="padding:10px;">';
         if (payload.start_at) {
             html += '<p style="margin:0 0 6px;"><strong>Inicio:</strong> ' + escapeHtml(formatDateTime(payload.start_at)) + '</p>';
@@ -1146,13 +1209,53 @@
             html += '<p style="margin:0 0 6px;"><strong>Organizador:</strong> ' + escapeHtml(payload.organizer_email) + '</p>';
         }
         html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">';
-        if (payload.meet_url) {
+        if (!isCancelled && payload.meet_url) {
             html += '<a class="btn btn-success btn-xs" href="' + escapeHtml(payload.meet_url) + '" target="_blank" rel="noopener">Abrir Meet</a>';
         }
-        if (payload.html_link) {
+        if (!isCancelled && payload.html_link) {
             html += '<a class="btn btn-default btn-xs" href="' + escapeHtml(payload.html_link) + '" target="_blank" rel="noopener">Abrir evento</a>';
         }
         html += '</div>';
+        if (isCancelled) {
+            html += '<p class="text-muted" style="margin:8px 0 0;">El caso sigue vivo y puede reagendarse más adelante.</p>';
+        }
+        html += '</div></div>';
+        return html;
+    }
+
+    function renderMeetingCancelledBody(jsonText) {
+        var payload = null;
+        try {
+            payload = JSON.parse(jsonText);
+        } catch (e) {
+            payload = null;
+        }
+        if (!payload || typeof payload !== 'object') {
+            return '<span style="white-space:pre-wrap;">' + escapeHtml(jsonText) + '</span>';
+        }
+
+        var integration = meetingIntegrationMeta(payload.integration_mode || 'calendar_plus_meet');
+        var cancelledByRole = String(payload.cancelled_by_role || '').trim().toUpperCase();
+        var byLabel = 'el equipo';
+        if (cancelledByRole === 'CLIENT') {
+            byLabel = 'el paciente';
+        } else if (cancelledByRole === 'PROVIDER') {
+            byLabel = 'el prestador';
+        } else if (cancelledByRole === 'ADMIN') {
+            byLabel = 'coordinación';
+        }
+
+        var html = '<div class="panel panel-warning" style="margin:0;">';
+        html += '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión cancelada</strong> <span class="label ' + escapeHtml(integration.badgeClass) + '" style="margin-left:6px;">' + escapeHtml(integration.badge) + '</span></div>';
+        html += '<div class="panel-body" style="padding:10px;">';
+        if (payload.start_at) {
+            html += '<p style="margin:0 0 6px;"><strong>Inicio:</strong> ' + escapeHtml(formatDateTime(payload.start_at)) + '</p>';
+        }
+        if (payload.end_at) {
+            html += '<p style="margin:0 0 6px;"><strong>Fin:</strong> ' + escapeHtml(formatDateTime(payload.end_at)) + '</p>';
+        }
+        html += '<p style="margin:0 0 6px;"><strong>Cancelada por:</strong> ' + escapeHtml(byLabel) + '</p>';
+        html += '<p class="text-muted" style="margin:8px 0 0;">El caso sigue vivo y puede reagendarse más adelante.</p>';
         html += '</div></div>';
         return html;
     }

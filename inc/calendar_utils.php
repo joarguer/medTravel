@@ -83,6 +83,9 @@ function calendar_json_event_row($row)
     $eventType = calendar_normalize_event_type($row['event_type'] ?? '');
     $requestId = (int)($row['request_id'] ?? 0);
     $itemId = (int)($row['item_id'] ?? 0);
+    $integrationMode = strtolower(trim((string)($row['integration_mode'] ?? '')));
+    $googleEventId = trim((string)($row['google_event_id'] ?? ''));
+    $isGoogleSynced = ($googleEventId !== '') || ($integrationMode !== '' && $integrationMode !== 'internal_only');
     $threadId = trim((string)($row['thread_id'] ?? ''));
     if ($threadId === '') {
         $threadId = calendar_build_thread_id($eventType, $requestId, $itemId);
@@ -100,6 +103,12 @@ function calendar_json_event_row($row)
         'request_id' => $requestId,
         'item_id' => $itemId,
         'thread_id' => $threadId ?: null,
+        'integration_mode' => $integrationMode,
+        'google_event_id' => $googleEventId,
+        'google_html_link' => (string)($row['google_html_link'] ?? ''),
+        'google_meet_url' => (string)($row['google_meet_url'] ?? ''),
+        'organizer_email' => (string)($row['organizer_email'] ?? ''),
+        'is_google_synced' => $isGoogleSynced,
         'extendedProps' => [
             'event_type' => $eventType,
             'request_id' => $requestId,
@@ -107,6 +116,12 @@ function calendar_json_event_row($row)
             'status' => (string)($row['status'] ?? 'scheduled'),
             'description' => (string)($row['description'] ?? ''),
             'thread_id' => $threadId ?: null,
+            'integration_mode' => $integrationMode,
+            'google_event_id' => $googleEventId,
+            'google_html_link' => (string)($row['google_html_link'] ?? ''),
+            'google_meet_url' => (string)($row['google_meet_url'] ?? ''),
+            'organizer_email' => (string)($row['organizer_email'] ?? ''),
+            'is_google_synced' => $isGoogleSynced,
         ],
     ];
 }

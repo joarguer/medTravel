@@ -367,6 +367,11 @@ function admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $f
     ];
 }
 
+function admin_inbox_linked_staff_scope_clause()
+{
+    return "(bri.assigned_staff_id = ? OR (COALESCE(bri.assigned_staff_id, 0) = 0 AND (bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review'))))";
+}
+
 function admin_inbox_build_scope()
 {
     $providerId = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
@@ -385,15 +390,29 @@ function admin_inbox_build_scope()
     $scopeWhere = '';
     $scopeTypes = '';
     $scopeParams = [];
+    $hasAssignedStaffId = inbox_table_has_column($conexion, 'booking_request_items', 'assigned_staff_id');
+    $currentLinkedStaffId = ($providerId > 0) ? current_provider_medical_staff_id($conexion) : 0;
+    $isLinkedMedicalStaffSession = $currentLinkedStaffId > 0 && $hasAssignedStaffId;
     if (!$isAdmin) {
         if ($providerId > 0 && $serviceProviderId > 0) {
-            $scopeWhere = " AND ((bri.provider_id = ? AND bri.item_type = 'medical_offer') OR (bri.service_provider_id = ? AND bri.item_type = 'complementary_service'))";
-            $scopeTypes = 'ii';
-            $scopeParams = [$providerId, $serviceProviderId];
+            if ($isLinkedMedicalStaffSession) {
+                $scopeWhere = " AND ((bri.provider_id = ? AND bri.item_type = 'medical_offer' AND " . admin_inbox_linked_staff_scope_clause() . ") OR (bri.service_provider_id = ? AND bri.item_type = 'complementary_service'))";
+                $scopeTypes = 'iii';
+                $scopeParams = [$providerId, $currentLinkedStaffId, $serviceProviderId];
+            } else {
+                $scopeWhere = " AND ((bri.provider_id = ? AND bri.item_type = 'medical_offer') OR (bri.service_provider_id = ? AND bri.item_type = 'complementary_service'))";
+                $scopeTypes = 'ii';
+                $scopeParams = [$providerId, $serviceProviderId];
+            }
         } elseif ($providerId > 0) {
             $scopeWhere = " AND bri.provider_id = ? AND bri.item_type = 'medical_offer'";
             $scopeTypes = 'i';
             $scopeParams = [$providerId];
+            if ($isLinkedMedicalStaffSession) {
+                $scopeWhere .= " AND " . admin_inbox_linked_staff_scope_clause();
+                $scopeTypes .= 'i';
+                $scopeParams[] = $currentLinkedStaffId;
+            }
         } else {
             $scopeWhere = " AND bri.service_provider_id = ? AND bri.item_type = 'complementary_service'";
             $scopeTypes = 'i';
@@ -413,6 +432,7 @@ function admin_inbox_build_scope()
         'reader_role' => $readerRole,
         'provider_id' => $providerId,
         'service_provider_id' => $serviceProviderId,
+        'linked_staff_id' => $currentLinkedStaffId,
         'scope_where' => $scopeWhere,
         'scope_types' => $scopeTypes,
         'scope_params' => $scopeParams,

@@ -197,15 +197,23 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
             if ($hasUsersActive) {
                 $sql .= " AND u.activo = 1";
             }
-            $sql .= " AND u.email IS NOT NULL AND u.email <> '' ORDER BY u.id ASC LIMIT 1";
+            $sql .= " AND u.email IS NOT NULL AND u.email <> ''
+                      ORDER BY
+                        CASE
+                          WHEN ? > 0 AND u.provider_id = ? THEN 0
+                          WHEN ? > 0 AND u.service_provider_id = ? THEN 1
+                          ELSE 2
+                        END ASC,
+                        u.id ASC
+                      LIMIT 1";
 
             $stmtUser = mysqli_prepare($conexion, $sql);
             if ($stmtUser) {
-                mysqli_stmt_bind_param($stmtUser, 'iiii', $providerId, $providerId, $serviceProviderId, $serviceProviderId);
+                mysqli_stmt_bind_param($stmtUser, 'iiiiiiii', $providerId, $providerId, $serviceProviderId, $serviceProviderId, $providerId, $providerId, $serviceProviderId, $serviceProviderId);
                 if (mysqli_stmt_execute($stmtUser)) {
                     $resUser = mysqli_stmt_get_result($stmtUser);
                     $rowUser = $resUser ? mysqli_fetch_assoc($resUser) : null;
-                    $userEmail = trim((string)($rowUser['email'] ?? ''));
+                    $userEmail = strtolower(trim((string)($rowUser['email'] ?? '')));
                     if (filter_var($userEmail, FILTER_VALIDATE_EMAIL)) {
                         if ($source !== null) {
                             if ($providerId > 0) {
@@ -231,7 +239,7 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
                 if (mysqli_stmt_execute($stmtProv)) {
                     $resProv = mysqli_stmt_get_result($stmtProv);
                     $rowProv = $resProv ? mysqli_fetch_assoc($resProv) : null;
-                    $provEmail = trim((string)($rowProv['email'] ?? ''));
+                    $provEmail = strtolower(trim((string)($rowProv['email'] ?? '')));
                     if (filter_var($provEmail, FILTER_VALIDATE_EMAIL)) {
                         if ($source !== null) {
                             $source = 'providers.email via booking_request_items.provider_id';
@@ -254,7 +262,7 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
                 if (mysqli_stmt_execute($stmtSp)) {
                     $resSp = mysqli_stmt_get_result($stmtSp);
                     $rowSp = $resSp ? mysqli_fetch_assoc($resSp) : null;
-                    $spEmail = trim((string)($rowSp['contact_email'] ?? ''));
+                    $spEmail = strtolower(trim((string)($rowSp['contact_email'] ?? '')));
                     if (filter_var($spEmail, FILTER_VALIDATE_EMAIL)) {
                         if ($source !== null) {
                             $source = 'service_providers.contact_email via booking_request_items.service_provider_id';

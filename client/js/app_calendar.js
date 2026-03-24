@@ -52,6 +52,71 @@
         return '';
     }
 
+    function getEventExtendedValue(event, key) {
+        if (!event || !key) return '';
+        if (typeof event[key] !== 'undefined' && event[key] !== null && event[key] !== '') {
+            return event[key];
+        }
+        if (event.extendedProps && typeof event.extendedProps[key] !== 'undefined' && event.extendedProps[key] !== null && event.extendedProps[key] !== '') {
+            return event.extendedProps[key];
+        }
+        return '';
+    }
+
+    function getEventIntegrationMode(event) {
+        return String(getEventExtendedValue(event, 'integration_mode') || '').toLowerCase();
+    }
+
+    function getEventGoogleEventId(event) {
+        return $.trim(String(getEventExtendedValue(event, 'google_event_id') || ''));
+    }
+
+    function isGoogleSyncedEvent(event) {
+        var integrationMode = getEventIntegrationMode(event);
+        var googleEventId = getEventGoogleEventId(event);
+        if (integrationMode === 'internal_only') return false;
+        return googleEventId !== '' || integrationMode === 'calendar_only' || integrationMode === 'calendar_plus_meet';
+    }
+
+    function getEventReadOnlyNotice(event) {
+        var status = getEventStatus(event);
+        if (status === 'cancelled') {
+            return 'This meeting was already cancelled and is kept only as reference in MedTravel.';
+        }
+        if (isGoogleSyncedEvent(event)) {
+            return 'This synchronized event remains read-only for direct editing so MedTravel stays consistent with Google Calendar and Google Meet.';
+        }
+        return '';
+    }
+
+    function getEventCancellationImpactNotice(event) {
+        var status = getEventStatus(event);
+        if (status === 'cancelled') {
+            return 'This meeting no longer has active cancellation actions.';
+        }
+        if (isGoogleSyncedEvent(event)) {
+            return 'This will cancel the meeting in MedTravel Calendar, Google Calendar, and Google Meet if applicable.';
+        }
+        return 'This will cancel the meeting only in MedTravel Calendar.';
+    }
+
+    function buildDetailNotice(event) {
+        var messages = [];
+        var readOnlyNotice = getEventReadOnlyNotice(event);
+        var cancelImpact = getEventCancellationImpactNotice(event);
+        if (readOnlyNotice) {
+            messages.push(readOnlyNotice);
+        }
+        if (cancelImpact) {
+            messages.push(cancelImpact);
+        }
+        return messages.join(' ');
+    }
+
+    function canCancelEvent(event) {
+        return !!(event && event.id && getEventStatus(event) !== 'cancelled');
+    }
+
     function statusColor(status) {
         var s = String(status || '').toLowerCase();
         if (s === 'confirmed') return '#36c6d3';
@@ -115,6 +180,7 @@
 
         var title = currentEvent.title || 'Event detail';
         var status = getEventStatus(currentEvent);
+        var readOnlyNotice = buildDetailNotice(currentEvent);
         var start = toDisplayDateTime(currentEvent.start);
         var end = toDisplayDateTime(currentEvent.end);
         var type = getEventType(currentEvent);
@@ -128,9 +194,12 @@
         $('#client-calendar-detail-end').text(end || 'N/A');
         $('#client-calendar-detail-type').text(type);
         $('#client-calendar-detail-description').text(description || 'N/A');
+        $('#client-calendar-detail-sync-note').text(readOnlyNotice).toggle(readOnlyNotice !== '');
         $('#client-calendar-open-request').attr('href', buildRequestUrl(requestId));
         $('#client-calendar-open-inbox').attr('href', buildInboxUrl(threadId));
         $('#client-calendar-request-change-btn').attr('href', buildInboxUrl(threadId));
+        $('#client-calendar-cancel-btn').toggle(canCancelEvent(currentEvent));
+        $('#client-calendar-cancel-btn').text(isGoogleSyncedEvent(currentEvent) ? 'Cancel synced meeting' : 'Cancel meeting');
 
         var isProposed = (status === 'proposed');
         $('#client-calendar-accept-btn').toggle(isProposed);
@@ -141,7 +210,48 @@
         } else {
             $('#client-calendar-accept-btn').prop('disabled', false);
         }
+        if (status === 'cancelled') {
+            $('#client-calendar-accept-btn').hide();
+            $('#client-calendar-request-change-btn').hide();
+            $('#client-calendar-cancel-btn').hide();
+        }
         $('#client-calendar-detail-modal').modal('show');
+    }
+
+    function cancelCurrentEvent() {
+        if (!currentEvent || !currentEvent.id) {
+            return;
+        }
+        if (getEventStatus(currentEvent) === 'cancelled') {
+            toastr.warning('This meeting was already cancelled');
+            return;
+        }
+
+        var confirmMessage = 'Cancel this meeting?\n\n' + getEventCancellationImpactNotice(currentEvent);
+        if (!window.confirm(confirmMessage)) {
+            return;
+        }
+
+        $.ajax({
+            url: config.cancelUrl || config.listUrl || '/client/ajax/calendar.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'cancel_event',
+                id: currentEvent.id
+            }
+        }).done(function (res) {
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'Could not cancel meeting');
+                return;
+            }
+            toastr.success('Meeting cancelled');
+            $('#client-calendar-detail-modal').modal('hide');
+            $('#client-calendar').fullCalendar('refetchEvents');
+        }).fail(function (xhr) {
+            var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            toastr.error((res && res.message) ? res.message : 'Could not cancel meeting');
+        });
     }
 
     function acceptCurrentEvent() {
@@ -211,6 +321,9 @@
                     }
                     var events = [];
                     (res.events || []).forEach(function (e) {
+                        if (getEventStatus(e) === 'cancelled') {
+                            return;
+                        }
                         e.backgroundColor = statusColor(getEventStatus(e));
                         e.borderColor = typeBorderColor(getEventType(e));
                         events.push(e);
@@ -235,6 +348,10 @@
         $('#client-calendar-accept-btn').on('click', function (e) {
             e.preventDefault();
             acceptCurrentEvent();
+        });
+        $('#client-calendar-cancel-btn').on('click', function (e) {
+            e.preventDefault();
+            cancelCurrentEvent();
         });
     });
 })();

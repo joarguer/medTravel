@@ -27,6 +27,7 @@
     var commissionGateActive = false;
     var freeMessageAllowed = true;
     var lastComposeNotice = '';
+    var cancelledMeetingKeys = {};
     var currentDocuments = [];
     var currentDocumentsThreadId = '';
     var attachModalBusy = false;
@@ -150,6 +151,38 @@
         };
     }
 
+    function meetingEventKeyFromPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return '';
+        }
+        var eventId = String(payload.event_id || '').trim();
+        if (eventId) {
+            return 'g:' + eventId;
+        }
+        var calendarEventId = parseInt(payload.calendar_event_id || 0, 10) || 0;
+        if (calendarEventId > 0) {
+            return 'c:' + String(calendarEventId);
+        }
+        return '';
+    }
+
+    function collectCancelledMeetingKeys(messages) {
+        var map = {};
+        (messages || []).forEach(function (message) {
+            var payload = parseStructuredJson('[MEETING_CANCELLED]', message && message.body ? message.body : '');
+            var key = meetingEventKeyFromPayload(payload);
+            if (key) {
+                map[key] = true;
+            }
+        });
+        return map;
+    }
+
+    function isMeetingCancelledPayload(payload) {
+        var key = meetingEventKeyFromPayload(payload);
+        return !!(key && cancelledMeetingKeys[key]);
+    }
+
     function renderMeetingProposalCard(text) {
         var proposal = parseMeetingProposalPayload(text);
         if (!proposal) {
@@ -175,25 +208,58 @@
             return renderStructuredParseFallback('[MEETING_CONFIRMED]');
         }
         var integration = meetingIntegrationMeta(payload.integration_mode || (payload.meet_url ? 'calendar_plus_meet' : (payload.html_link ? 'calendar_only' : 'internal_only')));
+        var isCancelled = isMeetingCancelledPayload(payload);
+        var canCancel = !isCancelled && currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
 
         var actionsHtml = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">';
-        if (payload.meet_url) {
+        if (!isCancelled && payload.meet_url) {
             actionsHtml += '<a class="btn btn-success btn-xs" href="' + esc(payload.meet_url) + '" target="_blank" rel="noopener">ABRIR MEET</a>';
         }
-        if (payload.html_link) {
+        if (!isCancelled && payload.html_link) {
             actionsHtml += '<a class="btn btn-default btn-xs" href="' + esc(payload.html_link) + '" target="_blank" rel="noopener">ABRIR EVENTO</a>';
+        }
+        if (canCancel) {
+            actionsHtml += '<button type="button" class="btn btn-danger btn-xs admin-meeting-cancel">CANCELAR REUNIÓN</button>';
         }
         actionsHtml += '</div>';
 
-        return '<div class="panel panel-success" style="margin:0;">' +
-            '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión confirmada</strong> <span class="label ' + esc(integration.badgeClass) + '" style="margin-left:6px;">' + esc(integration.badge) + '</span></div>' +
+        return '<div class="panel ' + (isCancelled ? 'panel-warning' : 'panel-success') + '" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>' + esc(isCancelled ? 'Reunión cancelada' : 'Reunión confirmada') + '</strong> <span class="label ' + esc(integration.badgeClass) + '" style="margin-left:6px;">' + esc(integration.badge) + '</span></div>' +
             '<div class="panel-body" style="padding:10px;">' +
                 (payload.start_at ? '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(payload.start_at)) + '</div>' : '') +
                 (payload.end_at ? '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(payload.end_at)) + '</div>' : '') +
                 '<div style="margin-top:6px;"><strong>Tipo:</strong> ' + esc(integration.label) + '</div>' +
                 (payload.organizer_email ? '<div style="margin-top:6px;"><strong>Organizador:</strong> ' + esc(payload.organizer_email) + '</div>' : '') +
-                '<div class="text-muted" style="margin-top:8px;">' + esc(integration.hint) + '</div>' +
+                '<div class="text-muted" style="margin-top:8px;">' + esc(isCancelled ? 'La reunión fue cancelada. El caso sigue activo y puede reagendarse.' : integration.hint) + '</div>' +
                 actionsHtml +
+            '</div>' +
+        '</div>';
+    }
+
+    function renderMeetingCancelledCard(fullText) {
+        var payload = parseStructuredJson('[MEETING_CANCELLED]', fullText);
+        if (!payload) {
+            return renderStructuredParseFallback('[MEETING_CANCELLED]');
+        }
+
+        var integration = meetingIntegrationMeta(payload.integration_mode || 'calendar_plus_meet');
+        var cancelledByRole = String(payload.cancelled_by_role || '').trim().toUpperCase();
+        var byLabel = 'el equipo';
+        if (cancelledByRole === 'CLIENT') {
+            byLabel = 'el paciente';
+        } else if (cancelledByRole === 'PROVIDER') {
+            byLabel = 'el prestador';
+        } else if (cancelledByRole === 'ADMIN') {
+            byLabel = 'coordinación';
+        }
+
+        return '<div class="panel panel-warning" style="margin:0;">' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>Reunión cancelada</strong> <span class="label ' + esc(integration.badgeClass) + '" style="margin-left:6px;">' + esc(integration.badge) + '</span></div>' +
+            '<div class="panel-body" style="padding:10px;">' +
+                (payload.start_at ? '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(payload.start_at)) + '</div>' : '') +
+                (payload.end_at ? '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(payload.end_at)) + '</div>' : '') +
+                '<div style="margin-top:6px;"><strong>Cancelada por:</strong> ' + esc(byLabel) + '</div>' +
+                '<div class="text-muted" style="margin-top:8px;">El caso sigue activo y puede reagendarse.</div>' +
             '</div>' +
         '</div>';
     }
@@ -1320,6 +1386,9 @@
         if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
             return renderMeetingConfirmedCard(trimmed);
         }
+        if (trimmed.indexOf('[MEETING_CANCELLED]') === 0) {
+            return renderMeetingCancelledCard(trimmed);
+        }
         if (/^\[ACTION\]\s*Client rejected proposed dates$/i.test(trimmed)) {
             return renderMeetingChangeRequestedCard();
         }
@@ -1775,11 +1844,13 @@
         if (!$box.length) return;
         var divider = '<div class="mt-section-divider">Mensajes</div>';
         if (!messages || !messages.length) {
+            cancelledMeetingKeys = {};
             $box.html(divider + '<p class="text-muted" style="margin:0;">No messages in this thread yet.</p>');
             return;
         }
 
         annotateGrouping(messages, null);
+        cancelledMeetingKeys = collectCancelledMeetingKeys(messages);
         var html = divider;
         messages.forEach(function (m) {
             var bodyHtml = formatAdminMessageBody(m.body || '');
@@ -1813,6 +1884,13 @@
             filtered.push(m);
         });
         if (!filtered.length) {
+            return;
+        }
+        var hasMeetingCancellation = filtered.some(function (m) {
+            return String(m && m.body ? m.body : '').trim().indexOf('[MEETING_CANCELLED]') === 0;
+        });
+        if (hasMeetingCancellation) {
+            loadMessages();
             return;
         }
         annotateGrouping(filtered, lastMeta);
@@ -2674,6 +2752,47 @@
         return true;
     }
 
+    function sendMeetingCancellation() {
+        if (!currentThread || !currentThread.thread_id) {
+            toastr.warning('Selecciona primero un hilo antes de enviar');
+            return false;
+        }
+        if (String(currentThread.thread_type || '').toUpperCase() !== 'ITEM' || parseInt(currentThread.item_id || 0, 10) <= 0) {
+            toastr.warning('La cancelación de reunión solo aplica a hilos ITEM');
+            return false;
+        }
+        if (!window.confirm('¿Cancelar esta reunión? El caso seguirá activo para poder reagendar.')) {
+            return false;
+        }
+
+        setComposeBusy(true, 'Cancelando reunión...');
+        $.ajax({
+            url: 'ajax/my_booking_requests.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'cancel_meeting',
+                item_id: parseInt(currentThread.item_id || 0, 10)
+            }
+        }).done(function (res) {
+            setComposeBusy(false, '');
+            if (!res || res.ok !== true) {
+                toastr.error((res && res.message) ? res.message : 'No se pudo cancelar la reunión');
+                return;
+            }
+            markSentFromResponse(res);
+            realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
+            toastr.success('Reunión cancelada');
+            loadMessages();
+            loadThreads();
+        }).fail(function (xhr) {
+            setComposeBusy(false, '');
+            var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+            toastr.error((res && res.message) ? res.message : 'No se pudo cancelar la reunión');
+        });
+        return true;
+    }
+
     $(function () {
         var params = new URLSearchParams(window.location.search);
         var threadId = String(params.get('thread_id') || '');
@@ -2710,6 +2829,9 @@
             var href = String(decodeURIComponent($(this).attr('data-url') || '') || $(this).attr('href') || '').trim();
             var doc = findDocumentById(docId);
             openDocViewer(doc || null, href);
+        });
+        $('#admin-inbox-messages').on('click', '.admin-meeting-cancel', function () {
+            sendMeetingCancellation();
         });
 
         // Clean up preview iframe/img on modal close to stop loading

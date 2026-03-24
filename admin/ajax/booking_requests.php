@@ -522,6 +522,34 @@ if ($action === 'force_cancel_item') {
         json_error('item_status no disponible', 409);
     }
 
+    if (table_exists($conexion, 'calendar_events')) {
+        $hasGoogleEventId = table_has_column($conexion, 'calendar_events', 'google_event_id');
+        $googleEventExpr = $hasGoogleEventId ? 'google_event_id' : "''";
+        $stmtMeeting = mysqli_prepare(
+            $conexion,
+            "SELECT id, status, {$googleEventExpr} AS google_event_id
+             FROM calendar_events
+             WHERE event_type = 'ITEM'
+               AND item_id = ?
+               AND status = 'confirmed'
+             ORDER BY start_at DESC, id DESC
+             LIMIT 1"
+        );
+        if ($stmtMeeting) {
+            mysqli_stmt_bind_param($stmtMeeting, 'i', $itemId);
+            if (mysqli_stmt_execute($stmtMeeting)) {
+                $resMeeting = mysqli_stmt_get_result($stmtMeeting);
+                $meetingRow = $resMeeting ? mysqli_fetch_assoc($resMeeting) : null;
+                $googleEventId = trim((string)($meetingRow['google_event_id'] ?? ''));
+                if ($meetingRow && $googleEventId !== '') {
+                    mysqli_stmt_close($stmtMeeting);
+                    json_error('El item tiene una reunión sincronizada activa. Cancélala primero desde la ruta oficial.', 409);
+                }
+            }
+            mysqli_stmt_close($stmtMeeting);
+        }
+    }
+
     $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $hasItemsUpdatedAt = table_has_column($conexion, 'booking_request_items', 'updated_at');
 

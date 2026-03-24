@@ -103,6 +103,71 @@
         return '';
     }
 
+    function getEventExtendedValue(event, key) {
+        if (!event || !key) return '';
+        if (typeof event[key] !== 'undefined' && event[key] !== null && event[key] !== '') {
+            return event[key];
+        }
+        if (event.extendedProps && typeof event.extendedProps[key] !== 'undefined' && event.extendedProps[key] !== null && event.extendedProps[key] !== '') {
+            return event.extendedProps[key];
+        }
+        return '';
+    }
+
+    function getEventIntegrationMode(event) {
+        return String(getEventExtendedValue(event, 'integration_mode') || '').toLowerCase();
+    }
+
+    function getEventGoogleEventId(event) {
+        return $.trim(String(getEventExtendedValue(event, 'google_event_id') || ''));
+    }
+
+    function isGoogleSyncedEvent(event) {
+        var integrationMode = getEventIntegrationMode(event);
+        var googleEventId = getEventGoogleEventId(event);
+        if (integrationMode === 'internal_only') return false;
+        return googleEventId !== '' || integrationMode === 'calendar_only' || integrationMode === 'calendar_plus_meet';
+    }
+
+    function getOfficialFlowLabel() {
+        return isProviderView() ? 'Mis Solicitudes' : 'Inbox o Mis Solicitudes';
+    }
+
+    function getEventReadOnlyNotice(event) {
+        var status = getEventStatus(event);
+        if (status === 'cancelled') {
+            return 'Este evento ya fue cancelado y se conserva solo como referencia en MedTravel.';
+        }
+        if (isGoogleSyncedEvent(event)) {
+            return 'Este evento está sincronizado con Google Calendar/Meet. La edición local queda deshabilitada para mantener consistencia con la integración.';
+        }
+        return '';
+    }
+
+    function getEventCancellationImpactNotice(event) {
+        var status = getEventStatus(event);
+        if (status === 'cancelled') {
+            return 'Este evento ya no tiene acciones activas de cancelación.';
+        }
+        if (isGoogleSyncedEvent(event)) {
+            return 'Esta cancelación afectará MedTravel Calendar, Google Calendar y Google Meet si aplica.';
+        }
+        return 'Esta cancelación solo afectará el calendar nativo de MedTravel.';
+    }
+
+    function buildDetailNotice(event) {
+        var messages = [];
+        var readOnlyNotice = getEventReadOnlyNotice(event);
+        var cancelImpact = getEventCancellationImpactNotice(event);
+        if (readOnlyNotice) {
+            messages.push(readOnlyNotice);
+        }
+        if (cancelImpact) {
+            messages.push(cancelImpact);
+        }
+        return messages.join(' ');
+    }
+
     function statusColor(status) {
         var s = String(status || '').toLowerCase();
         if (s === 'confirmed') return '#36c6d3';
@@ -322,6 +387,7 @@
     function mapListEvents(events) {
         var out = [];
         (events || []).forEach(function (e) {
+            if (getEventStatus(e) === 'cancelled') return;
             if (!eventAllowedByFilter(e)) return;
             if (!eventMatchesFocus(e)) return;
             e.backgroundColor = statusColor(getEventStatus(e));
@@ -611,7 +677,10 @@
         var requestId = getEventRequestId(currentEvent);
         var itemId = getEventItemId(currentEvent);
         var threadId = getEventThreadId(currentEvent);
-        var canEdit = !!config.canUpdate;
+        var status = getEventStatus(currentEvent);
+        var readOnlyNotice = buildDetailNotice(currentEvent);
+        var canEdit = !!config.canUpdate && status !== 'cancelled' && !isGoogleSyncedEvent(currentEvent);
+        var canDelete = !!config.canCancel && status !== 'cancelled';
 
         $('#admin-calendar-detail-id').val(currentEvent.id || '');
         $('#admin-calendar-detail-title').val(currentEvent.title || '');
@@ -631,7 +700,9 @@
         $('#admin-calendar-detail-type').prop('disabled', true);
         $('#admin-calendar-open-request, #admin-calendar-open-inbox').prop('disabled', false);
         $('#admin-calendar-detail-form button[type="submit"]').toggle(canEdit);
-        $('#admin-calendar-delete-btn').toggle(!!config.canDelete);
+        $('#admin-calendar-delete-btn').toggle(canDelete);
+        $('#admin-calendar-delete-btn').text(isGoogleSyncedEvent(currentEvent) ? 'Cancelar reunión sincronizada' : 'Cancelar evento');
+        $('#admin-calendar-detail-sync-note').text(readOnlyNotice).toggle(readOnlyNotice !== '');
 
         $('#admin-calendar-detail-modal').modal('show');
     }
@@ -936,6 +1007,10 @@
 
         $('#admin-calendar-detail-form').on('submit', function (e) {
             e.preventDefault();
+            if (currentEvent && getEventReadOnlyNotice(currentEvent)) {
+                toastr.warning(getEventReadOnlyNotice(currentEvent));
+                return;
+            }
             var $f = $(this);
             postCalendar({
                 action: 'update_event',
@@ -956,14 +1031,25 @@
         });
 
         $('#admin-calendar-delete-btn').on('click', function () {
+            if (!currentEvent) {
+                return;
+            }
+            if (getEventStatus(currentEvent) === 'cancelled') {
+                toastr.warning('Este evento ya fue cancelado.');
+                return;
+            }
             var eventId = $.trim($('#admin-calendar-detail-id').val() || '');
             if (!eventId) return;
+            var confirmMessage = '¿Cancelar este evento?\n\n' + getEventCancellationImpactNotice(currentEvent);
+            if (!window.confirm(confirmMessage)) {
+                return;
+            }
             postCalendar({
-                action: 'delete_event',
+                action: 'cancel_event',
                 id: eventId
             }, function () {
                 $('#admin-calendar-detail-modal').modal('hide');
-                toastr.success('Event deleted');
+                toastr.success('Evento cancelado');
                 refreshCalendar();
             });
         });
