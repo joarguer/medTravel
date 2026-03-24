@@ -1939,10 +1939,10 @@
         if (trimmed.indexOf('[PROPOSAL_RESPONSE]') === 0) {
             return renderProposalResponseCard(trimmed);
         }
-        if (trimmed.indexOf('[MEETING_PROPOSAL]') === 0) {
+        if (hasStructuredPrefix(trimmed, '[MEETING_PROPOSAL]')) {
             return renderMeetingProposalCard(trimmed, currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0);
         }
-        if (trimmed.indexOf('[MEETING_CONFIRMED]') === 0) {
+        if (hasStructuredPrefix(trimmed, '[MEETING_CONFIRMED]')) {
             return renderMeetingConfirmedCard(trimmed);
         }
         if (/^\[ACTION\]\s*Client rejected proposed dates$/i.test(trimmed)) {
@@ -1972,6 +1972,12 @@
         }
 
         var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+        if (hasStructuredPrefix(trimmed, '[MEETING_PROPOSAL]')) {
+            return renderMeetingProposalCard(trimmed, isItemThread);
+        }
+        if (hasStructuredPrefix(trimmed, '[MEETING_CONFIRMED]')) {
+            return renderMeetingConfirmedCard(trimmed);
+        }
         if (isReply && trimmed.toUpperCase().indexOf('PROPOSED_DATES') === 0) {
             return renderMeetingProposalCard(trimmed, isItemThread);
         }
@@ -2030,12 +2036,66 @@
     }
 
     function parseStructuredJson(prefix, fullText) {
-        var jsonText = String(fullText || '').replace(prefix, '').trim();
-        if (!jsonText) return null;
+        var jsonText = stripStructuredPrefix(fullText, prefix);
+        if (!jsonText) {
+            return null;
+        }
+        return parseStructuredPayload(jsonText);
+    }
+
+    function escapeRegExp(text) {
+        return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function hasStructuredPrefix(fullText, prefix) {
+        var source = String(fullText || '').trim();
+        if (!source) {
+            return false;
+        }
+        var prefixPattern = escapeRegExp(prefix);
+        return new RegExp('^(?:\\[(?:ACTION|REPLY)\\]\\s*)?' + prefixPattern + '(?:\\s|$)', 'i').test(source);
+    }
+
+    function stripStructuredPrefix(fullText, prefix) {
+        var source = String(fullText || '').trim();
+        if (!hasStructuredPrefix(source, prefix)) {
+            return '';
+        }
+        var prefixPattern = escapeRegExp(prefix);
+        return source.replace(new RegExp('^(?:\\[(?:ACTION|REPLY)\\]\\s*)?' + prefixPattern + '\\s*', 'i'), '').trim();
+    }
+
+    function parseStructuredPayload(text) {
+        var candidate = String(text || '').trim();
+        var depth = 0;
+
+        while (candidate && depth < 3) {
+            try {
+                var parsed = JSON.parse(candidate);
+                if (parsed && typeof parsed === 'object') {
+                    return parsed;
+                }
+                if (typeof parsed === 'string') {
+                    candidate = parsed.trim();
+                    depth += 1;
+                    continue;
+                }
+                return null;
+            } catch (e) {
+                break;
+            }
+        }
+
+        var firstBrace = candidate.indexOf('{');
+        var lastBrace = candidate.lastIndexOf('}');
+        if (firstBrace === -1 || lastBrace <= firstBrace) {
+            return null;
+        }
+
         try {
-            var parsed = JSON.parse(jsonText);
-            return parsed && typeof parsed === 'object' ? parsed : null;
-        } catch (e) {
+            var sliced = JSON.parse(candidate.slice(firstBrace, lastBrace + 1));
+            return sliced && typeof sliced === 'object' ? sliced : null;
+        } catch (e2) {
             return null;
         }
     }
@@ -2097,16 +2157,14 @@
     }
 
     function parseMeetingProposalPayload(fullText) {
-        if (String(fullText || '').indexOf('[MEETING_PROPOSAL]') === 0) {
-            var payload = parseStructuredJson('[MEETING_PROPOSAL]', fullText);
-            if (payload) {
-                return {
-                    startAt: String(payload.start_at || '').trim(),
-                    endAt: String(payload.end_at || '').trim(),
-                    note: String(payload.note || '').trim(),
-                    integrationMode: String(payload.integration_mode || 'calendar_plus_meet').trim().toLowerCase()
-                };
-            }
+        var payload = parseStructuredJson('[MEETING_PROPOSAL]', fullText);
+        if (payload) {
+            return {
+                startAt: String(payload.start_at || payload.startAt || '').trim(),
+                endAt: String(payload.end_at || payload.endAt || '').trim(),
+                note: String(payload.note || payload.notes || '').trim(),
+                integrationMode: String(payload.integration_mode || payload.integrationMode || 'calendar_plus_meet').trim().toLowerCase()
+            };
         }
 
         var proposal = parseMeetingProposalText(String(fullText || '').replace(/^\[REPLY\]\s*/i, ''));
@@ -2131,8 +2189,8 @@
         var actionsHtml = '';
         if (actionable) {
             actionsHtml = '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
-                '<button type="button" class="btn btn-success btn-xs client-date-action" data-action="accept_dates">ACEPTAR REUNIÓN</button>' +
-                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">PEDIR CAMBIO</button>' +
+                '<button type="button" class="btn btn-success btn-xs client-date-action" data-action="accept_dates">Accept meeting</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-date-action" data-action="reject_dates">Request change</button>' +
                 '</div>';
         }
 
@@ -2141,6 +2199,7 @@
             '<div class="panel-body" style="padding:10px;">' +
                 '<div><strong>Inicio:</strong> ' + esc(formatInboxDateTime(proposal.startAt)) + '</div>' +
                 '<div style="margin-top:6px;"><strong>Fin:</strong> ' + esc(formatInboxDateTime(proposal.endAt)) + '</div>' +
+                '<div style="margin-top:6px;"><strong>Tipo:</strong> ' + esc(integration.label) + '</div>' +
                 (proposal.note ? '<div style="margin-top:6px;"><strong>Nota:</strong> ' + esc(proposal.note) + '</div>' : '') +
                 '<div class="text-muted" style="margin-top:8px;">' + esc(integration.hint) + '</div>' +
                 actionsHtml +
