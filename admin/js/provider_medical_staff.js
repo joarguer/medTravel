@@ -31,6 +31,8 @@
     var deepLinkedProviderCatalogServiceId = parseInt(pageParams.get('provider_catalog_service_id') || '0', 10) || 0;
     var deepLinkedServiceId = parseInt(pageParams.get('service_id') || '0', 10) || 0;
     var deepLinkedAction = $.trim(pageParams.get('action') || '').toLowerCase();
+    var deepLinkedLegacyEditId = parseInt(pageParams.get('edit') || '0', 10) || 0;
+    var deepLinkedStaffId = parseInt(pageParams.get('staff_id') || pageParams.get('id') || pageParams.get('edit') || '0', 10) || 0;
     var deepLinkHandled = false;
     var emailValidationRequest = null;
     var emailValidationTimer = null;
@@ -1654,6 +1656,11 @@
                 updateServiceContextNote(resolvedSelection.item);
                 openCreateModalWithService(resolvedSelection.providerCatalogServiceIds, resolvedSelection.serviceIds);
             });
+        }
+
+        if (!deepLinkHandled && CAN_MANAGE_STAFF && deepLinkedStaffId > 0 && (deepLinkedAction === 'edit_staff' || deepLinkedLegacyEditId > 0)) {
+            deepLinkHandled = true;
+            openEditModal(deepLinkedStaffId);
         }
 
         $('#btn-add-medical-staff').on('click', openCreateModal);
