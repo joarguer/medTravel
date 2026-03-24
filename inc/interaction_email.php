@@ -155,56 +155,75 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
         if ($itemId <= 0) {
             return '';
         }
-        if (!inbox_table_exists($conexion, 'booking_request_items') || !inbox_table_exists($conexion, 'usuarios')) {
+        if (!inbox_table_exists($conexion, 'booking_request_items')) {
             return '';
         }
-        $hasUsersDeleted = inbox_table_has_column($conexion, 'usuarios', 'is_deleted');
-        $hasUsersActive = inbox_table_has_column($conexion, 'usuarios', 'activo');
 
-        $sql = "SELECT u.email, bri.provider_id, bri.service_provider_id
-                FROM booking_request_items bri
-                INNER JOIN usuarios u ON (
-                    (bri.provider_id IS NOT NULL AND bri.provider_id > 0 AND u.provider_id = bri.provider_id)
-                    OR
-                    (bri.service_provider_id IS NOT NULL AND bri.service_provider_id > 0 AND u.service_provider_id = bri.service_provider_id)
-                )
-                WHERE bri.id = ?";
-        if ($hasUsersDeleted) {
-            $sql .= " AND u.is_deleted = 0";
-        }
-        if ($hasUsersActive) {
-            $sql .= " AND u.activo = 1";
-        }
-        $sql .= " AND u.email IS NOT NULL AND u.email <> '' ORDER BY u.id ASC LIMIT 1";
-        $stmt = mysqli_prepare($conexion, $sql);
-        if (!$stmt) {
+        $providerId = 0;
+        $serviceProviderId = 0;
+        $stmtItem = mysqli_prepare($conexion, "SELECT provider_id, service_provider_id FROM booking_request_items WHERE id = ? LIMIT 1");
+        if (!$stmtItem) {
             return '';
         }
-        mysqli_stmt_bind_param($stmt, 'i', $itemId);
-        if (!mysqli_stmt_execute($stmt)) {
-            mysqli_stmt_close($stmt);
+        mysqli_stmt_bind_param($stmtItem, 'i', $itemId);
+        if (!mysqli_stmt_execute($stmtItem)) {
+            mysqli_stmt_close($stmtItem);
             return '';
         }
-        $res = mysqli_stmt_get_result($stmt);
-        $row = $res ? mysqli_fetch_assoc($res) : null;
-        mysqli_stmt_close($stmt);
-        $email = trim((string)($row['email'] ?? ''));
-        if ($source !== null && $email !== '') {
-            $providerId = (int)($row['provider_id'] ?? 0);
-            $serviceProviderId = (int)($row['service_provider_id'] ?? 0);
-            if ($providerId > 0) {
-                $source = 'usuarios.provider_id via booking_request_items.provider_id';
-            } elseif ($serviceProviderId > 0) {
-                $source = 'usuarios.service_provider_id via booking_request_items.service_provider_id';
-            } else {
-                $source = 'usuarios.email';
+        $resItem = mysqli_stmt_get_result($stmtItem);
+        $itemRow = $resItem ? mysqli_fetch_assoc($resItem) : null;
+        mysqli_stmt_close($stmtItem);
+        if (!$itemRow) {
+            return '';
+        }
+
+        $providerId = (int)($itemRow['provider_id'] ?? 0);
+        $serviceProviderId = (int)($itemRow['service_provider_id'] ?? 0);
+
+        if (inbox_table_exists($conexion, 'usuarios')) {
+            $hasUsersDeleted = inbox_table_has_column($conexion, 'usuarios', 'is_deleted');
+            $hasUsersActive = inbox_table_has_column($conexion, 'usuarios', 'activo');
+
+            $sql = "SELECT u.email
+                    FROM usuarios u
+                    WHERE (
+                        (? > 0 AND u.provider_id = ?)
+                        OR
+                        (? > 0 AND u.service_provider_id = ?)
+                    )";
+            if ($hasUsersDeleted) {
+                $sql .= " AND u.is_deleted = 0";
+            }
+            if ($hasUsersActive) {
+                $sql .= " AND u.activo = 1";
+            }
+            $sql .= " AND u.email IS NOT NULL AND u.email <> '' ORDER BY u.id ASC LIMIT 1";
+
+            $stmtUser = mysqli_prepare($conexion, $sql);
+            if ($stmtUser) {
+                mysqli_stmt_bind_param($stmtUser, 'iiii', $providerId, $providerId, $serviceProviderId, $serviceProviderId);
+                if (mysqli_stmt_execute($stmtUser)) {
+                    $resUser = mysqli_stmt_get_result($stmtUser);
+                    $rowUser = $resUser ? mysqli_fetch_assoc($resUser) : null;
+                    $userEmail = trim((string)($rowUser['email'] ?? ''));
+                    if (filter_var($userEmail, FILTER_VALIDATE_EMAIL)) {
+                        if ($source !== null) {
+                            if ($providerId > 0) {
+                                $source = 'usuarios.provider_id via booking_request_items.provider_id';
+                            } elseif ($serviceProviderId > 0) {
+                                $source = 'usuarios.service_provider_id via booking_request_items.service_provider_id';
+                            } else {
+                                $source = 'usuarios.email';
+                            }
+                        }
+                        mysqli_stmt_close($stmtUser);
+                        return $userEmail;
+                    }
+                }
+                mysqli_stmt_close($stmtUser);
             }
         }
-        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return $email;
-        }
 
-        $providerId = (int)($row['provider_id'] ?? 0);
         if ($providerId > 0 && inbox_table_exists($conexion, 'providers') && inbox_table_has_column($conexion, 'providers', 'email')) {
             $stmtProv = mysqli_prepare($conexion, "SELECT email FROM providers WHERE id = ? LIMIT 1");
             if ($stmtProv) {
@@ -225,7 +244,6 @@ if (!function_exists('interaction_email_fetch_provider_email')) {
             }
         }
 
-        $serviceProviderId = (int)($row['service_provider_id'] ?? 0);
         if ($serviceProviderId > 0
             && inbox_table_exists($conexion, 'service_providers')
             && inbox_table_has_column($conexion, 'service_providers', 'contact_email')

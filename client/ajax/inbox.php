@@ -167,12 +167,29 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
     $timezone = 'America/Bogota';
     $attendees = [];
     $clientEmail = trim((string)($eventRow['client_email'] ?? ''));
-    $providerEmail = function_exists('interaction_email_fetch_provider_email') ? trim((string)interaction_email_fetch_provider_email($conexion, $itemId)) : '';
+    $providerEmailSource = '';
+    $providerEmail = function_exists('interaction_email_fetch_provider_email')
+        ? trim((string)interaction_email_fetch_provider_email($conexion, $itemId, $providerEmailSource))
+        : '';
     if (filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
         $attendees[] = ['email' => $clientEmail];
     }
     if (filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
         $attendees[] = ['email' => $providerEmail];
+    }
+
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'CLIENT_MEETING_CONFIRM_ATTENDEES_PREP'
+            . ' request_id=' . (int)$requestId
+            . ' item_id=' . (int)$itemId
+            . ' organizer_admin_user_id=' . (int)$organizerAdminUserId
+            . ' organizer_email_existing=' . (string)($eventRow['organizer_email'] ?? '')
+            . ' client_email=' . $clientEmail
+            . ' provider_email=' . $providerEmail
+            . ' provider_email_source=' . ($providerEmailSource !== '' ? $providerEmailSource : 'unresolved')
+            . ' attendees=' . json_encode($attendees, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
     }
 
     $startDate = new DateTimeImmutable((string)$eventRow['start_at'], new DateTimeZone($timezone));
@@ -186,6 +203,20 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
         'attendees' => $attendees,
         'create_meet' => $integrationMode === 'calendar_plus_meet',
     ]);
+
+    if (function_exists('mt_email_debug_log')) {
+        mt_email_debug_log(
+            'CLIENT_MEETING_CONFIRM_ATTENDEES_RESULT'
+            . ' request_id=' . (int)$requestId
+            . ' item_id=' . (int)$itemId
+            . ' organizer_email=' . (string)($result['organizer_email'] ?? '')
+            . ' provider_email=' . $providerEmail
+            . ' client_email=' . $clientEmail
+            . ' google_attendees=' . json_encode((array)($result['attendees'] ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            . ' ok=' . (!empty($result['ok']) ? '1' : '0')
+        );
+    }
+
     if (empty($result['ok'])) {
         return $result;
     }
