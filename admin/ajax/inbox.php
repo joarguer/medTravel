@@ -1,12 +1,12 @@
 <?php
-include '../include/conexion.php';
-require_once '../include/email_config.php';
-require_once '../include/roles.php';
-require_once '../../inc/inbox_utils.php';
-require_once '../../inc/email_template.php';
-require_once '../../inc/interaction_email.php';
-require_once '../../inc/fee_gate.php';
-require_once '../../inc/commission_gate.php';
+require_once __DIR__ . '/../include/conexion.php';
+require_once __DIR__ . '/../include/email_config.php';
+require_once __DIR__ . '/../include/roles.php';
+require_once __DIR__ . '/../../inc/inbox_utils.php';
+require_once __DIR__ . '/../../inc/email_template.php';
+require_once __DIR__ . '/../../inc/interaction_email.php';
+require_once __DIR__ . '/../../inc/fee_gate.php';
+require_once __DIR__ . '/../../inc/commission_gate.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
