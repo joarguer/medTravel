@@ -891,7 +891,10 @@ require_once __DIR__ . '/provider_medical_staff_helpers.php';
 $_qs_staff_rows   = [];
 $_qs_staff_active = 0;
 $_qs_provider_id  = isset($provider_id) ? (int)$provider_id : 0;
-if ($es_prestador && $_qs_provider_id > 0 && isset($conexion) && $conexion
+$_qs_hide_for_linked_staff = function_exists('is_provider_linked_medical_staff_session')
+    ? is_provider_linked_medical_staff_session($conexion ?? null)
+    : false;
+if (!$_qs_hide_for_linked_staff && $es_prestador && $_qs_provider_id > 0 && isset($conexion) && $conexion
     && function_exists('provider_staff_table_exists')
     && provider_staff_table_exists($conexion)
     && function_exists('provider_staff_select_columns')) {
@@ -943,7 +946,7 @@ foreach ($_qs_staff_rows as $_qs_staff_seed) {
     $_qs_staff_case_pending[$_qs_seed_id] = 0;
 }
 
-if ($es_prestador && $_qs_provider_id > 0 && !empty($_qs_staff_ids) && isset($conexion) && $conexion) {
+if (!$_qs_hide_for_linked_staff && $es_prestador && $_qs_provider_id > 0 && !empty($_qs_staff_ids) && isset($conexion) && $conexion) {
     $_qs_items_table_check = mysqli_query($conexion, "SHOW TABLES LIKE 'booking_request_items'");
     $_qs_requests_table_check = mysqli_query($conexion, "SHOW TABLES LIKE 'booking_requests'");
     if ($_qs_items_table_check && mysqli_num_rows($_qs_items_table_check) > 0
@@ -1082,7 +1085,7 @@ ob_start();
 $_qs_staff_detail_templates = '';
 $_qs_staff_detail_panel = '';
 if ($es_prestador && $_qs_provider_id > 0) {
-    if (empty($_qs_staff_rows)) {
+    if (!$_qs_hide_for_linked_staff && empty($_qs_staff_rows)) {
         echo '<div class="inner-content" style="text-align:center; padding-top:10px;">';
         echo '<i class="fa fa-user-md" style="font-size:36px; color:#4a6070; display:block; margin-bottom:10px;"></i>';
         echo '<p style="color:#6c8296; font-size:12px; line-height:1.5; margin-bottom:14px;">';
@@ -1091,7 +1094,7 @@ if ($es_prestador && $_qs_provider_id > 0) {
         echo '</p>';
         echo '<a href="staff_medico.php" class="btn btn-sm btn-primary btn-block"><i class="fa fa-plus"></i> Agregar personal</a>';
         echo '</div>';
-    } else {
+    } elseif (!$_qs_hide_for_linked_staff) {
         $_qs_avatar_default = '../assets/layouts/layout6/img/avatar1.jpg';
         $_qs_staff_detail_templates = '';
         foreach ($_qs_staff_rows as $_qs_m) {
@@ -1105,9 +1108,28 @@ if ($es_prestador && $_qs_provider_id > 0) {
             $__photo_src = $_qs_avatar_default;
             $__edit_url = 'staff_medico.php?action=edit_staff&amp;staff_id=' . $__id;
             if ($__photo !== '') {
-                $_candidate = 'img/staff/' . $_qs_provider_id . '/' . $__photo;
-                if (file_exists(dirname(__FILE__, 2) . '/' . $_candidate)) {
-                    $__photo_src = '../' . $_candidate;
+                if (preg_match('~^(https?:)?//~i', $__photo) || strpos($__photo, 'data:') === 0) {
+                    $__photo_src = $__photo;
+                } else {
+                    $_qs_photo_candidates = [];
+                    $_qs_photo_clean = ltrim($__photo, '/');
+                    if ($_qs_photo_clean !== '') {
+                        $_qs_photo_candidates[] = $_qs_photo_clean;
+                    }
+                    if (basename($__photo) === $__photo) {
+                        $_qs_photo_candidates[] = 'uploads/staff_photos/' . $__photo;
+                        $_qs_photo_candidates[] = 'img/staff/' . $_qs_provider_id . '/' . $__photo;
+                    }
+                    foreach (array_unique($_qs_photo_candidates) as $_qs_photo_candidate) {
+                        if ($_qs_photo_candidate === '') {
+                            continue;
+                        }
+                        $_qs_photo_disk_path = dirname(__DIR__) . '/' . $_qs_photo_candidate;
+                        if (is_file($_qs_photo_disk_path)) {
+                            $__photo_src = $_qs_photo_candidate;
+                            break;
+                        }
+                    }
                 }
             }
             $__badge_class = $__active ? 'badge-success' : 'badge-default';
@@ -1260,37 +1282,39 @@ $_qs_staff_badge = $_qs_staff_active > 0
 
 // ── Construir $sider_bar ──────────────────────────────────────────────────────
 ob_start();
-echo '<a href="javascript:;" class="page-quick-sidebar-toggler">';
-echo '<i class="icon-login"></i>';
-echo '</a>';
-echo '<div class="page-quick-sidebar-wrapper" data-close-on-body-click="false">';
-echo '<div class="page-quick-sidebar">';
-echo '<ul class="nav nav-tabs">';
-echo '<li class="active"><a href="javascript:;" data-target="#quick_sidebar_tab_1" data-toggle="tab">Staff' . $_qs_staff_badge . '</a></li>';
-echo '<li><a href="javascript:;" data-target="#quick_sidebar_tab_2" data-toggle="tab">Alertas</a></li>';
-echo '</ul>';
-echo '<div class="tab-content">';
-echo '<div class="tab-pane active page-quick-sidebar-chat" id="quick_sidebar_tab_1">';
-echo '<div class="page-quick-sidebar-chat-users" data-rail-color="#ddd" data-wrapper-class="page-quick-sidebar-list">';
-echo '<h3 class="list-heading">Staff m&eacute;dico</h3>';
-echo '<ul class="media-list list-items" id="qs-staff-list">';
-echo $_qs_staff_html;
-echo '</ul>';
-echo '</div>';
-echo $_qs_staff_detail_panel;
-if ($_qs_staff_detail_templates !== '') {
-    echo '<div id="qs-staff-templates" style="display:none;">' . $_qs_staff_detail_templates . '</div>';
+if (!$_qs_hide_for_linked_staff) {
+    echo '<a href="javascript:;" class="page-quick-sidebar-toggler">';
+    echo '<i class="icon-login"></i>';
+    echo '</a>';
+    echo '<div class="page-quick-sidebar-wrapper" data-close-on-body-click="false">';
+    echo '<div class="page-quick-sidebar">';
+    echo '<ul class="nav nav-tabs">';
+    echo '<li class="active"><a href="javascript:;" data-target="#quick_sidebar_tab_1" data-toggle="tab">Staff' . $_qs_staff_badge . '</a></li>';
+    echo '<li><a href="javascript:;" data-target="#quick_sidebar_tab_2" data-toggle="tab">Alertas</a></li>';
+    echo '</ul>';
+    echo '<div class="tab-content">';
+    echo '<div class="tab-pane active page-quick-sidebar-chat" id="quick_sidebar_tab_1">';
+    echo '<div class="page-quick-sidebar-chat-users" data-rail-color="#ddd" data-wrapper-class="page-quick-sidebar-list">';
+    echo '<h3 class="list-heading">Staff m&eacute;dico</h3>';
+    echo '<ul class="media-list list-items" id="qs-staff-list">';
+    echo $_qs_staff_html;
+    echo '</ul>';
+    echo '</div>';
+    echo $_qs_staff_detail_panel;
+    if ($_qs_staff_detail_templates !== '') {
+        echo '<div id="qs-staff-templates" style="display:none;">' . $_qs_staff_detail_templates . '</div>';
+    }
+    echo '</div>';
+    echo '<div class="tab-pane page-quick-sidebar-alerts" id="quick_sidebar_tab_2">';
+    echo '<div class="page-quick-sidebar-alerts-list" style="padding:20px 15px; color:#aaa; font-size:12px; text-align:center;">';
+    echo '<i class="fa fa-bell-o" style="font-size:28px; display:block; margin-bottom:8px; opacity:.3;"></i>';
+    echo 'Sin alertas activas.';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
+    echo '</div>';
 }
-echo '</div>';
-echo '<div class="tab-pane page-quick-sidebar-alerts" id="quick_sidebar_tab_2">';
-echo '<div class="page-quick-sidebar-alerts-list" style="padding:20px 15px; color:#aaa; font-size:12px; text-align:center;">';
-echo '<i class="fa fa-bell-o" style="font-size:28px; display:block; margin-bottom:8px; opacity:.3;"></i>';
-echo 'Sin alertas activas.';
-echo '</div>';
-echo '</div>';
-echo '</div>';
-echo '</div>';
-echo '</div>';
 $sider_bar = ob_get_clean();
 
 if ($_qs_staff_detail_templates !== '') {
