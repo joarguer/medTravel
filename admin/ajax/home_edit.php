@@ -782,7 +782,7 @@ if($tipo == 'edit_service_img'){
 }
 
 if($tipo == 'get_booking'){
-    $busca = mysqli_query($conexion,"SELECT id,intro_title,intro_paragraph,secondary_paragraph,background_img,cta_text,cta_subtext FROM home_booking WHERE activo = '1' ORDER BY id DESC LIMIT 1");
+    $busca = mysqli_query($conexion,"SELECT id,intro_title,intro_paragraph,secondary_paragraph,background_img,cta_text,cta_subtext,form_title,form_paragraph FROM home_booking WHERE activo = '1' ORDER BY id DESC LIMIT 1");
     if(mysqli_num_rows($busca) > 0){
         $resultados = mysqli_fetch_assoc($busca);
     } else {
@@ -794,6 +794,8 @@ if($tipo == 'get_booking'){
             'background_img' => 'img/tour-booking-bg.jpg',
             'cta_text' => 'Submit your request',
             'cta_subtext' => 'Our coordinating team replies within 24 hours.',
+            'form_title' => 'Request Your Personalized Plan',
+            'form_paragraph' => 'Complete the form and our team will contact you with options tailored to your treatment and travel needs.',
         ];
     }
 }
@@ -845,7 +847,7 @@ if($tipo == 'edit_booking'){
     $id = isset($_REQUEST["id"]) ? (int)$_REQUEST["id"] : 0;
     $field = $_REQUEST["field"];
     $value = isset($_REQUEST["value"]) ? mysqli_real_escape_string($conexion, $_REQUEST["value"]) : '';
-    $allowed = ['intro_title','intro_paragraph','secondary_paragraph','cta_text','cta_subtext'];
+    $allowed = ['intro_title','intro_paragraph','secondary_paragraph','cta_text','cta_subtext','form_title','form_paragraph'];
     if($id > 0 && in_array($field, $allowed)){
         $update = mysqli_query($conexion,"UPDATE home_booking SET $field = '$value' WHERE id = $id");
         if($update){

@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS `home_booking` (
   `background_img` VARCHAR(255) DEFAULT 'img/tour-booking-bg.jpg',
   `cta_text` VARCHAR(255) DEFAULT 'Submit your request',
   `cta_subtext` VARCHAR(255) DEFAULT 'Our coordinating team replies within 24 hours.',
+  `form_title` VARCHAR(255) DEFAULT 'Request Your Personalized Plan',
+  `form_paragraph` TEXT,
   `activo` TINYINT(1) NOT NULL DEFAULT 1,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)

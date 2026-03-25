@@ -752,6 +752,17 @@ function open_booking(){
                 <label>Button Subtext</label>
                 <textarea onchange="edit_booking('cta_subtext', this.value)" class="form-control" id="cta_subtext_input" rows="2">${ctaSubtextValue}</textarea>
             </div>`;
+    const formTitleValue = escapeHtml(bookingData.form_title || '');
+    const formParagraphValue = escapeHtml(bookingData.form_paragraph || '');
+    body += `
+            <div class="form-group">
+                <label>Form Title (right column)</label>
+                <input onchange="edit_booking('form_title', this.value)" type="text" class="form-control" id="form_title_input" value="${formTitleValue}">
+            </div>
+            <div class="form-group">
+                <label>Form Paragraph (right column)</label>
+                <textarea onchange="edit_booking('form_paragraph', this.value)" class="form-control" id="form_paragraph_input" rows="3">${formParagraphValue}</textarea>
+            </div>`;
     $('.page-content-col').html(body);
     const bgUrl = 'https://medtravel.com.co/' + previewBackground.replace(/^\/+/, '');
     $('.about-header').css('background-image', 'url(' + bgUrl + ')');
