@@ -564,8 +564,8 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
             <div class="container py-5">
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
                     <h5 class="section-title px-3 text-dark">Our Services</h5>
-                    <h1 class="mb-4 text-dark">Comprehensive Coordination Services</h1>
-                    <p class="mb-0 text-muted">We manage every aspect of your medical tourism experience in Colombia, from planning to post-procedure follow-up.</p>
+                    <h1 class="mb-4 text-dark">Medical Travel Coordination Services</h1>
+                    <p class="mb-0 text-muted">We help coordinate the key services that support your medical journey in Colombia, from provider matching and appointments to travel, recovery, and ongoing support.</p>
                 </div>
                 <div class="row g-4">
                     <?php
@@ -578,12 +578,24 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
                             <div class="national-content">
                                 <div class="national-info">
                                     <h5 class="text-white text-uppercase mb-2"><?php echo $rst_service['title'];?></h5>
-                                    <p class="text-white mb-2" style="font-size: 14px;"><?php echo $rst_service['description'];?></p>
+                                    <?php
+                                    $service_title = $rst_service['title'] ?? '';
+                                    $service_description = $rst_service['description'] ?? '';
+                                    if (stripos($service_title, '24/7') !== false) {
+                                        $service_description = str_ireplace('Billingual', 'Bilingual', $service_description);
+                                    }
+                                    ?>
+                                    <p class="text-white mb-2" style="font-size: 14px;"><?php echo $service_description;?></p>
                                     <a href="services.php" class="btn-hover text-white">Learn More <i class="fa fa-arrow-right ms-2"></i></a>
                                 </div>
                             </div>
-                            <?php if(!empty($rst_service['badge'])){ ?>
-                            <div class="tour-offer <?php echo $rst_service['badge_class'];?>"><?php echo $rst_service['badge'];?></div>
+                            <?php
+                            $badge_raw = isset($rst_service['badge']) ? trim((string)$rst_service['badge']) : '';
+                            $badge_lc = strtolower($badge_raw);
+                            $badge_valid = ($badge_raw !== '' && $badge_lc !== 'null');
+                            if ($badge_valid) {
+                            ?>
+                            <div class="tour-offer <?php echo $rst_service['badge_class'];?>"><?php echo $badge_raw;?></div>
                             <?php } ?>
                             <div class="national-plus-icon">
                                 <a href="services.php" class="my-auto"><i class="<?php echo $rst_service['icon_class'];?> fa-2x text-white"></i></a>
