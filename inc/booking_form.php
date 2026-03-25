@@ -98,6 +98,24 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
     $texts = get_booking_texts();
     $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
     ?>
+    <style>
+    /* Scoped styles: improve contrast for legal links inside booking blocks */
+    .container-fluid.booking .form-check a,
+    .booking .form-check a {
+        color: #ffffff;
+        text-decoration: underline;
+    }
+    .container-fluid.booking .form-check a:hover,
+    .booking .form-check a:hover,
+    .container-fluid.booking .form-check a:focus,
+    .booking .form-check a:focus {
+        color: #ffffff;
+        opacity: 0.95;
+        outline: 2px solid rgba(255,255,255,0.12);
+        outline-offset: 2px;
+    }
+    </style>
+
     <form method="POST" action="/booking/step-1.php" class="book-tour-form">
         <input type="hidden" name="origin" value="<?php echo htmlspecialchars($origin, ENT_QUOTES); ?>">
         <input type="hidden" name="selected_services" id="selected-services-input" value="">
