@@ -10,6 +10,8 @@ function get_booking_texts() {
         'background_img' => 'img/tour-booking-bg.jpg',
         'cta_text' => 'Submit your request',
         'cta_subtext' => 'Our coordinating team replies within 24 hours.',
+        'form_title' => 'Request Your Personalized Plan',
+        'form_paragraph' => 'Complete the form and our team will contact you with options tailored to your treatment and travel needs.',
     ];
     if ($conexion) {
         $q = "SELECT intro_title,intro_paragraph,secondary_paragraph,background_img,cta_text,cta_subtext FROM home_booking WHERE activo = 1 ORDER BY id DESC LIMIT 1";

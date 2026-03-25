@@ -499,8 +499,8 @@ $booking_widget = (function() {
                     <a href="https://medtravel.com.co/offers.php" class="btn btn-light text-primary rounded-pill py-3 px-5 mt-2">Explore Offers</a>
                 </div>
                 <div class="col-lg-6">
-                    <h1 class="text-white mb-3">Request Your Personalized Plan</h1>
-                    <p class="text-white mb-4">Complete the form and our team will contact you with options tailored to your treatment and travel needs.</p>
+                    <h1 class="text-white mb-3"><?php echo htmlspecialchars($booking_texts['form_title']); ?></h1>
+                    <p class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['form_paragraph']); ?></p>
                     <?php render_booking_form('booking_widget'); ?>
                 </div>
             </div>
