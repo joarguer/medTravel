@@ -613,12 +613,12 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
         <div class="container-fluid py-5" style="background: linear-gradient(rgba(19, 53, 123, 0.9), rgba(19, 53, 123, 0.9)), url(img/about-img-1.png);">
             <div class="container text-center py-5">
                 <div class="mx-auto" style="max-width: 900px;">
-                    <h5 class="section-title px-3 text-white">Ready for Your Medical Trip?</h5>
-                    <h1 class="mb-4 text-white">Start Your Experience with MedTravel</h1>
-                    <p class="mb-4 text-white">We connect patients from the United States with certified medical providers in Colombia. We coordinate everything necessary for your peace of mind: flights, accommodation, transportation, meals and 24/7 support.</p>
+                    <h5 class="section-title px-3 text-white">READY TO PLAN YOUR MEDICAL JOURNEY?</h5>
+                    <h1 class="mb-4 text-white">Start Your MedTravel Experience</h1>
+                    <p class="mb-4 text-white">We help connect patients from the United States with verified medical providers in Colombia and coordinate the travel support they need, including flights, accommodation, transportation, meals, and ongoing assistance.</p>
                     <div class="d-flex justify-content-center gap-3 flex-wrap">
-                        <a href="contact.php" class="btn btn-light rounded-pill py-3 px-5">Request Quote</a>
-                        <a href="services.php" class="btn btn-outline-light rounded-pill py-3 px-5">View Services</a>
+                        <a href="https://medtravel.com.co/offers.php" class="btn btn-light rounded-pill py-3 px-5">Explore Offers</a>
+                        <a href="https://medtravel.com.co/services.php" class="btn btn-outline-light rounded-pill py-3 px-5">View Services</a>
                     </div>
                 </div>
             </div>
