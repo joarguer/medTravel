@@ -223,7 +223,14 @@ $(document).ready(function(){
                 tbody += '<td>'+escapeHtml(r.slug)+'</td>';
                 tbody += '<td>'+r.sort_order+'</td>';
                 tbody += '<td>'+(r.is_active == 1 ? '<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>' : '<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>';
-                tbody += '<td><a class="'+offersClass+' mr5" href="'+offersUrl+'">'+offersLabel+'</a> ' + staffAction + ' <button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Eliminar</button></td>';
+                var campaignUrl = 'https://medtravel.com.co/offers.php?service_id=' + serviceId;
+                tbody += '<td>';
+                tbody += '<a class="'+offersClass+' mr5" href="'+offersUrl+'">'+offersLabel+'</a> ';
+                tbody += staffAction + ' ';
+                tbody += '<button class="btn btn-sm btn-primary edit mr5">Editar</button> ';
+                tbody += '<button class="btn btn-sm btn-danger delete mr5">Eliminar</button> ';
+                tbody += '<button class="btn btn-sm btn-default copy-campaign-link" data-url="' + campaignUrl + '" title="Copiar enlace público de campaña para este servicio"><i class="fa fa-link"></i> Campaña</button>';
+                tbody += '</td>';
                 tbody += '</tr>';
             });
             $('#tbl-services tbody').html(tbody || '<tr><td colspan="6" class="text-center text-muted" style="padding:24px 12px;">No hay servicios habilitados para el prestador seleccionado.</td></tr>');
@@ -372,6 +379,35 @@ $(document).ready(function(){
             if(res && res.ok) loadList();
             else serviceToast('error', 'No fue posible actualizar el estado del servicio.');
         }, 'json');
+    });
+
+    $('#tbl-services').on('click', '.copy-campaign-link', function(){
+        var btn = $(this);
+        var copyUrl = btn.data('url');
+
+        function onCopied(){
+            btn.html('<i class="fa fa-check"></i> ¡Copiado!').addClass('btn-success').removeClass('btn-default');
+            setTimeout(function(){ btn.html('<i class="fa fa-link"></i> Campaña').addClass('btn-default').removeClass('btn-success'); }, 2000);
+            serviceToast('success', copyUrl, 'Enlace copiado al portapapeles');
+        }
+
+        function onFailed(){
+            var ta = document.createElement('textarea');
+            ta.value = copyUrl;
+            ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none;';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try { document.execCommand('copy'); onCopied(); }
+            catch(e) { prompt('Copia este enlace de campaña:', copyUrl); }
+            document.body.removeChild(ta);
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(copyUrl).then(onCopied).catch(onFailed);
+        } else {
+            onFailed();
+        }
     });
 
     $('#tbl-services').on('click', '.toggle-active', function(){
