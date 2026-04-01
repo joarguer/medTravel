@@ -10,8 +10,11 @@ require_once __DIR__ . '/inc/booking_page_header.php';
 
 // --- offer_id preseleccionado desde URL -----------------------------------------
 // Valida la oferta contra provider_service_offers; ignora si es inválida o inactiva.
+// $offer_id_in_url = true cuando el param está presente en la URL (sea válido o no).
+// Necesario para limpiar storage si la oferta resultó inválida o inactiva.
 $preselected_offer_id = 0;
-if (!empty($_GET['offer_id'])) {
+$offer_id_in_url = !empty($_GET['offer_id']);
+if ($offer_id_in_url) {
     $offer_id_raw = trim((string)$_GET['offer_id']);
     if (ctype_digit($offer_id_raw)) {
         $offer_id_int = (int)$offer_id_raw;
@@ -169,18 +172,23 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
     <!-- Template Javascript -->
     <script src="<?php echo htmlspecialchars(mt_asset_url('js/main.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 
-    <?php if ($preselected_offer_id > 0 || !empty($booking_utm)): ?>
+    <?php if ($offer_id_in_url || !empty($booking_utm)): ?>
     <!-- offer_id + UTM sync a localStorage/sessionStorage (generado server-side) -->
     <script>
     (function () {
         "use strict";
         try {
             <?php if ($preselected_offer_id > 0): ?>
-            // Sobreescribir cualquier oferta previa en storage con la del URL actual.
+            // Caso A: offer_id válido y activo — imponer sobre cualquier valor previo.
             localStorage.setItem("mt_preselected_offer_id", "<?php echo $preselected_offer_id; ?>");
             sessionStorage.setItem("preselected_offer_id", "<?php echo $preselected_offer_id; ?>");
             localStorage.setItem("mt_booking_started", "1");
             window.dispatchEvent(new Event("mt-booking-state-changed"));
+            <?php elseif ($offer_id_in_url): ?>
+            // Caso B: offer_id presente en URL pero inválido o inactivo —
+            // limpiar storage para evitar heredar una oferta vieja contaminada.
+            localStorage.removeItem("mt_preselected_offer_id");
+            sessionStorage.removeItem("preselected_offer_id");
             <?php endif; ?>
             <?php foreach ($booking_utm as $utmKey => $utmVal): ?>
             sessionStorage.setItem("mt_<?php echo htmlspecialchars($utmKey, ENT_QUOTES, 'UTF-8'); ?>", "<?php echo htmlspecialchars($utmVal, ENT_QUOTES, 'UTF-8'); ?>");
