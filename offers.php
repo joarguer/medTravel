@@ -302,116 +302,240 @@ include('inc/include.php');
 <head>
     <?php echo $head; ?>
     <style>
-        /* ── Cards ─────────────────────────────────────────── */
-        .offer-card {
-            transition: all 0.3s ease;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            background: white;
+        /* ── Page header ────────────────────────────────────── */
+        .category-header {
+            background: linear-gradient(135deg, #0f766e 0%, #0d9488 55%, #0891b2 100%);
+            color: white;
+            padding: 100px 0 70px 0;
+            margin-bottom: 0;
         }
-        .offer-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-            border-color: #d1d5db;
-        }
-        .offer-card .card-img-top {
-            height: 220px;
-            object-fit: cover;
-        }
-        .provider-logo {
-            width: 50px;
-            height: 50px;
-            object-fit: cover;
-            border-radius: 8px;
-            border: 2px solid #fff;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            position: absolute;
-            top: 180px;
-            left: 20px;
-            background: white;
-        }
-        .price-info {
-            background: #f8fafc;
-            padding: 12px 20px;
-            border-top: 1px solid #e5e7eb;
+        .category-header-trust {
+            margin-top: 32px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .price-label {
-            color: #64748b;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 24px;
+            opacity: 0.82;
             font-size: 13px;
             font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
         }
-        .price-amount {
-            color: #0f766e;
-            font-size: 20px;
-            font-weight: 700;
+        .category-header-trust span {
+            display: flex;
+            align-items: center;
+            gap: 7px;
         }
-        .service-badge {
-            background: #e0f2fe;
-            color: #0369a1;
-            padding: 6px 12px;
-            border-radius: 6px;
+
+        /* ── Filter bar ─────────────────────────────────────── */
+        .offers-filter-bar {
+            background: #f8fafc;
+            border-top: 3px solid #0f766e;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 18px 0 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 16px rgba(15,118,110,0.07);
+        }
+        .offers-filter-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .offers-filter-title {
             font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #0f766e;
+        }
+        .offers-filter-bar .form-control,
+        .offers-filter-bar .form-select {
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 13px;
+            height: 38px;
+            padding: 0 12px;
+            background: #fff;
+        }
+        .offers-filter-bar .form-control:focus,
+        .offers-filter-bar .form-select:focus {
+            border-color: #0f766e;
+            box-shadow: 0 0 0 3px rgba(15,118,110,0.12);
+        }
+        .offers-filter-bar label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: #64748b;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .filter-price-range {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .filter-price-range .form-control { width: 86px; }
+        .filter-price-sep {
+            color: #94a3b8;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .offers-count-badge {
+            background: #0f766e;
+            color: #fff;
+            border-radius: 20px;
+            padding: 4px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+        .btn-clear-filters {
+            font-size: 12px;
+            color: #64748b;
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 20px;
+            padding: 4px 14px;
+            cursor: pointer;
+            transition: all 0.18s;
             font-weight: 600;
+        }
+        .btn-clear-filters:hover {
+            border-color: #0f766e;
+            color: #0f766e;
+            background: #f0fdfa;
+        }
+        /* Active filter chips */
+        .filter-chips-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+        .filter-chip {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            margin-bottom: 12px;
+            background: #f0fdfa;
+            color: #0f766e;
+            border: 1px solid #99f6e4;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
         }
-        .service-badge i { font-size: 14px; }
-        .offer-card .card-body { padding: 24px; }
+        .filter-chip:hover {
+            background: #ccfbf1;
+            border-color: #0f766e;
+        }
+        .filter-chip i { font-size: 10px; opacity: 0.7; }
+
+        /* ── Cards ──────────────────────────────────────────── */
+        .offer-card {
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            background: white;
+        }
+        .offer-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 28px rgba(15,118,110,0.13);
+            border-color: #99f6e4;
+        }
+        .offer-card .card-img-top {
+            height: 210px;
+            object-fit: cover;
+        }
+        .offer-card .card-body {
+            padding: 20px 20px 16px;
+            display: flex;
+            flex-direction: column;
+        }
         .offer-card .card-title {
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
             color: #1e293b;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             line-height: 1.4;
         }
         .offer-card .card-text {
             color: #64748b;
-            font-size: 14px;
+            font-size: 13.5px;
             line-height: 1.6;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            flex-shrink: 0;
         }
-        .offer-card .card-text p { margin: 0; padding: 0; }
-        .offer-card .card-text p:not(:last-child) { margin-bottom: 8px; }
+        .provider-logo {
+            width: 46px;
+            height: 46px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            position: absolute;
+            top: 174px;
+            left: 18px;
+            background: white;
+        }
+        .service-badge {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 5px 11px;
+            border-radius: 6px;
+            font-size: 11.5px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 10px;
+            align-self: flex-start;
+        }
+        .service-badge i { font-size: 13px; }
         .provider-info {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 8px;
-            padding: 12px 0;
+            padding: 10px 0 0;
             border-top: 1px solid #f1f5f9;
-            margin-top: 16px;
+            margin-top: 14px;
         }
-        .provider-info i { color: #0f766e; font-size: 16px; }
         .provider-name {
             color: #334155;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13.5px;
             margin: 0;
         }
+        .provider-name i { color: #0f766e; margin-right: 4px; }
         .city-tag {
             color: #94a3b8;
-            font-size: 13px;
+            font-size: 12.5px;
             display: flex;
             align-items: center;
-            gap: 6px;
-            margin-top: 4px;
+            gap: 5px;
+            margin-top: 3px;
         }
-        .city-tag i { font-size: 12px; }
+        .city-tag i { font-size: 11px; }
         .provider-verification-badge {
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            margin-top: 8px;
+            margin-top: 7px;
             padding: 3px 9px;
             border-radius: 999px;
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 700;
             color: #065f46;
             background: #d1fae5;
@@ -420,138 +544,119 @@ include('inc/include.php');
             text-transform: uppercase;
         }
         .provider-verification-badge.review {
-            color: #92400e;
-            background: #fef3c7;
-            border-color: #f59e0b;
+            color: #92400e; background: #fef3c7; border-color: #f59e0b;
         }
         .provider-verification-badge.level {
-            color: #1d4ed8;
-            background: #dbeafe;
-            border-color: #60a5fa;
+            color: #1d4ed8; background: #dbeafe; border-color: #60a5fa;
+        }
+        .card-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: auto;
+            padding-top: 16px;
         }
         .btn-book-offer {
             background: #0f766e;
             border: none;
             color: white;
-            padding: 11px 20px;
+            padding: 12px 20px;
             border-radius: 8px;
-            font-weight: 600;
+            font-weight: 700;
             font-size: 13px;
-            transition: all 0.3s ease;
+            transition: background 0.2s ease, box-shadow 0.2s ease;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: inline-block;
+            letter-spacing: 0.6px;
+            display: block;
+            text-align: center;
             text-decoration: none;
+            width: 100%;
         }
         .btn-book-offer:hover {
             background: #0d9488;
             color: white;
-            box-shadow: 0 4px 12px rgba(15,118,110,0.3);
+            box-shadow: 0 4px 14px rgba(15,118,110,0.35);
         }
         .btn-details-offer {
-            padding: 10px 16px;
-            border: 1px solid #0f766e;
+            display: block;
+            text-align: center;
+            padding: 8px;
             color: #0f766e;
             text-decoration: none;
-            border-radius: 8px;
-            display: inline-block;
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: 600;
-            transition: all 0.2s ease;
+            border-radius: 6px;
+            transition: background 0.15s;
         }
         .btn-details-offer:hover {
             background: #f0fdfa;
             color: #0f766e;
         }
-        .card-actions {
+        /* Price footer */
+        .price-info {
+            background: linear-gradient(90deg, #f0fdfa 0%, #f8fafc 100%);
+            padding: 12px 20px;
+            border-top: 1px solid #e2e8f0;
             display: flex;
-            gap: 8px;
-            margin-top: 4px;
+            justify-content: space-between;
+            align-items: center;
         }
-
-        /* ── Category / page header ─────────────────────────── */
-        .category-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 120px 0 80px 0;
-            margin-bottom: 0;
-        }
-
-        /* ── Filter panel ───────────────────────────────────── */
-        .offers-filter-bar {
-            background: #fff;
-            border-bottom: 1px solid #e5e7eb;
-            padding: 20px 0;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-        }
-        .offers-filter-bar .form-control,
-        .offers-filter-bar .form-select {
-            border-radius: 8px;
-            border: 1px solid #d1d5db;
-            font-size: 13px;
-            height: 40px;
-            padding: 0 12px;
-        }
-        .offers-filter-bar .form-control:focus,
-        .offers-filter-bar .form-select:focus {
-            border-color: #0f766e;
-            box-shadow: 0 0 0 3px rgba(15,118,110,0.12);
-        }
-        .offers-filter-bar label {
+        .price-label {
+            color: #64748b;
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.6px;
-            color: #64748b;
-            margin-bottom: 4px;
-            display: block;
         }
-        .filter-price-range {
+        .price-amount {
+            color: #0f766e;
+            font-size: 19px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+
+        /* ── Section label (replaces the redundant heading) ── */
+        .offers-section-label {
             display: flex;
             align-items: center;
-            gap: 6px;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 28px;
         }
-        .filter-price-range .form-control {
-            width: 90px;
-        }
-        .filter-price-sep {
-            color: #94a3b8;
-            font-size: 12px;
-            white-space: nowrap;
-        }
-        .offers-count-badge {
-            background: #e0f2fe;
-            color: #0369a1;
-            border-radius: 20px;
-            padding: 4px 12px;
-            font-size: 12px;
-            font-weight: 700;
-        }
-        .btn-clear-filters {
-            font-size: 12px;
+        .offers-section-label .label-text {
+            font-size: 13px;
             color: #64748b;
-            background: none;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            padding: 5px 12px;
-            cursor: pointer;
-            transition: all 0.2s;
         }
-        .btn-clear-filters:hover {
-            border-color: #0f766e;
+        .offers-section-label .label-text strong { color: #1e293b; }
+        .btn-view-all-cat {
+            font-size: 12px;
+            font-weight: 600;
+            color: #0f766e;
+            border: 1px solid #99f6e4;
+            background: #f0fdfa;
+            border-radius: 20px;
+            padding: 4px 14px;
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+        .btn-view-all-cat:hover {
+            background: #ccfbf1;
             color: #0f766e;
         }
+
+        /* ── Empty / no-offers state ─────────────────────────── */
         .no-offers {
             text-align: center;
             padding: 80px 20px;
         }
         .no-offers i {
-            font-size: 70px;
-            color: #ddd;
+            font-size: 64px;
+            color: #cbd5e1;
             margin-bottom: 20px;
+            display: block;
         }
     </style>
 </head>
@@ -616,6 +721,14 @@ include('inc/include.php');
                 }
                 ?>
             </p>
+            <div class="category-header-trust">
+                <span><i class="fas fa-shield-alt"></i> Certified Providers</span>
+                <span><i class="fas fa-map-marker-alt"></i> Colombia</span>
+                <span><i class="fas fa-headset"></i> Coordinated by MedTravel</span>
+                <?php if (count($offers) > 0): ?>
+                <span><i class="fas fa-list-ul"></i> <?php echo count($offers); ?> services available</span>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
     <!-- Page Header End -->
@@ -624,18 +737,31 @@ include('inc/include.php');
     <!-- Filter Bar Start -->
     <div class="offers-filter-bar">
         <div class="container">
+
+            <!-- Heading row: title + count + clear -->
+            <div class="offers-filter-heading">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <span class="offers-filter-title"><i class="fas fa-sliders-h me-2"></i>Refine your search</span>
+                    <span class="offers-count-badge" id="offers-count"><?php echo count($offers); ?> offers</span>
+                </div>
+                <button class="btn-clear-filters" id="btn-clear-filters">
+                    <i class="fas fa-times me-1"></i>Clear filters
+                </button>
+            </div>
+
+            <!-- Filters row -->
             <div class="row g-2 align-items-end">
 
                 <!-- Text search -->
                 <div class="col-12 col-sm-6 col-lg-3">
-                    <label for="filter-q"><i class="fas fa-search me-1"></i>Search</label>
+                    <label for="filter-q">Search</label>
                     <input type="text" id="filter-q" class="form-control" placeholder="Service, provider, city…" autocomplete="off">
                 </div>
 
                 <!-- Service filter -->
                 <?php if (count($services_for_filter) > 1): ?>
                 <div class="col-12 col-sm-6 col-lg-2">
-                    <label for="filter-service"><i class="fas fa-stethoscope me-1"></i>Service</label>
+                    <label for="filter-service">Service</label>
                     <select id="filter-service" class="form-select">
                         <option value="">All services</option>
                         <?php foreach ($services_for_filter as $sid => $sname): ?>
@@ -648,7 +774,7 @@ include('inc/include.php');
                 <!-- City filter -->
                 <?php if ($show_city_filter): ?>
                 <div class="col-12 col-sm-6 col-lg-2">
-                    <label for="filter-city"><i class="fas fa-map-marker-alt me-1"></i>City</label>
+                    <label for="filter-city">City</label>
                     <select id="filter-city" class="form-select">
                         <option value="">All cities</option>
                         <?php foreach ($cities_for_filter as $city): ?>
@@ -658,10 +784,10 @@ include('inc/include.php');
                 </div>
                 <?php endif; ?>
 
-                <!-- Provider filter (solo si no hay filtro server-side por proveedor) -->
+                <!-- Provider filter -->
                 <?php if ($show_provider_filter): ?>
                 <div class="col-12 col-sm-6 col-lg-2">
-                    <label for="filter-provider"><i class="fas fa-hospital me-1"></i>Provider</label>
+                    <label for="filter-provider">Provider</label>
                     <select id="filter-provider" class="form-select">
                         <option value="">All providers</option>
                         <?php foreach ($providers_for_filter as $pid => $pname): ?>
@@ -674,7 +800,7 @@ include('inc/include.php');
                 <!-- Price range -->
                 <?php if (!empty($price_values)): ?>
                 <div class="col-12 col-sm-6 col-lg-3">
-                    <label><i class="fas fa-dollar-sign me-1"></i>Price (USD)</label>
+                    <label>Price (USD)</label>
                     <div class="filter-price-range">
                         <input type="number" id="filter-price-min" class="form-control" placeholder="Min"
                                min="0" max="<?php echo $price_max_all; ?>" step="1">
@@ -687,23 +813,19 @@ include('inc/include.php');
 
                 <!-- Sort -->
                 <div class="col-12 col-sm-6 col-lg-2">
-                    <label for="filter-sort"><i class="fas fa-sort me-1"></i>Sort</label>
+                    <label for="filter-sort">Sort by</label>
                     <select id="filter-sort" class="form-select">
                         <option value="default">Relevance</option>
-                        <option value="price_asc">Price: low to high</option>
-                        <option value="price_desc">Price: high to low</option>
+                        <option value="price_asc">Price: low → high</option>
+                        <option value="price_desc">Price: high → low</option>
                     </select>
                 </div>
 
-                <!-- Count + Clear -->
-                <div class="col-12 col-sm-6 col-lg-1 d-flex align-items-end gap-2 flex-wrap">
-                    <span class="offers-count-badge" id="offers-count"><?php echo count($offers); ?> offers</span>
-                    <button class="btn-clear-filters" id="btn-clear-filters" title="Clear filters">
-                        <i class="fas fa-times me-1"></i>Clear
-                    </button>
-                </div>
-
             </div>
+
+            <!-- Active filter chips (rendered by JS) -->
+            <div id="filter-chips" class="filter-chips-row" style="display:none;"></div>
+
         </div>
     </div>
     <!-- Filter Bar End -->
@@ -713,44 +835,24 @@ include('inc/include.php');
     <div class="container-fluid py-5">
         <div class="container py-4">
 
-            <!-- Section heading -->
-            <?php if ($category_id > 0): ?>
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <div>
-                                <h2 class="mb-1">Available Services</h2>
-                                <p class="text-muted mb-0">
-                                    <?php if ($provider_filter_id > 0 && $provider_filter_name !== ''): ?>
-                                        <?php echo htmlspecialchars($provider_filter_name); ?> offering <?php echo htmlspecialchars(strtolower($category_name)); ?> services through MedTravel
-                                    <?php else: ?>
-                                        Certified providers offering <?php echo htmlspecialchars(strtolower($category_name)); ?> services in Colombia
-                                    <?php endif; ?>
-                                </p>
-                            </div>
-                            <a href="offers.php<?php echo $provider_filter_id > 0 ? '?provider_id=' . (int)$provider_filter_id : ''; ?>" class="btn btn-outline-primary">View All Categories</a>
-                        </div>
-                    </div>
-                </div>
-            <?php else: ?>
-                <div class="row mb-4">
-                    <div class="col-12 text-center">
-                        <h2 class="mb-2">
-                            <?php if ($provider_filter_id > 0 && $provider_filter_name !== ''): ?>
-                                Explore Medical Services from <?php echo htmlspecialchars($provider_filter_name); ?>
-                            <?php else: ?>
-                                Explore All Medical Services
-                            <?php endif; ?>
-                        </h2>
-                        <p class="text-muted">
-                            <?php if ($provider_filter_id > 0 && $provider_filter_name !== ''): ?>
-                                Browse the medical services currently offered by <?php echo htmlspecialchars($provider_filter_name); ?> through MedTravel
-                            <?php else: ?>
-                                Browse through our comprehensive catalog of medical services from certified providers across Colombia
-                            <?php endif; ?>
-                        </p>
-                    </div>
-                </div>
+            <!-- Section label (contextual, only when server-side filter active) -->
+            <?php if ($category_id > 0 || ($provider_filter_id > 0 && $provider_filter_name !== '')): ?>
+            <div class="offers-section-label">
+                <span class="label-text">
+                    <?php if ($category_id > 0 && $provider_filter_id > 0 && $provider_filter_name !== ''): ?>
+                        Category: <strong><?php echo htmlspecialchars($category_name); ?></strong>
+                        &nbsp;·&nbsp; Provider: <strong><?php echo htmlspecialchars($provider_filter_name); ?></strong>
+                    <?php elseif ($category_id > 0): ?>
+                        Category: <strong><?php echo htmlspecialchars($category_name); ?></strong>
+                    <?php else: ?>
+                        Provider: <strong><?php echo htmlspecialchars($provider_filter_name); ?></strong>
+                    <?php endif; ?>
+                </span>
+                <?php if ($category_id > 0): ?>
+                <a href="offers.php<?php echo $provider_filter_id > 0 ? '?provider_id=' . (int)$provider_filter_id : ''; ?>"
+                   class="btn-view-all-cat"><i class="fas fa-th me-1"></i>View all categories</a>
+                <?php endif; ?>
+            </div>
             <?php endif; ?>
 
             <?php if (count($offers) > 0): ?>
@@ -829,7 +931,7 @@ include('inc/include.php');
                                         <?php echo htmlspecialchars($offer['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
                                     </h5>
 
-                                    <p class="card-text" style="height: 60px; overflow: hidden;">
+                                    <p class="card-text">
                                         <?php echo htmlspecialchars($desc_display, ENT_QUOTES, 'UTF-8'); ?>
                                     </p>
 
@@ -859,7 +961,7 @@ include('inc/include.php');
                                             <i class="fas fa-calendar-check me-1"></i>Book Now
                                         </a>
                                         <a href="offer_detail.php?id=<?php echo $offer_id_int; ?>" class="btn-details-offer">
-                                            <i class="fas fa-info-circle me-1"></i>Details
+                                            <i class="fas fa-info-circle me-1"></i>View details
                                         </a>
                                     </div>
                                 </div>
@@ -971,6 +1073,52 @@ include('inc/include.php');
                 };
             }
 
+            function renderChips() {
+                var f        = getFilters();
+                var chipsEl  = document.getElementById('filter-chips');
+                if (!chipsEl) return;
+
+                var chips = [];
+                if (f.q) {
+                    chips.push({ label: 'Search: "' + f.q + '"', clear: function () { if (elQ) elQ.value = ''; } });
+                }
+                if (f.service && elService) {
+                    var sOpt = elService.options[elService.selectedIndex];
+                    chips.push({ label: 'Service: ' + (sOpt ? sOpt.text : f.service), clear: function () { elService.value = ''; } });
+                }
+                if (f.city && elCity) {
+                    chips.push({ label: 'City: ' + f.city.charAt(0).toUpperCase() + f.city.slice(1), clear: function () { elCity.value = ''; } });
+                }
+                if (f.provider && elProvider) {
+                    var pOpt = elProvider.options[elProvider.selectedIndex];
+                    chips.push({ label: 'Provider: ' + (pOpt ? pOpt.text : f.provider), clear: function () { elProvider.value = ''; } });
+                }
+                if (f.priceMin !== null) {
+                    chips.push({ label: 'Min $' + f.priceMin, clear: function () { if (elPriceMin) elPriceMin.value = ''; } });
+                }
+                if (f.priceMax !== null) {
+                    chips.push({ label: 'Max $' + f.priceMax, clear: function () { if (elPriceMax) elPriceMax.value = ''; } });
+                }
+                if (f.sort !== 'default' && elSort) {
+                    var sortOpt = elSort.options[elSort.selectedIndex];
+                    chips.push({ label: sortOpt ? sortOpt.text : f.sort, clear: function () { if (elSort) elSort.value = 'default'; } });
+                }
+
+                if (chips.length === 0) {
+                    chipsEl.style.display = 'none';
+                    return;
+                }
+                chipsEl.style.display = '';
+                chipsEl.innerHTML = chips.map(function (c, i) {
+                    return '<button class="filter-chip" data-chip-idx="' + i + '">' +
+                           c.label + ' <i class="fas fa-times"></i></button>';
+                }).join('');
+                chips.forEach(function (c, i) {
+                    var btn = chipsEl.querySelector('[data-chip-idx="' + i + '"]');
+                    if (btn) btn.addEventListener('click', function () { c.clear(); applyFilters(); });
+                });
+            }
+
             function applyFilters() {
                 var f = getFilters();
                 var visible = [];
@@ -1018,6 +1166,9 @@ include('inc/include.php');
                 // Empty state
                 if (emptyEl) emptyEl.style.display = visible.length === 0 ? '' : 'none';
 
+                // Active filter chips
+                renderChips();
+
                 // URL sync (preserves server-side params, adds/removes client-side params)
                 updateUrl(f);
             }
@@ -1056,9 +1207,14 @@ include('inc/include.php');
                 applyFilters();
             }
 
-            // Attach events
+            // Attach events (text inputs with debounce; selects immediate)
+            var debounceTimer;
+            function debouncedApply() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(applyFilters, 220);
+            }
             [elQ, elPriceMin, elPriceMax].forEach(function (el) {
-                if (el) el.addEventListener('input', applyFilters);
+                if (el) el.addEventListener('input', debouncedApply);
             });
             [elService, elCity, elProvider, elSort].forEach(function (el) {
                 if (el) el.addEventListener('change', applyFilters);
