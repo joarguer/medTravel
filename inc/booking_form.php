@@ -41,6 +41,11 @@ function booking_background_style($booking_texts = null) {
 
 function render_booking_form($origin = 'booking_page', $preselected_offer_id = null, $preload = [], $preselected_service_id = 0) {
     global $conexion;
+    // Read UTM params from URL to forward through the booking form
+    $form_utm = [];
+    foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $_utmK) {
+        $form_utm[$_utmK] = !empty($_GET[$_utmK]) ? substr(trim((string)$_GET[$_utmK]), 0, 255) : '';
+    }
     
     // Cargar ciudades/destinos dinámicamente desde proveedores
     $destinations = ['' => 'Select Destination'];
@@ -121,6 +126,9 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
         <input type="hidden" name="selected_services" id="selected-services-input" value="">
         <input type="hidden" name="preselected_offer" value="<?php echo $preselected_offer_id ? intval($preselected_offer_id) : ''; ?>">
         <input type="hidden" name="preselected_service" value="<?php echo $preselected_service_id ? intval($preselected_service_id) : ''; ?>">
+        <?php foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $_utmK): ?>
+        <input type="hidden" name="<?php echo $_utmK; ?>" value="<?php echo htmlspecialchars($form_utm[$_utmK], ENT_QUOTES, 'UTF-8'); ?>">
+        <?php endforeach; ?>
         
         <div class="row g-3">
             <div class="col-md-6">

@@ -56,6 +56,15 @@ if(mysqli_num_rows($busca_header) > 0) {
 // Obtener ID de la oferta
 $offer_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
+// UTM params: se preservan en el CTA de booking para mantener atribución de campaña
+$_utm_qs = '';
+foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $_utmK) {
+    if (!empty($_GET[$_utmK])) {
+        $_utm_qs .= '&' . $_utmK . '=' . urlencode(substr(trim((string)$_GET[$_utmK]), 0, 255));
+    }
+}
+unset($_utmK);
+
 if ($offer_id == 0) {
     die('ID de oferta inválido');
 }
@@ -559,7 +568,7 @@ if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_s
                         <?php echo htmlspecialchars($offer['currency']); ?> 
                         <?php echo number_format($offer['price_from'], 2); ?>
                     </div>
-                    <a href="booking.php?offer_id=<?php echo (int)$offer['id']; ?>" class="btn btn-book">
+                    <a href="booking.php?offer_id=<?php echo (int)$offer['id']; echo $_utm_qs; ?>" class="btn btn-book">
                         <i class="fas fa-calendar-check me-2"></i>Book This Service
                     </a>
                     <?php if ($hideProviderDirectContact): ?>

@@ -488,6 +488,11 @@ function run_static_booking_insert_local($conexion, $data)
     $hasTermsVersion = table_has_column_local($conexion, 'booking_requests', 'terms_version');
     $hasTermsIp = table_has_column_local($conexion, 'booking_requests', 'terms_ip');
     $hasTermsUserAgent = table_has_column_local($conexion, 'booking_requests', 'terms_user_agent');
+    $hasUtmSource   = table_has_column_local($conexion, 'booking_requests', 'utm_source');
+    $hasUtmMedium   = table_has_column_local($conexion, 'booking_requests', 'utm_medium');
+    $hasUtmCampaign = table_has_column_local($conexion, 'booking_requests', 'utm_campaign');
+    $hasUtmContent  = table_has_column_local($conexion, 'booking_requests', 'utm_content');
+    $hasUtmTerm     = table_has_column_local($conexion, 'booking_requests', 'utm_term');
 
     $columns = [
         'name', 'email', 'phone', 'origin', 'booking_datetime', 'destination', 'persons', 'category',
@@ -511,6 +516,11 @@ function run_static_booking_insert_local($conexion, $data)
     if ($hasTermsUserAgent) {
         $columns[] = 'terms_user_agent';
     }
+    if ($hasUtmSource)   { $columns[] = 'utm_source'; }
+    if ($hasUtmMedium)   { $columns[] = 'utm_medium'; }
+    if ($hasUtmCampaign) { $columns[] = 'utm_campaign'; }
+    if ($hasUtmContent)  { $columns[] = 'utm_content'; }
+    if ($hasUtmTerm)     { $columns[] = 'utm_term'; }
     $result['columns'] = $columns;
 
     $sql = "INSERT INTO booking_requests (`" . implode('`,`', $columns) . "`) VALUES (" . implode(',', array_fill(0, count($columns), '?')) . ")";
@@ -1992,6 +2002,11 @@ $fallbackBooking = [
     'category' => isset($_POST['category']) ? trim((string)$_POST['category']) : '',
     'special_request' => isset($_POST['special_request']) ? trim((string)$_POST['special_request']) : '',
     'preselected_offer' => isset($_POST['preselected_offer']) ? trim((string)$_POST['preselected_offer']) : '',
+    'utm_source'   => isset($_POST['utm_source'])   ? substr(trim((string)$_POST['utm_source']),   0, 255) : '',
+    'utm_medium'   => isset($_POST['utm_medium'])   ? substr(trim((string)$_POST['utm_medium']),   0, 255) : '',
+    'utm_campaign' => isset($_POST['utm_campaign']) ? substr(trim((string)$_POST['utm_campaign']), 0, 255) : '',
+    'utm_content'  => isset($_POST['utm_content'])  ? substr(trim((string)$_POST['utm_content']),  0, 255) : '',
+    'utm_term'     => isset($_POST['utm_term'])      ? substr(trim((string)$_POST['utm_term']),      0, 255) : '',
 ];
 
 foreach ($fallbackBooking as $k => $v) {
@@ -2137,6 +2152,11 @@ $staticPayload = [
     'terms_version' => $termsVersion,
     'terms_ip' => $termsIp,
     'terms_user_agent' => $termsUserAgent,
+    'utm_source'   => ($booking['utm_source']   ?? '') !== '' ? (string)$booking['utm_source']   : null,
+    'utm_medium'   => ($booking['utm_medium']   ?? '') !== '' ? (string)$booking['utm_medium']   : null,
+    'utm_campaign' => ($booking['utm_campaign'] ?? '') !== '' ? (string)$booking['utm_campaign'] : null,
+    'utm_content'  => ($booking['utm_content']  ?? '') !== '' ? (string)$booking['utm_content']  : null,
+    'utm_term'     => ($booking['utm_term']      ?? '') !== '' ? (string)$booking['utm_term']      : null,
 ];
 
 $attemptStatic = run_static_booking_insert_local($conexion, $staticPayload);
@@ -2173,6 +2193,11 @@ if (!$saved) {
         'terms_version' => $termsVersion,
         'terms_ip' => $termsIp,
         'terms_user_agent' => $termsUserAgent,
+        'utm_source'   => ($booking['utm_source']   ?? '') !== '' ? (string)$booking['utm_source']   : null,
+        'utm_medium'   => ($booking['utm_medium']   ?? '') !== '' ? (string)$booking['utm_medium']   : null,
+        'utm_campaign' => ($booking['utm_campaign'] ?? '') !== '' ? (string)$booking['utm_campaign'] : null,
+        'utm_content'  => ($booking['utm_content']  ?? '') !== '' ? (string)$booking['utm_content']  : null,
+        'utm_term'     => ($booking['utm_term']      ?? '') !== '' ? (string)$booking['utm_term']      : null,
     ];
 
     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$timeline_from)) {

@@ -934,6 +934,9 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         <input type="hidden" name="special_request" id="wizard-hidden-special-request" value="<?php echo isset($booking['special_request']) ? htmlspecialchars((string)$booking['special_request']) : ''; ?>">
                         <input type="hidden" name="preselected_offer" id="wizard-hidden-preselected-offer" value="<?php echo isset($booking['preselected_offer']) ? htmlspecialchars((string)$booking['preselected_offer']) : ''; ?>">
                         <input type="hidden" name="preselected_service" id="wizard-hidden-preselected-service" value="<?php echo isset($booking['preselected_service']) ? htmlspecialchars((string)$booking['preselected_service']) : ''; ?>">
+                        <?php foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $_utmK): ?>
+                        <input type="hidden" name="<?php echo $_utmK; ?>" value="<?php echo htmlspecialchars((string)($booking[$_utmK] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                        <?php endforeach; ?>
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Preferred dates</label>

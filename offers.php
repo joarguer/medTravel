@@ -58,6 +58,15 @@ $provider_filter_id    = isset($_GET['provider_id']) ? (int)$_GET['provider_id']
 // No genera filtrado server-side: opera sobre las cards ya renderizadas
 $preselected_service_filter = isset($_GET['service_id']) ? (int)$_GET['service_id'] : 0;
 
+// UTM params: se preservan en los enlaces de salida para mantener atribución de campaña
+$_utm_qs = '';
+foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $_utmK) {
+    if (!empty($_GET[$_utmK])) {
+        $_utm_qs .= '&' . $_utmK . '=' . urlencode(substr(trim((string)$_GET[$_utmK]), 0, 255));
+    }
+}
+unset($_utmK);
+
 $category_name        = $offers_header_title;
 $category_description = '';
 $provider_filter_name = '';
@@ -957,10 +966,10 @@ include('inc/include.php');
                                     </div>
 
                                     <div class="card-actions">
-                                        <a href="booking.php?offer_id=<?php echo $offer_id_int; ?>" class="btn-book-offer">
+                                        <a href="booking.php?offer_id=<?php echo $offer_id_int; echo $_utm_qs; ?>" class="btn-book-offer">
                                             <i class="fas fa-calendar-check me-1"></i>Book Now
                                         </a>
-                                        <a href="offer_detail.php?id=<?php echo $offer_id_int; ?>" class="btn-details-offer">
+                                        <a href="offer_detail.php?id=<?php echo $offer_id_int; echo $_utm_qs; ?>" class="btn-details-offer">
                                             <i class="fas fa-info-circle me-1"></i>View details
                                         </a>
                                     </div>
