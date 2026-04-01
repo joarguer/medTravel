@@ -822,7 +822,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                                data-type="<?php echo htmlspecialchars($offer['service_name'], ENT_QUOTES); ?>"
                                                data-price="<?php echo htmlspecialchars($offer['price_from'], ENT_QUOTES); ?>"
                                                data-currency="<?php echo htmlspecialchars($offer['currency'], ENT_QUOTES); ?>"
-                                               <?php echo ($preselected_offer_id === (int)$offer['id'] || ($preselected_offer_id === 0 && $preselected_service_id > 0 && $preselected_service_id === (int)$offer['service_id'])) ? 'checked' : ''; ?>
+                                               <?php echo ($preselected_offer_id === (int)$offer['id']) ? 'checked' : ''; ?>
                                                id="offer-<?php echo $offer['id']; ?>">
 
                                         <?php

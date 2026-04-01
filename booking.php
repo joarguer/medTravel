@@ -218,9 +218,11 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
             window.dispatchEvent(new Event("mt-booking-state-changed"));
             <?php elseif ($offer_id_in_url): ?>
             // Caso B: offer_id presente en URL pero inválido o inactivo —
-            // limpiar storage para evitar heredar una oferta vieja contaminada.
+            // limpiar storage para evitar heredar oferta o servicio viejo contaminado.
             localStorage.removeItem("mt_preselected_offer_id");
             sessionStorage.removeItem("preselected_offer_id");
+            localStorage.removeItem("mt_preselected_service_id");
+            sessionStorage.removeItem("preselected_service_id");
             <?php endif; ?>
             <?php if (!$offer_id_in_url && $preselected_service_id > 0): ?>
             // Caso C: service_id válido (offer_id no en URL) — pre-seleccionar servicio.
