@@ -149,9 +149,10 @@ function list_services(mysqli $db, string $source): void {
     $sql = "SELECT sc.id, sc.name, sc.slug, COALESCE(sc.short_description, '') AS description, sc.is_active,
                    MIN(CASE WHEN o.currency = 'USD' THEN o.price_from END) AS price_from_usd
             FROM service_catalog sc
-            LEFT JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1
+            INNER JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1
+            WHERE sc.is_active = 1
             GROUP BY sc.id, sc.name, sc.slug, sc.short_description, sc.is_active
-            ORDER BY sc.is_active DESC, sc.name ASC";
+            ORDER BY sc.name ASC";
 
     $res = mysqli_query($db, $sql);
     if (!$res) {
@@ -179,8 +180,8 @@ function service_detail(mysqli $db, string $slug, string $source): void {
     $sql = "SELECT sc.id, sc.name, sc.slug, COALESCE(sc.short_description, '') AS description, sc.is_active,
                    MIN(CASE WHEN o.currency = 'USD' THEN o.price_from END) AS price_from_usd
             FROM service_catalog sc
-            LEFT JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1
-            WHERE sc.slug = ?
+            INNER JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1
+            WHERE sc.slug = ? AND sc.is_active = 1
             GROUP BY sc.id, sc.name, sc.slug, sc.short_description, sc.is_active
             LIMIT 1";
 
