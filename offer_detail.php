@@ -559,7 +559,7 @@ if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_s
                         <?php echo htmlspecialchars($offer['currency']); ?> 
                         <?php echo number_format($offer['price_from'], 2); ?>
                     </div>
-                    <a href="#booking-section" class="btn btn-book" onclick="scrollToBooking(<?php echo $offer['id']; ?>); return false;">
+                    <a href="booking.php?offer_id=<?php echo (int)$offer['id']; ?>" class="btn btn-book">
                         <i class="fas fa-calendar-check me-2"></i>Book This Service
                     </a>
                     <?php if ($hideProviderDirectContact): ?>

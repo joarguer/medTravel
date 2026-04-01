@@ -1185,7 +1185,11 @@ include('inc/include.php');
 
                 // Client-side params (only set when non-default)
                 if (f.q)                next.set('q',          f.q);
-                if (f.service)          next.set('service_id', f.service);
+                if (f.service) {
+                    next.set('service_id', f.service);
+                } else if (initialServiceId && !serviceFilterExplicitlyCleared) {
+                    next.set('service_id', initialServiceId);
+                }
                 if (f.city)             next.set('city',       f.city);
                 if (f.provider)         next.set('pf',         f.provider);
                 if (f.priceMin !== null) next.set('price_min', f.priceMin);
@@ -1197,6 +1201,7 @@ include('inc/include.php');
             }
 
             function clearFilters() {
+                serviceFilterExplicitlyCleared = true;
                 if (elQ)        elQ.value        = '';
                 if (elService)  elService.value  = '';
                 if (elCity)     elCity.value     = '';
@@ -1234,8 +1239,10 @@ include('inc/include.php');
             // service_id: from URL param or from PHP preselect (booking deep-link)
             var phpServiceFilter = <?php echo (int)$preselected_service_filter; ?>;
             var urlServiceId     = urlP.has('service_id') ? urlP.get('service_id') : '';
+            var initialServiceId = urlServiceId || (phpServiceFilter ? String(phpServiceFilter) : '');
+            var serviceFilterExplicitlyCleared = false;
             if (elService) {
-                elService.value = urlServiceId || (phpServiceFilter ? String(phpServiceFilter) : '');
+                elService.value = initialServiceId;
             }
 
             // Run on load
