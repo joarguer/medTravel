@@ -11,7 +11,12 @@ $(document).ready(function(){
                 tbody += '<td>'+escapeHtml(row.slug)+'</td>';
                 tbody += '<td>'+row.sort_order+'</td>';
                 tbody += '<td>'+(row.is_active == 1 ? '<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>' : '<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>';
-                tbody += '<td><button class="btn btn-sm btn-primary edit">Editar</button> <button class="btn btn-sm btn-danger delete">Eliminar</button></td>';
+                var campaignUrl = 'https://medtravel.com.co/offers.php?category=' + row.id;
+                tbody += '<td>';
+                tbody += '<button class="btn btn-sm btn-primary edit">Editar</button> ';
+                tbody += '<button class="btn btn-sm btn-danger delete">Eliminar</button> ';
+                tbody += '<button class="btn btn-sm btn-default copy-campaign-link" data-url="' + campaignUrl + '" title="Copiar enlace de campaña"><i class="fa fa-link"></i> Campaña</button>';
+                tbody += '</td>';
                 tbody += '</tr>';
             });
             $('#tbl-categories tbody').html(tbody);
@@ -74,6 +79,40 @@ $(document).ready(function(){
         let id = tr.data('id');
         $.post(url, { tipo: 'toggle', id: id, val: 0 }, function(res){ if(res && res.ok) loadList(); else alert('Error'); }, 'json');
     });
+
+    // copy campaign link
+    $('#tbl-categories').on('click', '.copy-campaign-link', function(){
+        var btn = $(this);
+        var url = btn.data('url');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function(){
+                btn.html('<i class="fa fa-check"></i> ¡Copiado!').addClass('btn-success').removeClass('btn-default');
+                setTimeout(function(){ btn.html('<i class="fa fa-link"></i> Campaña').addClass('btn-default').removeClass('btn-success'); }, 2000);
+            }).catch(function(){
+                fallbackCopy(btn, url);
+            });
+        } else {
+            fallbackCopy(btn, url);
+        }
+    });
+
+    function fallbackCopy(btn, url) {
+        var ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            document.execCommand('copy');
+            btn.html('<i class="fa fa-check"></i> ¡Copiado!').addClass('btn-success').removeClass('btn-default');
+            setTimeout(function(){ btn.html('<i class="fa fa-link"></i> Campaña').addClass('btn-default').removeClass('btn-success'); }, 2000);
+        } catch(e) {
+            prompt('Copia este enlace:', url);
+        }
+        document.body.removeChild(ta);
+    }
 
     // toggle active button
     $('#tbl-categories').on('click', '.toggle-active', function(){
