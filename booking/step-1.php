@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$fields = ['name', 'email', 'timeline_from', 'timeline_to', 'destination', 'persons', 'category', 'special_request', 'origin', 'preselected_offer', 'phone', 'consent_terms', 'consent_privacy', 'consent_insurance'];
+$fields = ['name', 'email', 'timeline_from', 'timeline_to', 'destination', 'persons', 'category', 'special_request', 'origin', 'preselected_offer', 'preselected_service', 'phone', 'consent_terms', 'consent_privacy', 'consent_insurance'];
 $input = [];
 foreach ($fields as $field) {
     if (isset($_POST[$field])) {

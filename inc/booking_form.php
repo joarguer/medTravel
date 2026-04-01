@@ -39,7 +39,7 @@ function booking_background_style($booking_texts = null) {
     return 'style="--booking-bg-image: url(\'' . htmlspecialchars($path, ENT_QUOTES) . '\')"';
 }
 
-function render_booking_form($origin = 'booking_page', $preselected_offer_id = null, $preload = []) {
+function render_booking_form($origin = 'booking_page', $preselected_offer_id = null, $preload = [], $preselected_service_id = 0) {
     global $conexion;
     
     // Cargar ciudades/destinos dinámicamente desde proveedores
@@ -120,6 +120,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
         <input type="hidden" name="origin" value="<?php echo htmlspecialchars($origin, ENT_QUOTES); ?>">
         <input type="hidden" name="selected_services" id="selected-services-input" value="">
         <input type="hidden" name="preselected_offer" value="<?php echo $preselected_offer_id ? intval($preselected_offer_id) : ''; ?>">
+        <input type="hidden" name="preselected_service" value="<?php echo $preselected_service_id ? intval($preselected_service_id) : ''; ?>">
         
         <div class="row g-3">
             <div class="col-md-6">
@@ -226,6 +227,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
             var KEY_STEP1_SUBMITTED = 'mt_booking_step1_submitted';
             var KEY_SELECTED_SERVICES = 'mt_selected_services';
             var KEY_PRESELECTED_OFFER = 'mt_preselected_offer_id';
+            var KEY_PRESELECTED_SERVICE = 'mt_preselected_service_id';
             var RETRY_DELAYS = [0, 250, 1000];
             var DEBUG = !!window.MT_DEBUG;
 
@@ -306,6 +308,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                             budget: getFieldValue('budget'),
                             additional_notes: getFieldValue('additional_notes'),
                             preselected_offer: getFieldValue('preselected_offer'),
+                            preselected_service: getFieldValue('preselected_service'),
                             updated_at: new Date().toISOString()
                         };
                         localStorage.setItem(KEY_STARTED, '1');
@@ -370,7 +373,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 var supportedKeys = [
                     'name', 'email', 'phone', 'origin', 'destination', 'category',
                     'special_request', 'timeline_from', 'timeline_to', 'persons',
-                    'budget', 'additional_notes', 'preselected_offer'
+                    'budget', 'additional_notes', 'preselected_offer', 'preselected_service'
                 ];
                 supportedKeys.forEach(function(key) {
                     if (Object.prototype.hasOwnProperty.call(draft, key)) {
@@ -389,6 +392,15 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                     setFieldIfEmpty(form, 'preselected_offer', persistedOffer);
                     try {
                         localStorage.setItem(KEY_PRESELECTED_OFFER, String(persistedOffer));
+                    } catch (e) {}
+                }
+
+                var persistedService = localStorage.getItem(KEY_PRESELECTED_SERVICE) || sessionStorage.getItem('preselected_service_id');
+                if (persistedService) {
+                    hasProgressData = true;
+                    setFieldIfEmpty(form, 'preselected_service', persistedService);
+                    try {
+                        localStorage.setItem(KEY_PRESELECTED_SERVICE, String(persistedService));
                     } catch (e) {}
                 }
 

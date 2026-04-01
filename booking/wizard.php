@@ -13,6 +13,27 @@ $allow_submission = ($submission_status !== 'submitted');
 // Capturar oferta pre-seleccionada si existe
 $preselected_offer_id = !empty($booking['preselected_offer']) ? intval($booking['preselected_offer']) : 0;
 
+// Capturar servicio pre-seleccionado (service_catalog.id) si existe y no hay oferta específica
+$preselected_service_id = (!$preselected_offer_id && !empty($booking['preselected_service']))
+    ? intval($booking['preselected_service'])
+    : 0;
+
+// Obtener nombre del servicio pre-seleccionado para mostrar en el banner
+$preselected_service_name = '';
+if ($preselected_service_id > 0) {
+    $stmt_sname = mysqli_prepare($conexion, 'SELECT name FROM service_catalog WHERE id = ? LIMIT 1');
+    if ($stmt_sname) {
+        mysqli_stmt_bind_param($stmt_sname, 'i', $preselected_service_id);
+        if (mysqli_stmt_execute($stmt_sname)) {
+            $res_sname = mysqli_stmt_get_result($stmt_sname);
+            if ($res_sname && ($row_sname = mysqli_fetch_assoc($res_sname))) {
+                $preselected_service_name = $row_sname['name'];
+            }
+        }
+        mysqli_stmt_close($stmt_sname);
+    }
+}
+
 // Cargar header del wizard desde la base de datos
 $wizard_header = [
     'title' => 'Booking Wizard',
@@ -632,6 +653,16 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 <i class="fas fa-check-circle me-2"></i>
                 <strong>Offer Pre-Selected:</strong> We've already selected the offer you were viewing. You can add more offers below or proceed to submit.
             </div>
+        <?php elseif ($preselected_service_id > 0): ?>
+            <div class="alert alert-info" style="background: #dbeafe; border: 1px solid #93c5fd; color: #1e40af; margin-bottom: 20px;">
+                <i class="fas fa-stethoscope me-2"></i>
+                <strong>Service Pre-Selected:</strong>
+                <?php if ($preselected_service_name !== ''): ?>
+                    We've highlighted all available offers for <strong><?php echo htmlspecialchars($preselected_service_name); ?></strong>. Choose the provider that best fits your needs.
+                <?php else: ?>
+                    We've highlighted offers for the service you selected. Choose the provider that best fits your needs.
+                <?php endif; ?>
+            </div>
         <?php endif; ?>
 
         <?php if ($allow_submission): ?>
@@ -791,7 +822,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                                data-type="<?php echo htmlspecialchars($offer['service_name'], ENT_QUOTES); ?>"
                                                data-price="<?php echo htmlspecialchars($offer['price_from'], ENT_QUOTES); ?>"
                                                data-currency="<?php echo htmlspecialchars($offer['currency'], ENT_QUOTES); ?>"
-                                               <?php echo ($preselected_offer_id === (int)$offer['id']) ? 'checked' : ''; ?>
+                                               <?php echo ($preselected_offer_id === (int)$offer['id'] || ($preselected_offer_id === 0 && $preselected_service_id > 0 && $preselected_service_id === (int)$offer['service_id'])) ? 'checked' : ''; ?>
                                                id="offer-<?php echo $offer['id']; ?>">
 
                                         <?php
@@ -902,6 +933,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         <input type="hidden" name="category" id="wizard-hidden-category" value="<?php echo isset($booking['category']) ? htmlspecialchars((string)$booking['category']) : ''; ?>">
                         <input type="hidden" name="special_request" id="wizard-hidden-special-request" value="<?php echo isset($booking['special_request']) ? htmlspecialchars((string)$booking['special_request']) : ''; ?>">
                         <input type="hidden" name="preselected_offer" id="wizard-hidden-preselected-offer" value="<?php echo isset($booking['preselected_offer']) ? htmlspecialchars((string)$booking['preselected_offer']) : ''; ?>">
+                        <input type="hidden" name="preselected_service" id="wizard-hidden-preselected-service" value="<?php echo isset($booking['preselected_service']) ? htmlspecialchars((string)$booking['preselected_service']) : ''; ?>">
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Preferred dates</label>
@@ -1046,6 +1078,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
         const KEY_SELECTED_SERVICES = 'mt_selected_services';
         const KEY_SELECTED_OFFERS = 'mt_selected_offers';
         const KEY_PRESELECTED_OFFER = 'mt_preselected_offer_id';
+        const KEY_PRESELECTED_SERVICE = 'mt_preselected_service_id';
         const WAS_SUBMITTED = <?php echo ($submission_status === 'submitted') ? 'true' : 'false'; ?>;
 
         function clearBookingStorage() {
@@ -1053,12 +1086,14 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 'mt_selected_services',
                 'mt_selected_offers',
                 'mt_preselected_offer_id',
+                'mt_preselected_service_id',
                 'mt_booking_draft',
                 'mt_booking_started',
                 'mt_booking_step1_submitted'
             ];
             keys.forEach(function(k) { localStorage.removeItem(k); });
             sessionStorage.removeItem('preselected_offer_id');
+            sessionStorage.removeItem('preselected_service_id');
         }
 
         const timelineFrom = document.getElementById('wizard-date-from');
@@ -1156,10 +1191,16 @@ if ($flow === 'addon' && !empty($addon_route)) {
             setWizardFieldIfEmpty('category', draft.category);
             setWizardFieldIfEmpty('special_request', draft.special_request || draft.additional_notes);
             setWizardFieldIfEmpty('preselected_offer', draft.preselected_offer);
+            setWizardFieldIfEmpty('preselected_service', draft.preselected_service);
 
             const preOffer = String(localStorage.getItem(KEY_PRESELECTED_OFFER) || sessionStorage.getItem('preselected_offer_id') || '').trim();
             if (/^\d+$/.test(preOffer)) {
                 setWizardFieldIfEmpty('preselected_offer', preOffer);
+            }
+
+            const preService = String(localStorage.getItem(KEY_PRESELECTED_SERVICE) || sessionStorage.getItem('preselected_service_id') || '').trim();
+            if (/^\d+$/.test(preService)) {
+                setWizardFieldIfEmpty('preselected_service', preService);
             }
         }
 
