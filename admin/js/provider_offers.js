@@ -42,6 +42,57 @@ $(function(){
         return $('<div>').text(String(text)).html();
     }
 
+    function buildPublicOfferUrl(offerId){
+        return 'https://medtravel.com.co/offer_detail.php?id=' + encodeURIComponent(String(offerId || ''));
+    }
+
+    function fallbackCopyText(text){
+        var temp = $('<textarea readonly style="position:absolute;left:-9999px;top:-9999px;"></textarea>');
+        $('body').append(temp);
+        temp.val(String(text || ''));
+        if (temp[0]) {
+            temp[0].focus();
+            temp[0].select();
+        }
+        var copied = false;
+        try {
+            copied = document.execCommand('copy');
+        } catch (e) {
+            copied = false;
+        }
+        temp.remove();
+        return copied;
+    }
+
+    function copyPublicOfferUrl(offerId){
+        var normalizedId = parseInt(offerId, 10) || 0;
+        if (normalizedId <= 0) {
+            offersToast('error', 'No fue posible resolver el ID real de la oferta.', 'Mis Ofertas');
+            return;
+        }
+
+        var campaignUrl = buildPublicOfferUrl(normalizedId);
+
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(campaignUrl).then(function(){
+                offersToast('success', 'Enlace comercial copiado: ' + campaignUrl, 'Mis Ofertas');
+            }).catch(function(){
+                if (fallbackCopyText(campaignUrl)) {
+                    offersToast('success', 'Enlace comercial copiado: ' + campaignUrl, 'Mis Ofertas');
+                    return;
+                }
+                offersToast('error', 'No fue posible copiar el enlace comercial.', 'Mis Ofertas');
+            });
+            return;
+        }
+
+        if (fallbackCopyText(campaignUrl)) {
+            offersToast('success', 'Enlace comercial copiado: ' + campaignUrl, 'Mis Ofertas');
+            return;
+        }
+        offersToast('error', 'No fue posible copiar el enlace comercial.', 'Mis Ofertas');
+    }
+
     function getActiveProviderContextId(){
         return isAdminMedical ? adminSelectedProviderId : scopedMedicalProviderId;
     }
@@ -386,6 +437,7 @@ $(function(){
                 var actions = $('<td>');
                 actions.append($('<button class="btn btn-xs btn-primary mr5">Editar</button>').click(function(){ openEdit(row.id); }));
                 actions.append($('<button class="btn btn-xs btn-warning mr5">Fotos</button>').click(function(){ loadGallery(row.id); }));
+                actions.append($('<button class="btn btn-xs btn-success mr5">Copiar link</button>').click(function(){ copyPublicOfferUrl(row.id); }));
                 if (!isAdminMedical && parseInt(row.provider_catalog_service_id || 0, 10) > 0) {
                     actions.append($('<a class="btn btn-xs btn-info mr5">Asignar a staff</a>').attr('href', buildStaffAssignmentUrl(parseInt(row.provider_catalog_service_id || 0, 10), parseInt(row.service_id || 0, 10))));
                 }
