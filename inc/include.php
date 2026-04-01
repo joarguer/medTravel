@@ -351,13 +351,13 @@ $footer = '<div class="container-fluid footer py-5">
                 <div class="footer-item d-flex flex-column">
                     <h4 class="mb-4 text-white">Get In Touch</h4>
                     <a href=""><i class="fas fa-envelope me-2"></i> info@medtravel.com</a>
-                    <a href=""><i class="fas fa-phone me-2"></i> +561 698 8069</a>
-                    <a href="" class="mb-3"><i class="fab fa-whatsapp me-2"></i> Whatsapp: +57 350 2431667</a>
+                    <a href="tel:+573502431667"><i class="fas fa-phone me-2"></i> +561 698 8069</a>
+                    <a href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer" class="mb-3"><i class="fab fa-whatsapp me-2"></i> Whatsapp: +57 350 2431667</a>
                     <div class="d-flex align-items-center">
                         <i class="fas fa-share fa-2x text-white me-2"></i>
                         <a class="btn-square btn btn-primary rounded-circle mx-1" href=""><i class="fab fa-facebook-f"></i></a>
                         <a class="btn-square btn btn-primary rounded-circle mx-1" href=""><i class="fab fa-instagram"></i></a>
-                        <a class="btn-square btn btn-primary rounded-circle mx-1" href="https://wa.me/573502431667"><i class="fab fa-whatsapp"></i></a>
+                        <a class="btn-square btn btn-primary rounded-circle mx-1" href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i></a>
                     </div>
                 </div>
             </div>
