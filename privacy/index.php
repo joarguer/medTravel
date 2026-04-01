@@ -19,8 +19,8 @@ $head_privacy = str_replace(
 );
 
 // Version string (do NOT break if constants missing)
-$privacy_version = defined('PRIVACY_VERSION') ? PRIVACY_VERSION : 'v1.1-FL-USA';
-$effective_date = 'February 21, 2026';
+$privacy_version = defined('PRIVACY_VERSION') ? PRIVACY_VERSION : 'v1.2-FL-USA';
+$effective_date = 'April 1, 2026';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -99,11 +99,16 @@ $effective_date = 'February 21, 2026';
                             <li>Comply with applicable laws and lawful requests.</li>
                         </ul>
 
-                        <h3 class="mt-4">4. Medical Information and HIPAA</h3>
+                        <h3 class="mt-4">4. Medical Information Handling</h3>
                         <p>
                             MedTravel does not provide medical advice, diagnosis, or treatment. We are not a healthcare provider and are not a HIPAA covered entity
-                            or business associate. Medical information you submit is used solely to coordinate your request and is shared with independent providers
-                            at your direction.
+                            or business associate. Medical information you submit is used solely for coordination purposes, including intake processing, matching your
+                            request with appropriate providers, appointment scheduling, and operational support.
+                        </p>
+                        <p>
+                            MedTravel does not clinically interpret any medical information you provide. Information is shared with independent providers solely
+                            at your direction and to the extent necessary to facilitate your request. Independent providers may, under their own legal or clinical
+                            obligations, request additional documentation from you directly.
                         </p>
 
                         <h3 class="mt-4">5. Sharing with Providers and Third Parties</h3>
@@ -124,8 +129,10 @@ $effective_date = 'February 21, 2026';
 
                         <h3 class="mt-4">7. International Data Transfers</h3>
                         <p>
-                            Your request may involve providers or services outside the United States. Your information may be transferred and processed
-                            internationally to coordinate services. By using the platform, you consent to these transfers.
+                            MedTravel's coordination activities involve providers and services across multiple jurisdictions, primarily the United States and Colombia.
+                            Your information may be transferred to, stored in, or processed in these or other countries as necessary to coordinate your care,
+                            process bookings, communicate with providers, or deliver operational support. Data protection standards vary across jurisdictions.
+                            By using the platform, you expressly acknowledge and consent to these transfers.
                         </p>
 
                         <h3 class="mt-4">8. Cookies and Tracking</h3>
@@ -146,29 +153,54 @@ $effective_date = 'February 21, 2026';
                             and we cannot guarantee absolute security.
                         </p>
 
-                        <h3 class="mt-4">11. Your Choices and Rights</h3>
+                        <h3 class="mt-4">11. Security Incidents and Breach Notification</h3>
+                        <p>
+                            In the event of a security incident that affects your personal information, MedTravel will take reasonable steps to assess and contain
+                            the incident. Where required by applicable law, we will notify affected users and/or relevant authorities within a reasonable timeframe
+                            and in the manner required by law. The scope and timing of any notification will depend on the nature of the incident and the legal
+                            requirements of the applicable jurisdiction.
+                        </p>
+
+                        <h3 class="mt-4">12. Your Choices and Rights</h3>
                         <p>
                             Subject to applicable U.S. and Florida law, you may request access, correction, or deletion of certain personal data,
                             subject to identity verification and legal limitations.
                         </p>
 
-                        <h3 class="mt-4">12. Children’s Privacy</h3>
+                        <h3 class="mt-4">13. California Residents</h3>
+                        <p>
+                            If you are a California resident, you may have additional rights under the California Consumer Privacy Act (CCPA) and related
+                            regulations, including the right to know what personal information we collect, the right to request correction or deletion of certain
+                            data, and the right to opt out of the sale of personal information. MedTravel does not sell personal information in the traditional
+                            sense. To exercise your California privacy rights or to submit a request, please contact us at <strong>privacy@medtravel.com</strong>.
+                            We will respond within the timeframe required by applicable law, subject to identity verification.
+                        </p>
+
+                        <h3 class="mt-4">14. Colombian Data Protection</h3>
+                        <p>
+                            When your information is shared with providers or partners located in Colombia for coordination purposes, that information may be
+                            subject to treatment under applicable Colombian data protection law, including Ley 1581 de 2012 (Ley de Protección de Datos Personales)
+                            and related regulations, to the extent applicable. Each Colombian provider is an independent data controller for information they
+                            receive directly from you or through MedTravel at your direction.
+                        </p>
+
+                        <h3 class="mt-4">15. Children's Privacy</h3>
                         <p>
                             The platform is intended for users 18 and older. We do not knowingly collect personal information from children.
                         </p>
 
-                        <h3 class="mt-4">13. Governing Law</h3>
+                        <h3 class="mt-4">16. Governing Law</h3>
                         <p>
                             This Privacy Policy is governed by the laws of the State of Florida, United States.
                         </p>
 
-                        <h3 class="mt-4">14. Changes to This Policy</h3>
+                        <h3 class="mt-4">17. Changes to This Policy</h3>
                         <p>
                             We may update this Privacy Policy from time to time. When updated, we will revise the version number and effective date.
                             Continued use of the platform constitutes acceptance of the revised policy.
                         </p>
 
-                        <h3 class="mt-4">15. Contact</h3>
+                        <h3 class="mt-4">18. Contact</h3>
                         <p>If you have questions about this Privacy Policy, please contact MedTravel before submitting a booking request.</p>
                         <ul class="mb-0">
                             <li>Email: privacy@medtravel.com</li>
