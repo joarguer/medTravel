@@ -931,7 +931,15 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                 <textarea name="additional_notes" id="additional_notes" class="form-control" rows="4" placeholder="Anything else we should know? (medical conditions, special requirements, etc.)"><?php echo !empty($booking['special_request']) ? htmlspecialchars($booking['special_request']) : ''; ?></textarea>
                             </div>
                         </div>
-                        <div class="d-flex justify-content-between align-items-center mt-4">
+                        <div class="p-3 rounded mb-4 mt-4" style="background:#f8fafc;border:1px solid #e2e8f0;">
+                            <p class="mb-2 small fw-semibold text-secondary"><i class="fas fa-clipboard-check me-1"></i>Before you submit, please note:</p>
+                            <ul class="mb-0 small text-muted ps-3" style="line-height:1.8;">
+                                <li><strong>Platform role:</strong> MedTravel is a coordination platform only and does not provide medical care directly.</li>
+                                <li><strong>Travel insurance:</strong> You are responsible for obtaining travel insurance with appropriate medical coverage before your trip.</li>
+                                <li><strong>Fees &amp; cancellation:</strong> Coordination and facilitation fees may be non-refundable once the process has started. Payments to third-party providers are subject to their own policies. <a href="/terms.php" target="_blank" rel="noopener" class="text-primary">See Terms v<?php echo defined('TERMS_VERSION') ? htmlspecialchars(TERMS_VERSION) : '1.2'; ?></a>.</li>
+                            </ul>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <?php if ($prev_step_url !== ''): ?>
                                     <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
@@ -976,13 +984,14 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         </ul>
                     <?php endif; ?>
                     <p class="mb-1"><strong>Next steps:</strong></p>
-                    <ol style="padding-left:20px; margin-bottom:0;">
+                    <ol style="padding-left:20px; margin-bottom:8px;">
                         <li>Availability check</li>
                         <li>Virtual consultation scheduling</li>
                         <li>Budget confirmation</li>
                         <li>Schedule coordination</li>
                         <li>Payment</li>
                     </ol>
+                    <p class="mb-0 small text-muted" style="border-top:1px solid #bee3f8;padding-top:8px;margin-top:4px;"><i class="fas fa-info-circle me-1 text-primary"></i><strong>Fees &amp; cancellation:</strong> Coordination and facilitation fees may be non-refundable once the process has started. Payments to third-party providers are subject to their own cancellation policies. <a href="/terms.php" target="_blank" rel="noopener">Terms</a> &middot; <a href="/privacy/" target="_blank" rel="noopener">Privacy</a>.</p>
                 </div>
             <?php endif; ?>
             <div class="d-flex flex-wrap gap-2">
