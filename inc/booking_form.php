@@ -39,7 +39,7 @@ function booking_background_style($booking_texts = null) {
     return 'style="--booking-bg-image: url(\'' . htmlspecialchars($path, ENT_QUOTES) . '\')"';
 }
 
-function render_booking_form($origin = 'booking_page', $preselected_offer_id = null) {
+function render_booking_form($origin = 'booking_page', $preselected_offer_id = null, $preload = []) {
     global $conexion;
     
     // Cargar ciudades/destinos dinámicamente desde proveedores
@@ -124,13 +124,13 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
         <div class="row g-3">
             <div class="col-md-6">
                 <div class="form-floating">
-                    <input type="text" name="name" class="form-control bg-white border-0" id="book-name" placeholder="Your Name" required>
+                    <input type="text" name="name" class="form-control bg-white border-0" id="book-name" placeholder="Your Name" value="<?php echo htmlspecialchars($preload['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                     <label for="book-name"><i class="fas fa-user me-2"></i>Your Name</label>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="form-floating">
-                    <input type="email" name="email" class="form-control bg-white border-0" id="book-email" placeholder="Your Email" required>
+                    <input type="email" name="email" class="form-control bg-white border-0" id="book-email" placeholder="Your Email" value="<?php echo htmlspecialchars($preload['email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" required>
                     <label for="book-email"><i class="fas fa-envelope me-2"></i>Your Email</label>
                 </div>
             </div>
@@ -148,7 +148,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
             </div>
             <div class="col-md-6">
                 <div class="form-floating">
-                    <input type="tel" name="phone" class="form-control bg-white border-0" id="book-phone" placeholder="Phone Number">
+                    <input type="tel" name="phone" class="form-control bg-white border-0" id="book-phone" placeholder="Phone Number" value="<?php echo htmlspecialchars($preload['phone'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                     <label for="book-phone"><i class="fas fa-phone me-2"></i>Phone Number (Optional)</label>
                 </div>
             </div>

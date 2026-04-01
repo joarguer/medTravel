@@ -7,6 +7,62 @@ $page_canonical = 'https://medtravel.com.co/booking.php';
 include('inc/include.php');
 require_once __DIR__ . '/inc/booking_page_header.php';
 // booking_form.php already included by include.php
+
+// --- offer_id preseleccionado desde URL -----------------------------------------
+// Valida la oferta contra provider_service_offers; ignora si es inválida o inactiva.
+$preselected_offer_id = 0;
+if (!empty($_GET['offer_id'])) {
+    $offer_id_raw = trim((string)$_GET['offer_id']);
+    if (ctype_digit($offer_id_raw)) {
+        $offer_id_int = (int)$offer_id_raw;
+        if ($offer_id_int > 0) {
+            $stmt_offer_check = mysqli_prepare(
+                $conexion,
+                'SELECT id FROM provider_service_offers WHERE id = ? AND is_active = 1 LIMIT 1'
+            );
+            if ($stmt_offer_check) {
+                mysqli_stmt_bind_param($stmt_offer_check, 'i', $offer_id_int);
+                if (mysqli_stmt_execute($stmt_offer_check)) {
+                    $res_offer_check = mysqli_stmt_get_result($stmt_offer_check);
+                    if ($res_offer_check && mysqli_num_rows($res_offer_check) > 0) {
+                        $preselected_offer_id = $offer_id_int;
+                    }
+                }
+                mysqli_stmt_close($stmt_offer_check);
+            }
+        }
+    }
+}
+
+// --- Precarga de campos del formulario desde URL (solo para UX de campañas) ----
+// No se persisten automáticamente sin interacción del usuario.
+$preload = [];
+$preload_name = '';
+if (!empty($_GET['first_name'])) {
+    $preload_name = substr(trim((string)$_GET['first_name']), 0, 100);
+}
+if (!empty($_GET['last_name'])) {
+    $preload_name .= ($preload_name !== '' ? ' ' : '') . substr(trim((string)$_GET['last_name']), 0, 100);
+}
+if ($preload_name !== '') {
+    $preload['name'] = $preload_name;
+}
+if (!empty($_GET['email'])) {
+    $preload['email'] = substr(trim((string)$_GET['email']), 0, 255);
+}
+if (!empty($_GET['phone'])) {
+    $preload['phone'] = substr(trim((string)$_GET['phone']), 0, 50);
+}
+
+// --- UTM params para tracking client-side (se sincronizan vía JS más abajo) ---
+$booking_utm = [];
+foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $utmKey) {
+    if (!empty($_GET[$utmKey])) {
+        $booking_utm[$utmKey] = substr(trim((string)$_GET[$utmKey]), 0, 255);
+    }
+}
+// -------------------------------------------------------------------------------
+
 $booking_texts = get_booking_texts();
 $booking_style = booking_background_style($booking_texts);
 $bookingPageHeader = mt_booking_page_header_fetch($conexion);
@@ -68,7 +124,7 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
                 <div class="col-lg-6">
                     <h1 class="text-white mb-3"><?php echo htmlspecialchars($booking_texts['form_title']); ?></h1>
                     <p class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['form_paragraph']); ?></p>
-                    <?php render_booking_form('booking_page'); ?>
+                    <?php render_booking_form('booking_page', $preselected_offer_id, $preload); ?>
                 </div>
             </div>
         </div>
@@ -112,6 +168,27 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
 
     <!-- Template Javascript -->
     <script src="<?php echo htmlspecialchars(mt_asset_url('js/main.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
+
+    <?php if ($preselected_offer_id > 0 || !empty($booking_utm)): ?>
+    <!-- offer_id + UTM sync a localStorage/sessionStorage (generado server-side) -->
+    <script>
+    (function () {
+        "use strict";
+        try {
+            <?php if ($preselected_offer_id > 0): ?>
+            // Sobreescribir cualquier oferta previa en storage con la del URL actual.
+            localStorage.setItem("mt_preselected_offer_id", "<?php echo $preselected_offer_id; ?>");
+            sessionStorage.setItem("preselected_offer_id", "<?php echo $preselected_offer_id; ?>");
+            localStorage.setItem("mt_booking_started", "1");
+            window.dispatchEvent(new Event("mt-booking-state-changed"));
+            <?php endif; ?>
+            <?php foreach ($booking_utm as $utmKey => $utmVal): ?>
+            sessionStorage.setItem("mt_<?php echo htmlspecialchars($utmKey, ENT_QUOTES, 'UTF-8'); ?>", "<?php echo htmlspecialchars($utmVal, ENT_QUOTES, 'UTF-8'); ?>");
+            <?php endforeach; ?>
+        } catch (e) {}
+    }());
+    </script>
+    <?php endif; ?>
 </body>
 
 </html>
