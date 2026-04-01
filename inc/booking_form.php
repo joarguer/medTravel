@@ -179,14 +179,31 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 </div>
             </div>
             <div class="col-12">
-                <div class="form-check text-white">
-                    <input class="form-check-input" type="checkbox" name="terms_accepted" id="book-terms" value="1" required>
-                    <label class="form-check-label" for="book-terms">
-                        I agree to the <a href="/terms.php" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy/" target="_blank" rel="noopener">Privacy Policy</a>
+                <div class="p-3 rounded mb-1" style="background:rgba(0,0,0,0.25);border-left:3px solid rgba(255,193,7,0.8);">
+                    <p class="text-white small mb-0"><strong><i class="fas fa-info-circle me-1 text-warning"></i>Important notice:</strong> MedTravel is a coordination and facilitation platform only. We are not a hospital, clinic, or healthcare provider. Medical services are provided exclusively by independent third-party providers. MedTravel does not guarantee medical outcomes, procedure safety, or recovery results. We strongly recommend obtaining travel insurance with medical coverage before your trip.</p>
+                </div>
+            </div>
+            <div class="col-12 mt-1">
+                <div class="form-check text-white mb-2">
+                    <input class="form-check-input" type="checkbox" name="consent_terms" id="book-consent-terms" value="1" required>
+                    <label class="form-check-label" for="book-consent-terms">
+                        I agree to the <a href="/terms.php" target="_blank" rel="noopener">Terms of Service</a> and understand that MedTravel acts solely as an intermediary platform.
+                    </label>
+                </div>
+                <div class="form-check text-white mb-2">
+                    <input class="form-check-input" type="checkbox" name="consent_privacy" id="book-consent-privacy" value="1" required>
+                    <label class="form-check-label" for="book-consent-privacy">
+                        I agree to the <a href="/privacy/" target="_blank" rel="noopener">Privacy Policy</a> and consent to the handling of my personal and medical information as described.
+                    </label>
+                </div>
+                <div class="form-check text-white mb-1">
+                    <input class="form-check-input" type="checkbox" name="consent_insurance" id="book-consent-insurance" value="1" required>
+                    <label class="form-check-label" for="book-consent-insurance">
+                        I understand that I am responsible for obtaining travel insurance with appropriate medical coverage for my trip.
                     </label>
                 </div>
                 <div class="text-warning small mt-2 d-none" id="book-terms-error">
-                    You must accept the Terms to continue.
+                    You must accept all three items above to continue.
                 </div>
             </div>
             <div class="col-12">
@@ -305,13 +322,20 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 if (!form || form.dataset.mtTermsBound === '1') return;
                 form.dataset.mtTermsBound = '1';
 
-                var checkbox = form.querySelector('[name="terms_accepted"]');
+                var consentNames = ['consent_terms', 'consent_privacy', 'consent_insurance'];
+                var checkboxes = consentNames.map(function(n) {
+                    return form.querySelector('[name="' + n + '"]');
+                }).filter(Boolean);
                 var submitBtn = form.querySelector('button[type="submit"]');
                 var errorBox = document.getElementById('book-terms-error');
-                if (!checkbox || !submitBtn) return;
+                if (!checkboxes.length || !submitBtn) return;
+
+                function allAccepted() {
+                    return checkboxes.every(function(cb) { return cb.checked; });
+                }
 
                 function updateState(showError) {
-                    var accepted = !!checkbox.checked;
+                    var accepted = allAccepted();
                     submitBtn.disabled = !accepted;
                     if (errorBox) {
                         errorBox.classList.toggle('d-none', accepted || !showError);
@@ -319,11 +343,11 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 }
 
                 updateState(false);
-                checkbox.addEventListener('change', function() {
-                    updateState(false);
+                checkboxes.forEach(function(cb) {
+                    cb.addEventListener('change', function() { updateState(false); });
                 });
                 form.addEventListener('submit', function(e) {
-                    if (!checkbox.checked) {
+                    if (!allAccepted()) {
                         e.preventDefault();
                         updateState(true);
                     }

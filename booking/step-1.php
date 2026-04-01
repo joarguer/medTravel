@@ -4,21 +4,9 @@ require_once __DIR__ . '/../inc/constants.php';
 
 function booking_step1_client_ip_local()
 {
-    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-        return $_SERVER['HTTP_CLIENT_IP'];
-    }
-    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        return $_SERVER['HTTP_X_FORWARDED_FOR'];
-    }
-    if (!empty($_SERVER['HTTP_X_FORWARDED'])) {
-        return $_SERVER['HTTP_X_FORWARDED'];
-    }
-    if (!empty($_SERVER['HTTP_FORWARDED_FOR'])) {
-        return $_SERVER['HTTP_FORWARDED_FOR'];
-    }
-    if (!empty($_SERVER['HTTP_FORWARDED'])) {
-        return $_SERVER['HTTP_FORWARDED'];
-    }
+    // REMOTE_ADDR is the only value that cannot be spoofed by the client.
+    // HTTP_CLIENT_IP and HTTP_X_FORWARDED_FOR can be freely set by any client
+    // and must not be trusted unless a controlled trusted-proxy list is configured.
     return $_SERVER['REMOTE_ADDR'] ?? '';
 }
 
@@ -27,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$fields = ['name', 'email', 'timeline_from', 'timeline_to', 'destination', 'persons', 'category', 'special_request', 'origin', 'preselected_offer', 'phone', 'terms_accepted'];
+$fields = ['name', 'email', 'timeline_from', 'timeline_to', 'destination', 'persons', 'category', 'special_request', 'origin', 'preselected_offer', 'phone', 'consent_terms', 'consent_privacy', 'consent_insurance'];
 $input = [];
 foreach ($fields as $field) {
     if (isset($_POST[$field])) {
@@ -45,18 +33,25 @@ foreach ($required as $field) {
     }
 }
 
-if (!isset($_POST['terms_accepted']) || (string)$_POST['terms_accepted'] !== '1') {
-    $_SESSION['booking_step1_error'] = 'You must accept the Terms to continue.';
-    $back = !empty($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '/booking.php';
-    header('Location: ' . $back);
-    exit;
+$consent_keys = ['consent_terms', 'consent_privacy', 'consent_insurance'];
+foreach ($consent_keys as $consent_key) {
+    if (!isset($_POST[$consent_key]) || (string)$_POST[$consent_key] !== '1') {
+        $_SESSION['booking_step1_error'] = 'You must accept all three consent items to continue.';
+        $back = !empty($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '/booking.php';
+        header('Location: ' . $back);
+        exit;
+    }
 }
 
 $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
-$input['terms_accepted'] = '1';
-$input['terms_version'] = $termsVersion;
+// Record each consent separately for audit; derive backward-compatible terms_accepted.
+$input['consent_terms']    = '1';
+$input['consent_privacy']  = '1';
+$input['consent_insurance'] = '1';
+$input['terms_accepted']   = '1'; // kept for backward compat with submit.php
+$input['terms_version']    = $termsVersion;
 $input['terms_accepted_at'] = date('Y-m-d H:i:s');
-$input['terms_ip'] = booking_step1_client_ip_local();
+$input['terms_ip']         = booking_step1_client_ip_local();
 $input['terms_user_agent'] = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
 
 $_SESSION['booking_request'] = $input;

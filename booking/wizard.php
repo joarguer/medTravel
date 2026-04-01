@@ -622,6 +622,11 @@ if ($flow === 'addon' && !empty($addon_route)) {
             <?php endif; ?>
         </div>
 
+        <div class="alert mb-4 py-2 px-3 small" role="note" style="background:#fff8e1;border-left:3px solid #f59e0b;border-radius:6px;color:#78350f;">
+            <i class="fas fa-info-circle me-1" style="color:#f59e0b;"></i>
+            <strong>Reminder:</strong> MedTravel is a coordination platform only — not a hospital, clinic, or healthcare provider. Medical services are provided exclusively by independent third-party providers. MedTravel does not guarantee medical outcomes, procedure safety, or recovery results.
+        </div>
+
         <?php if ($preselected_offer_id > 0): ?>
             <div class="alert alert-success" style="background: #dcfce7; border: 1px solid #86efac; color: #166534; margin-bottom: 20px;">
                 <i class="fas fa-check-circle me-2"></i>

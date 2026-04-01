@@ -1,15 +1,7 @@
 <?php
-require_once __DIR__ . '/include.php'; // Asegúrate que carga constants.php
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Privacy Policy - MedTravel</title>
-</head>
-<body>
-
-<h1>Privacy Policy</h1>
+// Permanent redirect to canonical privacy page
+header("Location: /privacy/", true, 301);
+exit;
 <p><strong>Version:</strong> <?= PRIVACY_VERSION ?></p>
 <p><strong>Effective Date:</strong> February 21, 2026</p>
 
