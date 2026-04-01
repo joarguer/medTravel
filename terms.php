@@ -25,7 +25,7 @@ $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
         <div class="container text-center py-5" style="max-width: 900px;">
             <h3 class="text-white display-3 mb-3">Terms of Service &amp; Medical Disclaimer</h3>
             <p class="text-white mb-0">Version: <?php echo htmlspecialchars($termsVersion); ?></p>
-            <p class="text-white mb-0">Effective Date: 2026-02-21</p>
+            <p class="text-white mb-0">Effective Date: 2026-04-01</p>
         </div>
     </div>
 
@@ -112,6 +112,42 @@ $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
 
                 <h4>11. Electronic Acceptance</h4>
                 <p>By checking the acceptance box and submitting a booking request, you acknowledge that this constitutes a legally binding electronic signature.</p>
+
+                <hr>
+
+                <h4>12. Travel Insurance Requirement</h4>
+                <p>You are solely responsible for obtaining and maintaining adequate travel insurance coverage prior to your trip. MedTravel strongly recommends that your policy include, at minimum: emergency medical treatment, surgical and hospitalization costs, medical complications arising from planned procedures, medical evacuation and repatriation, and trip cancellation or interruption.</p>
+                <p>MedTravel shall not be liable for any medical costs, losses, additional expenses, or consequences of any kind arising from your failure to obtain adequate coverage or from any gap, exclusion, or limitation in your insurance policy. No coordination or facilitation fee paid to MedTravel constitutes or replaces insurance coverage.</p>
+
+                <hr>
+
+                <h4>13. Cancellation and Refund Policy</h4>
+                <p>MedTravel may charge coordination, facilitation, or reservation fees in connection with arranging services between you and independent providers. Unless expressly stated otherwise in writing at the time of payment, coordination and facilitation fees paid to MedTravel are non-refundable once the management of your request has commenced.</p>
+                <p>Payments made directly to third-party providers are governed exclusively by those providers' own cancellation and refund policies. MedTravel has no control over, and cannot guarantee refunds for, amounts paid directly to providers.</p>
+                <p>Cancellations, rescheduling, or no-shows may result in forfeiture of deposits, partial payments, or other charges imposed by providers. MedTravel bears no liability for financial losses resulting from a provider's cancellation policy or from travel disruptions outside MedTravel's control.</p>
+
+                <hr>
+
+                <h4>14. Telemedicine and Virtual Assessment Consent</h4>
+                <p>Some coordination activities may involve video calls, virtual consultations, or other forms of remote communication between you and independent medical providers. MedTravel may facilitate access to such interactions but does not participate in, supervise, or perform any medical act or clinical assessment conducted during these sessions.</p>
+                <p>By using the platform you consent to: the scheduling and facilitation of virtual interactions by MedTravel; the sharing of relevant information with the provider for coordination purposes; and the use of third-party communication technologies, including but not limited to Google Meet or similar platforms. You acknowledge that electronic communications may be subject to technical failures, interruptions, or security limitations beyond MedTravel's control, and that MedTravel is not liable for any consequences arising from such failures. The medical relationship remains exclusively between you and the independent provider.</p>
+
+                <hr>
+
+                <h4>15. Force Majeure</h4>
+                <p>MedTravel shall not be in breach of these Terms, and shall not be liable for any delay or failure to perform, to the extent that such delay or failure is caused by circumstances reasonably beyond MedTravel's control, including without limitation: travel restrictions or border closures imposed by any government or authority; flight cancellations or transportation disruptions; pandemics, epidemics, or public health emergencies; natural disasters or acts of God; provider insolvency, closure, or withdrawal of services; acts of war, civil unrest, or terrorism; regulatory or legislative changes; and failures of telecommunications, internet, or third-party technology infrastructure.</p>
+                <p>In such circumstances, MedTravel will use reasonable efforts to communicate with you and assist in identifying alternatives, but cannot guarantee the availability, timing, or cost of substitute arrangements.</p>
+
+                <hr>
+
+                <h4>16. Provider Verification Disclaimer</h4>
+                <p>MedTravel may display designations such as "verified," "featured," "highlighted," or similar indicators for certain listed providers. These designations reflect an administrative or commercial review process conducted by MedTravel and do not constitute: a guarantee of clinical outcomes or procedure safety; confirmation that a provider holds a current and valid professional license; accreditation by any medical or regulatory body; an endorsement of medical quality, competence, or standards of care; or a representation that the provider is free from past complaints or legal actions.</p>
+                <p>You remain solely responsible for evaluating any provider's credentials, qualifications, and suitability before proceeding. MedTravel encourages all patients to conduct their own due diligence and, where appropriate, to seek independent professional advice.</p>
+
+                <hr>
+
+                <h4>17. Changes to These Terms</h4>
+                <p>MedTravel reserves the right to update these Terms at any time. When updated, the version number and effective date will be revised. Continued use of the platform after such updates constitutes acceptance of the revised Terms. The version accepted at the time of your booking request will govern that specific engagement.</p>
             </div>
         </div>
     </div>
