@@ -355,8 +355,8 @@ $footer = '<div class="container-fluid footer py-5">
                     <a href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer" class="mb-3"><i class="fab fa-whatsapp me-2"></i> Whatsapp: +57 350 2431667</a>
                     <div class="d-flex align-items-center">
                         <i class="fas fa-share fa-2x text-white me-2"></i>
-                        <a class="btn-square btn btn-primary rounded-circle mx-1" href=""><i class="fab fa-facebook-f"></i></a>
-                        <a class="btn-square btn btn-primary rounded-circle mx-1" href=""><i class="fab fa-instagram"></i></a>
+                        <a class="btn-square btn btn-primary rounded-circle mx-1" href="https://www.facebook.com/share/181t1WGHUw/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer"><i class="fab fa-facebook-f"></i></a>
+                        <a class="btn-square btn btn-primary rounded-circle mx-1" href="https://www.instagram.com/medtravel.usa?igsh=NzJoc2Y1dTdmdDBx&utm_source=qr" target="_blank" rel="noopener noreferrer"><i class="fab fa-instagram"></i></a>
                         <a class="btn-square btn btn-primary rounded-circle mx-1" href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i></a>
                     </div>
                 </div>
