@@ -713,6 +713,7 @@ if ($action === 'list_threads') {
         $itemSql = "SELECT
                         bri.id AS item_id,
                         bri.booking_request_id AS request_id,
+                        bri.item_type,
                         COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name,
                         br.destination,
                         br.created_at
@@ -750,6 +751,7 @@ if ($action === 'list_threads') {
                         'thread_id' => inbox_thread_id('ITEM', $requestId, $itemId),
                         'thread_key' => inbox_thread_id('ITEM', $requestId, $itemId),
                         'thread_type' => 'ITEM',
+                        'item_type' => (string)($row['item_type'] ?? ''),
                         'request_id' => $requestId,
                         'booking_id' => $requestId,
                         'item_id' => $itemId,

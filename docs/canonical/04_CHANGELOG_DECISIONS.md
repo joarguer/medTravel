@@ -1,5 +1,23 @@
 # Changelog Decisions
 
+## 2026-04-02 — Inbox cliente: filtros de entrada canonizados por ambito de conversacion
+
+**Outcome**
+- Se corrige una ambiguedad de UX donde `thread_type=CARE` podia mostrar tambien hilos `ITEM` en la lista lateral.
+- Se establece una entrada explicita por 4 comportamientos en `client/request_detail.php`: `ALL`, `CARE`, `ITEM` medico y `ITEM` complementario.
+- Se refuerza la separacion operativa entre coordinacion MedTravel y conversaciones con providers por item.
+
+**Decision**
+- `thread_type=CARE` debe mostrar solo hilos de coordinacion MedTravel del `request_id`.
+- `thread_type=ITEM` debe mostrar solo hilos ITEM del `request_id`; si llega `item_group`, filtrar por `medical` o `complementary`.
+- `thread_type=ALL` debe mostrar todos los hilos del `request_id`.
+- La seleccion inicial y la lista visible deben respetar el mismo filtro (no solo preseleccion de hilo).
+
+**Operational effect**
+- `client/js/app_inbox.js` aplica filtro de lista por URL (`thread_type`, `request_id`, `item_group`, `thread_id`).
+- `client/ajax/inbox.php` expone `item_type` en `list_threads` para habilitar filtro por grupo en frontend.
+- Se reduce riesgo de mezcla semantica entre coordinacion y mensajeria medico/complementaria al navegar desde detalle de caso.
+
 ## 2026-04-02 — `generadorDocumentos` se mantiene como proyecto auxiliar separado
 
 **Outcome**

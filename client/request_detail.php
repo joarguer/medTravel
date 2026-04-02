@@ -66,15 +66,18 @@ if ($requestId <= 0) {
                             <div class="portlet-body">
                                 <p>Messages and updates are managed in your Inbox for privacy and clarity.</p>
                                 <p>
-                                    <a class="btn btn-primary" id="client-open-inbox-care" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=CARE">
-                                        <i class="icon-envelope-open"></i> Open Inbox
+                                    <a class="btn btn-primary" id="client-open-inbox-all" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=ALL">
+                                        <i class="icon-envelope-open"></i> Open Inbox (All)
                                     </a>
                                 </p>
                                 <div id="client-inbox-item-links" style="margin-top:10px;">
-                                    <a class="btn btn-default" id="client-open-inbox-medical" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=CARE">
+                                    <a class="btn btn-default" id="client-open-inbox-care" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=CARE">
+                                        <i class="icon-bubbles"></i> Message MedTravel Coordination
+                                    </a>
+                                    <a class="btn btn-default" id="client-open-inbox-medical" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=ITEM&item_group=medical">
                                         <i class="icon-bubble"></i> Message Medical Provider
                                     </a>
-                                    <a class="btn btn-default" id="client-open-inbox-complementary" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=CARE" style="margin-left:8px;">
+                                    <a class="btn btn-default" id="client-open-inbox-complementary" href="/client/app_inbox.php?request_id=<?php echo (int)$requestId; ?>&thread_type=ITEM&item_group=complementary" style="margin-left:8px;">
                                         <i class="icon-bubble"></i> Message Complementary Provider
                                     </a>
                                     <p class="text-muted" style="margin:8px 0 0 0;">Buttons route to the first available item by category.</p>

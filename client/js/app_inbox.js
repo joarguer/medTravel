@@ -23,6 +23,7 @@
     };
     var currentThread = null;
     var preferredThread = null;
+    var threadListFilter = null;
     var autoSelectItemRequestId = 0;
     var selectedFiles = [];
     var currentDocuments = [];
@@ -1335,10 +1336,52 @@
         if (preferred.requestId > 0 && tBooking !== preferred.requestId) {
             return false;
         }
+        if (preferred.threadType === 'ALL') {
+            return true;
+        }
         if (preferred.threadType === 'ITEM') {
-            return tType === 'ITEM' && preferred.itemId > 0 && tItem === preferred.itemId;
+            if (tType !== 'ITEM') {
+                return false;
+            }
+            if (preferred.itemId > 0) {
+                return tItem === preferred.itemId;
+            }
+            if (preferred.itemGroup) {
+                return normalizeItemGroupKey(thread.item_type) === preferred.itemGroup;
+            }
+            return true;
         }
         return tType === 'CARE';
+    }
+
+    function normalizeItemGroupKey(rawType) {
+        var type = String(rawType || '').toLowerCase().trim();
+        if (type === 'medical_offer') return 'medical';
+        if (type === 'complementary_service') return 'complementary';
+        return '';
+    }
+
+    function threadMatchesListFilter(thread, filter) {
+        if (!thread || !filter) return true;
+        var threadId = String(thread.thread_id || '');
+        if (filter.threadId) {
+            return threadId === String(filter.threadId);
+        }
+        var requestId = parseInt(thread.booking_id || thread.request_id || 0, 10);
+        if (filter.requestId > 0 && requestId !== filter.requestId) {
+            return false;
+        }
+        var type = String(thread.thread_type || '').toUpperCase();
+        if (filter.mode === 'CARE') {
+            return type === 'CARE';
+        }
+        if (filter.mode === 'ITEM') {
+            return type === 'ITEM';
+        }
+        if (filter.mode === 'ITEM_GROUP') {
+            return type === 'ITEM' && normalizeItemGroupKey(thread.item_type) === filter.itemGroup;
+        }
+        return true;
     }
 
     function formatThreadTime(value) {
@@ -1476,8 +1519,15 @@
         var $list = $('#client-inbox-thread-list');
         if (!$list.length) return;
 
-        if (!threads || !threads.length) {
-            $list.html('<li><a href="javascript:;">No threads available</a></li>');
+        var visibleThreads = $.isArray(threads) ? threads : [];
+        if (threadListFilter) {
+            visibleThreads = visibleThreads.filter(function (thread) {
+                return threadMatchesListFilter(thread, threadListFilter);
+            });
+        }
+
+        if (!visibleThreads.length) {
+            $list.html('<li><a href="javascript:;">No threads available for this filter</a></li>');
             $('#client-inbox-content').hide();
             $('#client-inbox-empty').show();
             currentThread = null;
@@ -1487,9 +1537,9 @@
 
         var selectedKey = '';
         if (preferredThread) {
-            for (var i = 0; i < threads.length; i++) {
-                if (threadMatchesPreference(threads[i], preferredThread)) {
-                    selectedKey = String(threads[i].thread_id || '');
+            for (var i = 0; i < visibleThreads.length; i++) {
+                if (threadMatchesPreference(visibleThreads[i], preferredThread)) {
+                    selectedKey = String(visibleThreads[i].thread_id || '');
                     break;
                 }
             }
@@ -1498,8 +1548,8 @@
             selectedKey = String(currentThread.thread_id);
         }
         if (!selectedKey && autoSelectItemRequestId > 0) {
-            for (var k = 0; k < threads.length; k++) {
-                var autoThread = threads[k] || {};
+            for (var k = 0; k < visibleThreads.length; k++) {
+                var autoThread = visibleThreads[k] || {};
                 var autoReqId = parseInt(autoThread.booking_id || autoThread.request_id || 0, 10);
                 var autoType = String(autoThread.thread_type || '').toUpperCase();
                 if (autoReqId === autoSelectItemRequestId && autoType === 'ITEM') {
@@ -1508,8 +1558,8 @@
                 }
             }
             if (!selectedKey) {
-                for (var m = 0; m < threads.length; m++) {
-                    var careThread = threads[m] || {};
+                for (var m = 0; m < visibleThreads.length; m++) {
+                    var careThread = visibleThreads[m] || {};
                     var careReqId = parseInt(careThread.booking_id || careThread.request_id || 0, 10);
                     var careType = String(careThread.thread_type || '').toUpperCase();
                     if (careReqId === autoSelectItemRequestId && careType === 'CARE') {
@@ -1521,11 +1571,11 @@
             autoSelectItemRequestId = 0;
         }
         if (!selectedKey) {
-            selectedKey = String(threads[0].thread_id || '');
+            selectedKey = String(visibleThreads[0].thread_id || '');
         }
 
         var html = '';
-        threads.forEach(function (thread) {
+        visibleThreads.forEach(function (thread) {
             var threadId = String(thread.thread_id || '');
             var unread = parseInt(thread.unread_count || 0, 10);
             var active = (threadId === selectedKey);
@@ -1551,7 +1601,8 @@
                 ' data-thread-id="' + esc(threadId) + '"' +
                 ' data-thread-type="' + esc(thread.thread_type) + '"' +
                 ' data-booking-id="' + esc(thread.booking_id || thread.request_id || 0) + '"' +
-                ' data-item-id="' + esc(thread.item_id || 0) + '">' +
+                ' data-item-id="' + esc(thread.item_id || 0) + '"' +
+                ' data-item-type="' + esc(thread.item_type || '') + '">' +
                 '<div class="mt-thread-row">' +
                     '<div class="mt-thread-main">' +
                         '<div class="mt-thread-title">' + esc(displayTitle) + '</div>' +
@@ -1574,14 +1625,14 @@
         $list.html(html);
 
         var selected = null;
-        for (var j = 0; j < threads.length; j++) {
-            if (String(threads[j].thread_id || '') === selectedKey) {
-                selected = threads[j];
+        for (var j = 0; j < visibleThreads.length; j++) {
+            if (String(visibleThreads[j].thread_id || '') === selectedKey) {
+                selected = visibleThreads[j];
                 break;
             }
         }
         if (!selected) {
-            selected = threads[0];
+            selected = visibleThreads[0];
         }
 
         var changed = !currentThread || String(currentThread.thread_id || '') !== String(selected.thread_id || '');
@@ -1590,6 +1641,7 @@
             thread_type: String(selected.thread_type || 'CARE'),
             booking_id: parseInt(selected.booking_id || selected.request_id || 0, 10),
             item_id: parseInt(selected.item_id || 0, 10),
+            item_type: String(selected.item_type || ''),
             thread_title: String(selected.title || ''),
             thread_subtitle: String(selected.subtitle || '')
         };
@@ -3231,28 +3283,84 @@
 
         var params = new URLSearchParams(window.location.search);
         var threadId = String(params.get('thread_id') || '');
-        var requestId = parseInt(params.get('request_id') || '0', 10);
+        var requestId = parseInt(params.get('request_id') || params.get('booking_id') || '0', 10);
         var hasThreadTypeParam = params.has('thread_type');
         var hasItemIdParam = params.has('item_id');
         var threadType = String(params.get('thread_type') || 'CARE').toUpperCase();
         var itemId = parseInt(params.get('item_id') || '0', 10);
+        var itemGroup = String(params.get('item_group') || '').toLowerCase().trim();
+        if (itemGroup !== 'medical' && itemGroup !== 'complementary') {
+            itemGroup = '';
+        }
         if (threadId) {
             preferredThread = { threadId: threadId };
+            threadListFilter = {
+                threadId: threadId,
+                requestId: 0,
+                mode: 'THREAD'
+            };
         } else if (requestId > 0) {
-            if (hasThreadTypeParam && threadType === 'CARE') {
+            if (hasItemIdParam && itemId > 0) {
+                preferredThread = {
+                    requestId: requestId,
+                    threadType: 'ITEM',
+                    itemId: itemId,
+                    itemGroup: itemGroup
+                };
+                threadListFilter = {
+                    threadId: '',
+                    requestId: requestId,
+                    mode: 'ITEM'
+                };
+            } else if (hasThreadTypeParam && threadType === 'ALL') {
+                preferredThread = {
+                    requestId: requestId,
+                    threadType: 'ALL',
+                    itemId: 0
+                };
+                threadListFilter = {
+                    threadId: '',
+                    requestId: requestId,
+                    mode: 'ALL_REQUEST'
+                };
+            } else if (hasThreadTypeParam && threadType === 'ITEM' && itemGroup) {
+                preferredThread = {
+                    requestId: requestId,
+                    threadType: 'ITEM',
+                    itemId: 0,
+                    itemGroup: itemGroup
+                };
+                threadListFilter = {
+                    threadId: '',
+                    requestId: requestId,
+                    mode: 'ITEM_GROUP',
+                    itemGroup: itemGroup
+                };
+            } else if (hasThreadTypeParam && threadType === 'CARE') {
                 preferredThread = {
                     requestId: requestId,
                     threadType: 'CARE',
                     itemId: 0
                 };
-            } else if (hasItemIdParam && itemId > 0) {
-                preferredThread = {
+                threadListFilter = {
+                    threadId: '',
                     requestId: requestId,
-                    threadType: 'ITEM',
-                    itemId: itemId
+                    mode: 'CARE'
+                };
+            } else if (hasThreadTypeParam && threadType === 'ITEM') {
+                autoSelectItemRequestId = requestId;
+                threadListFilter = {
+                    threadId: '',
+                    requestId: requestId,
+                    mode: 'ITEM'
                 };
             } else {
                 autoSelectItemRequestId = requestId;
+                threadListFilter = {
+                    threadId: '',
+                    requestId: requestId,
+                    mode: 'ALL_REQUEST'
+                };
             }
         }
 
@@ -3267,6 +3375,7 @@
                 thread_type: String($a.data('thread-type') || 'CARE'),
                 booking_id: parseInt($a.data('booking-id') || 0, 10),
                 item_id: parseInt($a.data('item-id') || 0, 10),
+                item_type: String($a.data('item-type') || ''),
                 thread_title: $.trim($a.find('.mt-thread-title').text() || ''),
                 thread_subtitle: $.trim($a.find('.mt-thread-location').text() || '')
             };

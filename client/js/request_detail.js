@@ -69,13 +69,23 @@
         var medicalItemId = firstItemId(medical);
         var complementaryItemId = firstItemId(complementary);
 
+        var allUrl = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ALL';
         var careUrl = '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=CARE';
         var medicalUrl = medicalItemId > 0
-            ? '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ITEM&item_id=' + encodeURIComponent(String(medicalItemId))
-            : careUrl;
+            ? '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ITEM&item_group=medical&item_id=' + encodeURIComponent(String(medicalItemId))
+            : '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ITEM&item_group=medical';
         var complementaryUrl = complementaryItemId > 0
-            ? '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ITEM&item_id=' + encodeURIComponent(String(complementaryItemId))
-            : careUrl;
+            ? '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ITEM&item_group=complementary&item_id=' + encodeURIComponent(String(complementaryItemId))
+            : '/client/app_inbox.php?request_id=' + encodeURIComponent(String(requestId)) + '&thread_type=ITEM&item_group=complementary';
+
+        var $allBtn = $('#client-open-inbox-all');
+        if ($allBtn.length) {
+            $allBtn.attr('href', allUrl);
+        }
+        var $careBtn = $('#client-open-inbox-care');
+        if ($careBtn.length) {
+            $careBtn.attr('href', careUrl);
+        }
 
         var $medicalBtn = $('#client-open-inbox-medical');
         if ($medicalBtn.length) {
@@ -96,8 +106,8 @@
                 info.push('Complementary item #' + complementaryItemId);
             }
             var text = info.length
-                ? ('Buttons route to: ' + info.join(' · '))
-                : 'No item-specific thread found yet. Buttons will open general inbox.';
+                ? ('Available filters: All, MedTravel, ' + info.join(' · '))
+                : 'Available filters: All, MedTravel, Medical, Complementary.';
             $linksBox.find('p.text-muted').text(text);
         }
     }
