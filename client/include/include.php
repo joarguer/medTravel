@@ -31,6 +31,35 @@ function client_current_script()
 
 $currentScript = client_current_script();
 $clientUserId = get_client_user_id();
+
+// ── Terms gate: redirect to acceptance page if client has not yet accepted ────
+// Skips: terms_gate.php itself (avoids infinite loop), AJAX endpoints.
+if ($currentScript !== 'terms_gate.php') {
+    if (!isset($_SESSION['client_terms_accepted'])) {
+        // Lazy DB check — done once per session and then cached in session.
+        $_SESSION['client_terms_accepted'] = 1; // safe default if column missing
+        if (isset($conexion) && $conexion) {
+            $_tcCheck = mysqli_query($conexion, "SHOW COLUMNS FROM `usuarios` LIKE 'terms_accepted'");
+            if ($_tcCheck && mysqli_num_rows($_tcCheck) > 0 && $clientUserId > 0) {
+                $_tcStmt = mysqli_prepare($conexion, "SELECT terms_accepted FROM usuarios WHERE id = ? LIMIT 1");
+                if ($_tcStmt) {
+                    mysqli_stmt_bind_param($_tcStmt, 'i', $clientUserId);
+                    if (mysqli_stmt_execute($_tcStmt)) {
+                        $_tcRes = mysqli_stmt_get_result($_tcStmt);
+                        $_tcRow = $_tcRes ? mysqli_fetch_assoc($_tcRes) : null;
+                        $_SESSION['client_terms_accepted'] = (int)($_tcRow['terms_accepted'] ?? 1);
+                    }
+                    mysqli_stmt_close($_tcStmt);
+                }
+            }
+            unset($_tcCheck, $_tcStmt, $_tcRes, $_tcRow);
+        }
+    }
+    if ((int)($_SESSION['client_terms_accepted'] ?? 1) !== 1) {
+        header('Location: /client/terms_gate.php');
+        exit;
+    }
+}
 $clientName = htmlspecialchars((string)($_SESSION['nombre_usuario'] ?? 'Client'), ENT_QUOTES, 'UTF-8');
 $avatarRaw = trim((string)($_SESSION['avatar'] ?? ''));
 $avatarUrl = '/assets/layouts/layout/img/avatar3.jpg';
