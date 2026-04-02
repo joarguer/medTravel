@@ -19,6 +19,12 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - La trazabilidad de cada item debe soportar historial operativo, responsables, citas y eventos relevantes.
 - La comision o coordination gate es una capacidad comercial complementaria y configurable, no una regla universal del sistema.
 
+### Capacidad documental auxiliar (proyecto satelite)
+
+- MedTravel cuenta con una herramienta satelite separada llamada `generadorDocumentos` para producir documentos HTML editoriales, comerciales u operativos cuando se requieran.
+- Esta capacidad no forma parte hoy del flujo core de paciente, provider o staff dentro del runtime productivo principal de MedTravel.
+- Su integracion al runtime principal solo debe evaluarse si un flujo operativo real del producto exige generacion documental online con datos vivos.
+
 ### Fundamento de experiencia del paciente internacional
 
 - MedTravel no debe modelarse como simple catalogo ni como booking aislado de servicios.

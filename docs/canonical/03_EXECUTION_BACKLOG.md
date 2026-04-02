@@ -39,6 +39,7 @@ Alias al backlog / pasos de ejecución canónico.
 - [ ] Revisar que agenda, Google Calendar y Google Meet se presenten como herramientas de coordinacion de cita y no como sustitutos de la relacion clinica
 - [ ] Revisar que patient journey, Inbox y textos de producto mantengan explicita la frontera entre coordinacion operativa y decision medica
 - [ ] Aplicar revision continua de labels, mensajes guia, CTAs y estados visibles contra esta frontera antes de cerrar cambios funcionales relevantes
+- [ ] Evaluar integracion de generacion documental online solo si el flujo operativo real de MedTravel lo exige (proyecto satelite `generadorDocumentos`)
 
 ### Frente transversal — Experiencia del paciente internacional
 

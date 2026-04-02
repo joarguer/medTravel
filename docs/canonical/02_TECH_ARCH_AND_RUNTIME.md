@@ -27,6 +27,20 @@ Esta capa complementa el runtime existente y redefine el marco tecnico esperado 
 - La relacion de acceso es `provider_medical_staff.linked_user_id → usuarios.id`.
 - La documentacion tecnica no debe asumir que prestador = medico.
 
+## Proyecto satelite de generacion documental: `generadorDocumentos`
+
+### Estado actual
+
+- Existe un proyecto auxiliar separado para generacion de documentos HTML formateados (guias, cuentas de cobro, propuestas y piezas editoriales/operativas).
+- Su arquitectura esta desacoplada para reutilizacion (`templates`, `documents`, `shared`, `assets`, `launcher/index`, JSON por documento).
+- El proyecto esta preparado para evolucionar hacia alimentacion por datos dinamicos.
+
+### Frontera de runtime
+
+- `generadorDocumentos` NO esta integrado hoy al runtime productivo principal de MedTravel.
+- No se declara como modulo core del producto ni como dependencia obligatoria de los flujos actuales de paciente/provider/staff.
+- Cualquier integracion futura debe evaluarse solo si la operacion real de MedTravel exige generacion documental online desde datos vivos del sistema.
+
 ## Arquitectura de identidad y onboarding administrativo del dominio medico
 
 Este frente queda documentado distinguiendo explicitamente estado actual real, decision canónica, deuda tecnica y transicion esperada.

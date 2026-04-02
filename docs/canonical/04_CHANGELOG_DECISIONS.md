@@ -1,5 +1,21 @@
 # Changelog Decisions
 
+## 2026-04-02 — `generadorDocumentos` se mantiene como proyecto auxiliar separado
+
+**Outcome**
+- Se registra oficialmente la existencia de `generadorDocumentos` como herramienta satelite disponible para generar documentos HTML formateados de uso editorial, comercial u operativo.
+- Se deja explicito que su arquitectura desacoplada (templates/documents/shared/assets/launcher + JSON por documento) esta orientada a reutilizacion y preparada para evolucion con datos dinamicos.
+- Se evita documentarlo como capacidad ya integrada al runtime productivo principal de MedTravel.
+
+**Decision**
+- `generadorDocumentos` permanece como proyecto aparte por ahora.
+- No se incorpora como modulo core ni dependencia del flujo actual de paciente, provider o staff.
+- Su integracion futura solo debe evaluarse si una necesidad operativa real del producto exige generacion documental online con datos vivos del sistema.
+
+**Operational effect**
+- El canon de producto y arquitectura debe tratar `generadorDocumentos` como capacidad satelite disponible, no como funcionalidad runtime ya desplegada en MedTravel.
+- El backlog solo mantiene esta linea como evaluacion opcional condicionada por demanda operativa real.
+
 ## 2026-04-02 — Runtime staff reforzado + lifecycle clínico-operativo formalizado
 
 **Commits**: `69e62dc`, `9c05fdb`, `32e2c30`, `87748d4`, `16cac36`
