@@ -3,6 +3,7 @@ require_once __DIR__ . '/admin/include/conexion.php';
 require_once __DIR__ . '/admin/include/password_utils.php';
 require_once __DIR__ . '/admin/include/email_config.php';
 require_once __DIR__ . '/inc/email_template.php';
+require_once __DIR__ . '/inc/public_site_links.php';
 
 function usuarios_column_exists_reset($conexion, $column)
 {
@@ -537,6 +538,10 @@ if ($tokenState === 'expired') {
     $tokenInfoTitle = 'Link expired';
     $tokenInfoText = 'For security reasons, access links expire after 24 hours. You can request a new one below.';
 }
+$showPendingClientTermsNotice = is_array($userByToken) && mt_user_has_pending_client_terms($userByToken);
+$pendingTermsNotice = mt_pending_terms_notice_payload();
+$termsUrl = mt_public_terms_url();
+$privacyUrl = mt_public_privacy_url();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -597,10 +602,17 @@ if ($tokenState === 'expired') {
                     <?php endif; ?>
 
                     <?php if ($showPasswordForm): ?>
-                        <div class="auth-terms-notice">
-                            <strong>First-time access notice</strong>
-                            After you create your password and sign in for the first time, you will be asked to review and accept the MedTravel Terms of Service to complete activation of your patient portal.
-                        </div>
+                        <?php if ($showPendingClientTermsNotice): ?>
+                            <div class="auth-terms-notice">
+                                <strong><?php echo htmlspecialchars((string)$pendingTermsNotice['title'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                                <?php echo htmlspecialchars((string)$pendingTermsNotice['body'], ENT_QUOTES, 'UTF-8'); ?>
+                                <div style="margin-top:8px;">
+                                    <a href="<?php echo htmlspecialchars($termsUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>
+                                    &middot;
+                                    <a href="<?php echo htmlspecialchars($privacyUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                         <h4 style="margin:0 0 12px 0;">Create your password</h4>
                         <form method="post" action="set_password.php">
                             <input type="hidden" name="action" value="set_password">
@@ -616,10 +628,17 @@ if ($tokenState === 'expired') {
                             </div>
                         </form>
                     <?php elseif ($showResendForm): ?>
-                        <div class="auth-terms-notice">
-                            <strong>First-time access notice</strong>
-                            Once you create your password and sign in for the first time, MedTravel will ask you to review and accept the Terms of Service before your patient portal is fully activated.
-                        </div>
+                        <?php if ($showPendingClientTermsNotice): ?>
+                            <div class="auth-terms-notice">
+                                <strong><?php echo htmlspecialchars((string)$pendingTermsNotice['title'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                                <?php echo htmlspecialchars((string)$pendingTermsNotice['body'], ENT_QUOTES, 'UTF-8'); ?>
+                                <div style="margin-top:8px;">
+                                    <a href="<?php echo htmlspecialchars($termsUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>
+                                    &middot;
+                                    <a href="<?php echo htmlspecialchars($privacyUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                         <h4 style="margin:0 0 8px 0;"><?php echo htmlspecialchars($tokenInfoTitle, ENT_QUOTES, 'UTF-8'); ?></h4>
                         <p style="margin:0 0 10px 0; color:#9ca8b4;"><?php echo htmlspecialchars($tokenInfoText, ENT_QUOTES, 'UTF-8'); ?></p>
                         <p style="margin:0 0 12px 0; color:#9ca8b4;">Your patient portal lets you track each requested service status, receive updates, and coordinate your virtual evaluation appointment.</p>

@@ -1,3 +1,96 @@
+<?php
+require_once __DIR__ . '/inc/public_site_links.php';
+
+$publicTermsUrl = mt_public_terms_url();
+$publicPrivacyUrl = mt_public_privacy_url();
+$publicSocialLinks = mt_public_social_links();
+$pendingTermsNotice = mt_pending_terms_notice_payload();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'login_context') {
+    require_once __DIR__ . '/admin/include/conexion.php';
+
+    header('Content-Type: application/json; charset=utf-8');
+
+    $identifier = trim((string)($_POST['username'] ?? ''));
+    if ($identifier === '' || !isset($conexion) || !$conexion) {
+        echo json_encode(['success' => true, 'show_terms_notice' => false]);
+        exit;
+    }
+
+    $loginHasColumn = function ($table, $column) use ($conexion) {
+        static $cache = [];
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, $cache)) {
+            return $cache[$key];
+        }
+        $tableEsc = mysqli_real_escape_string($conexion, $table);
+        $columnEsc = mysqli_real_escape_string($conexion, $column);
+        $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+        $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+        return $cache[$key];
+    };
+
+    $selectParts = [
+        'id',
+        $loginHasColumn('usuarios', 'rol') ? 'rol' : "'' AS rol",
+        $loginHasColumn('usuarios', 'role_id') ? 'role_id' : 'NULL AS role_id',
+        $loginHasColumn('usuarios', 'ppal') ? 'ppal' : '0 AS ppal',
+        $loginHasColumn('usuarios', 'provider_id') ? 'provider_id' : 'NULL AS provider_id',
+        $loginHasColumn('usuarios', 'service_provider_id') ? 'service_provider_id' : 'NULL AS service_provider_id',
+        $loginHasColumn('usuarios', 'terms_accepted') ? 'terms_accepted' : '1 AS terms_accepted',
+        $loginHasColumn('usuarios', 'activo') ? 'activo' : '1 AS activo',
+    ];
+
+    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM usuarios WHERE (usuario = ? OR email = ?)';
+    if ($loginHasColumn('usuarios', 'is_deleted')) {
+        $sql .= ' AND is_deleted = 0';
+    }
+    $sql .= ' ORDER BY id ASC LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        echo json_encode(['success' => true, 'show_terms_notice' => false]);
+        exit;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'ss', $identifier, $identifier);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        echo json_encode(['success' => true, 'show_terms_notice' => false]);
+        exit;
+    }
+
+    $res = mysqli_stmt_get_result($stmt);
+    $userRow = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    $showNotice = false;
+    if (is_array($userRow) && (int)($userRow['activo'] ?? 1) === 1) {
+        $showNotice = mt_user_has_pending_client_terms($userRow);
+    }
+
+    echo json_encode([
+        'success' => true,
+        'show_terms_notice' => $showNotice,
+        'title' => $showNotice ? (string)$pendingTermsNotice['title'] : '',
+        'body' => $showNotice ? (string)$pendingTermsNotice['body'] : '',
+        'terms_url' => $showNotice ? (string)$pendingTermsNotice['terms_url'] : $publicTermsUrl,
+        'privacy_url' => $showNotice ? (string)$pendingTermsNotice['privacy_url'] : $publicPrivacyUrl,
+    ]);
+    exit;
+}
+
+$loginSocialHtml = '';
+foreach ($publicSocialLinks as $social) {
+    $socialUrl = htmlspecialchars((string)($social['url'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $socialLabel = htmlspecialchars((string)($social['label'] ?? 'Social'), ENT_QUOTES, 'UTF-8');
+    $socialIcon = htmlspecialchars((string)($social['icon'] ?? 'fa-share-alt'), ENT_QUOTES, 'UTF-8');
+    if ($socialUrl === '') {
+        continue;
+    }
+    $loginSocialHtml .= '<a class="btn btn-icon-only btn-circle login-social-link" href="' . $socialUrl . '" target="_blank" rel="noopener noreferrer" aria-label="' . $socialLabel . '" title="' . $socialLabel . '"><i class="fa ' . $socialIcon . '"></i></a>';
+}
+?>
 <!DOCTYPE html>
 <html lang="es">
     <!--<![endif]-->
@@ -41,11 +134,43 @@
                 font-size: 13px;
                 line-height: 1.55;
             }
+            .auth-terms-notice.is-hidden {
+                display: none;
+            }
             .auth-terms-notice strong {
                 display: block;
                 margin-bottom: 4px;
                 color: #13357b;
                 font-weight: 700;
+            }
+            .auth-terms-notice .legal-links {
+                margin-top: 8px;
+            }
+            .auth-terms-notice .legal-links a {
+                font-weight: 600;
+            }
+            .login-social-links {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                margin-top: 12px;
+            }
+            .login-social-link {
+                width: 38px;
+                height: 38px;
+                border: 1px solid #d7e2ef;
+                background: #f8fbff;
+                color: #13357b;
+                font-size: 16px;
+                line-height: 38px;
+                transition: all .18s ease;
+            }
+            .login-social-link:hover,
+            .login-social-link:focus {
+                color: #fff;
+                background: #13357b;
+                border-color: #13357b;
             }
         </style>
         <link rel="shortcut icon" href="admin/favicon.ico" /> </head>
@@ -68,16 +193,21 @@
                     <button class="close" data-close="alert"></button>
                     <span> Ingrese su password. </span>
                 </div>
-                <div class="auth-terms-notice">
-                    <strong>First-time access notice</strong>
-                    If this is your first time signing in after activating your account, you will be asked to review and accept the MedTravel Terms of Service before your patient portal is fully activated.
+                <div class="auth-terms-notice is-hidden" id="login-terms-notice">
+                    <strong id="login-terms-notice-title"><?php echo htmlspecialchars((string)$pendingTermsNotice['title'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                    <span id="login-terms-notice-body"></span>
+                    <div class="legal-links">
+                        <a id="login-terms-link" href="<?php echo htmlspecialchars($publicTermsUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Terms and Conditions</a>
+                        &middot;
+                        <a id="login-privacy-link" href="<?php echo htmlspecialchars($publicPrivacyUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                    </div>
                 </div>
                 <div class="form-group">
                     <!--ie8, ie9 does not support html5 placeholder, so we just show field title for that-->
                     <label class="control-label visible-ie8 visible-ie9">Username</label>
                     <div class="input-icon">
                         <i class="fa fa-user"></i>
-                        <input class="form-control placeholder-no-fix" type="text" autocomplete="off" placeholder="Username" name="username" /> </div>
+                        <input class="form-control placeholder-no-fix" type="text" autocomplete="off" placeholder="Username" name="username" id="login-username" /> </div>
                 </div>
                 <div class="form-group">
                     <label class="control-label visible-ie8 visible-ie9">Password</label>
@@ -93,21 +223,10 @@
                     <button type="submit" class="btn green pull-right"> Login </button>
                 </div>
                 <div class="login-options">
-                    <h4>Or login with</h4>
-                    <ul class="social-icons">
-                        <li>
-                            <a class="facebook" data-original-title="facebook" href="javascript:;"> </a>
-                        </li>
-                        <li>
-                            <a class="twitter" data-original-title="Twitter" href="javascript:;"> </a>
-                        </li>
-                        <li>
-                            <a class="googleplus" data-original-title="Goole Plus" href="javascript:;"> </a>
-                        </li>
-                        <li>
-                            <a class="linkedin" data-original-title="Linkedin" href="javascript:;"> </a>
-                        </li>
-                    </ul>
+                    <h4>Connect with MedTravel</h4>
+                    <div class="login-social-links">
+                        <?php echo $loginSocialHtml; ?>
+                    </div>
                 </div>
                 <div class="forget-password">
                     <h4>Forgot your password ?</h4>
@@ -428,8 +547,8 @@
                 <div class="form-group">
                     <label class="mt-checkbox mt-checkbox-outline">
                         <input type="checkbox" name="tnc" /> I agree to the
-                        <a href="javascript:;">Terms of Service </a> &
-                        <a href="javascript:;">Privacy Policy </a>
+                        <a href="<?php echo htmlspecialchars($publicTermsUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Terms of Service </a> &
+                        <a href="<?php echo htmlspecialchars($publicPrivacyUrl, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">Privacy Policy </a>
                         <span></span>
                     </label>
                     <div id="register_tnc_error"> </div>
@@ -467,6 +586,90 @@
         <!-- END PAGE LEVEL SCRIPTS -->
         <!-- BEGIN THEME LAYOUT SCRIPTS -->
         <!-- END THEME LAYOUT SCRIPTS -->
+        <script>
+        (function () {
+            var usernameInput = document.getElementById('login-username');
+            var noticeEl = document.getElementById('login-terms-notice');
+            var titleEl = document.getElementById('login-terms-notice-title');
+            var bodyEl = document.getElementById('login-terms-notice-body');
+            var termsLinkEl = document.getElementById('login-terms-link');
+            var privacyLinkEl = document.getElementById('login-privacy-link');
+            var debounceTimer = null;
+            var lastLookupValue = '';
+            var requestCounter = 0;
+
+            function hideNotice() {
+                if (!noticeEl) {
+                    return;
+                }
+                noticeEl.classList.add('is-hidden');
+            }
+
+            function showNotice(payload) {
+                if (!noticeEl) {
+                    return;
+                }
+                titleEl.textContent = payload.title || 'First-time portal activation';
+                bodyEl.textContent = payload.body || '';
+                termsLinkEl.href = payload.terms_url || '<?php echo htmlspecialchars($publicTermsUrl, ENT_QUOTES, 'UTF-8'); ?>';
+                privacyLinkEl.href = payload.privacy_url || '<?php echo htmlspecialchars($publicPrivacyUrl, ENT_QUOTES, 'UTF-8'); ?>';
+                noticeEl.classList.remove('is-hidden');
+            }
+
+            function lookupPendingTermsNotice() {
+                if (!usernameInput) {
+                    return;
+                }
+
+                var value = (usernameInput.value || '').trim();
+                if (value === '' || value.length < 3) {
+                    lastLookupValue = value;
+                    hideNotice();
+                    return;
+                }
+                if (value === lastLookupValue) {
+                    return;
+                }
+                lastLookupValue = value;
+                requestCounter += 1;
+                var currentRequest = requestCounter;
+
+                $.ajax({
+                    url: window.location.pathname,
+                    method: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'login_context',
+                        username: value
+                    }
+                }).done(function (res) {
+                    if (currentRequest !== requestCounter) {
+                        return;
+                    }
+                    if (res && res.show_terms_notice) {
+                        showNotice(res);
+                    } else {
+                        hideNotice();
+                    }
+                }).fail(function () {
+                    if (currentRequest === requestCounter) {
+                        hideNotice();
+                    }
+                });
+            }
+
+            if (!usernameInput) {
+                return;
+            }
+
+            usernameInput.addEventListener('blur', lookupPendingTermsNotice);
+            usernameInput.addEventListener('change', lookupPendingTermsNotice);
+            usernameInput.addEventListener('input', function () {
+                clearTimeout(debounceTimer);
+                debounceTimer = window.setTimeout(lookupPendingTermsNotice, 220);
+            });
+        }());
+        </script>
     </body>
 
 </html>

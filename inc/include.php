@@ -2,6 +2,7 @@
 include_once(__DIR__ . "/../admin/include/conexion.php");
 include_once(__DIR__ . '/constants.php');
 include_once(__DIR__ . '/booking_form.php');
+require_once __DIR__ . '/public_site_links.php';
 
 // Simple guard to avoid rendering dead/legal placeholder links in the footer.
 function mt_valid_public_page(string $relativePath): bool {
@@ -344,6 +345,18 @@ if ($sitemap_link) {
     $legal_links_html .= '<a href="' . $sitemap_link . '"><i class="fas fa-angle-right me-2"></i> Sitemap</a>';
 }
 
+$public_social_links = mt_public_social_links();
+$footer_social_html = '';
+foreach ($public_social_links as $social) {
+    $socialUrl = htmlspecialchars((string)($social['url'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $socialIcon = htmlspecialchars((string)($social['icon'] ?? 'fa-share-alt'), ENT_QUOTES, 'UTF-8');
+    $socialLabel = htmlspecialchars((string)($social['label'] ?? 'Social'), ENT_QUOTES, 'UTF-8');
+    if ($socialUrl === '') {
+        continue;
+    }
+    $footer_social_html .= '<a class="btn-square btn btn-primary rounded-circle mx-1" href="' . $socialUrl . '" target="_blank" rel="noopener noreferrer" aria-label="' . $socialLabel . '"><i class="fab ' . $socialIcon . '"></i></a>';
+}
+
 $footer = '<div class="container-fluid footer py-5">
     <div class="container py-5">
         <div class="row g-5">
@@ -355,9 +368,7 @@ $footer = '<div class="container-fluid footer py-5">
                     <a href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer" class="mb-3"><i class="fab fa-whatsapp me-2"></i> Whatsapp: +57 350 2431667</a>
                     <div class="d-flex align-items-center">
                         <i class="fas fa-share fa-2x text-white me-2"></i>
-                        <a class="btn-square btn btn-primary rounded-circle mx-1" href="https://www.facebook.com/share/181t1WGHUw/?mibextid=wwXIfr" target="_blank" rel="noopener noreferrer"><i class="fab fa-facebook-f"></i></a>
-                        <a class="btn-square btn btn-primary rounded-circle mx-1" href="https://www.instagram.com/medtravel.usa?igsh=NzJoc2Y1dTdmdDBx&utm_source=qr" target="_blank" rel="noopener noreferrer"><i class="fab fa-instagram"></i></a>
-                        <a class="btn-square btn btn-primary rounded-circle mx-1" href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer"><i class="fab fa-whatsapp"></i></a>
+                        ' . $footer_social_html . '
                     </div>
                 </div>
             </div>
