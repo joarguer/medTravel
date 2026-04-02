@@ -4,10 +4,7 @@ medtravel_session_start();
 include("valida_session.php");
 include_once("conexion.php");
 require_once __DIR__ . '/../../inc/realtime.php';
-$nombre_usuario = isset($_SESSION["nombre_usuario"]) ? $_SESSION["nombre_usuario"] : '';
-//separator
-$nombre_usuario_parts = explode(" ", $nombre_usuario ?: '');
-$nombre_usuario = isset($nombre_usuario_parts[0]) ? $nombre_usuario_parts[0] : '';
+$nombre_usuario = isset($_SESSION["nombre_usuario"]) ? trim((string)$_SESSION["nombre_usuario"]) : '';
 $title = 'MedTravel';
 
 // ROLE FLAGS: determinar permisos de menú
@@ -32,6 +29,37 @@ $es_cliente = (
     && intval($session_role_id) === ROLE_CLIENT
 );
 $is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
+
+if ($is_linked_medical_staff_session && isset($conexion)) {
+    $session_user_id = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+    if ($session_user_id > 0) {
+        $staff_name_sql = 'SELECT full_name FROM provider_medical_staff WHERE linked_user_id = ? LIMIT 1';
+        $stmt_staff_name = mysqli_prepare($conexion, $staff_name_sql);
+        if ($stmt_staff_name) {
+            mysqli_stmt_bind_param($stmt_staff_name, 'i', $session_user_id);
+            if (mysqli_stmt_execute($stmt_staff_name)) {
+                mysqli_stmt_bind_result($stmt_staff_name, $staff_full_name);
+                if (mysqli_stmt_fetch($stmt_staff_name)) {
+                    $staff_full_name = trim((string)$staff_full_name);
+                    if ($staff_full_name !== '') {
+                        $nombre_usuario = $staff_full_name;
+                    }
+                }
+            }
+            mysqli_stmt_close($stmt_staff_name);
+        }
+    }
+}
+
+$nombre_usuario_parts = preg_split('/\s+/', trim((string)$nombre_usuario));
+$nombre_usuario = isset($nombre_usuario_parts[0]) ? (string)$nombre_usuario_parts[0] : '';
+$honorific_tokens = ['dr', 'dr.', 'dra', 'dra.', 'doctor', 'doctora'];
+if ($nombre_usuario !== '' && in_array(strtolower($nombre_usuario), $honorific_tokens, true) && isset($nombre_usuario_parts[1])) {
+    $nombre_usuario = (string)$nombre_usuario_parts[1];
+}
+if ($nombre_usuario === '') {
+    $nombre_usuario = 'User';
+}
 
 $can_view_my_bookings = (
     !$es_admin
