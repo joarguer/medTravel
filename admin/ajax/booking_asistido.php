@@ -114,6 +114,73 @@ if ($action === 'lookup') {
     exit;
 }
 
+// ── action: get_offers ───────────────────────────────────────────────────────
+// Returns active offers for a given service_catalog.id.
+// Mirrors the canonical INNER JOIN used in booking/wizard.php:
+//   provider_service_offers INNER JOIN providers INNER JOIN service_catalog
+
+if ($action === 'get_offers') {
+    $serviceId = (int)($_POST['service_id'] ?? 0);
+    if ($serviceId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'service_id required']);
+        exit;
+    }
+
+    // Verify service exists and is active
+    $stmtSvc = mysqli_prepare($conexion, "SELECT id FROM service_catalog WHERE id = ? AND is_active = 1 LIMIT 1");
+    if (!$stmtSvc) {
+        echo json_encode(['success' => false, 'message' => 'DB error']);
+        exit;
+    }
+    mysqli_stmt_bind_param($stmtSvc, 'i', $serviceId);
+    mysqli_stmt_execute($stmtSvc);
+    $resSvc = mysqli_stmt_get_result($stmtSvc);
+    $svcRow = $resSvc ? mysqli_fetch_assoc($resSvc) : null;
+    mysqli_stmt_close($stmtSvc);
+
+    if (!$svcRow) {
+        echo json_encode(['success' => false, 'message' => 'Service not found or inactive']);
+        exit;
+    }
+
+    // Load offers — canonical query matching wizard.php
+    $offersSql = "SELECT o.id,
+                         COALESCE(NULLIF(o.title,''), sc.name, CONCAT('Offer #',o.id)) AS offer_title,
+                         p.name AS provider_name,
+                         COALESCE(o.price_from, 0) AS price_from,
+                         COALESCE(NULLIF(o.currency,''),'USD') AS currency
+                  FROM provider_service_offers o
+                  INNER JOIN providers p ON p.id = o.provider_id
+                      AND p.is_active = 1 AND p.is_deleted = 0
+                  INNER JOIN service_catalog sc ON sc.id = o.service_id
+                  WHERE o.service_id = ?
+                    AND o.is_active = 1
+                    AND o.is_deleted = 0
+                  ORDER BY p.name ASC, offer_title ASC";
+    $stmtOffers = mysqli_prepare($conexion, $offersSql);
+    if (!$stmtOffers) {
+        echo json_encode(['success' => false, 'message' => 'DB prepare error']);
+        exit;
+    }
+    mysqli_stmt_bind_param($stmtOffers, 'i', $serviceId);
+    mysqli_stmt_execute($stmtOffers);
+    $resOffers = mysqli_stmt_get_result($stmtOffers);
+    $offers = [];
+    while ($resOffers && ($row = mysqli_fetch_assoc($resOffers))) {
+        $offers[] = [
+            'id'       => (int)$row['id'],
+            'title'    => (string)$row['offer_title'],
+            'provider' => (string)$row['provider_name'],
+            'price'    => is_numeric($row['price_from']) ? round((float)$row['price_from'], 2) : 0,
+            'currency' => strtoupper(trim((string)$row['currency'])),
+        ];
+    }
+    mysqli_stmt_close($stmtOffers);
+
+    echo json_encode(['success' => true, 'offers' => $offers, 'service_id' => $serviceId]);
+    exit;
+}
+
 // ── action: submit ────────────────────────────────────────────────────────────
 
 if ($action === 'submit') {
@@ -124,7 +191,7 @@ if ($action === 'submit') {
     $origin         = trim((string)($_POST['origin'] ?? 'agent_assisted'));
     $destination    = trim((string)($_POST['destination'] ?? 'Armenia, Quindío'));
     $persons        = max(1, (int)($_POST['persons'] ?? 1));
-    $category       = trim((string)($_POST['category'] ?? ''));
+    $serviceId      = (int)($_POST['service_id'] ?? 0);
     $specialRequest = trim((string)($_POST['special_request'] ?? ''));
     $timelineFrom   = trim((string)($_POST['timeline_from'] ?? ''));
     $timelineTo     = trim((string)($_POST['timeline_to'] ?? ''));
@@ -144,6 +211,53 @@ if ($action === 'submit') {
     if ($name === '') {
         echo json_encode(['success' => false, 'message' => 'Patient full name is required.']);
         exit;
+    }
+    if ($serviceId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'A medical service must be selected.']);
+        exit;
+    }
+
+    // ── Validate service exists and is active ─────────────────────────────────
+    $stmtSvcCheck = mysqli_prepare($conexion,
+        "SELECT sc.id, sc.name, COALESCE(cat.name,'') AS category_name
+         FROM service_catalog sc
+         LEFT JOIN service_categories cat ON cat.id = sc.category_id
+         WHERE sc.id = ? AND sc.is_active = 1 LIMIT 1"
+    );
+    if (!$stmtSvcCheck) {
+        echo json_encode(['success' => false, 'message' => 'DB error validating service.']);
+        exit;
+    }
+    mysqli_stmt_bind_param($stmtSvcCheck, 'i', $serviceId);
+    mysqli_stmt_execute($stmtSvcCheck);
+    $resSvcCheck = mysqli_stmt_get_result($stmtSvcCheck);
+    $svcCheckRow = $resSvcCheck ? mysqli_fetch_assoc($resSvcCheck) : null;
+    mysqli_stmt_close($stmtSvcCheck);
+
+    if (!$svcCheckRow) {
+        echo json_encode(['success' => false, 'message' => 'Selected service not found or inactive.']);
+        exit;
+    }
+    $category = (string)$svcCheckRow['category_name']; // derived from service catalog — not free text
+
+    // ── Backend validation: each selected offer must belong to the chosen service ─
+    if (!empty($selectedOffers)) {
+        $offerIdsCsv = implode(',', $selectedOffers); // all ints, safe
+        $invalidCheck = mysqli_query($conexion,
+            "SELECT COUNT(*) AS cnt
+             FROM provider_service_offers o
+             INNER JOIN providers p ON p.id = o.provider_id AND p.is_active = 1 AND p.is_deleted = 0
+             INNER JOIN service_catalog sc ON sc.id = o.service_id
+             WHERE o.id IN ({$offerIdsCsv})
+               AND (o.service_id != {$serviceId} OR o.is_active = 0 OR o.is_deleted = 1)"
+        );
+        if ($invalidCheck) {
+            $invalidRow = mysqli_fetch_assoc($invalidCheck);
+            if ((int)($invalidRow['cnt'] ?? 0) > 0) {
+                echo json_encode(['success' => false, 'message' => 'One or more selected offers do not belong to the chosen service or are no longer active.']);
+                exit;
+            }
+        }
     }
 
     // ── Build timeline string ─────────────────────────────────────────────────
