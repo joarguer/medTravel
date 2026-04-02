@@ -505,6 +505,8 @@ if ($categoriesRes) {
                 resultEl.innerHTML = '<span class="text-success"><i class="fa fa-check"></i> Existing client: <strong>' + escHtml(res.nombre) + '</strong></span>';
                 if (res.nombre)   document.getElementById('patient_name').value  = res.nombre;
                 if (res.telefono) document.getElementById('patient_phone').value = res.telefono;
+            } else if (res.conflict) {
+                resultEl.innerHTML = '<span class="text-warning"><i class="fa fa-exclamation-triangle"></i> ' + escHtml(res.message || 'This email belongs to an internal MedTravel user.') + '</span>';
             } else {
                 resultEl.innerHTML = '<span class="text-info"><i class="fa fa-user-plus"></i> New patient — account will be created.</span>';
             }
@@ -521,7 +523,11 @@ if ($categoriesRes) {
         btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Creating…';
         $.post('ajax/booking_asistido.php', $(this).serialize() + '&action=submit', function (res) {
             if (res.success) {
-                toastr.success('Booking created. Credentials email sent to patient.');
+                if (res.warning_code) {
+                    toastr.warning(res.message || 'Booking created with warnings.');
+                } else {
+                    toastr.success(res.message || 'Booking created successfully.');
+                }
                 setTimeout(function () { window.location = 'booking_requests.php'; }, 2000);
             } else {
                 toastr.error(res.message || 'Could not create booking. Check fields and try again.');

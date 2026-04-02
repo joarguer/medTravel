@@ -916,35 +916,39 @@ if ($action === 'lookup') {
         ab_json_response(['found' => false]);
     }
 
-    $whereParts = [];
-    $types = '';
-    $params = [];
-    if (ab_has_column($conexion, 'usuarios', 'email')) {
-        $whereParts[] = 'email = ?'; $types .= 's'; $params[] = $email;
-    }
-    if (ab_has_column($conexion, 'usuarios', 'usuario')) {
-        $whereParts[] = 'usuario = ?'; $types .= 's'; $params[] = $email;
-    }
-    if (empty($whereParts)) {
+    $lookup = ab_build_user_lookup($conexion, $email);
+    if (!$lookup) {
         ab_json_response(['found' => false]);
     }
 
-    $sql = "SELECT id, nombre, telefono FROM usuarios WHERE (" . implode(' OR ', $whereParts) . ")";
-    if (ab_has_column($conexion, 'usuarios', 'is_deleted')) $sql .= " AND is_deleted = 0";
-    $sql .= " LIMIT 1";
-
-    $stmt = mysqli_prepare($conexion, $sql);
-    if ($stmt && ab_bind_params($stmt, $types, $params) && mysqli_stmt_execute($stmt)) {
+    $stmt = mysqli_prepare($conexion, $lookup['sql']);
+    if ($stmt && ab_bind_params($stmt, $lookup['types'], $lookup['params']) && mysqli_stmt_execute($stmt)) {
         $res = mysqli_stmt_get_result($stmt);
-        $row = $res ? mysqli_fetch_assoc($res) : null;
+        $rows = [];
+        while ($res && ($row = mysqli_fetch_assoc($res))) {
+            $rows[] = $row;
+        }
         mysqli_stmt_close($stmt);
-        if ($row) {
+
+        $reusable = ab_pick_reusable_user($rows);
+        if ($reusable) {
             ab_json_response([
                 'found'    => true,
-                'id'       => (int)$row['id'],
-                'nombre'   => (string)($row['nombre'] ?? ''),
-                'telefono' => (string)($row['telefono'] ?? ''),
+                'id'       => (int)$reusable['id'],
+                'nombre'   => (string)($reusable['nombre'] ?? ''),
+                'telefono' => (string)($reusable['telefono'] ?? ''),
             ]);
+        }
+
+        foreach ($rows as $row) {
+            if (ab_user_is_privileged($row)) {
+                ab_json_response([
+                    'found' => false,
+                    'conflict' => true,
+                    'code' => 'PATIENT_EMAIL_CONFLICT',
+                    'message' => 'This email belongs to an internal MedTravel user. The booking can be created, but no patient portal account will be linked until a patient email is provided.',
+                ]);
+            }
         }
     } elseif ($stmt) {
         mysqli_stmt_close($stmt);
@@ -1125,26 +1129,30 @@ if ($action === 'submit') {
     $clientUserId = 0;
     $isNewUser = false;
     $resetToken = '';
+    $accountWarningCode = '';
+    $accountWarningMessage = '';
     list($clientUserId, $clientUserError) = ab_find_or_create_client_user($conexion, $email, $name, $phone, $isNewUser, $resetToken);
     if ($clientUserId <= 0) {
         ab_submit_log('client_user_failed email=' . $email . ' error=' . (string)$clientUserError);
         if ($clientUserError === 'privileged_email_conflict') {
-            ab_json_error(
-                'The email belongs to an internal MedTravel user. Use a patient email address or an existing non-admin client account.',
-                409,
-                ['code' => 'PATIENT_EMAIL_CONFLICT']
-            );
+            $accountWarningCode = 'PATIENT_EMAIL_CONFLICT';
+            $accountWarningMessage = 'Booking will be created without linking a patient portal account because this email belongs to an internal MedTravel user.';
+            $clientUserId = 0;
+            $isNewUser = false;
+            $resetToken = '';
         }
-        if ($clientUserError === 'lookup_missing_columns' || $clientUserError === 'missing_required_user_columns') {
+        if ($clientUserId <= 0 && ($clientUserError === 'lookup_missing_columns' || $clientUserError === 'missing_required_user_columns')) {
             ab_json_error('Patient account creation is not available in this environment. Check the usuarios schema.', 500, [
                 'code' => 'PATIENT_ACCOUNT_SCHEMA_ERROR',
                 'detail' => (string)$clientUserError,
             ]);
         }
-        ab_json_error('Failed to create or reuse patient account.', 500, [
-            'code' => 'PATIENT_ACCOUNT_CREATE_FAILED',
-            'detail' => (string)$clientUserError,
-        ]);
+        if ($clientUserId <= 0 && $accountWarningCode === '') {
+            ab_json_error('Failed to create or reuse patient account.', 500, [
+                'code' => 'PATIENT_ACCOUNT_CREATE_FAILED',
+                'detail' => (string)$clientUserError,
+            ]);
+        }
     }
 
     // ── Set password reset token (if new user or to trigger set-password flow) ─
@@ -1350,9 +1358,17 @@ if ($action === 'submit') {
         'client_user_id'   => $clientUserId,
         'is_new_user'      => $isNewUser,
         'items_created'    => count($createdItems),
+        'warning_code'     => $accountWarningCode,
+        'warning_message'  => $accountWarningMessage,
+        'credentials_sent' => ($isNewUser && $clientUserId > 0),
         'message'          => $isNewUser
             ? 'Booking created. Credentials sent to patient.'
-            : 'Booking created. Existing patient account reused.',
+            : ($accountWarningCode !== ''
+                ? 'Booking created. No patient portal account was linked because the email belongs to an internal MedTravel user.'
+                : ($clientUserId > 0
+                    ? 'Booking created. Existing patient account reused.'
+                    : 'Booking created.'))
+        ,
     ]);
 }
 
