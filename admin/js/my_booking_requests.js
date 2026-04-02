@@ -3,6 +3,7 @@
     var activeDetailItemId = 0;
     var activeDetailData = null;
     var cancelledMeetingKeys = {};
+    var pageContext = window.MY_BOOKING_REQUESTS_CONTEXT || {};
 
     $(document).ready(function () {
         initTable();
@@ -45,7 +46,18 @@
                         return '<span class="label label-default">' + escapeHtml(value || '-') + '</span>';
                     }
                 },
-                { data: 'item_name' },
+                {
+                    data: 'item_name',
+                    render: function (value, type, row) {
+                        return escapeHtml(value || '-') + '<br><small class="text-muted">' + escapeHtml(renderOperationalOwnerText(row)) + '</small>';
+                    }
+                },
+                {
+                    data: null,
+                    render: function (row) {
+                        return renderOperationalOwnerCell(row);
+                    }
+                },
                 {
                     data: 'item_status',
                     render: function (value) {
@@ -90,6 +102,7 @@
             var itemId = parseInt($('#provider_reject_item_id').val(), 10) || 0;
             var reason = ($('#provider_reject_reason').val() || '').trim();
             if (itemId <= 0) return;
+            if (!confirmOperationalAction('rechazar este caso')) return;
             if (!reason) {
                 toastr.error('Debes ingresar un motivo de rechazo');
                 return;
@@ -106,6 +119,7 @@
             var startAt = ($('#provider_proposed_start_at').val() || '').trim();
             var endAt = ($('#provider_proposed_end_at').val() || '').trim();
             if (itemId <= 0) return;
+            if (!confirmOperationalAction('proponer una cita')) return;
             if (!notes) {
                 toastr.error('Debes ingresar notas para proponer una cita');
                 return;
@@ -130,6 +144,7 @@
 
         $('#my_booking_detail_modal').on('click', '#btn-modal-provider-confirm', function () {
             if (!activeDetailItemId) return;
+            if (!confirmOperationalAction('aceptar este caso')) return;
             if (!confirm('¿Deseas aceptar este caso?')) return;
             sendProviderAction('provider_confirm', { item_id: activeDetailItemId }, reloadActiveDetail);
         });
@@ -158,6 +173,7 @@
 
         $('#my_booking_detail_modal').on('click', '#btn-modal-cancel-meeting', function () {
             if (!activeDetailItemId) return;
+            if (!confirmOperationalAction('cancelar esta reunión')) return;
             if (!confirm('¿Cancelar esta reunión? El caso seguirá activo para poder reagendar.')) return;
             sendProviderAction('cancel_meeting', { item_id: activeDetailItemId }, reloadActiveDetail, 'Reunión cancelada');
         });
@@ -340,9 +356,59 @@
         activeDetailData.assigned_doctor = payload.assigned_doctor || null;
         activeDetailData.clinic = payload.clinic || null;
         activeDetailData.assigned_staff = payload.assigned_staff || null;
+        activeDetailData.operational_owner_label = payload.operational_owner_label || activeDetailData.operational_owner_label || null;
+        activeDetailData.operational_owner_short_label = payload.operational_owner_short_label || activeDetailData.operational_owner_short_label || null;
+        activeDetailData.operational_owner_role_label_es = payload.operational_owner_role_label_es || activeDetailData.operational_owner_role_label_es || null;
+        activeDetailData.operational_owner_note_es = payload.operational_owner_note_es || activeDetailData.operational_owner_note_es || null;
+        activeDetailData.supervisor_override_required = parseInt(payload.supervisor_override_required, 10) || 0;
+        activeDetailData.supervisor_override_message = payload.supervisor_override_message || '';
+        activeDetailData.linked_staff_auto_claim_available = parseInt(payload.linked_staff_auto_claim_available, 10) || 0;
+        activeDetailData.linked_staff_auto_claim_message = payload.linked_staff_auto_claim_message || '';
         activeDetailData.summary = activeDetailData.summary || {};
         activeDetailData.summary.assigned_doctor = payload.assigned_doctor || null;
+        activeDetailData.summary.operational_owner = payload.operational_owner_short_label || activeDetailData.summary.operational_owner || null;
         rerenderActiveDetail();
+    }
+
+    function renderOperationalOwnerText(row) {
+        row = row || {};
+        return (row.operational_owner_short_label || row.operational_owner_label || row.assigned_doctor || 'Administración del prestador').toString();
+    }
+
+    function renderOperationalOwnerCell(row) {
+        row = row || {};
+        var ownerText = renderOperationalOwnerText(row);
+        var roleLabel = (row.operational_owner_role_label_es || (parseInt(row.assigned_staff_id, 10) > 0 ? 'Staff asignado' : 'Administración del prestador')).toString();
+        var modeLabel = (row.ownership_mode_label_es || '').toString().trim();
+        var modeRole = 'SYSTEM';
+        if (modeLabel === 'Supervisión') {
+            modeRole = 'COORDINATOR';
+        } else if (parseInt(row.assigned_staff_id, 10) > 0) {
+            modeRole = 'DOCTOR';
+        }
+        var html = '<strong>' + escapeHtml(ownerText) + '</strong>';
+        html += '<br><small class="text-muted">' + escapeHtml(roleLabel) + '</small>';
+        if (modeLabel) {
+            html += '<br>' + renderRoleChip(modeRole, modeLabel);
+        }
+        return html;
+    }
+
+    function confirmOperationalAction(actionLabel) {
+        actionLabel = (actionLabel || 'continuar con esta acción').toString();
+        if (!activeDetailData) {
+            return true;
+        }
+
+        if (parseInt(activeDetailData.supervisor_override_required, 10) === 1) {
+            return confirm((activeDetailData.supervisor_override_message || 'Este caso tiene un responsable operativo asignado.') + '\n\n¿Deseas ' + actionLabel + ' en modo supervisión?');
+        }
+
+        if (parseInt(activeDetailData.linked_staff_auto_claim_available, 10) === 1) {
+            return confirm((activeDetailData.linked_staff_auto_claim_message || 'Asumirás este caso como responsable operativo.') + '\n\n¿Deseas continuar?');
+        }
+
+        return true;
     }
 
     function rerenderActiveDetail(tabId) {
@@ -400,7 +466,7 @@
             { label: 'Estado del prestador', value: renderStatusBadge(d.provider_status || d.item_status || 'pending_provider', { label: d.provider_status_label_es || d.item_status_label_es }) },
             { label: 'Estado de la cita', value: renderStatusBadge(appointmentStatus, { label: appointmentLabel }) },
             { label: 'Prestador asignado', value: escapeHtml((d.summary && d.summary.assigned_provider) || d.assigned_provider || 'Sin definir') },
-            { label: 'Médico asignado', value: escapeHtml((d.summary && d.summary.assigned_doctor) || d.assigned_doctor || 'Pendiente de asignación') },
+            { label: 'Responsable operativo', value: escapeHtml((d.summary && d.summary.operational_owner) || d.operational_owner_short_label || d.operational_owner_label || 'Administración del prestador') },
             { label: 'Próxima cita', value: escapeHtml(nextAppointment ? formatDateTime(nextAppointment) : 'Pendiente') }
         ];
 
@@ -429,7 +495,7 @@
 
     function renderWorkflowGuide() {
         var html = '<div class="mt-workflow-guide">';
-        html += '<div class="mt-guide-card"><h6>Este modal</h6><p>Revisa el caso, valida contexto clínico, acepta o rechaza, propone una cita y asigna o reasigna médico.</p></div>';
+        html += '<div class="mt-guide-card"><h6>Este módulo</h6><p>Revisa el caso, define quién lo lleva operativamente y usa solo las acciones que correspondan a tu rol actual.</p></div>';
         html += '<div class="mt-guide-card"><h6>Inbox</h6><p>Habla con el paciente, resuelve dudas, pide documentos y haz seguimiento conversacional del caso.</p></div>';
         html += '<div class="mt-guide-card"><h6>Calendario</h6><p>Propón, confirma o mueve citas desde la agenda para mantener la coordinación ordenada.</p></div>';
         html += '</div>';
@@ -472,6 +538,7 @@
         html += '<div class="col-md-6">';
         html += renderKeyValue('Prestador asignado', (d.summary && d.summary.assigned_provider) || d.assigned_provider || 'Sin definir');
         html += renderKeyValue('Médico asignado', d.assigned_doctor || 'Pendiente de asignación');
+        html += renderKeyValue('Responsable operativo', d.operational_owner_label || 'Administración del prestador / sin asignar');
         html += renderKeyValue('Próxima cita', d.next_appointment && d.next_appointment.start_at ? formatDateTime(d.next_appointment.start_at) : 'Pendiente');
         html += renderKeyValue('Estado de la cita', d.appointment_status_label_es || d.medical_coordination_status_label_es || genericStatusLabelEs(d.appointment_status || d.medical_coordination_status || 'pending'));
         html += renderKeyValue('Creado', formatDateTime(d.booking_created_at || ''));
@@ -491,13 +558,20 @@
         html += '<h5 class="mt-panel-title">Acciones rápidas</h5>';
         html += '<p class="mt-panel-subtitle">Gestiona aquí solo la decisión operativa del caso. La conversación y la agenda se continúan desde sus módulos dedicados.</p>';
         html += '<p class="mt-actions-note" style="margin-top:0;">Estas decisiones corresponden al prestador y su equipo tratante. MedTravel facilita la coordinación operativa.</p>';
+        if (parseInt(d.supervisor_override_required, 10) === 1) {
+            html += '<div class="alert alert-warning" style="margin-top:12px;"><strong>Modo supervisión.</strong> ' + escapeHtml(d.supervisor_override_message || 'Este item ya tiene responsable operativo asignado.') + '</div>';
+        } else if (parseInt(d.linked_staff_auto_claim_available, 10) === 1) {
+            html += '<div class="alert alert-info" style="margin-top:12px;"><strong>Asignación pendiente.</strong> ' + escapeHtml(d.linked_staff_auto_claim_message || 'Si continúas, asumirás este item como responsable operativo.') + '</div>';
+        } else if (d.operational_owner_note_es) {
+            html += '<div class="alert alert-info" style="margin-top:12px;"><strong>Responsabilidad operativa.</strong> ' + escapeHtml(d.operational_owner_note_es) + '</div>';
+        }
 
         if (hasActions) {
             html += '<div class="mt-quick-actions">';
             if (options.canShowLegacyActions) {
-                html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-provider-confirm">Aceptar caso</button>';
-                html += '<button type="button" class="btn btn-danger btn-sm" id="btn-modal-provider-reject">Rechazar caso</button>';
-                html += '<button type="button" class="btn btn-warning btn-sm" id="btn-modal-provider-propose">Proponer cita</button>';
+                html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-provider-confirm">' + escapeHtml(parseInt(d.supervisor_override_required, 10) === 1 ? 'Aceptar como supervisión' : 'Aceptar caso') + '</button>';
+                html += '<button type="button" class="btn btn-danger btn-sm" id="btn-modal-provider-reject">' + escapeHtml(parseInt(d.supervisor_override_required, 10) === 1 ? 'Rechazar como supervisión' : 'Rechazar caso') + '</button>';
+                html += '<button type="button" class="btn btn-warning btn-sm" id="btn-modal-provider-propose">' + escapeHtml(parseInt(d.supervisor_override_required, 10) === 1 ? 'Proponer cita como supervisión' : 'Proponer cita') + '</button>';
             }
             if (canAssignStaff) {
                 html += '<button type="button" class="btn btn-info btn-sm" id="btn-modal-assign-staff"><i class="fa fa-user-md"></i> ' + escapeHtml(parseInt(d.assigned_staff_id, 10) > 0 ? 'Reasignar médico' : 'Asignar médico') + '</button>';
@@ -659,8 +733,10 @@
         html += '<div class="mt-section-head"><h5>Médico / staff</h5></div>';
         html += '<div class="row">';
         html += '<div class="col-md-6">' + renderKeyValue('Médico asignado', d.assigned_doctor || 'Pendiente de asignación') + '</div>';
+        html += '<div class="col-md-6">' + renderKeyValue('Responsable operativo', d.operational_owner_label || 'Administración del prestador / sin asignar') + '</div>';
         html += '<div class="col-md-6">' + renderKeyValue('Clínica / sede', d.clinic || 'Sin definir') + '</div>';
         html += '</div>';
+        html += '<p class="text-muted" style="margin:8px 0 0;">' + escapeHtml(d.operational_owner_note_es || 'La asignación clínica define quién lleva el seguimiento operativo del item.') + '</p>';
         if (parseInt(d.can_assign_staff, 10) === 1) {
             html += '<div class="mt-inline-actions">';
             html += '<span class="mt-inline-label">Asignación clínica</span>';

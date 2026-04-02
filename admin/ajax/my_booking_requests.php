@@ -133,6 +133,59 @@ function normalize_legacy_item_status($status)
     return $status;
 }
 
+function apply_operational_owner_meta($row, $isLinkedMedicalStaffSession, $currentLinkedStaffId = 0)
+{
+    $row = is_array($row) ? $row : [];
+    $currentLinkedStaffId = (int)$currentLinkedStaffId;
+    $assignedStaffId = (int)($row['assigned_staff_id'] ?? 0);
+    $currentStatus = normalize_legacy_item_status($row['current_status'] ?? $row['item_status'] ?? '');
+    $assignedStaff = isset($row['assigned_staff']) && is_array($row['assigned_staff']) ? $row['assigned_staff'] : [];
+    $assignedDoctor = trim((string)($row['assigned_doctor'] ?? $assignedStaff['full_name'] ?? ''));
+    $providerOwnerLabel = 'Administración del prestador / sin asignar';
+    $providerOwnerShortLabel = 'Administración del prestador';
+    $isOperationalOwner = false;
+
+    if ($assignedStaffId > 0) {
+        if ($assignedDoctor === '') {
+            $assignedDoctor = 'Staff asignado';
+        }
+        $row['operational_owner_type'] = 'assigned_staff';
+        $row['operational_owner_label'] = $assignedDoctor;
+        $row['operational_owner_short_label'] = $assignedDoctor;
+        $row['operational_owner_role_label_es'] = 'Staff asignado';
+        $row['operational_owner_note_es'] = 'El ciclo operativo de este item queda a cargo del staff asignado.';
+        $isOperationalOwner = $isLinkedMedicalStaffSession && $currentLinkedStaffId > 0 && $assignedStaffId === $currentLinkedStaffId;
+    } else {
+        $row['operational_owner_type'] = 'provider_admin';
+        $row['operational_owner_label'] = $providerOwnerLabel;
+        $row['operational_owner_short_label'] = $providerOwnerShortLabel;
+        $row['operational_owner_role_label_es'] = 'Administración del prestador';
+        $row['operational_owner_note_es'] = 'Mientras no haya staff asignado, la administración del prestador conserva la responsabilidad operativa.';
+    }
+
+    $row['has_operational_owner_staff'] = $assignedStaffId > 0 ? 1 : 0;
+    $row['current_user_is_operational_owner'] = $isOperationalOwner ? 1 : 0;
+    $row['supervisor_override_required'] = (!$isLinkedMedicalStaffSession && $assignedStaffId > 0) ? 1 : 0;
+    $row['supervisor_override_message'] = (!$isLinkedMedicalStaffSession && $assignedStaffId > 0)
+        ? 'Este item está asignado a ' . $assignedDoctor . '. Como administración del prestador actuarás en modo supervisión si continúas.'
+        : '';
+    $row['linked_staff_auto_claim_available'] = ($isLinkedMedicalStaffSession && $assignedStaffId <= 0 && $currentStatus === 'pending_provider') ? 1 : 0;
+    $row['linked_staff_auto_claim_message'] = ($isLinkedMedicalStaffSession && $assignedStaffId <= 0 && $currentStatus === 'pending_provider')
+        ? 'Este item aún no tiene staff asignado. Si continúas con una acción operativa, quedarás como responsable operativo.'
+        : '';
+    $row['ownership_mode_label_es'] = $row['supervisor_override_required']
+        ? 'Supervisión'
+        : ($isOperationalOwner ? 'Responsable actual' : ($assignedStaffId > 0 ? 'Seguimiento del staff' : 'Sin asignación clínica'));
+
+    if ($isLinkedMedicalStaffSession && $assignedStaffId > 0 && !$isOperationalOwner) {
+        $row['operational_owner_note_es'] = 'Este item está asignado a otro integrante del staff.';
+    } elseif ($isLinkedMedicalStaffSession && $assignedStaffId <= 0) {
+        $row['operational_owner_note_es'] = 'Aún no hay staff asignado. La administración del prestador conserva la responsabilidad hasta que alguien asuma el item.';
+    }
+
+    return $row;
+}
+
 function is_valid_date_ymd($value)
 {
     if ($value === '' || $value === null) {
@@ -1504,7 +1557,7 @@ function is_staff_eligible_for_item_assignment($itemContext, $staffServiceSets)
     return $matchesProviderCatalogService || (!$matchesProviderCatalogService && $matchesLegacyService);
 }
 
-function maybe_assign_item_to_current_linked_staff($conexion, $itemId, $providerId, $currentLinkedStaffId, $currentAssignedStaffId, $hasItemAssignedStaffId, $hasItemAssignedAt, $hasItemAssignedByUserId, $hasItemsSoftDelete, $hasRequestsSoftDelete)
+function maybe_assign_item_to_current_linked_staff($conexion, $itemId, $providerId, $currentLinkedStaffId, $currentAssignedStaffId, $hasItemAssignedStaffId, $hasItemAssignedAt, $hasItemAssignedByUserId, $hasItemsSoftDelete, $hasRequestsSoftDelete, $currentStatus = '')
 {
     $itemId = (int)$itemId;
     $providerId = (int)$providerId;
@@ -1520,6 +1573,15 @@ function maybe_assign_item_to_current_linked_staff($conexion, $itemId, $provider
             return ['ok' => false, 'assigned' => false, 'message' => 'item_assigned_to_other_staff', 'status' => 403];
         }
         return ['ok' => true, 'assigned' => false];
+    }
+
+    if (normalize_legacy_item_status($currentStatus) !== 'pending_provider') {
+        return [
+            'ok' => false,
+            'assigned' => false,
+            'message' => 'Este item ya no puede asumirse automáticamente. La administración del prestador debe asignar al responsable operativo.',
+            'status' => 409
+        ];
     }
 
     $staffRow = provider_staff_fetch_basic_row($conexion, $currentLinkedStaffId, $providerId);
@@ -2121,6 +2183,10 @@ if ($action === 'list') {
                 bri.id AS item_id,
                 bri.booking_request_id,
                 bri.item_type,
+                " . ($hasItemsProviderId ? 'bri.provider_id' : 'NULL') . " AS provider_id,
+                {$itemAssignedStaffExpr} AS assigned_staff_id,
+                {$assignedDoctorExpr} AS assigned_doctor,
+                {$clinicExpr} AS clinic,
                 bri.offer_id,
                 bri.medtravel_service_id,
                 CASE
@@ -2173,6 +2239,8 @@ if ($action === 'list') {
         if ($isMedicalProviderSession && isset($row['additional_notes'])) {
             $row['additional_notes'] = strip_medtravel_services_requested_block((string)$row['additional_notes']);
         }
+        $row = provider_staff_apply_assignment_payload($conexion, $row);
+        $row = apply_operational_owner_meta($row, $isLinkedMedicalStaffSession, $currentLinkedStaffId);
         $rows[] = $row;
     }
     mysqli_stmt_close($stmt);
@@ -2469,6 +2537,7 @@ if ($action === 'get_detail') {
     $row['provider_id'] = (int)($row['provider_id'] ?? 0);
     $row['assigned_staff_id'] = (int)($row['assigned_staff_id'] ?? 0);
     $row['can_assign_staff'] = (!$isLinkedMedicalStaffSession && ($row['item_type'] ?? '') === 'medical_offer' && (int)$row['provider_id'] > 0 && ((int)$row['offer_id'] > 0 || (int)$row['service_id'] > 0)) ? 1 : 0;
+    $row = apply_operational_owner_meta($row, $isLinkedMedicalStaffSession, $currentLinkedStaffId);
 
     $row['coordination_unlocked'] = $coordinationFee['unlocked'] ? 1 : 0;
     $row['coordination_actions_locked'] = (!$coordinationFee['unlocked'] && !$isAdminSession) ? 1 : 0;
@@ -2485,6 +2554,7 @@ if ($action === 'get_detail') {
         'coordination_unlocked' => $coordinationFee['unlocked'] ? 'yes' : 'no',
         'assigned_provider' => $row['assigned_provider'] ?? null,
         'assigned_doctor' => $row['assigned_doctor'] ?? null,
+        'operational_owner' => $row['operational_owner_short_label'] ?? null,
         'next_appointment' => isset($row['next_appointment']['start_at']) ? $row['next_appointment']['start_at'] : null,
     ];
     $row['event_log'] = build_detail_event_log($row, $history, $row['messages'], $documents);
@@ -2655,6 +2725,7 @@ if ($action === 'assign_staff') {
         ? (int)$updatedContext['provider_catalog_service_id']
         : null;
     $updatedContext = provider_staff_apply_assignment_payload($conexion, $updatedContext);
+    $updatedContext = apply_operational_owner_meta($updatedContext, $isLinkedMedicalStaffSession, $currentLinkedStaffId);
 
     json_ok([
         'data' => [
@@ -2666,6 +2737,14 @@ if ($action === 'assign_staff') {
             'assigned_staff_id' => (int)($updatedContext['assigned_staff_id'] ?? 0),
             'assigned_doctor' => $updatedContext['assigned_doctor'] ?? null,
             'clinic' => $updatedContext['clinic'] ?? null,
+            'operational_owner_label' => $updatedContext['operational_owner_label'] ?? null,
+            'operational_owner_short_label' => $updatedContext['operational_owner_short_label'] ?? null,
+            'operational_owner_role_label_es' => $updatedContext['operational_owner_role_label_es'] ?? null,
+            'operational_owner_note_es' => $updatedContext['operational_owner_note_es'] ?? null,
+            'supervisor_override_required' => (int)($updatedContext['supervisor_override_required'] ?? 0),
+            'supervisor_override_message' => $updatedContext['supervisor_override_message'] ?? '',
+            'linked_staff_auto_claim_available' => (int)($updatedContext['linked_staff_auto_claim_available'] ?? 0),
+            'linked_staff_auto_claim_message' => $updatedContext['linked_staff_auto_claim_message'] ?? '',
             'assigned_staff' => $updatedContext['assigned_staff'] ?? null,
         ],
     ]);
@@ -2924,7 +3003,8 @@ if ($action === 'send_message') {
                 $hasItemAssignedAt,
                 $hasItemAssignedByUserId,
                 $hasItemsSoftDelete,
-                $hasRequestsSoftDelete
+                $hasRequestsSoftDelete,
+                (string)($itemRow['current_status'] ?? $itemRow['item_status'] ?? '')
             );
             if (empty($assignmentResult['ok'])) {
                 json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
@@ -3066,7 +3146,8 @@ if ($action === 'propose_dates') {
             $hasItemAssignedAt,
             $hasItemAssignedByUserId,
             $hasItemsSoftDelete,
-            $hasRequestsSoftDelete
+            $hasRequestsSoftDelete,
+            (string)($itemRow['current_status'] ?? $itemRow['item_status'] ?? '')
         );
         if (empty($assignmentResult['ok'])) {
             json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
@@ -3247,7 +3328,8 @@ if ($action === 'send_final_decision') {
             $hasItemAssignedAt,
             $hasItemAssignedByUserId,
             $hasItemsSoftDelete,
-            $hasRequestsSoftDelete
+            $hasRequestsSoftDelete,
+            (string)($itemRow['current_status'] ?? $itemRow['item_status'] ?? '')
         );
         if (empty($assignmentResult['ok'])) {
             json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
@@ -3413,7 +3495,8 @@ if ($action === 'send_quick_reply') {
             $hasItemAssignedAt,
             $hasItemAssignedByUserId,
             $hasItemsSoftDelete,
-            $hasRequestsSoftDelete
+            $hasRequestsSoftDelete,
+            (string)($itemRow['current_status'] ?? $itemRow['item_status'] ?? '')
         );
         if (empty($assignmentResult['ok'])) {
             json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));
@@ -3546,7 +3629,8 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
             $hasItemAssignedAt,
             $hasItemAssignedByUserId,
             $hasItemsSoftDelete,
-            $hasRequestsSoftDelete
+            $hasRequestsSoftDelete,
+            (string)($itemRow['current_status'] ?? $itemRow['item_status'] ?? '')
         );
         if (empty($assignmentResult['ok'])) {
             json_err((string)($assignmentResult['message'] ?? 'item_assignment_failed'), (int)($assignmentResult['status'] ?? 409));

@@ -9,6 +9,16 @@ if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
 
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $service_provider_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
+$is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
+
+$page_heading = $is_linked_medical_staff_session ? 'Mis solicitudes asignadas' : 'Mis Solicitudes';
+$page_breadcrumb = $page_heading;
+$page_caption = $is_linked_medical_staff_session ? 'Mis solicitudes asignadas' : 'Solicitudes del prestador';
+$page_intro_title = $is_linked_medical_staff_session ? 'Tu bandeja operativa' : 'Vista operativa del prestador';
+$page_intro_body = $is_linked_medical_staff_session
+    ? 'Aquí verás los casos que ya quedaron bajo tu responsabilidad operativa. Si algún caso nuevo sigue sin staff asignado, la administración del prestador debe asignarlo o podrás asumirlo solo cuando siga realmente pendiente.'
+    : 'Cuando un item ya tiene médico o staff asignado, esa persona debe llevar el seguimiento operativo. Desde esta vista puedes supervisar, asignar o intervenir de forma explícita cuando haga falta.';
+$page_intro_class = $is_linked_medical_staff_session ? 'info' : 'warning';
 
 if ($provider_id <= 0 && $service_provider_id <= 0) {
     http_response_code(403);
@@ -306,6 +316,12 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
             pointer-events: auto;
             opacity: .65;
         }
+        .mt-page-intro {
+            margin-bottom: 18px;
+        }
+        .mt-page-intro .alert {
+            margin-bottom: 0;
+        }
         @media (max-width: 767px) {
             #my_booking_detail_modal .modal-dialog {
                 width: auto;
@@ -337,21 +353,27 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     <div class="container-fluid">
         <div class="page-content">
             <div class="breadcrumbs">
-                <h1>Mis Solicitudes</h1>
+                <h1><?php echo htmlspecialchars($page_heading, ENT_QUOTES, 'UTF-8'); ?></h1>
                 <ol class="breadcrumb">
                     <li><a href="index.php">Inicio</a></li>
-                    <li class="active">Mis Solicitudes</li>
+                    <li class="active"><?php echo htmlspecialchars($page_breadcrumb, ENT_QUOTES, 'UTF-8'); ?></li>
                 </ol>
             </div>
 
             <div class="page-content-container">
                 <div class="row">
                     <div class="col-md-12">
+                        <div class="mt-page-intro">
+                            <div class="alert alert-<?php echo htmlspecialchars($page_intro_class, ENT_QUOTES, 'UTF-8'); ?>">
+                                <strong><?php echo htmlspecialchars($page_intro_title, ENT_QUOTES, 'UTF-8'); ?>.</strong>
+                                <?php echo htmlspecialchars($page_intro_body, ENT_QUOTES, 'UTF-8'); ?>
+                            </div>
+                        </div>
                         <div class="portlet light bordered">
                             <div class="portlet-title">
                                 <div class="caption">
                                     <i class="icon-list font-blue"></i>
-                                    <span class="caption-subject font-blue bold uppercase">Solicitudes asignadas</span>
+                                    <span class="caption-subject font-blue bold uppercase"><?php echo htmlspecialchars($page_caption, ENT_QUOTES, 'UTF-8'); ?></span>
                                 </div>
                                 <div class="actions">
                                     <button class="btn btn-circle btn-icon-only btn-default" id="btn-reload-my-bookings">
@@ -368,6 +390,7 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
                                         <th>Destino / Línea de tiempo</th>
                                         <th>Tipo</th>
                                         <th>Servicio</th>
+                                        <th>Responsable operativo</th>
                                         <th>Estado</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -513,6 +536,11 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
 </div>
 
 <?php echo $theme_layout_script;?>
+<script>
+window.MY_BOOKING_REQUESTS_CONTEXT = {
+    isLinkedMedicalStaffSession: <?php echo $is_linked_medical_staff_session ? 'true' : 'false'; ?>
+};
+</script>
 <script src="../../assets/global/scripts/datatable.js" type="text/javascript"></script>
 <script src="../../assets/global/plugins/datatables/datatables.min.js" type="text/javascript"></script>
 <script src="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>
