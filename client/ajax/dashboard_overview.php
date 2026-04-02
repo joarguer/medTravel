@@ -208,6 +208,11 @@ function client_dashboard_build_actions($booking, $phaseKey)
             'label' => 'Open messages',
             'url' => $itemInboxUrl,
         ];
+    } elseif ($phaseKey === 'post_treatment_follow_up') {
+        $primary = [
+            'label' => 'Open messages',
+            'url' => $itemInboxUrl,
+        ];
     } elseif ($phaseKey === 'treatment_completed') {
         $primary = [
             'label' => 'View case',
@@ -253,6 +258,7 @@ function client_dashboard_build_visible_phase(array $booking)
     $hasAwaitingClient = in_array('awaiting_client', $itemStatuses, true);
     $hasProposedChange = in_array('provider_proposed_change', $itemStatuses, true);
     $hasConfirmed = in_array('provider_confirmed', $itemStatuses, true) || in_array('client_accepted', $itemStatuses, true);
+    $hasPostTreatmentFollowUp = in_array('post_treatment_follow_up', $itemStatuses, true);
     $hasTreatmentCompleted = in_array('treatment_completed', $itemStatuses, true);
     $terminalStatuses = ['provider_rejected', 'client_rejected', 'cancelled'];
     $allTerminal = !empty($itemStatuses) && count(array_diff($itemStatuses, $terminalStatuses)) === 0;
@@ -270,6 +276,11 @@ function client_dashboard_build_visible_phase(array $booking)
         $headline = 'This case has been closed';
         $description = 'This request is no longer active in your portal.';
         $nextStep = 'You can review the details of this case if needed.';
+    } elseif ($hasPostTreatmentFollowUp) {
+        $phaseKey = 'post_treatment_follow_up';
+        $headline = 'We are following up on your recovery';
+        $description = 'Your care team is now in the post-treatment follow-up stage.';
+        $nextStep = 'Please check your messages for follow-up instructions and updates.';
     } elseif ($hasTreatmentCompleted) {
         $phaseKey = 'treatment_completed';
         $headline = 'Your treatment is complete';
@@ -332,6 +343,7 @@ function client_dashboard_phase_priority($phaseKey, $requiresAction)
     }
     $map = [
         'appointment_scheduled' => 80,
+        'post_treatment_follow_up' => 75,
         'treatment_completed' => 70,
         'reviewing' => 60,
         'coordinating' => 50,

@@ -424,6 +424,7 @@ function provider_status_label($status)
         'provider_rejected' => 'Caso rechazado',
         'provider_proposed_change' => 'Cita propuesta',
         'treatment_completed' => 'Tratamiento completado',
+        'post_treatment_follow_up' => 'Seguimiento post tratamiento',
     ];
     $key = trim((string)$status);
     return isset($map[$key]) ? $map[$key] : $key;
@@ -453,6 +454,7 @@ function generic_status_label_es($status)
         'date_confirmed' => 'Cita confirmada',
         'rescheduled' => 'Cita reprogramada',
         'treatment_completed' => 'Tratamiento completado',
+        'post_treatment_follow_up' => 'Seguimiento post tratamiento',
         'completed' => 'Atención realizada',
         'cancelled' => 'Caso cerrado',
         'confirmed' => 'Confirmado',
@@ -488,6 +490,7 @@ function appointment_status_label_es($status)
         'date_confirmed' => 'Cita confirmada',
         'rescheduled' => 'Cita reprogramada',
         'treatment_completed' => 'Tratamiento completado',
+        'post_treatment_follow_up' => 'Seguimiento post tratamiento',
         'completed' => 'Atención realizada',
         'cancelled' => 'Cita cancelada',
         'confirmed' => 'Cita confirmada',
@@ -1704,7 +1707,7 @@ function sync_booking_fee_gate_state($conexion, $bookingRequestId, $hasRequestsS
 
     $statsSql = "SELECT
                     COUNT(*) AS total_count,
-                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted', 'treatment_completed') THEN 1 ELSE 0 END) AS confirmed_count,
+                          SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted', 'treatment_completed', 'post_treatment_follow_up') THEN 1 ELSE 0 END) AS confirmed_count,
                     SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
                  FROM booking_request_items bri
                  WHERE bri.booking_request_id = ?";
@@ -1807,7 +1810,7 @@ function rollup_booking_status($conexion, $bookingRequestId, $hasRequestsSoftDel
 
     $statsSql = "SELECT
                     COUNT(*) AS total_count,
-                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted', 'treatment_completed') THEN 1 ELSE 0 END) AS confirmed_count,
+                          SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted', 'treatment_completed', 'post_treatment_follow_up') THEN 1 ELSE 0 END) AS confirmed_count,
                     SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
                  FROM booking_request_items bri
                  WHERE bri.booking_request_id = ?";
@@ -1942,6 +1945,7 @@ $canonicalItemStatuses = [
     'awaiting_client',
     'client_accepted',
     'treatment_completed',
+    'post_treatment_follow_up',
     'client_rejected',
     'cancelled',
 ];
@@ -1950,6 +1954,7 @@ $providerAllowedTargets = [
     'provider_rejected',
     'provider_proposed_change',
     'treatment_completed',
+    'post_treatment_follow_up',
 ];
 
 $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
@@ -1976,6 +1981,8 @@ $hasProviderProposedCurrency = table_has_column($conexion, 'booking_request_item
 $hasProviderNotes = table_has_column($conexion, 'booking_request_items', 'provider_notes');
 $hasTreatmentCompletedAt = table_has_column($conexion, 'booking_request_items', 'treatment_completed_at');
 $hasTreatmentCompletedByUserId = table_has_column($conexion, 'booking_request_items', 'treatment_completed_by_user_id');
+$hasFollowUpStartedAt = table_has_column($conexion, 'booking_request_items', 'follow_up_started_at');
+$hasFollowUpStartedByUserId = table_has_column($conexion, 'booking_request_items', 'follow_up_started_by_user_id');
 
 $hasTimelineFrom = table_has_column($conexion, 'booking_requests', 'timeline_from');
 $hasTimelineTo = table_has_column($conexion, 'booking_requests', 'timeline_to');
@@ -3664,9 +3671,18 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     if (!in_array($currentStatus, $canonicalItemStatuses, true)) {
         json_err('invalid_current_status', 409);
     }
-    $allowedCurrentStatuses = ['pending_provider'];
-    if ($targetStatus === 'provider_proposed_change') {
-        $allowedCurrentStatuses[] = 'provider_proposed_change';
+    $allowedCurrentStatuses = [];
+    if ($targetStatus === 'provider_confirmed' || $targetStatus === 'provider_rejected') {
+        $allowedCurrentStatuses = ['pending_provider'];
+    } elseif ($targetStatus === 'provider_proposed_change') {
+        $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change'];
+    } elseif ($targetStatus === 'treatment_completed') {
+        $allowedCurrentStatuses = ['provider_confirmed', 'client_accepted', 'treatment_completed'];
+    } elseif ($targetStatus === 'post_treatment_follow_up') {
+        $allowedCurrentStatuses = ['treatment_completed', 'post_treatment_follow_up'];
+    }
+    if (empty($allowedCurrentStatuses)) {
+        json_err('transition_not_allowed', 403);
     }
     if (!in_array($currentStatus, $allowedCurrentStatuses, true)) {
         json_err('transition_not_allowed_from_' . $currentStatus, 409);
@@ -3701,6 +3717,17 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         }
         if ($hasTreatmentCompletedByUserId && $providerResponseBy !== null) {
             $setParts[] = 'bri.treatment_completed_by_user_id = ?';
+            $types .= 'i';
+            $params[] = $providerResponseBy;
+        }
+    }
+
+    if ($targetStatus === 'post_treatment_follow_up') {
+        if ($hasFollowUpStartedAt) {
+            $setParts[] = 'bri.follow_up_started_at = NOW()';
+        }
+        if ($hasFollowUpStartedByUserId && $providerResponseBy !== null) {
+            $setParts[] = 'bri.follow_up_started_by_user_id = ?';
             $types .= 'i';
             $params[] = $providerResponseBy;
         }

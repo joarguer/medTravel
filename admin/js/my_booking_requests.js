@@ -159,6 +159,16 @@
             }, reloadActiveDetail, 'Tratamiento marcado como completado');
         });
 
+        $('#my_booking_detail_modal').on('click', '#btn-modal-start-post-follow-up', function () {
+            if (!activeDetailItemId) return;
+            if (!confirmOperationalAction('iniciar seguimiento post tratamiento')) return;
+            if (!confirm('¿Deseas iniciar el seguimiento post tratamiento para este item?')) return;
+            sendProviderAction('update_item_status', {
+                item_id: activeDetailItemId,
+                status: 'post_treatment_follow_up'
+            }, reloadActiveDetail, 'Seguimiento post tratamiento iniciado');
+        });
+
         $('#my_booking_detail_modal').on('click', '#btn-modal-provider-reject', function () {
             if (!activeDetailItemId) return;
             $('#provider_reject_item_id').val(activeDetailItemId);
@@ -565,8 +575,10 @@
         var normalizedStatus = normalizeItemStatus(d.item_status || d.provider_status || '');
         var canMarkTreatmentCompleted = ['provider_confirmed', 'client_accepted', 'treatment_completed'].indexOf(normalizedStatus) !== -1;
         var alreadyCompleted = normalizedStatus === 'treatment_completed';
+        var canStartPostFollowUp = ['treatment_completed', 'post_treatment_follow_up'].indexOf(normalizedStatus) !== -1;
+        var alreadyInPostFollowUp = normalizedStatus === 'post_treatment_follow_up';
         var canAssignStaff = parseInt(d.can_assign_staff, 10) === 1;
-        var hasActions = options.canShowLegacyActions || canAssignStaff || canMarkTreatmentCompleted;
+        var hasActions = options.canShowLegacyActions || canAssignStaff || canMarkTreatmentCompleted || canStartPostFollowUp;
         var html = '<div class="mt-panel">';
         html += '<h5 class="mt-panel-title">Acciones rápidas</h5>';
         html += '<p class="mt-panel-subtitle">Gestiona aquí solo la decisión operativa del caso. La conversación y la agenda se continúan desde sus módulos dedicados.</p>';
@@ -588,6 +600,9 @@
             }
             if (canMarkTreatmentCompleted) {
                 html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-mark-treatment-completed"' + (alreadyCompleted ? ' disabled="disabled"' : '') + '><i class="fa fa-check"></i> ' + escapeHtml(alreadyCompleted ? 'Tratamiento completado' : 'Marcar tratamiento completado') + '</button>';
+            }
+            if (canStartPostFollowUp) {
+                html += '<button type="button" class="btn btn-info btn-sm" id="btn-modal-start-post-follow-up"' + (alreadyInPostFollowUp ? ' disabled="disabled"' : '') + '><i class="fa fa-stethoscope"></i> ' + escapeHtml(alreadyInPostFollowUp ? 'Seguimiento post tratamiento activo' : 'Iniciar seguimiento post tratamiento') + '</button>';
             }
             if (canAssignStaff) {
                 html += '<button type="button" class="btn btn-info btn-sm" id="btn-modal-assign-staff"><i class="fa fa-user-md"></i> ' + escapeHtml(parseInt(d.assigned_staff_id, 10) > 0 ? 'Reasignar médico' : 'Asignar médico') + '</button>';
@@ -1043,7 +1058,7 @@
         if (['pending_provider', 'required_pending', 'pending'].indexOf(status) !== -1) css = 'label-warning';
         else if (['provider_confirmed', 'client_accepted', 'paid', 'waived', 'not_applicable', 'disabled_manually', 'date_confirmed', 'doctor_assigned', 'completed', 'treatment_completed'].indexOf(status) !== -1) css = 'label-success';
         else if (['provider_rejected', 'client_rejected', 'cancelled'].indexOf(status) !== -1) css = 'label-danger';
-        else if (['provider_proposed_change', 'awaiting_client', 'provider_reviewing', 'needs_more_info', 'date_proposed', 'rescheduled'].indexOf(status) !== -1) css = 'label-info';
+        else if (['provider_proposed_change', 'awaiting_client', 'provider_reviewing', 'needs_more_info', 'date_proposed', 'rescheduled', 'post_treatment_follow_up'].indexOf(status) !== -1) css = 'label-info';
         var label = options.label || genericStatusLabelEs(status);
         return '<span class="label ' + css + '">' + escapeHtml(label || '-') + '</span>';
     }
@@ -1129,6 +1144,7 @@
             date_confirmed: 'Cita confirmada',
             rescheduled: 'Cita reprogramada',
             treatment_completed: 'Tratamiento completado',
+            post_treatment_follow_up: 'Seguimiento post tratamiento',
             completed: 'Atención realizada',
             cancelled: 'Caso cerrado',
             confirmed: 'Confirmado',
