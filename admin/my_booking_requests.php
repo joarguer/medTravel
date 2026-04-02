@@ -71,6 +71,8 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
         }
         .mt-request-detail .mt-detail-title {
             margin: 0 0 6px;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .mt-request-detail .mt-inline-meta,
         .mt-request-detail .mt-header-actions,
@@ -87,7 +89,7 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
         }
         .mt-request-detail .mt-header-summary {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
             gap: 10px;
             margin-top: 14px;
         }
@@ -97,10 +99,22 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
             background: #fff;
             padding: 10px 12px;
             min-height: 76px;
+            overflow: hidden;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .mt-request-detail .mt-header-summary-card .mt-summary-label,
         .mt-request-detail .mt-header-summary-card .mt-summary-value {
             margin: 0;
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+        .mt-request-detail .mt-header-summary-card .label {
+            white-space: normal;
+            display: inline-block;
+            max-width: 100%;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .mt-summary-grid {
             display: grid;
@@ -120,10 +134,21 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
             letter-spacing: .05em;
             color: #6b7d90;
             margin-bottom: 6px;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .mt-summary-value {
             font-weight: 600;
             color: #2c3e50;
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+        .mt-summary-value .label {
+            white-space: normal;
+            display: inline-block;
+            max-width: 100%;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .mt-request-detail .mt-workflow-guide {
             display: grid;
@@ -197,6 +222,8 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
         .mt-request-detail .mt-panel-subtitle {
             margin: 0 0 12px;
             color: #6b7d90;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         .mt-request-detail .mt-quick-actions {
             display: flex;
