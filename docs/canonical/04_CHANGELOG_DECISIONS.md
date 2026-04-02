@@ -1,5 +1,83 @@
 # Changelog Decisions
 
+## 2026-04-02 — Booking asistido, gate de términos, sincronización item/cita y panel de paciente
+
+**Commits**: `d5f1467`, `7f29902`, `ee33eac`, `fac28a7`, `7f8c60e`, `aa52def`, `fad5bed`, `8e97385`, `59e9093`, `8d2a1bf`, `69f85c3`, `f23b9bf`
+
+**Outcome**
+
+A. **Implementado — Booking asistido por agente (Admin)**
+- Se implementa el flujo completo de creacion de casos por agente interno para pacientes captados via WhatsApp, widget de chat, telefono u otro canal offline.
+- El agente selecciona canal, busca o crea al paciente y elige servicios y ofertas usando el flujo canónico categoria → servicio → oferta.
+- El caso se crea con trazabilidad de origen: `creation_source`, `created_by_agent`, `agent_channel` en `booking_requests`.
+- El paciente creado por agente tiene `terms_accepted = 0`; recibe credenciales por email para completar la aceptacion de Terminos en su primer login.
+- El agente no puede aceptar los Terminos en nombre del paciente; esa accion es exclusiva del paciente.
+- Archivos nuevos: `admin/booking_asistido.php`, `admin/ajax/booking_asistido.php`.
+- Migracion: `sql/2026_04_02_agent_assisted_booking.sql`.
+
+B. **Implementado — Gate de aceptacion de Terminos del cliente**
+- Se implementa una pagina de aceptacion de Terminos obligatoria para clientes creados por agente.
+- `client/terms_gate.php`: pagina con Terminos y Privacidad, requiere aceptacion explicita.
+- `client/ajax/accept_terms.php`: registra IP, user_agent, version y timestamp de aceptacion.
+- `client/include/include.php`: chequeo session-cached que redirige al gate si `terms_accepted = 0`.
+- Nuevas columnas en `usuarios`: `terms_accepted`, `terms_accepted_at`, `terms_version`, `terms_ip`, `terms_user_agent`.
+- Backfill aplicado: clientes existentes con bookings previos aceptados quedan exentos.
+
+C. **Implementado — Flujo canónico categoria → servicio → oferta en booking asistido**
+- El booking asistido aplica exactamente el mismo flujo de dos pasos del wizard publico.
+- Solo aparecen servicios con al menos una oferta activa de un provider activo.
+- AJAX `get_offers` filtra por `service_catalog.id` seleccionado.
+- Backend valida service_id y cada oferta antes de crear el caso.
+- Patron `ab_has_column()` para columnas opcionales tipo `is_deleted` (mirror de `booking/submit.php`).
+
+D. **Implementado — Aviso contextual en login y set_password**
+- `login.php` expone endpoint AJAX `login_context` que detecta clientes ROLE_CLIENT con `terms_accepted = 0`.
+- Se muestra aviso informativo antes / durante el login.
+- `set_password.php` implementa el aviso equivalente.
+- Los social links de login se unificaron con el footer comercial via `inc/public_site_links.php`.
+
+E. **Implementado — Sincronizacion minima item ↔ cita**
+- `inc/google_calendar.php` recibe tres funciones nuevas para sincronizar `item_status` del item con transiciones del evento de calendario.
+- Mapeo: proposed/scheduled → `appointment_proposed`, confirmed → `appointment_confirmed`, cancelled → `appointment_cancelled`, reschedule → `appointment_requested_change`.
+- `google_calendar_sync_booking_request_rollups` agrega estados de items hacia el `booking_request`.
+- Normalizacion: `pending_admin` / `pending_review` → `pending_provider`.
+- Afecta: `admin/ajax/calendar.php`, `client/ajax/calendar.php`, `client/ajax/inbox.php`, `admin/ajax/my_booking_requests.php`.
+
+F. **Implementado — Panel unico simplificado del paciente (Patient Journey Panel)**
+- `client/ajax/dashboard_overview.php`: nuevo endpoint que resuelve resumen de caso, items, nombres de servicio y estados visibles del paciente.
+- `client/index.php` y `client/js/dashboard.js`: actualizados para el nuevo panel unico.
+- La vista del paciente ya no es multi-tab; es un panel lineal de journey simplificado.
+- Resolucion del nombre del item desde `provider_service_offers` → `service_catalog` / `medtravel_services_catalog` con guards para columnas opcionales.
+
+G. **Implementado — Traduccion portal del paciente al ingles**
+- `client/mis_datos.php` migrado semanticamente a "My Profile".
+- Nav links del portal actualizados en `client/include/include.php`.
+
+**Decision operativa aprobada — Ownership por staff asignado (pendiente implementacion tecnica)**
+- Se aprueba que el staff asignado a un item tiende a ser el owner operativo del item despues de la asignacion.
+- La implementacion tecnica (rol `provider_staff`, landing "Mis solicitudes asignadas", scope RBAC) queda como siguiente frente pendiente.
+
+**Decision**
+- Las decisiones A-G quedan registradas como implementadas en produccion a partir de 2026-04-02.
+- El patron `has_column()` guard queda canonizado como practica obligatoria para columnas introducidas por migraciones opcionales.
+- El flujo categoria → servicio → oferta queda canonizado como el unico flujo valido para toda seleccion de oferta en MedTravel (tanto publico como asistido).
+- La separacion entre creacion del caso y aceptacion personal de Terminos queda canonizada como regla legal y operativa infranqueable.
+- El ownership operativo por staff asignado queda aprobado como decision de producto; la implementacion tecnica es el proximo frente.
+
+**Pendientes generados**
+- [ ] `appointment_mode` como atributo estructural del item/cita
+- [ ] `treatment_completed` como hito del lifecycle del item
+- [ ] `post_treatment_follow_up` como hito/tarea del lifecycle del item
+- [ ] Rol tecnico `provider_staff` y landing "Mis solicitudes asignadas"
+- [ ] Scope RBAC por `assigned_staff_id` para acceso del staff al panel
+- [ ] Endurecimiento de admin/inbox donde persiste mezcla semantica entre comunicacion y cambio de estado
+- [ ] Politica de reenvio de credenciales para casos asistidos con gate de terminos pendiente
+
+**Transition note**
+- Los archivos modificados pero no commiteados en el momento de esta canonizacion (`admin/ajax/my_booking_requests.php`, `admin/js/my_booking_requests.js`, `admin/my_booking_requests.php`) representan trabajo en progreso y no deben considerarse como funcionalidad cerrada hasta su commit.
+
+---
+
 ## 2026-03-23 — Aceptación MedTravel no equivale a consentimiento OAuth Google
 
 **Outcome**

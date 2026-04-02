@@ -355,3 +355,113 @@ MedTravel administrators configure the commission terms individually for each pr
 
 If `is_active = 0`, the provider operates with no commission unlock requirement.  
 If `is_active = 1`, the optional commission / coordination gate can be enforced according to the provider agreement.
+
+## Booking asistido por agente (desde 2026-04-02)
+
+MedTravel permite que un agente interno cree un caso en nombre de un paciente captado por canales indirectos (WhatsApp, widget de chat, teléfono u otro canal offline).
+
+### Principios del flujo
+
+- El agente crea el caso desde `admin/booking_asistido.php`.
+- El agente selecciona el canal de captacion, busca o crea al paciente y elige las ofertas aplicando el flujo canónico: categoria → servicio → oferta.
+- El caso se crea con `creation_source = 'agent_assisted'`, `created_by_agent = id del agente` y `agent_channel = canal`.
+- El paciente creado por agente tiene `terms_accepted = 0` porque aun no ha aceptado personalmente los Terminos.
+- El agente no puede aceptar los Terminos en nombre del paciente.
+- Se envia un correo de credenciales al paciente para que acceda al portal y complete la aceptacion.
+
+### Regla legal operativa
+
+- Los casos creados por agente existen como expediente operativo desde el primer momento.
+- El acceso al portal del paciente queda bloqueado hasta que el paciente acepte los Terminos personalmente.
+- Esta separacion entre creacion del caso y aceptacion de terminos es una regla de producto, no solo una restriccion tecnica.
+
+### Trazabilidad de origen
+
+- `booking_requests.creation_source` distingue entre `public_form`, `agent_assisted` y `api`.
+- `booking_requests.created_by_agent` guarda el id del agente que creo el caso.
+- `booking_requests.agent_channel` guarda el canal de captacion.
+- Estas columnas deben mantenerse en futuros reportes y auditorias operativas.
+
+## Gate de aceptacion de terminos del cliente (desde 2026-04-02)
+
+Cuando un paciente accede al portal del cliente por primera vez tras ser creado por un agente, se le presenta obligatoriamente la pagina de aceptacion de Terminos antes de poder navegar.
+
+### Comportamiento implementado
+
+- `client/include/include.php` verifica `usuarios.terms_accepted` en cada request del portal del paciente.
+- Si `terms_accepted = 0`, redirige a `client/terms_gate.php`.
+- `client/terms_gate.php` muestra Terminos y Privacidad y requiere aceptacion explicita del paciente.
+- La aceptacion se registra via `client/ajax/accept_terms.php` con auditoría completa: IP del cliente, user agent, version de terminos y timestamp.
+- Solo despues de aceptar el paciente puede navegar el portal.
+- Los pacientes existentes con bookings previos con `terms_accepted = 1` quedaron exentos via backfill en la migracion `2026_04_02_agent_assisted_booking.sql`.
+
+### Campos de auditoria en `usuarios`
+
+- `terms_accepted` (TINYINT 0/1)
+- `terms_accepted_at` (DATETIME)
+- `terms_version` (VARCHAR, ej: `v1.1`)
+- `terms_ip` (VARCHAR 45)
+- `terms_user_agent` (VARCHAR 255)
+
+### Regla de producto
+
+- MedTravel no puede operar juridicamente en nombre del paciente para aceptar sus Terminos.
+- La aceptacion debe ser un acto voluntario y verificable del paciente, con registro de auditoria.
+- Esta regla no puede relajarse por optimizacion de UX ni por conveniencia operativa.
+
+### Aviso contextual en login y set_password
+
+- `login.php` expone un endpoint AJAX de contexto que detecta si el usuario es ROLE_CLIENT con `terms_accepted = 0`.
+- En ese caso muestra un aviso contextual antes o durante el login orientado al cliente.
+- `set_password.php` muestra el mismo aviso equivalente.
+- El aviso es informativo y no bloquea el login; el bloqueo real ocurre despues dentro del portal.
+
+## Social links unificados (desde 2026-04-02)
+
+- `inc/public_site_links.php` es la fuente unica de verdad para los enlaces sociales del frente publico de MedTravel.
+- Expone funciones: `mt_public_social_links()`, `mt_public_terms_url()`, `mt_public_privacy_url()`.
+- `login.php`, `set_password.php` y el footer comercial consumen desde este archivo.
+- No deben mantenerse listas de redes sociales hardcodeadas en otras paginas; deben migrarse a este helper.
+
+## Panel unico simplificado del paciente (Patient Journey Panel, desde 2026-04-02)
+
+El portal del paciente muestra un panel unico de seguimiento del caso que reemplaza la vista anterior multi-tab.
+
+### Principios de UX del paciente
+
+- El paciente recibe una vista unificada de su caso: resumen, items con estados visibles, citas y timeline.
+- La complejidad operativa interna (pipeline de items, estados tecnicos, roles) no se expone al paciente directamente.
+- El lenguaje del portal del paciente es en ingles.
+- La UX del paciente debe mantenerse simple, comprensible y orientada al journey del proceso medico, no al modelo interno de la plataforma.
+- El paciente no ve la nomenclatura de roles ni la estructura operation / provider / staff; solo ve quien lo atiende, que sigue y cual es el estado de su caso.
+
+### Implementacion
+
+- `client/ajax/dashboard_overview.php`: endpoint que resuelve el resumen del caso, items, nombres de servicio y estados visibles.
+- La resolucion del nombre del item usa: `provider_service_offers` → `service_catalog` o `medtravel_services_catalog` segun el tipo de item.
+- Incluye guards de compatibilidad para columnas opcionales (`is_deleted`, `item_type`, `offer_id`, `medtravel_service_id`).
+- `client/index.php` y `client/js/dashboard.js` actualizados para el nuevo panel.
+
+### Idioma del portal del paciente
+
+- Todo el portal del cliente se presenta en ingles.
+- `client/mis_datos.php` fue renombrada semanticamente a `My Profile` (2026-04-02).
+- Esta regla se aplica a todos los labels, mensajes, titulos y acciones visibles del portal del cliente.
+- Las excepciones solo aplican a datos de contenido editados en espanol por el prestador o por admin (nombres de servicios, notas, etc.).
+
+## Ownership operativo por staff asignado (decision aprobada, implementacion pendiente)
+
+### Decision operativa (aprobada 2026-04-02)
+
+- El staff asignado a un item debe tender a ser el owner operativo de ese item despues de la asignacion.
+- Antes de la asignacion, el owner operativo del item es el provider/admin del prestador.
+- Despues de la asignacion a un staff especifico, las acciones, notificaciones y responsabilidades del item deben dirigirse preferentemente al staff asignado.
+- Esta decision aplica al ciclo de vida operativo del item, no al ambito legal ni contractual, que sigue siendo responsabilidad del provider.
+- Esta regla es de producto y de operacion; la implementacion tecnica en RBAC y en el scope de acceso del staff queda como siguiente frente pendiente.
+
+### Estado actual
+
+- El modelo de datos ya soporta `booking_request_items.assigned_staff_id`.
+- El staff puede ser asignado a un item desde el panel admin.
+- La implementacion de scope de acceso del staff al panel (landing "Mis solicitudes asignadas") y la formalizacion del rol `provider_staff` estan pendientes.
+- Ver backlog frente "Paso 6 — Acceso del staff al panel admin".

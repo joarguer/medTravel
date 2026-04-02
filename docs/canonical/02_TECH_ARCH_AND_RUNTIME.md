@@ -570,3 +570,140 @@ Server → Client
 - File deletion is restricted to managed paths owned by the corresponding module.
 - Replacement uploads remove the previous managed file only when the old path is within the expected module directory.
 - Missing files on disk do not block content updates or deletes.
+
+## Flujo canónico de seleccion de oferta: categoria → servicio → oferta (desde 2026-04-02)
+
+Este flujo es el patron canónico para toda seleccion de oferta en MedTravel, tanto en el wizard publico como en el booking asistido por admin.
+
+### Flujo en dos pasos
+
+**Paso 1 — Selector de servicio (carga inicial)**
+- Se consulta `service_catalog` con INNER JOIN `service_categories`.
+- Solo se muestran servicios que tengan al menos una oferta activa de un provider activo y no eliminado.
+- Orden: `service_categories.sort_order` + `service_catalog.sort_order`.
+- Las ofertas huerfanas (sin vinculo a un servicio valido) no aparecen nunca.
+
+**Paso 2 — AJAX get_offers (por servicio seleccionado)**
+- Se retornan las ofertas del `service_catalog.id` seleccionado.
+- Filtros obligatorios: `provider_service_offers.is_active = 1`, `providers.is_active = 1`.
+- Si existen columnas `is_deleted` (columna opcional en algunos environments), se incluye `is_deleted = 0`.
+- Ver punto "Patron de compatibilidad para columnas opcionales" sobre como se detecta la existencia de `is_deleted`.
+
+**Validacion en backend (submit)**
+- `service_id` es obligatorio y debe existir en `service_catalog` como servicio activo.
+- La categoria se deriva del `service_catalog`, nunca del POST directo.
+- Cada oferta seleccionada se verifica contra `service_id`: debe ser activa, no eliminada y pertenecer al servicio.
+- Si alguna oferta no cumple, el request es rechazado.
+
+### Implementaciones donde aplica este patron
+
+- `booking/wizard.php` + `booking/submit.php` — flujo publico
+- `admin/booking_asistido.php` + `admin/ajax/booking_asistido.php` — booking asistido por agente (implementado 2026-04-02)
+
+### Regla canónica
+
+- Este flujo no debe simplificarse a un listado plano de todas las ofertas sin filtro de servicio.
+- La estructura categoria → servicio → oferta refleja el modelo de negocio real y debe preservarse en todo punto de entrada.
+
+## Patron de compatibilidad para columnas opcionales — has_column guard (desde 2026-04-02)
+
+Algunas columnas como `is_deleted` en `provider_service_offers` y `providers` pueden no existir en environments que no aplicaron la migracion de soft delete.
+
+### Patron implementado
+
+- Antes de incluir condiciones `AND tabla.is_deleted = 0` en las queries, el runtime ejecuta `SHOW COLUMNS FROM tabla LIKE 'is_deleted'`.
+- Si la columna no existe, la condicion se omite sin fallar.
+- Este patron previene errores `Unknown column` en environments parciales sin relajar reglas de negocio.
+
+### Helper asociado
+
+- `ab_has_column($conexion, $tabla, $columna)` en `admin/ajax/booking_asistido.php` (local al modulo).
+- `google_calendar_table_has_column($conexion, $tabla, $columna)` en `inc/google_calendar.php`.
+- `booking/submit.php` implementa el mismo patron como referencia original del proyecto.
+
+### Regla de uso
+
+- Toda nueva query que dependa de columnas introducidas por migraciones opcionales debe aplicar este patron.
+- No debe hardcodearse `AND is_deleted = 0` sin verificar existencia si la columna puede no estar presente.
+
+## Sincronizacion minima item ↔ cita (desde 2026-04-02)
+
+### Funcion y alcance
+
+Se implemento un mecanismo de sincronizacion minima en `inc/google_calendar.php` para mantener el `item_status` de los items alineado con las transiciones de estado del evento de calendario asociado.
+
+### Mapeo canónico evento → estado del item
+
+| Estado del evento de calendar  | Estado resultante en item     |
+|--------------------------------|-------------------------------|
+| `proposed` / `scheduled`       | `appointment_proposed`        |
+| `confirmed`                    | `appointment_confirmed`       |
+| `cancelled`                    | `appointment_cancelled`       |
+| reschedule (proposed/scheduled) | `appointment_requested_change` |
+
+### Funciones implementadas (en `inc/google_calendar.php`)
+
+- `google_calendar_sync_item_status_for_transition($conexion, $itemId, $targetStatus, $options)` — actualiza `item_status` del item y dispara rollup.
+- `google_calendar_sync_booking_request_rollups($conexion, $bookingRequestId)` — agrega estados de todos los items del caso para derivar un estado rollup del booking_request cuando aplique.
+- `google_calendar_sync_item_status_from_event_status($conexion, $itemId, $eventStatus, $options)` — funcion de entrada que mapea `eventStatus` a `targetStatus` y delega a `sync_item_status_for_transition`.
+
+### Normalizacion de estados
+
+- Los estados `pending_admin` y `pending_review` se normalizan a `pending_provider` para compatibilidad con estados legacy.
+- Esta normalizacion aplica tanto en las funciones de sync como en el endpoint del dashboard del paciente.
+
+### Archivos afectados
+
+- `inc/google_calendar.php` — funciones de sync nuevas
+- `admin/ajax/calendar.php` — llama sync en mutaciones de eventos ITEM
+- `client/ajax/calendar.php` — llama sync en mutaciones de eventos ITEM desde el portal del paciente
+- `client/ajax/inbox.php` — usa sync para transiciones de cita disparadas desde el inbox
+- `admin/ajax/my_booking_requests.php` — usa rollup para reflejar estado derivado en listado de solicitudes
+
+### Alcance de esta sincronizacion
+
+- Esta sincronizacion es minima e intencional: mueve `item_status` cuando hay un evento de calendario asociado.
+- No reemplaza las acciones estructuradas del item (aceptar, rechazar, solicitar info, proponer cita).
+- No implementa aun `appointment_mode` ni `treatment_completed` ni `post_treatment_follow_up` como atributos formales del item.
+
+## Nuevo esquema de trazabilidad (migracion 2026_04_02_agent_assisted_booking)
+
+### Columnas nuevas en `booking_requests`
+
+| Columna             | Tipo        | Default          | Descripcion                                               |
+|---------------------|-------------|------------------|-----------------------------------------------------------|
+| `creation_source`   | VARCHAR(20) | `public_form`    | `public_form` / `agent_assisted` / `api`                  |
+| `created_by_agent`  | INT         | NULL             | FK a `usuarios.id`: agente que creo el caso por el cliente |
+| `agent_channel`     | VARCHAR(50) | NULL             | `whatsapp` / `widget_chat` / `phone` / `other`            |
+
+### Columnas nuevas en `usuarios`
+
+| Columna              | Tipo         | Default | Descripcion                                         |
+|----------------------|--------------|---------|-----------------------------------------------------|
+| `terms_accepted`     | TINYINT(1)   | 0       | 1 = usuario acepto personalmente los Terminos       |
+| `terms_accepted_at`  | DATETIME     | NULL    | Timestamp de aceptacion                             |
+| `terms_version`      | VARCHAR(20)  | NULL    | Version de Terminos en el momento de aceptacion    |
+| `terms_ip`           | VARCHAR(45)  | NULL    | IP del cliente al aceptar                           |
+| `terms_user_agent`   | VARCHAR(255) | NULL    | Navegador / dispositivo al aceptar                  |
+
+### Backfill aplicado
+
+- Clientes existentes con bookings previos donde `booking_requests.terms_accepted = 1` recibieron `usuarios.terms_accepted = 1` con valores derivados del booking.
+- Esto evita que clientes activos sean forzados a re-aceptar en su proximo login.
+
+## Componentes de booking asistido por agente (Admin, desde 2026-04-02)
+
+| Archivo                              | Rol                                                               |
+|--------------------------------------|-------------------------------------------------------------------|
+| `admin/booking_asistido.php`         | UI del agente: seleccion de canal, paciente, categoria/servicio/oferta |
+| `admin/ajax/booking_asistido.php`    | Backend: lookup/creacion de usuario, creacion de booking + items, envio de credenciales |
+| `client/terms_gate.php`              | Pagina de aceptacion de Terminos para pacientes recien creados por agente |
+| `client/ajax/accept_terms.php`       | Endpoint AJAX: registra aceptacion de Terminos con auditoria       |
+| `sql/2026_04_02_agent_assisted_booking.sql` | Migracion iterativa con ADD COLUMN IF NOT EXISTS + backfill |
+
+## Social links y URLs publicas compartidas — `inc/public_site_links.php` (desde 2026-04-02)
+
+- `inc/public_site_links.php` es la fuente unica de verdad para enlaces sociales, URL de Terminos y URL de Privacidad del frente publico.
+- Expone: `mt_public_social_links()`, `mt_public_terms_url()`, `mt_public_privacy_url()`, `mt_pending_terms_notice_payload()`.
+- Consumido por `login.php`, `set_password.php` e `inc/include.php`.
+- Nuevos modulos y paginas que requieran estos datos deben importar este helper en lugar de hardcodear los valores.

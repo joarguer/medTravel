@@ -48,6 +48,8 @@ Alias al backlog / pasos de ejecución canónico.
 - DONE 2026-03-22: la propuesta de valor canonica incluye confianza, acompañamiento, coordinacion medica, coordinacion logistica, claridad del proceso, seguridad operativa y continuidad
 - DONE 2026-03-22: se reconoce canónicamente que el paciente puede requerir multiples medicos, multiples citas y continuidad antes, durante y despues del viaje
 - DONE 2026-03-22: se deja asentado que el runtime actual ya cubre parcialmente esta promesa con provider identificado, staff asignable, Inbox, Calendar, detalle de caso y trazabilidad basica
+- DONE 2026-04-02: panel unico simplificado del paciente implementado en `client/index.php` + `client/ajax/dashboard_overview.php` + `client/js/dashboard.js`
+- DONE 2026-04-02: portal del paciente migrado a ingles (`mis_datos.php` → "My Profile"; nav links actualizados)
 
 #### Frentes pendientes para completar la promesa de experiencia
 
@@ -55,9 +57,64 @@ Alias al backlog / pasos de ejecución canónico.
 - [ ] Evolucionar agenda fina por medico / staff asignado
 - [ ] Integrar Google Calendar y Google Meet como extensiones de la cita
 - [ ] Soportar coordinacion multi-medico y multi-provider cuando el caso lo requiera
-- [ ] Dar mayor claridad al journey completo del paciente antes, durante y despues del viaje
+- [x] Dar mayor claridad al journey completo del paciente (DONE 2026-04-02: panel unico Patient Journey implementado)
 - [ ] Mejorar la explicacion visible de quien atiende, como avanza el caso y cual es el siguiente paso para el paciente
 - [ ] Endurecer controles para reducir solapamientos, errores de agenda y quiebres de continuidad clinica u operativa
+
+### Frente especifico — Booking asistido por agente
+
+#### Canon cerrado
+
+- DONE 2026-04-02: booking asistido por agente implementado en `admin/booking_asistido.php` + `admin/ajax/booking_asistido.php`
+- DONE 2026-04-02: flujo canónico categoria → servicio → oferta aplicado en booking asistido (mismo patron que wizard publico)
+- DONE 2026-04-02: trazabilidad de origen del caso: `creation_source`, `created_by_agent`, `agent_channel` en `booking_requests`
+- DONE 2026-04-02: gate de aceptacion de terminos del cliente implementado: `client/terms_gate.php` + `client/ajax/accept_terms.php`
+- DONE 2026-04-02: campos de auditoria de aceptacion: `terms_accepted`, `terms_accepted_at`, `terms_version`, `terms_ip`, `terms_user_agent` en `usuarios`
+- DONE 2026-04-02: aviso contextual en `login.php` y `set_password.php` para clientes con terminos pendientes
+- DONE 2026-04-02: social links y URLs publicas unificados en `inc/public_site_links.php`
+- DONE 2026-04-02: patron has_column guard canonizado para columnas opcionales tipo `is_deleted`
+
+#### Deuda pendiente de este frente
+
+- [ ] Agregar campo `agent_channel` al listado de solicitudes admin para visibilidad operativa del origen del caso
+- [ ] Definir politica de reenvio de credenciales para casos asistidos cuando el email no llega o el paciente no completa el gate
+- [ ] Auditar el flujo de booking asistido cuando el email del paciente ya existe como usuario interno con otro rol
+
+### Frente especifico — Sincronizacion item ↔ cita y atributos pendientes del item
+
+#### Canon cerrado
+
+- DONE 2026-04-02: sincronizacion minima implementada: `google_calendar_sync_item_status_for_transition`, `google_calendar_sync_booking_request_rollups`, `google_calendar_sync_item_status_from_event_status`
+- DONE 2026-04-02: mapeo canónico: proposed/scheduled → `appointment_proposed`, confirmed → `appointment_confirmed`, cancelled → `appointment_cancelled`, reschedule → `appointment_requested_change`
+- DONE 2026-04-02: normalizacion de estados legacy `pending_admin` / `pending_review` → `pending_provider`
+
+#### Atributos del item pendientes de formalizar
+
+- [ ] `appointment_mode` — modalidad presencial / virtual como atributo estructural del item o de la cita
+- [ ] `treatment_completed` — flag o estado que marque la finalizacion clinica del item
+- [ ] `post_treatment_follow_up` — estado o tarea que represente seguimiento post-atencion
+- [ ] Formalizar el pipeline de estados extendido del item para que incluya estos hitos de lifecycle
+
+#### Pendientes de endurecimiento
+
+- [ ] Endurecimiento del admin/inbox donde aun existe mezcla semantica entre acciones de comunicacion y cambios de estado del item
+- [ ] Definir que acciones del inbox pueden disparar sincronizacion de estado del item y cuales son solo comunicacion libre
+
+### Frente especifico — Ownership operativo por staff asignado
+
+#### Decision aprobada (2026-04-02)
+
+- El staff asignado debe tender a ser el owner operativo del item despues de la asignacion.
+- Antes de la asignacion, el owner operativo es el provider/admin del prestador.
+- Esta decision es operativa y de producto; la implementacion tecnica en RBAC y scope de acceso del staff es el siguiente frente.
+
+#### Pendientes de implementacion
+
+- [ ] Formalizar el rol tecnico `provider_staff` (Paso 6 — sin reutilizar ROLE_PROVIDER ni ROLE_PROVIDER_ADMIN)
+- [ ] Implementar landing "Mis solicitudes asignadas" como scope del staff autenticado
+- [ ] Scope duro por `booking_request_items.assigned_staff_id` para el acceso del staff al panel
+- [ ] Notificaciones dirigidas al staff asignado tras la asignacion (email / inbox)
+- [ ] Revisando que el ownership del item se transfiera semanticamente al staff asignado en la UI admin
 
 ### Frente especifico — Servicios medicos, staff y ofertas
 
