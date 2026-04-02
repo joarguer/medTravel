@@ -23,6 +23,7 @@
     };
     var currentThread = null;
     var preferredThread = null;
+    var urlFilterThreadId = '';
     var feeGateActive = false;
     var commissionGateActive = false;
     var freeMessageAllowed = true;
@@ -2268,11 +2269,15 @@
     }
 
     function loadThreads() {
+        var listData = { action: 'list_threads' };
+        if (urlFilterThreadId) {
+            listData.filter_thread_id = urlFilterThreadId;
+        }
         $.ajax({
             url: 'ajax/inbox.php',
             method: 'GET',
             dataType: 'json',
-            data: { action: 'list_threads' }
+            data: listData
         }).done(function (res) {
             if (!res || res.ok !== true) {
                 toastr.error((res && res.message) ? res.message : 'Could not load threads');
@@ -2801,6 +2806,7 @@
         var itemId = parseInt(params.get('item_id') || '0', 10);
         if (threadId) {
             preferredThread = { threadId: threadId };
+            urlFilterThreadId = threadId;
         } else if (requestId > 0 && (threadType === 'CARE' || threadType === 'ITEM')) {
             preferredThread = {
                 requestId: requestId,

@@ -626,6 +626,12 @@ if ($action === 'list_threads') {
     $usuariosTableExists = inbox_table_exists($conexion, 'usuarios');
     $hasUsuariosNombre = $usuariosTableExists && inbox_table_has_column($conexion, 'usuarios', 'nombre');
 
+    // Optional single-thread filter (passed when page was opened with ?thread_id=ITEM:N or CARE:N)
+    $filterThreadRaw = strtoupper(trim((string)($_GET['filter_thread_id'] ?? '')));
+    $filterParsed = $filterThreadRaw !== '' ? inbox_parse_thread_id($filterThreadRaw) : ['ok' => false];
+    $filterItemId = ($filterParsed['ok'] && $filterParsed['thread_type'] === 'ITEM') ? (int)$filterParsed['item_id'] : 0;
+    $filterRequestId = ($filterParsed['ok'] && $filterParsed['thread_type'] === 'CARE') ? (int)$filterParsed['request_id'] : 0;
+
     $patientNameParts = [];
     if ($hasBookingName) {
         $patientNameParts[] = "NULLIF(TRIM(br.name), '')";
@@ -647,7 +653,8 @@ if ($action === 'list_threads') {
         : "'pending_provider'";
     $threads = [];
 
-    if (!empty($scope['is_admin'])) {
+    if (!empty($scope['is_admin']) && $filterItemId <= 0) {
+        // Skip CARE threads entirely when filtering to a specific ITEM thread
         $careSql = "SELECT br.id AS request_id,
                            br.destination,
                            br.created_at,
@@ -657,6 +664,9 @@ if ($action === 'list_threads') {
                     WHERE 1=1";
         if ($hasRequestsSoftDelete) {
             $careSql .= " AND br.is_deleted = 0";
+        }
+        if ($filterRequestId > 0) {
+            $careSql .= " AND br.id = " . $filterRequestId;
         }
         $careSql .= " ORDER BY br.created_at DESC LIMIT " . (int)$limit;
         $careRes = mysqli_query($conexion, $careSql);
@@ -704,6 +714,9 @@ if ($action === 'list_threads') {
         }
         if ($hasRequestsSoftDelete) {
             $itemSql .= " AND br.is_deleted = 0";
+        }
+        if ($filterItemId > 0) {
+            $itemSql .= " AND bri.id = " . $filterItemId;
         }
         $itemSql .= (string)$scope['scope_where'];
         $itemSql .= " ORDER BY br.created_at DESC, bri.id DESC LIMIT " . (int)$limit;
