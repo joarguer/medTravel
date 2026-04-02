@@ -2002,6 +2002,10 @@ $fallbackBooking = [
     'category' => isset($_POST['category']) ? trim((string)$_POST['category']) : '',
     'special_request' => isset($_POST['special_request']) ? trim((string)$_POST['special_request']) : '',
     'preselected_offer' => isset($_POST['preselected_offer']) ? trim((string)$_POST['preselected_offer']) : '',
+    'consent_terms' => isset($_POST['consent_terms']) ? trim((string)$_POST['consent_terms']) : '',
+    'consent_privacy' => isset($_POST['consent_privacy']) ? trim((string)$_POST['consent_privacy']) : '',
+    'consent_insurance' => isset($_POST['consent_insurance']) ? trim((string)$_POST['consent_insurance']) : '',
+    'terms_accepted' => isset($_POST['terms_accepted']) ? trim((string)$_POST['terms_accepted']) : '',
     'utm_source'   => isset($_POST['utm_source'])   ? substr(trim((string)$_POST['utm_source']),   0, 255) : '',
     'utm_medium'   => isset($_POST['utm_medium'])   ? substr(trim((string)$_POST['utm_medium']),   0, 255) : '',
     'utm_campaign' => isset($_POST['utm_campaign']) ? substr(trim((string)$_POST['utm_campaign']), 0, 255) : '',
@@ -2019,6 +2023,22 @@ foreach (['name', 'email', 'phone'] as $contactField) {
     if (isset($fallbackBooking[$contactField]) && $fallbackBooking[$contactField] !== '') {
         $booking[$contactField] = $fallbackBooking[$contactField];
     }
+}
+
+foreach (['consent_terms', 'consent_privacy', 'consent_insurance'] as $consentField) {
+    if (isset($fallbackBooking[$consentField])) {
+        $booking[$consentField] = ($fallbackBooking[$consentField] === '1') ? '1' : '';
+    }
+}
+
+if (
+    (string)($booking['consent_terms'] ?? '') === '1'
+    && (string)($booking['consent_privacy'] ?? '') === '1'
+    && (string)($booking['consent_insurance'] ?? '') === '1'
+) {
+    $booking['terms_accepted'] = '1';
+} elseif (isset($fallbackBooking['terms_accepted'])) {
+    $booking['terms_accepted'] = ($fallbackBooking['terms_accepted'] === '1') ? '1' : '';
 }
 
 if (empty($booking['origin'])) {

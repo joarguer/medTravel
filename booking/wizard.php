@@ -38,6 +38,11 @@ $contact_name = trim((string)($booking['name'] ?? ''));
 $contact_email = trim((string)($booking['email'] ?? ''));
 $contact_phone = trim((string)($booking['phone'] ?? ''));
 $step1_contact_complete = ($contact_name !== '' && $contact_email !== '');
+$consent_terms_checked = ((string)($booking['consent_terms'] ?? '') === '1' || (string)($booking['terms_accepted'] ?? '') === '1');
+$consent_privacy_checked = ((string)($booking['consent_privacy'] ?? '') === '1' || (string)($booking['terms_accepted'] ?? '') === '1');
+$consent_insurance_checked = ((string)($booking['consent_insurance'] ?? '') === '1' || (string)($booking['terms_accepted'] ?? '') === '1');
+$step1_consents_complete = ($consent_terms_checked && $consent_privacy_checked && $consent_insurance_checked);
+$step1_recovery_needed = (!$step1_contact_complete || !$step1_consents_complete);
 
 // Cargar header del wizard desde la base de datos
 $wizard_header = [
@@ -380,6 +385,16 @@ if ($flow === 'addon' && !empty($addon_route)) {
         .contact-gate-message {
             margin-top: 12px;
         }
+        .wizard-consent-list {
+            margin-top: 18px;
+        }
+        .wizard-consent-list .form-check {
+            margin-bottom: 10px;
+        }
+        .wizard-consent-list a {
+            color: #1d4ed8;
+            text-decoration: underline;
+        }
         .wizard-stage { 
             border: 1px solid #e5e7eb; 
             border-radius: 10px; 
@@ -644,8 +659,8 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 <?php echo htmlspecialchars($submission_message ?: 'Please review the form.'); ?>
             </div>
         <?php endif; ?>
-        <div class="wizard-summary<?php echo $step1_contact_complete ? '' : ' is-incomplete'; ?>">
-            <?php if ($step1_contact_complete): ?>
+        <div class="wizard-summary<?php echo $step1_recovery_needed ? ' is-incomplete' : ''; ?>">
+            <?php if (!$step1_recovery_needed): ?>
                 <h2>Step 1 completed</h2>
                 <p>We captured your contact context so we can continue with the wizard.</p>
                 <p><strong>Name:</strong> <?php echo htmlspecialchars($contact_name); ?></p>
@@ -655,10 +670,10 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 <?php endif; ?>
             <?php else: ?>
                 <h2>Step 1 incomplete</h2>
-                <p>We kept your selected service context, but we still need your contact details before submitting.</p>
+                <p>We kept your selected service context, but we still need the required Step 1 details before submitting.</p>
                 <div class="contact-completion-note">
                     <i class="fas fa-exclamation-circle me-2"></i>
-                    Complete <strong>name</strong> and <strong>email</strong> here without restarting the booking flow.
+                    Complete the required contact data and consent items here without restarting the booking flow.
                 </div>
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -674,8 +689,28 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         <input type="tel" class="form-control" id="wizard-contact-phone" value="<?php echo htmlspecialchars($contact_phone, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="tel">
                     </div>
                 </div>
+                <div class="wizard-consent-list">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="wizard-consent-terms" <?php echo $consent_terms_checked ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="wizard-consent-terms">
+                            I agree to the <a href="/terms.php" target="_blank" rel="noopener">Terms of Service</a> and understand that MedTravel acts solely as an intermediary platform.
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="wizard-consent-privacy" <?php echo $consent_privacy_checked ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="wizard-consent-privacy">
+                            I agree to the <a href="/privacy/" target="_blank" rel="noopener">Privacy Policy</a> and consent to the handling of my personal and medical information as described.
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="wizard-consent-insurance" <?php echo $consent_insurance_checked ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="wizard-consent-insurance">
+                            I understand that I am responsible for obtaining travel insurance with appropriate medical coverage for my trip.
+                        </label>
+                    </div>
+                </div>
                 <div id="wizard-contact-gate-message" class="alert alert-warning contact-gate-message mb-0" role="alert">
-                    <i class="fas fa-info-circle me-2"></i>Final submit stays blocked until name and email are completed.
+                    <i class="fas fa-info-circle me-2"></i>Final submit stays blocked until all required Step 1 items are completed.
                 </div>
             <?php endif; ?>
             <?php if (!empty($booking['destination'])): ?>
@@ -691,7 +726,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
             <?php if (!empty($booking['special_request'])): ?>
                 <p><strong>Special request:</strong> <?php echo htmlspecialchars($booking['special_request']); ?></p>
             <?php endif; ?>
-            <?php if (empty($booking) && !$step1_contact_complete): ?>
+            <?php if (empty($booking) && $step1_recovery_needed): ?>
                 <p>No data captured yet.</p>
             <?php endif; ?>
         </div>
@@ -987,12 +1022,16 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         <input type="hidden" name="special_request" id="wizard-hidden-special-request" value="<?php echo isset($booking['special_request']) ? htmlspecialchars((string)$booking['special_request']) : ''; ?>">
                         <input type="hidden" name="preselected_offer" id="wizard-hidden-preselected-offer" value="<?php echo isset($booking['preselected_offer']) ? htmlspecialchars((string)$booking['preselected_offer']) : ''; ?>">
                         <input type="hidden" name="preselected_service" id="wizard-hidden-preselected-service" value="<?php echo isset($booking['preselected_service']) ? htmlspecialchars((string)$booking['preselected_service']) : ''; ?>">
+                        <input type="hidden" name="consent_terms" id="wizard-hidden-consent-terms" value="<?php echo $consent_terms_checked ? '1' : ''; ?>">
+                        <input type="hidden" name="consent_privacy" id="wizard-hidden-consent-privacy" value="<?php echo $consent_privacy_checked ? '1' : ''; ?>">
+                        <input type="hidden" name="consent_insurance" id="wizard-hidden-consent-insurance" value="<?php echo $consent_insurance_checked ? '1' : ''; ?>">
+                        <input type="hidden" name="terms_accepted" id="wizard-hidden-terms-accepted" value="<?php echo $step1_consents_complete ? '1' : ''; ?>">
                         <?php foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $_utmK): ?>
                         <input type="hidden" name="<?php echo $_utmK; ?>" value="<?php echo htmlspecialchars((string)($booking[$_utmK] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                         <?php endforeach; ?>
-                        <?php if (!$step1_contact_complete): ?>
+                        <?php if ($step1_recovery_needed): ?>
                             <div class="alert alert-warning mb-4" role="alert">
-                                <i class="fas fa-user-check me-2"></i>Please complete your contact data above before sending this request.
+                                <i class="fas fa-user-check me-2"></i>Please complete the required Step 1 details above before sending this request.
                             </div>
                         <?php endif; ?>
                         <div class="row g-3">
@@ -1038,7 +1077,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                     <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
                                 <?php endif; ?>
                             </div>
-                            <button type="submit" id="wizard-submit-button" class="btn btn-primary px-4 py-3" <?php echo $step1_contact_complete ? '' : 'disabled'; ?>>
+                            <button type="submit" id="wizard-submit-button" class="btn btn-primary px-4 py-3" <?php echo $step1_recovery_needed ? 'disabled' : ''; ?>>
                                 <i class="fas fa-paper-plane me-2"></i>Submit Request
                             </button>
                         </div>
@@ -1270,14 +1309,33 @@ if ($flow === 'addon' && !empty($addon_route)) {
             return hiddenField ? String(hiddenField.value || '').trim() : '';
         }
 
+        function getConsentFieldValue(fieldName) {
+            const editorField = document.getElementById('wizard-' + fieldName.replace('_', '-'));
+            if (editorField) {
+                return !!editorField.checked;
+            }
+            const hiddenField = document.querySelector('[name="' + fieldName + '"]');
+            return hiddenField ? String(hiddenField.value || '').trim() === '1' : false;
+        }
+
         function isWizardContactComplete() {
             return getContactFieldValue('name') !== '' && getContactFieldValue('email') !== '';
+        }
+
+        function areWizardConsentsComplete() {
+            return getConsentFieldValue('consent_terms')
+                && getConsentFieldValue('consent_privacy')
+                && getConsentFieldValue('consent_insurance');
+        }
+
+        function isWizardStep1Complete() {
+            return isWizardContactComplete() && areWizardConsentsComplete();
         }
 
         function updateWizardContactGateState() {
             const submitButton = document.getElementById('wizard-submit-button');
             if (submitButton) {
-                submitButton.disabled = !isWizardContactComplete();
+                submitButton.disabled = !isWizardStep1Complete();
             }
 
             const gateMessage = document.getElementById('wizard-contact-gate-message');
@@ -1285,14 +1343,14 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 return;
             }
 
-            if (isWizardContactComplete()) {
+            if (isWizardStep1Complete()) {
                 gateMessage.className = 'alert alert-success contact-gate-message mb-0';
-                gateMessage.innerHTML = '<i class="fas fa-check-circle me-2"></i>Contact details ready. Your selected offer and service context remain preserved.';
+                gateMessage.innerHTML = '<i class="fas fa-check-circle me-2"></i>Required Step 1 details are ready. Your selected offer and service context remain preserved.';
                 return;
             }
 
             gateMessage.className = 'alert alert-warning contact-gate-message mb-0';
-            gateMessage.innerHTML = '<i class="fas fa-info-circle me-2"></i>Final submit stays blocked until name and email are completed.';
+            gateMessage.innerHTML = '<i class="fas fa-info-circle me-2"></i>Final submit stays blocked until name, email, and all required consent items are completed.';
         }
 
         function syncWizardContactEditor() {
@@ -1318,6 +1376,16 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 draft.phone = String(phoneField.value || '').trim();
                 setWizardFieldValue('phone', draft.phone);
             }
+            const consentTerms = getConsentFieldValue('consent_terms');
+            const consentPrivacy = getConsentFieldValue('consent_privacy');
+            const consentInsurance = getConsentFieldValue('consent_insurance');
+            draft.consent_terms = consentTerms ? '1' : '';
+            draft.consent_privacy = consentPrivacy ? '1' : '';
+            draft.consent_insurance = consentInsurance ? '1' : '';
+            setWizardFieldValue('consent_terms', draft.consent_terms);
+            setWizardFieldValue('consent_privacy', draft.consent_privacy);
+            setWizardFieldValue('consent_insurance', draft.consent_insurance);
+            setWizardFieldValue('terms_accepted', areWizardConsentsComplete() ? '1' : '');
             saveDraftPayload(draft);
             updateWizardContactGateState();
         }
@@ -1337,6 +1405,20 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 if (value === '') return;
                 field.value = value;
             });
+            [
+                ['consent_terms', 'wizard-consent-terms'],
+                ['consent_privacy', 'wizard-consent-privacy'],
+                ['consent_insurance', 'wizard-consent-insurance']
+            ].forEach(function(tuple) {
+                const fieldName = tuple[0];
+                const fieldId = tuple[1];
+                const field = document.getElementById(fieldId);
+                if (!field) return;
+                const value = String(draft[fieldName] || '').trim();
+                if (value === '1') {
+                    field.checked = true;
+                }
+            });
             syncWizardContactEditor();
         }
 
@@ -1346,6 +1428,12 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 if (!field || field.dataset.mtBound === '1') return;
                 field.dataset.mtBound = '1';
                 field.addEventListener('input', syncWizardContactEditor);
+                field.addEventListener('change', syncWizardContactEditor);
+            });
+            ['wizard-consent-terms', 'wizard-consent-privacy', 'wizard-consent-insurance'].forEach(function(fieldId) {
+                const field = document.getElementById(fieldId);
+                if (!field || field.dataset.mtBound === '1') return;
+                field.dataset.mtBound = '1';
                 field.addEventListener('change', syncWizardContactEditor);
             });
             updateWizardContactGateState();
@@ -1364,6 +1452,10 @@ if ($flow === 'addon' && !empty($addon_route)) {
             setWizardFieldIfEmpty('special_request', draft.special_request || draft.additional_notes);
             setWizardFieldIfEmpty('preselected_offer', draft.preselected_offer);
             setWizardFieldIfEmpty('preselected_service', draft.preselected_service);
+            setWizardFieldIfEmpty('consent_terms', draft.consent_terms);
+            setWizardFieldIfEmpty('consent_privacy', draft.consent_privacy);
+            setWizardFieldIfEmpty('consent_insurance', draft.consent_insurance);
+            setWizardFieldIfEmpty('terms_accepted', draft.terms_accepted);
 
             const preOffer = String(localStorage.getItem(KEY_PRESELECTED_OFFER) || sessionStorage.getItem('preselected_offer_id') || '').trim();
             if (/^\d+$/.test(preOffer)) {
@@ -1655,12 +1747,21 @@ if ($flow === 'addon' && !empty($addon_route)) {
             if (bookingForm) {
                 bookingForm.addEventListener('submit', function(e) {
                     syncWizardContactEditor();
-                    if (!isWizardContactComplete()) {
+                    if (!isWizardStep1Complete()) {
                         e.preventDefault();
                         updateWizardContactGateState();
-                        const missingField = document.getElementById('wizard-contact-name') && getContactFieldValue('name') === ''
-                            ? document.getElementById('wizard-contact-name')
-                            : document.getElementById('wizard-contact-email');
+                        let missingField = null;
+                        if (document.getElementById('wizard-contact-name') && getContactFieldValue('name') === '') {
+                            missingField = document.getElementById('wizard-contact-name');
+                        } else if (document.getElementById('wizard-contact-email') && getContactFieldValue('email') === '') {
+                            missingField = document.getElementById('wizard-contact-email');
+                        } else if (document.getElementById('wizard-consent-terms') && !getConsentFieldValue('consent_terms')) {
+                            missingField = document.getElementById('wizard-consent-terms');
+                        } else if (document.getElementById('wizard-consent-privacy') && !getConsentFieldValue('consent_privacy')) {
+                            missingField = document.getElementById('wizard-consent-privacy');
+                        } else if (document.getElementById('wizard-consent-insurance') && !getConsentFieldValue('consent_insurance')) {
+                            missingField = document.getElementById('wizard-consent-insurance');
+                        }
                         if (missingField) {
                             missingField.focus();
                         }
