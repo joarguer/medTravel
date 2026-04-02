@@ -7,41 +7,81 @@ if (!user_can(PERM_BOOKING_MANAGE)) {
     exit;
 }
 
-// Load service catalog: only services that have at least one valid active offer.
-// Mirrors the canonical INNER JOIN used in booking/wizard.php.
-// is_deleted is checked only when the column actually exists (not in base schema).
-$services = [];
-$_offerHasDeleted    = (bool)mysqli_query($conexion, "SHOW COLUMNS FROM `provider_service_offers` LIKE 'is_deleted'") &&
-                       mysqli_num_rows(mysqli_query($conexion, "SHOW COLUMNS FROM `provider_service_offers` LIKE 'is_deleted'")) > 0;
-$_providerHasDeleted = (bool)mysqli_query($conexion, "SHOW COLUMNS FROM `providers` LIKE 'is_deleted'") &&
-                       mysqli_num_rows(mysqli_query($conexion, "SHOW COLUMNS FROM `providers` LIKE 'is_deleted'")) > 0;
+function ab_page_has_column($conexion, $table, $column)
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
 
-$_offerDeletedCond    = $_offerHasDeleted    ? ' AND o.is_deleted = 0' : '';
-$_providerDeletedCond = $_providerHasDeleted ? ' AND p.is_deleted = 0' : '';
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $columnEsc = mysqli_real_escape_string($conexion, $column);
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+    $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+    return $cache[$key];
+}
 
-$servicesSql = "SELECT sc.id, sc.name,
-                       COALESCE(cat.name,'General') AS category_name,
-                       COALESCE(cat.sort_order,9999) AS cat_sort
-                FROM service_catalog sc
-                INNER JOIN service_categories cat ON cat.id = sc.category_id
-                WHERE sc.is_active = 1
-                  AND EXISTS (
-                      SELECT 1
-                      FROM provider_service_offers o
-                      INNER JOIN providers p ON p.id = o.provider_id
-                          AND p.is_active = 1{$_providerDeletedCond}
-                      WHERE o.service_id = sc.id
-                        AND o.is_active = 1{$_offerDeletedCond}
-                  )
-                ORDER BY cat_sort ASC, cat.name ASC,
-                         COALESCE(sc.sort_order,9999) ASC, sc.name ASC";
-$servicesRes = mysqli_query($conexion, $servicesSql);
-if ($servicesRes) {
-    while ($row = mysqli_fetch_assoc($servicesRes)) {
-        $cat = htmlspecialchars((string)$row['category_name'], ENT_QUOTES, 'UTF-8');
-        $services[$cat][] = [
-            'id'   => (int)$row['id'],
+$categories = [];
+$hasCategoryActive    = ab_page_has_column($conexion, 'service_categories', 'is_active');
+$hasCategoryDeleted   = ab_page_has_column($conexion, 'service_categories', 'is_deleted');
+$hasServiceActive     = ab_page_has_column($conexion, 'service_catalog', 'is_active');
+$hasServiceDeleted    = ab_page_has_column($conexion, 'service_catalog', 'is_deleted');
+$hasOfferDeleted      = ab_page_has_column($conexion, 'provider_service_offers', 'is_deleted');
+$hasProviderDeleted   = ab_page_has_column($conexion, 'providers', 'is_deleted');
+
+$categoryWhereParts = [];
+if ($hasCategoryActive) {
+    $categoryWhereParts[] = 'cat.is_active = 1';
+}
+if ($hasCategoryDeleted) {
+    $categoryWhereParts[] = 'cat.is_deleted = 0';
+}
+$categoryWhereSql = !empty($categoryWhereParts) ? 'WHERE ' . implode(' AND ', $categoryWhereParts) : '';
+
+$serviceJoinConds = [];
+if ($hasServiceActive) {
+    $serviceJoinConds[] = 'sc.is_active = 1';
+}
+if ($hasServiceDeleted) {
+    $serviceJoinConds[] = 'sc.is_deleted = 0';
+}
+$serviceJoinSql = !empty($serviceJoinConds) ? ' AND ' . implode(' AND ', $serviceJoinConds) : '';
+
+$offerJoinSql = ' AND o.is_active = 1';
+if ($hasOfferDeleted) {
+    $offerJoinSql .= ' AND o.is_deleted = 0';
+}
+
+$providerJoinSql = ' AND p.is_active = 1';
+if ($hasProviderDeleted) {
+    $providerJoinSql .= ' AND p.is_deleted = 0';
+}
+
+$categoriesSql = "SELECT
+                    cat.id,
+                    cat.name,
+                    COALESCE(cat.sort_order, 9999) AS sort_order,
+                    COUNT(DISTINCT sc.id) AS service_count,
+                    COUNT(DISTINCT CASE WHEN p.id IS NOT NULL THEN o.id END) AS offer_count
+                  FROM service_categories cat
+                  LEFT JOIN service_catalog sc
+                    ON sc.category_id = cat.id{$serviceJoinSql}
+                  LEFT JOIN provider_service_offers o
+                    ON o.service_id = sc.id{$offerJoinSql}
+                  LEFT JOIN providers p
+                    ON p.id = o.provider_id{$providerJoinSql}
+                  {$categoryWhereSql}
+                  GROUP BY cat.id, cat.name, sort_order
+                  ORDER BY sort_order ASC, cat.name ASC";
+$categoriesRes = mysqli_query($conexion, $categoriesSql);
+if ($categoriesRes) {
+    while ($row = mysqli_fetch_assoc($categoriesRes)) {
+        $categories[] = [
+            'id' => (int)$row['id'],
             'name' => (string)$row['name'],
+            'service_count' => (int)($row['service_count'] ?? 0),
+            'offer_count' => (int)($row['offer_count'] ?? 0),
         ];
     }
 }
@@ -66,6 +106,8 @@ if ($servicesRes) {
         .offer-price { font-size:12px; font-weight:600; color:#2563eb; white-space:nowrap; }
         .terms-warning { background:#fff8e1; border:1px solid #ffe082; border-radius:4px; padding:10px 14px; font-size:13px; color:#7b5800; margin-top:16px; }
         .agent-badge { display:inline-block; background:#e8f4fd; border:1px solid #b8daf8; border-radius:3px; padding:2px 8px; font-size:11px; color:#1a6ca8; font-weight:600; }
+        #services-loading { display:none; color:#888; font-size:13px; padding:8px 0 4px; }
+        #services-empty { display:none; margin-top:8px; }
         #offers-panel { margin-top:12px; min-height:40px; }
         #offers-loading { display:none; color:#888; font-size:13px; padding:8px 0; }
         #offers-empty { display:none; }
@@ -207,33 +249,56 @@ if ($servicesRes) {
 
                                     <!-- Service selection — canonical: category → service → offers -->
                                     <h4 class="form-section">Medical service &amp; offers</h4>
-                                    <?php if (empty($services)): ?>
+                                    <?php if (empty($categories)): ?>
                                         <div class="alert alert-warning">
-                                            No active services with published offers found.
-                                            Please publish at least one offer in the catalog first.
+                                            No active medical categories were found in the real catalog.
+                                            Review `service_categories` and `service_catalog` first.
                                         </div>
                                     <?php else: ?>
                                         <div class="row">
-                                            <div class="col-md-8">
+                                            <div class="col-md-6">
                                                 <div class="form-group">
-                                                    <label>Medical service <span class="required">*</span></label>
-                                                    <select name="service_id" id="service_id" class="form-control" required>
-                                                        <option value="">— Select a service —</option>
-                                                        <?php foreach ($services as $categoryName => $catServices): ?>
-                                                            <optgroup label="<?php echo htmlspecialchars($categoryName, ENT_QUOTES, 'UTF-8'); ?>">
-                                                                <?php foreach ($catServices as $svc): ?>
-                                                                    <option value="<?php echo $svc['id']; ?>">
-                                                                        <?php echo htmlspecialchars($svc['name'], ENT_QUOTES, 'UTF-8'); ?>
-                                                                    </option>
-                                                                <?php endforeach; ?>
-                                                            </optgroup>
+                                                    <label>Category <span class="required">*</span></label>
+                                                    <select name="category_id" id="category_id" class="form-control" required>
+                                                        <option value="">— Select a category —</option>
+                                                        <?php foreach ($categories as $category): ?>
+                                                            <option value="<?php echo (int)$category['id']; ?>">
+                                                                <?php
+                                                                echo htmlspecialchars(
+                                                                    $category['name']
+                                                                    . ($category['service_count'] > 0
+                                                                        ? ' (' . $category['service_count'] . ' services)'
+                                                                        : ' (No active services)'),
+                                                                    ENT_QUOTES,
+                                                                    'UTF-8'
+                                                                );
+                                                                ?>
+                                                            </option>
                                                         <?php endforeach; ?>
                                                     </select>
                                                     <p class="help-block" style="font-size:12px;">
-                                                        Select a service to load available offers from providers.
+                                                        Start from a real category in `service_categories`.
                                                     </p>
                                                 </div>
                                             </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label>Service <span class="required">*</span></label>
+                                                    <select name="service_id" id="service_id" class="form-control" required disabled>
+                                                        <option value="">— Select a service —</option>
+                                                    </select>
+                                                    <p class="help-block" style="font-size:12px;">
+                                                        Services are loaded only from the selected category.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div id="services-loading">
+                                            <i class="fa fa-spinner fa-spin"></i> Loading services…
+                                        </div>
+                                        <div id="services-empty" class="alert alert-warning" style="display:none;">
+                                            No active services are available for this category.
                                         </div>
 
                                         <!-- Offers loaded dynamically once service is selected -->
@@ -242,7 +307,7 @@ if ($servicesRes) {
                                                 <i class="fa fa-spinner fa-spin"></i> Loading offers…
                                             </div>
                                             <div id="offers-empty" class="alert alert-warning" style="display:none;">
-                                                No active offers available for this service. You can still save the case and add offers later.
+                                                Select a service to load active offers.
                                             </div>
                                             <div id="offers-list"></div>
                                         </div>
@@ -282,26 +347,118 @@ if ($servicesRes) {
 (function () {
     'use strict';
 
+    var categorySelect = document.getElementById('category_id');
     var serviceSelect  = document.getElementById('service_id');
+    var servicesLoading = document.getElementById('services-loading');
+    var servicesEmpty = document.getElementById('services-empty');
     var offersLoading  = document.getElementById('offers-loading');
     var offersEmpty    = document.getElementById('offers-empty');
     var offersList     = document.getElementById('offers-list');
 
-    // Load offers when a service is selected
+    function resetOffers(message) {
+        if (!offersList || !offersEmpty) {
+            return;
+        }
+        offersList.innerHTML = '';
+        offersEmpty.textContent = message || 'No active offers available for this service. You can still save the case and add offers later.';
+        offersEmpty.style.display = message ? 'block' : 'none';
+        if (offersLoading) {
+            offersLoading.style.display = 'none';
+        }
+    }
+
+    function resetServices(message) {
+        if (!serviceSelect) {
+            return;
+        }
+        serviceSelect.innerHTML = '<option value="">— Select a service —</option>';
+        serviceSelect.value = '';
+        serviceSelect.disabled = true;
+        if (servicesEmpty) {
+            servicesEmpty.textContent = message || 'No active services are available for this category.';
+            servicesEmpty.style.display = message ? 'block' : 'none';
+        }
+        if (servicesLoading) {
+            servicesLoading.style.display = 'none';
+        }
+        resetOffers('');
+    }
+
+    function loadServices(categoryId) {
+        resetServices('');
+
+        if (!categoryId) {
+            return;
+        }
+
+        servicesLoading.style.display = 'block';
+        $.post('ajax/booking_asistido.php', { action: 'get_services', category_id: categoryId }, function (res) {
+            servicesLoading.style.display = 'none';
+
+            if (!res || !res.success) {
+                resetServices((res && res.message) ? res.message : 'Could not load services for this category.');
+                return;
+            }
+
+            if (!res.services || res.services.length === 0) {
+                resetServices(res.message || 'No active services are available for this category.');
+                return;
+            }
+
+            serviceSelect.disabled = false;
+            res.services.forEach(function (service) {
+                var option = document.createElement('option');
+                option.value = service.id;
+                option.textContent = service.name + (service.offer_count > 0
+                    ? ' (' + service.offer_count + ' active offers)'
+                    : ' (No active offers)');
+                serviceSelect.appendChild(option);
+            });
+
+            resetOffers('');
+        }, 'json').fail(function () {
+            resetServices('Could not load services for this category.');
+            toastr.error('Could not load services. Please try again.');
+        });
+    }
+
+    if (categorySelect) {
+        categorySelect.addEventListener('change', function () {
+            loadServices(this.value);
+        });
+    }
+
     if (serviceSelect) {
         serviceSelect.addEventListener('change', function () {
             var serviceId = this.value;
-            // Clear previous selections
-            offersList.innerHTML = '';
-            offersEmpty.style.display = 'none';
+            var categoryId = categorySelect ? categorySelect.value : '';
 
-            if (!serviceId) return;
+            resetOffers('');
+
+            if (!categoryId) {
+                resetOffers('Select a category first.');
+                return;
+            }
+            if (!serviceId) {
+                resetOffers('');
+                return;
+            }
 
             offersLoading.style.display = 'block';
 
-            $.post('ajax/booking_asistido.php', { action: 'get_offers', service_id: serviceId }, function (res) {
+            $.post('ajax/booking_asistido.php', { action: 'get_offers', category_id: categoryId, service_id: serviceId }, function (res) {
                 offersLoading.style.display = 'none';
-                if (!res.success || !res.offers || res.offers.length === 0) {
+                if (!res || !res.success) {
+                    resetOffers((res && res.message) ? res.message : 'Could not load offers for this service.');
+                    return;
+                }
+                if (!res.offers || res.offers.length === 0) {
+                    resetOffers(res.message || 'No active offers available for this service. You can still save the case and add offers later.');
+                    offersEmpty.style.display = 'block';
+                    return;
+                }
+                offersEmpty.style.display = 'none';
+                if (!offersList) {
                     offersEmpty.style.display = 'block';
                     return;
                 }
@@ -331,7 +488,7 @@ if ($servicesRes) {
                     }
                 });
             }, 'json').fail(function () {
-                offersLoading.style.display = 'none';
+                resetOffers('Could not load offers for this service.');
                 toastr.error('Could not load offers. Please try again.');
             });
         });

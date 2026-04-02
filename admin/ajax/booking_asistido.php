@@ -11,13 +11,57 @@
  * The client must personally accept on first login via the terms gate.
  */
 
+@ini_set('display_errors', 0);
+@ini_set('display_startup_errors', 0);
+
+require_once __DIR__ . '/../include/conexion.php';
+require_once __DIR__ . '/../include/roles.php';
+require_once __DIR__ . '/../include/password_utils.php';
+require_once __DIR__ . '/../include/email_config.php';
+require_once __DIR__ . '/../../inc/email_template.php';
+
+function ab_json_response(array $payload, $status = 200)
+{
+    http_response_code((int)$status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload);
+    exit;
+}
+
+function ab_json_error($message, $status = 400, array $extra = [])
+{
+    ab_json_response(array_merge(['success' => false, 'message' => (string)$message], $extra), $status);
+}
+
+set_exception_handler(function ($e) {
+    error_log('booking_asistido ajax exception: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    ab_json_error('Internal server error.', 500);
+});
+
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if (!$error) {
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array($error['type'], $fatalTypes, true)) {
+        return;
+    }
+
+    error_log('booking_asistido ajax fatal: ' . $error['message'] . ' in ' . $error['file'] . ':' . $error['line']);
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['success' => false, 'message' => 'Internal server error.']);
+});
+
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 
 if (!user_can(PERM_BOOKING_MANAGE)) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Access denied']);
-    exit;
+    ab_json_error('Access denied', 403);
 }
 
 $action = trim((string)($_POST['action'] ?? ''));
@@ -69,13 +113,202 @@ function ab_bind_params($stmt, $types, &$params)
     return call_user_func_array('mysqli_stmt_bind_param', $bind);
 }
 
+function ab_status_conditions($conexion, $table, $alias)
+{
+    $conditions = [];
+    if (ab_has_column($conexion, $table, 'is_active')) {
+        $conditions[] = $alias . '.is_active = 1';
+    }
+    if (ab_has_column($conexion, $table, 'is_deleted')) {
+        $conditions[] = $alias . '.is_deleted = 0';
+    }
+    return $conditions;
+}
+
+function ab_load_category_row($conexion, $categoryId)
+{
+    $categoryId = (int)$categoryId;
+    if ($categoryId <= 0) {
+        return null;
+    }
+
+    $sql = "SELECT cat.id, cat.name
+            FROM service_categories cat
+            WHERE cat.id = ?";
+    $conditions = ab_status_conditions($conexion, 'service_categories', 'cat');
+    if (!empty($conditions)) {
+        $sql .= ' AND ' . implode(' AND ', $conditions);
+    }
+    $sql .= ' LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $categoryId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ?: null;
+}
+
+function ab_load_service_row($conexion, $serviceId, $categoryId = 0)
+{
+    $serviceId = (int)$serviceId;
+    $categoryId = (int)$categoryId;
+    if ($serviceId <= 0) {
+        return null;
+    }
+
+    $sql = "SELECT
+                sc.id,
+                sc.name,
+                sc.category_id,
+                COALESCE(cat.name, '') AS category_name
+            FROM service_catalog sc
+            LEFT JOIN service_categories cat ON cat.id = sc.category_id
+            WHERE sc.id = ?";
+    $types = 'i';
+    $params = [$serviceId];
+
+    if ($categoryId > 0) {
+        $sql .= " AND sc.category_id = ?";
+        $types .= 'i';
+        $params[] = $categoryId;
+    }
+
+    $serviceConditions = ab_status_conditions($conexion, 'service_catalog', 'sc');
+    if (!empty($serviceConditions)) {
+        $sql .= ' AND ' . implode(' AND ', $serviceConditions);
+    }
+
+    $categoryConditions = ab_status_conditions($conexion, 'service_categories', 'cat');
+    if (!empty($categoryConditions)) {
+        $sql .= ' AND ' . implode(' AND ', $categoryConditions);
+    }
+
+    $sql .= ' LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    if (!ab_bind_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return null;
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ?: null;
+}
+
+function ab_fetch_services_for_category($conexion, $categoryId)
+{
+    $categoryId = (int)$categoryId;
+    if ($categoryId <= 0) {
+        return [];
+    }
+
+    $serviceConditions = ab_status_conditions($conexion, 'service_catalog', 'sc');
+    $offerConditions = ab_status_conditions($conexion, 'provider_service_offers', 'o');
+    $providerConditions = ab_status_conditions($conexion, 'providers', 'p');
+    $orderExpr = ab_has_column($conexion, 'service_catalog', 'sort_order') ? 'COALESCE(sc.sort_order, 9999)' : 'sc.id';
+
+    $sql = "SELECT
+                sc.id,
+                sc.name,
+                COUNT(DISTINCT CASE WHEN p.id IS NOT NULL THEN o.id END) AS offer_count
+            FROM service_catalog sc
+            LEFT JOIN provider_service_offers o
+                ON o.service_id = sc.id";
+    if (!empty($offerConditions)) {
+        $sql .= ' AND ' . implode(' AND ', $offerConditions);
+    }
+    $sql .= "
+            LEFT JOIN providers p
+                ON p.id = o.provider_id";
+    if (!empty($providerConditions)) {
+        $sql .= ' AND ' . implode(' AND ', $providerConditions);
+    }
+    $sql .= "
+            WHERE sc.category_id = ?";
+    if (!empty($serviceConditions)) {
+        $sql .= ' AND ' . implode(' AND ', $serviceConditions);
+    }
+    $sql .= "
+            GROUP BY sc.id, sc.name, {$orderExpr}
+            ORDER BY {$orderExpr} ASC, sc.name ASC";
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return [];
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $categoryId);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return [];
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $services = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $services[] = [
+            'id' => (int)$row['id'],
+            'name' => (string)$row['name'],
+            'offer_count' => (int)($row['offer_count'] ?? 0),
+        ];
+    }
+    mysqli_stmt_close($stmt);
+
+    return $services;
+}
+
+function ab_selected_offers_are_valid($conexion, $serviceId, array $selectedOffers)
+{
+    $selectedOffers = array_values(array_unique(array_filter(array_map('intval', $selectedOffers))));
+    if (empty($selectedOffers)) {
+        return true;
+    }
+
+    $idsCsv = implode(',', $selectedOffers);
+    $offerConditions = ab_status_conditions($conexion, 'provider_service_offers', 'o');
+    $providerConditions = ab_status_conditions($conexion, 'providers', 'p');
+
+    $sql = "SELECT COUNT(DISTINCT o.id) AS valid_count
+            FROM provider_service_offers o
+            INNER JOIN providers p ON p.id = o.provider_id
+            WHERE o.id IN ({$idsCsv})
+              AND o.service_id = ?";
+    if (!empty($offerConditions)) {
+        $sql .= ' AND ' . implode(' AND ', $offerConditions);
+    }
+    if (!empty($providerConditions)) {
+        $sql .= ' AND ' . implode(' AND ', $providerConditions);
+    }
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $serviceId);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return false;
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    return (int)($row['valid_count'] ?? 0) === count($selectedOffers);
+}
+
 // ── action: lookup ────────────────────────────────────────────────────────────
 
 if ($action === 'lookup') {
     $email = trim((string)($_POST['email'] ?? ''));
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        echo json_encode(['found' => false]);
-        exit;
+        ab_json_response(['found' => false]);
     }
 
     $whereParts = [];
@@ -87,7 +320,9 @@ if ($action === 'lookup') {
     if (ab_has_column($conexion, 'usuarios', 'usuario')) {
         $whereParts[] = 'usuario = ?'; $types .= 's'; $params[] = $email;
     }
-    if (empty($whereParts)) { echo json_encode(['found' => false]); exit; }
+    if (empty($whereParts)) {
+        ab_json_response(['found' => false]);
+    }
 
     $sql = "SELECT id, nombre, telefono FROM usuarios WHERE (" . implode(' OR ', $whereParts) . ")";
     if (ab_has_column($conexion, 'usuarios', 'is_deleted')) $sql .= " AND is_deleted = 0";
@@ -99,54 +334,67 @@ if ($action === 'lookup') {
         $row = $res ? mysqli_fetch_assoc($res) : null;
         mysqli_stmt_close($stmt);
         if ($row) {
-            echo json_encode([
+            ab_json_response([
                 'found'    => true,
                 'id'       => (int)$row['id'],
                 'nombre'   => (string)($row['nombre'] ?? ''),
                 'telefono' => (string)($row['telefono'] ?? ''),
             ]);
-            exit;
         }
     } elseif ($stmt) {
         mysqli_stmt_close($stmt);
     }
-    echo json_encode(['found' => false]);
-    exit;
+    ab_json_response(['found' => false]);
+}
+
+// ── action: get_services ─────────────────────────────────────────────────────
+
+if ($action === 'get_services') {
+    $categoryId = (int)($_POST['category_id'] ?? 0);
+    if ($categoryId <= 0) {
+        ab_json_error('category_id required');
+    }
+
+    $categoryRow = ab_load_category_row($conexion, $categoryId);
+    if (!$categoryRow) {
+        ab_json_error('Category not found or inactive', 404);
+    }
+
+    $services = ab_fetch_services_for_category($conexion, $categoryId);
+    ab_json_response([
+        'success' => true,
+        'category_id' => $categoryId,
+        'category_name' => (string)$categoryRow['name'],
+        'services' => $services,
+        'message' => empty($services) ? 'No active services are available for this category.' : '',
+    ]);
 }
 
 // ── action: get_offers ───────────────────────────────────────────────────────
-// Returns active offers for a given service_catalog.id.
-// Mirrors the canonical INNER JOIN used in booking/wizard.php:
-//   provider_service_offers INNER JOIN providers INNER JOIN service_catalog
+// Returns active offers for a given category + service pair.
 
 if ($action === 'get_offers') {
+    $categoryId = (int)($_POST['category_id'] ?? 0);
     $serviceId = (int)($_POST['service_id'] ?? 0);
+    if ($categoryId <= 0) {
+        ab_json_error('category_id required');
+    }
     if ($serviceId <= 0) {
-        echo json_encode(['success' => false, 'message' => 'service_id required']);
-        exit;
+        ab_json_error('service_id required');
     }
 
-    // Verify service exists and is active
-    $stmtSvc = mysqli_prepare($conexion, "SELECT id FROM service_catalog WHERE id = ? AND is_active = 1 LIMIT 1");
-    if (!$stmtSvc) {
-        echo json_encode(['success' => false, 'message' => 'DB error']);
-        exit;
+    $categoryRow = ab_load_category_row($conexion, $categoryId);
+    if (!$categoryRow) {
+        ab_json_error('Category not found or inactive', 404);
     }
-    mysqli_stmt_bind_param($stmtSvc, 'i', $serviceId);
-    mysqli_stmt_execute($stmtSvc);
-    $resSvc = mysqli_stmt_get_result($stmtSvc);
-    $svcRow = $resSvc ? mysqli_fetch_assoc($resSvc) : null;
-    mysqli_stmt_close($stmtSvc);
 
+    $svcRow = ab_load_service_row($conexion, $serviceId, $categoryId);
     if (!$svcRow) {
-        echo json_encode(['success' => false, 'message' => 'Service not found or inactive']);
-        exit;
+        ab_json_error('Selected service does not belong to the chosen category or is inactive', 422);
     }
 
-    // Load offers — canonical query matching wizard.php.
-    // is_deleted checked conditionally: not in base schema, added by soft-delete migration.
-    $offerDelCond    = ab_has_column($conexion, 'provider_service_offers', 'is_deleted') ? ' AND o.is_deleted = 0' : '';
-    $providerDelCond = ab_has_column($conexion, 'providers', 'is_deleted')               ? ' AND p.is_deleted = 0' : '';
+    $offerConditions = ab_status_conditions($conexion, 'provider_service_offers', 'o');
+    $providerConditions = ab_status_conditions($conexion, 'providers', 'p');
 
     $offersSql = "SELECT o.id,
                          COALESCE(NULLIF(o.title,''), sc.name, CONCAT('Offer #',o.id)) AS offer_title,
@@ -155,18 +403,27 @@ if ($action === 'get_offers') {
                          COALESCE(NULLIF(o.currency,''),'USD') AS currency
                   FROM provider_service_offers o
                   INNER JOIN providers p ON p.id = o.provider_id
-                      AND p.is_active = 1{$providerDelCond}
                   INNER JOIN service_catalog sc ON sc.id = o.service_id
                   WHERE o.service_id = ?
-                    AND o.is_active = 1{$offerDelCond}
+                    AND sc.category_id = ?";
+    if (!empty($offerConditions)) {
+        $offersSql .= ' AND ' . implode(' AND ', $offerConditions);
+    }
+    if (!empty($providerConditions)) {
+        $offersSql .= ' AND ' . implode(' AND ', $providerConditions);
+    }
+    $offersSql .= "
                   ORDER BY p.name ASC, offer_title ASC";
     $stmtOffers = mysqli_prepare($conexion, $offersSql);
     if (!$stmtOffers) {
-        echo json_encode(['success' => false, 'message' => 'DB prepare error']);
-        exit;
+        ab_json_error('DB prepare error', 500);
     }
-    mysqli_stmt_bind_param($stmtOffers, 'i', $serviceId);
-    mysqli_stmt_execute($stmtOffers);
+    mysqli_stmt_bind_param($stmtOffers, 'ii', $serviceId, $categoryId);
+    if (!mysqli_stmt_execute($stmtOffers)) {
+        $err = mysqli_stmt_error($stmtOffers);
+        mysqli_stmt_close($stmtOffers);
+        ab_json_error('Failed to load offers: ' . $err, 500);
+    }
     $resOffers = mysqli_stmt_get_result($stmtOffers);
     $offers = [];
     while ($resOffers && ($row = mysqli_fetch_assoc($resOffers))) {
@@ -180,8 +437,14 @@ if ($action === 'get_offers') {
     }
     mysqli_stmt_close($stmtOffers);
 
-    echo json_encode(['success' => true, 'offers' => $offers, 'service_id' => $serviceId]);
-    exit;
+    ab_json_response([
+        'success' => true,
+        'category_id' => $categoryId,
+        'service_id' => $serviceId,
+        'service_name' => (string)($svcRow['name'] ?? ''),
+        'offers' => $offers,
+        'message' => empty($offers) ? 'No active offers are available for this service.' : '',
+    ]);
 }
 
 // ── action: submit ────────────────────────────────────────────────────────────
@@ -194,6 +457,7 @@ if ($action === 'submit') {
     $origin         = trim((string)($_POST['origin'] ?? 'agent_assisted'));
     $destination    = trim((string)($_POST['destination'] ?? 'Armenia, Quindío'));
     $persons        = max(1, (int)($_POST['persons'] ?? 1));
+    $categoryId     = (int)($_POST['category_id'] ?? 0);
     $serviceId      = (int)($_POST['service_id'] ?? 0);
     $specialRequest = trim((string)($_POST['special_request'] ?? ''));
     $timelineFrom   = trim((string)($_POST['timeline_from'] ?? ''));
@@ -204,69 +468,37 @@ if ($action === 'submit') {
     // Offer IDs
     $rawOffers = $_POST['selected_offers'] ?? [];
     if (!is_array($rawOffers)) $rawOffers = [$rawOffers];
-    $selectedOffers = array_values(array_filter(array_map('intval', $rawOffers)));
+    $selectedOffers = array_values(array_unique(array_filter(array_map('intval', $rawOffers))));
 
     // ── Validate required fields ──────────────────────────────────────────────
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        echo json_encode(['success' => false, 'message' => 'Valid patient email is required.']);
-        exit;
+        ab_json_error('Valid patient email is required.');
     }
     if ($name === '') {
-        echo json_encode(['success' => false, 'message' => 'Patient full name is required.']);
-        exit;
+        ab_json_error('Patient full name is required.');
+    }
+    if ($categoryId <= 0) {
+        ab_json_error('A category must be selected.');
     }
     if ($serviceId <= 0) {
-        echo json_encode(['success' => false, 'message' => 'A medical service must be selected.']);
-        exit;
+        ab_json_error('A medical service must be selected.');
     }
 
-    // ── Validate service exists and is active ─────────────────────────────────
-    $stmtSvcCheck = mysqli_prepare($conexion,
-        "SELECT sc.id, sc.name, COALESCE(cat.name,'') AS category_name
-         FROM service_catalog sc
-         LEFT JOIN service_categories cat ON cat.id = sc.category_id
-         WHERE sc.id = ? AND sc.is_active = 1 LIMIT 1"
-    );
-    if (!$stmtSvcCheck) {
-        echo json_encode(['success' => false, 'message' => 'DB error validating service.']);
-        exit;
+    $categoryRow = ab_load_category_row($conexion, $categoryId);
+    if (!$categoryRow) {
+        ab_json_error('Selected category not found or inactive.', 404);
     }
-    mysqli_stmt_bind_param($stmtSvcCheck, 'i', $serviceId);
-    mysqli_stmt_execute($stmtSvcCheck);
-    $resSvcCheck = mysqli_stmt_get_result($stmtSvcCheck);
-    $svcCheckRow = $resSvcCheck ? mysqli_fetch_assoc($resSvcCheck) : null;
-    mysqli_stmt_close($stmtSvcCheck);
 
+    // ── Validate service exists, is active, and belongs to category ──────────
+    $svcCheckRow = ab_load_service_row($conexion, $serviceId, $categoryId);
     if (!$svcCheckRow) {
-        echo json_encode(['success' => false, 'message' => 'Selected service not found or inactive.']);
-        exit;
+        ab_json_error('Selected service does not belong to the chosen category or is inactive.', 422);
     }
     $category = (string)$svcCheckRow['category_name']; // derived from service catalog — not free text
 
     // ── Backend validation: each selected offer must belong to the chosen service ─
-    // is_deleted conditions added only if the column exists (not in base schema).
-    if (!empty($selectedOffers)) {
-        $offerIdsCsv      = implode(',', $selectedOffers); // all ints, safe
-        $_valOfferDel     = ab_has_column($conexion, 'provider_service_offers', 'is_deleted');
-        $_valProviderDel  = ab_has_column($conexion, 'providers', 'is_deleted');
-        $_valProvDelCond  = $_valProviderDel ? ' AND p.is_deleted = 0' : '';
-        $_valOfferBadCond = $_valOfferDel    ? " OR o.is_deleted = 1" : '';
-
-        $invalidCheck = mysqli_query($conexion,
-            "SELECT COUNT(*) AS cnt
-             FROM provider_service_offers o
-             INNER JOIN providers p ON p.id = o.provider_id AND p.is_active = 1{$_valProvDelCond}
-             INNER JOIN service_catalog sc ON sc.id = o.service_id
-             WHERE o.id IN ({$offerIdsCsv})
-               AND (o.service_id != {$serviceId} OR o.is_active = 0{$_valOfferBadCond})"
-        );
-        if ($invalidCheck) {
-            $invalidRow = mysqli_fetch_assoc($invalidCheck);
-            if ((int)($invalidRow['cnt'] ?? 0) > 0) {
-                echo json_encode(['success' => false, 'message' => 'One or more selected offers do not belong to the chosen service or are no longer active.']);
-                exit;
-            }
-        }
+    if (!ab_selected_offers_are_valid($conexion, $serviceId, $selectedOffers)) {
+        ab_json_error('One or more selected offers do not belong to the chosen service or are no longer active.', 422);
     }
 
     // ── Build timeline string ─────────────────────────────────────────────────
@@ -351,8 +583,7 @@ if ($action === 'submit') {
         }
 
         if (empty($userData['usuario']) || empty($userData['password'])) {
-            echo json_encode(['success' => false, 'message' => 'Cannot create user account (missing required columns).']);
-            exit;
+            ab_json_error('Cannot create user account (missing required columns).', 500);
         }
 
         $insertCols = array_keys($userData);
@@ -376,8 +607,7 @@ if ($action === 'submit') {
                 } elseif ($stmtRescue) { mysqli_stmt_close($stmtRescue); }
             }
             if ($clientUserId === 0) {
-                echo json_encode(['success' => false, 'message' => 'Failed to create patient account: ' . $errMsg]);
-                exit;
+                ab_json_error('Failed to create patient account: ' . $errMsg, 500);
             }
         } else {
             $clientUserId = (int)mysqli_insert_id($conexion);
@@ -459,8 +689,7 @@ if ($action === 'submit') {
     $requiredBrCols = ['name', 'email', 'phone', 'origin', 'booking_datetime', 'destination', 'persons', 'category', 'special_request', 'selected_offers', 'budget', 'timeline', 'additional_notes'];
     foreach ($requiredBrCols as $req) {
         if (!in_array($req, $brCols, true)) {
-            echo json_encode(['success' => false, 'message' => "Missing required column: {$req}. Run the migration SQL."]);
-            exit;
+            ab_json_error("Missing required column: {$req}. Run the migration SQL.", 500);
         }
     }
 
@@ -472,8 +701,7 @@ if ($action === 'submit') {
     if (!$stmtBr || !ab_bind_params($stmtBr, $brTypes, $brVals) || !mysqli_stmt_execute($stmtBr)) {
         $errMsg = $stmtBr ? mysqli_stmt_error($stmtBr) : mysqli_error($conexion);
         if ($stmtBr) mysqli_stmt_close($stmtBr);
-        echo json_encode(['success' => false, 'message' => 'Failed to create booking request: ' . $errMsg]);
-        exit;
+        ab_json_error('Failed to create booking request: ' . $errMsg, 500);
     }
     $bookingRequestId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtBr);
@@ -481,16 +709,30 @@ if ($action === 'submit') {
     // ── Insert booking_request_items ──────────────────────────────────────────
     $createdItems = [];
     if (!empty($selectedOffers) && ab_table_exists($conexion, 'booking_request_items')) {
+        $offerMetaConditions = ab_status_conditions($conexion, 'provider_service_offers', 'o');
+        $providerMetaConditions = ab_status_conditions($conexion, 'providers', 'p');
+        $offerMetaSql = "SELECT
+                            o.provider_id,
+                            o.service_id,
+                            o.price_from,
+                            COALESCE(NULLIF(o.currency,''), 'USD') AS currency
+                         FROM provider_service_offers o
+                         INNER JOIN providers p ON p.id = o.provider_id
+                         WHERE o.id = ?";
+        if (!empty($offerMetaConditions)) {
+            $offerMetaSql .= ' AND ' . implode(' AND ', $offerMetaConditions);
+        }
+        if (!empty($providerMetaConditions)) {
+            $offerMetaSql .= ' AND ' . implode(' AND ', $providerMetaConditions);
+        }
+        $offerMetaSql .= ' LIMIT 1';
+
         foreach ($selectedOffers as $offerId) {
             $offerId = (int)$offerId;
             if ($offerId <= 0) continue;
 
             // Fetch offer metadata
-            $stmtOff = mysqli_prepare($conexion,
-                "SELECT o.provider_id, o.service_id, o.price_from, COALESCE(NULLIF(o.currency,''),'USD') AS currency
-                 FROM provider_service_offers o
-                 WHERE o.id = ? AND o.is_active = 1 AND o.is_deleted = 0 LIMIT 1"
-            );
+            $stmtOff = mysqli_prepare($conexion, $offerMetaSql);
             if (!$stmtOff) continue;
             mysqli_stmt_bind_param($stmtOff, 'i', $offerId);
             if (!mysqli_stmt_execute($stmtOff)) { mysqli_stmt_close($stmtOff); continue; }
@@ -598,7 +840,7 @@ if ($action === 'submit') {
     }
 
     // ── Success response ──────────────────────────────────────────────────────
-    echo json_encode([
+    ab_json_response([
         'success'          => true,
         'booking_id'       => $bookingRequestId,
         'client_user_id'   => $clientUserId,
@@ -606,10 +848,7 @@ if ($action === 'submit') {
         'items_created'    => count($createdItems),
         'message'          => 'Booking created. Credentials sent to patient.',
     ]);
-    exit;
 }
 
 // ── Unknown action ────────────────────────────────────────────────────────────
-http_response_code(400);
-echo json_encode(['success' => false, 'message' => 'Unknown action']);
-exit;
+ab_json_error('Unknown action', 400);
