@@ -242,6 +242,7 @@
                     hideSummary();
                 }
                 window.dispatchEvent(new Event('mt-booking-state-changed'));
+                window.location.assign('https://medtravel.com.co/offers.php');
             });
         }
     }
