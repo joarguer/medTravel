@@ -1418,56 +1418,30 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
 
     mysqli_begin_transaction($conexion);
 
-    $targetStatus = ($action === 'accept_dates') ? 'awaiting_client' : 'provider_proposed_change';
-    $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
-    $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
-    $hasItemUpdatedAt = client_table_has_column($conexion, 'booking_request_items', 'updated_at');
-
-    $sql = "UPDATE booking_request_items bri
-            INNER JOIN booking_requests br ON br.id = bri.booking_request_id
-            SET bri.item_status = ?";
-    if ($hasItemUpdatedAt) {
-        $sql .= ', bri.updated_at = NOW()';
-    }
-    $sql .= " WHERE bri.id = ? AND (" . $ownerScope['sql'] . ")";
-    if ($hasItemsSoftDelete) {
-        $sql .= ' AND bri.is_deleted = 0';
-    }
-    if ($hasBookingSoftDelete) {
-        $sql .= ' AND br.is_deleted = 0';
-    }
-    $sql .= ' LIMIT 1';
-
-    $types = 'si' . $ownerScope['types'];
-    $params = array_merge([$targetStatus, $itemId], $ownerScope['params']);
-
-    $stmt = mysqli_prepare($conexion, $sql);
-    if (!$stmt) {
-        mysqli_rollback($conexion);
-        client_inbox_err('prepare_failed', 500);
-    }
-    if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
-        $err = mysqli_stmt_error($stmt);
-        mysqli_stmt_close($stmt);
-        mysqli_rollback($conexion);
-        client_inbox_err('update_failed: ' . $err, 500);
-    }
-    $affected = mysqli_stmt_affected_rows($stmt);
-    mysqli_stmt_close($stmt);
-    if ($affected <= 0) {
-        mysqli_rollback($conexion);
-        client_inbox_err('not_found_or_no_change', 404);
-    }
-
     $confirmedMeeting = null;
+    $syncedItemStatus = '';
     if ($action === 'accept_dates') {
         $confirmedMeeting = client_inbox_confirm_google_meeting($conexion, $meetingRow, (int)$ctx['request_id'], $itemId);
         if (empty($confirmedMeeting['ok'])) {
             mysqli_rollback($conexion);
             client_inbox_err((string)($confirmedMeeting['error'] ?? 'meeting_google_create_failed'), 409);
         }
+
+        $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_confirmed');
+        if (empty($syncResult['ok'])) {
+            mysqli_rollback($conexion);
+            client_inbox_err((string)($syncResult['error'] ?? 'item_status_sync_failed'), 409);
+        }
+        $syncedItemStatus = (string)($syncResult['item_status'] ?? 'provider_confirmed');
     } else {
         client_inbox_cancel_proposed_meeting($conexion, (int)($meetingRow['id'] ?? 0));
+
+        $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_requested_change');
+        if (empty($syncResult['ok'])) {
+            mysqli_rollback($conexion);
+            client_inbox_err((string)($syncResult['error'] ?? 'item_status_sync_failed'), 409);
+        }
+        $syncedItemStatus = (string)($syncResult['item_status'] ?? 'provider_proposed_change');
     }
 
     if (!inbox_table_exists($conexion, 'inbox_messages')) {
@@ -1520,6 +1494,7 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
         'request_id' => $requestId,
         'booking_id' => $requestId,
         'item_id' => $itemId,
+        'item_status' => $syncedItemStatus,
         'meeting' => $confirmedMeeting,
         'message' => [
             'id' => $messageId,

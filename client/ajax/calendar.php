@@ -435,19 +435,31 @@ if ($action === 'accept_event') {
         $threadId = calendar_build_thread_id($threadType, $requestId, $itemId);
     }
 
+    mysqli_begin_transaction($conexion);
+
     $stmtUpdate = mysqli_prepare($conexion, "UPDATE calendar_events SET status = 'confirmed', updated_at = NOW() WHERE id = ? LIMIT 1");
     if (!$stmtUpdate) {
+        mysqli_rollback($conexion);
         calendar_client_err('prepare_failed', 500);
     }
     mysqli_stmt_bind_param($stmtUpdate, 'i', $eventId);
     if (!mysqli_stmt_execute($stmtUpdate)) {
         $err = mysqli_stmt_error($stmtUpdate);
         mysqli_stmt_close($stmtUpdate);
+        mysqli_rollback($conexion);
         calendar_client_err('update_failed: ' . $err, 500);
     }
     mysqli_stmt_close($stmtUpdate);
     $eventRow['status'] = 'confirmed';
     $eventRow['updated_at'] = date('Y-m-d H:i:s');
+
+    if ($threadType === 'ITEM' && $itemId > 0) {
+        $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_confirmed');
+        if (empty($syncResult['ok'])) {
+            mysqli_rollback($conexion);
+            calendar_client_err((string)($syncResult['error'] ?? 'item_status_sync_failed'), 409);
+        }
+    }
 
     client_calendar_insert_inbox_message(
         $conexion,
@@ -459,6 +471,8 @@ if ($action === 'accept_event') {
         $clientUserId,
         'Patient accepted the proposed schedule.'
     );
+
+    mysqli_commit($conexion);
 
     $adminEmail = client_calendar_resolve_patientcare_email($conexion);
     $providerEmail = ($threadType === 'ITEM' && $itemId > 0) ? client_calendar_fetch_item_provider_email($conexion, $itemId) : '';

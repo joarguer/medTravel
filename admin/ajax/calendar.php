@@ -844,12 +844,15 @@ if ($action === 'create_event') {
     }
     $threadId = calendar_build_thread_id($eventType, $requestId, $itemId);
 
+    mysqli_begin_transaction($conexion);
+
     $sql = "INSERT INTO calendar_events
                 (title, description, start_at, end_at, all_day, event_type, request_id, item_id, thread_id, created_by_role, created_by_user_id, provider_id, client_user_id, status, updated_at)
             VALUES
                 (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
+        mysqli_rollback($conexion);
         calendar_admin_err('prepare_failed', 500);
     }
     $createdByRole = (string)$scope['role_label'];
@@ -876,10 +879,19 @@ if ($action === 'create_event') {
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
+        mysqli_rollback($conexion);
         calendar_admin_err('insert_failed: ' . $err, 500);
     }
     $eventId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+
+    if ($eventType === 'ITEM' && $itemId > 0 && in_array($status, ['proposed', 'scheduled', 'confirmed'], true)) {
+        $syncResult = google_calendar_sync_item_status_from_event_status($conexion, $itemId, $status);
+        if (empty($syncResult['ok'])) {
+            mysqli_rollback($conexion);
+            calendar_admin_err((string)($syncResult['error'] ?? 'item_status_sync_failed'), 409);
+        }
+    }
 
     $eventRow = calendar_fetch_event_row_admin($conexion, $eventId, ['is_admin' => true, 'scope_types' => '', 'scope_params' => [], 'scope_where' => '']);
     if ($isProviderActor) {
@@ -906,6 +918,9 @@ if ($action === 'create_event') {
             (int)$scope['user_id'],
             $autoMessage
         );
+    }
+    mysqli_commit($conexion);
+    if ($isProviderActor) {
         $bookingContact = calendar_fetch_booking_contact($conexion, $requestId);
         $adminEmail = calendar_resolve_patientcare_email($conexion);
         calendar_notify_provider_proposed_change($conexion, $eventForNotify, $bookingContact ?: [], $adminEmail);
@@ -1013,12 +1028,15 @@ if ($action === 'update_event') {
         }
     }
 
+    mysqli_begin_transaction($conexion);
+
     $sql = "UPDATE calendar_events
             SET title = ?, description = ?, start_at = ?, end_at = ?, all_day = ?, event_type = ?, request_id = ?, item_id = ?, thread_id = ?, provider_id = ?, client_user_id = ?, status = ?, updated_at = NOW()
             WHERE id = ?
             LIMIT 1";
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
+        mysqli_rollback($conexion);
         calendar_admin_err('prepare_failed', 500);
     }
     mysqli_stmt_bind_param(
@@ -1041,9 +1059,18 @@ if ($action === 'update_event') {
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
+        mysqli_rollback($conexion);
         calendar_admin_err('update_failed: ' . $err, 500);
     }
     mysqli_stmt_close($stmt);
+
+    if ($eventType === 'ITEM' && $itemId > 0 && in_array($status, ['proposed', 'scheduled', 'confirmed'], true)) {
+        $syncResult = google_calendar_sync_item_status_from_event_status($conexion, $itemId, $status);
+        if (empty($syncResult['ok'])) {
+            mysqli_rollback($conexion);
+            calendar_admin_err((string)($syncResult['error'] ?? 'item_status_sync_failed'), 409);
+        }
+    }
 
     $row = calendar_fetch_event_row_admin($conexion, $eventId, $scope);
     if ($isProviderActor) {
@@ -1070,6 +1097,9 @@ if ($action === 'update_event') {
             'thread_id' => $threadId,
             'status' => $status,
         ];
+    }
+    mysqli_commit($conexion);
+    if ($isProviderActor) {
         $bookingContact = calendar_fetch_booking_contact($conexion, $requestId);
         $adminEmail = calendar_resolve_patientcare_email($conexion);
         calendar_notify_provider_proposed_change($conexion, $notifyRow, $bookingContact ?: [], $adminEmail);

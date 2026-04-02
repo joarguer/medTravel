@@ -319,6 +319,11 @@ function my_booking_create_proposed_meeting_event($conexion, array $itemRow, arr
     $calendarEventId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
 
+    $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_proposed');
+    if (empty($syncResult['ok'])) {
+        return ['ok' => false, 'error' => (string)($syncResult['error'] ?? 'item_status_sync_failed')];
+    }
+
     return [
         'ok' => true,
         'calendar_event_id' => $calendarEventId,
