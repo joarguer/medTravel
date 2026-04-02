@@ -9,7 +9,16 @@ if (!user_can(PERM_BOOKING_MANAGE)) {
 
 // Load service catalog: only services that have at least one valid active offer.
 // Mirrors the canonical INNER JOIN used in booking/wizard.php.
+// is_deleted is checked only when the column actually exists (not in base schema).
 $services = [];
+$_offerHasDeleted    = (bool)mysqli_query($conexion, "SHOW COLUMNS FROM `provider_service_offers` LIKE 'is_deleted'") &&
+                       mysqli_num_rows(mysqli_query($conexion, "SHOW COLUMNS FROM `provider_service_offers` LIKE 'is_deleted'")) > 0;
+$_providerHasDeleted = (bool)mysqli_query($conexion, "SHOW COLUMNS FROM `providers` LIKE 'is_deleted'") &&
+                       mysqli_num_rows(mysqli_query($conexion, "SHOW COLUMNS FROM `providers` LIKE 'is_deleted'")) > 0;
+
+$_offerDeletedCond    = $_offerHasDeleted    ? ' AND o.is_deleted = 0' : '';
+$_providerDeletedCond = $_providerHasDeleted ? ' AND p.is_deleted = 0' : '';
+
 $servicesSql = "SELECT sc.id, sc.name,
                        COALESCE(cat.name,'General') AS category_name,
                        COALESCE(cat.sort_order,9999) AS cat_sort
@@ -20,9 +29,9 @@ $servicesSql = "SELECT sc.id, sc.name,
                       SELECT 1
                       FROM provider_service_offers o
                       INNER JOIN providers p ON p.id = o.provider_id
-                          AND p.is_active = 1 AND p.is_deleted = 0
+                          AND p.is_active = 1{$_providerDeletedCond}
                       WHERE o.service_id = sc.id
-                        AND o.is_active = 1 AND o.is_deleted = 0
+                        AND o.is_active = 1{$_offerDeletedCond}
                   )
                 ORDER BY cat_sort ASC, cat.name ASC,
                          COALESCE(sc.sort_order,9999) ASC, sc.name ASC";

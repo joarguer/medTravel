@@ -143,7 +143,11 @@ if ($action === 'get_offers') {
         exit;
     }
 
-    // Load offers — canonical query matching wizard.php
+    // Load offers — canonical query matching wizard.php.
+    // is_deleted checked conditionally: not in base schema, added by soft-delete migration.
+    $offerDelCond    = ab_has_column($conexion, 'provider_service_offers', 'is_deleted') ? ' AND o.is_deleted = 0' : '';
+    $providerDelCond = ab_has_column($conexion, 'providers', 'is_deleted')               ? ' AND p.is_deleted = 0' : '';
+
     $offersSql = "SELECT o.id,
                          COALESCE(NULLIF(o.title,''), sc.name, CONCAT('Offer #',o.id)) AS offer_title,
                          p.name AS provider_name,
@@ -151,11 +155,10 @@ if ($action === 'get_offers') {
                          COALESCE(NULLIF(o.currency,''),'USD') AS currency
                   FROM provider_service_offers o
                   INNER JOIN providers p ON p.id = o.provider_id
-                      AND p.is_active = 1 AND p.is_deleted = 0
+                      AND p.is_active = 1{$providerDelCond}
                   INNER JOIN service_catalog sc ON sc.id = o.service_id
                   WHERE o.service_id = ?
-                    AND o.is_active = 1
-                    AND o.is_deleted = 0
+                    AND o.is_active = 1{$offerDelCond}
                   ORDER BY p.name ASC, offer_title ASC";
     $stmtOffers = mysqli_prepare($conexion, $offersSql);
     if (!$stmtOffers) {
@@ -241,15 +244,21 @@ if ($action === 'submit') {
     $category = (string)$svcCheckRow['category_name']; // derived from service catalog — not free text
 
     // ── Backend validation: each selected offer must belong to the chosen service ─
+    // is_deleted conditions added only if the column exists (not in base schema).
     if (!empty($selectedOffers)) {
-        $offerIdsCsv = implode(',', $selectedOffers); // all ints, safe
+        $offerIdsCsv      = implode(',', $selectedOffers); // all ints, safe
+        $_valOfferDel     = ab_has_column($conexion, 'provider_service_offers', 'is_deleted');
+        $_valProviderDel  = ab_has_column($conexion, 'providers', 'is_deleted');
+        $_valProvDelCond  = $_valProviderDel ? ' AND p.is_deleted = 0' : '';
+        $_valOfferBadCond = $_valOfferDel    ? " OR o.is_deleted = 1" : '';
+
         $invalidCheck = mysqli_query($conexion,
             "SELECT COUNT(*) AS cnt
              FROM provider_service_offers o
-             INNER JOIN providers p ON p.id = o.provider_id AND p.is_active = 1 AND p.is_deleted = 0
+             INNER JOIN providers p ON p.id = o.provider_id AND p.is_active = 1{$_valProvDelCond}
              INNER JOIN service_catalog sc ON sc.id = o.service_id
              WHERE o.id IN ({$offerIdsCsv})
-               AND (o.service_id != {$serviceId} OR o.is_active = 0 OR o.is_deleted = 1)"
+               AND (o.service_id != {$serviceId} OR o.is_active = 0{$_valOfferBadCond})"
         );
         if ($invalidCheck) {
             $invalidRow = mysqli_fetch_assoc($invalidCheck);
