@@ -555,6 +555,24 @@ if ($tokenState === 'expired') {
     <link href="assets/global/css/components-md.min.css" rel="stylesheet" id="style_components" type="text/css" />
     <link href="assets/global/css/plugins-md.min.css" rel="stylesheet" type="text/css" />
     <link href="assets/pages/css/lock.min.css" rel="stylesheet" type="text/css" />
+    <style>
+        .auth-terms-notice {
+            margin: 0 0 15px 0;
+            padding: 12px 14px;
+            border: 1px solid #cfe2ff;
+            border-radius: 4px;
+            background: #f4f8ff;
+            color: #355070;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+        .auth-terms-notice strong {
+            display: block;
+            margin-bottom: 4px;
+            color: #13357b;
+            font-weight: 700;
+        }
+    </style>
     <link rel="shortcut icon" href="favicon.ico" />
 </head>
 <body>
@@ -579,6 +597,10 @@ if ($tokenState === 'expired') {
                     <?php endif; ?>
 
                     <?php if ($showPasswordForm): ?>
+                        <div class="auth-terms-notice">
+                            <strong>First-time access notice</strong>
+                            After you create your password and sign in for the first time, you will be asked to review and accept the MedTravel Terms of Service to complete activation of your patient portal.
+                        </div>
                         <h4 style="margin:0 0 12px 0;">Create your password</h4>
                         <form method="post" action="set_password.php">
                             <input type="hidden" name="action" value="set_password">
@@ -594,6 +616,10 @@ if ($tokenState === 'expired') {
                             </div>
                         </form>
                     <?php elseif ($showResendForm): ?>
+                        <div class="auth-terms-notice">
+                            <strong>First-time access notice</strong>
+                            Once you create your password and sign in for the first time, MedTravel will ask you to review and accept the Terms of Service before your patient portal is fully activated.
+                        </div>
                         <h4 style="margin:0 0 8px 0;"><?php echo htmlspecialchars($tokenInfoTitle, ENT_QUOTES, 'UTF-8'); ?></h4>
                         <p style="margin:0 0 10px 0; color:#9ca8b4;"><?php echo htmlspecialchars($tokenInfoText, ENT_QUOTES, 'UTF-8'); ?></p>
                         <p style="margin:0 0 12px 0; color:#9ca8b4;">Your patient portal lets you track each requested service status, receive updates, and coordinate your virtual evaluation appointment.</p>

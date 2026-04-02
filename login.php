@@ -30,6 +30,24 @@
         <!-- END PAGE LEVEL STYLES -->
         <!-- BEGIN THEME LAYOUT STYLES -->
         <!-- END THEME LAYOUT STYLES -->
+        <style>
+            .auth-terms-notice {
+                margin: 16px 0 18px;
+                padding: 14px 16px;
+                border: 1px solid #cfe2ff;
+                border-radius: 4px;
+                background: #f4f8ff;
+                color: #355070;
+                font-size: 13px;
+                line-height: 1.55;
+            }
+            .auth-terms-notice strong {
+                display: block;
+                margin-bottom: 4px;
+                color: #13357b;
+                font-weight: 700;
+            }
+        </style>
         <link rel="shortcut icon" href="admin/favicon.ico" /> </head>
     <!-- END HEAD -->
 
@@ -49,6 +67,10 @@
                 <div class="alert alert-danger display-hide">
                     <button class="close" data-close="alert"></button>
                     <span> Ingrese su password. </span>
+                </div>
+                <div class="auth-terms-notice">
+                    <strong>First-time access notice</strong>
+                    If this is your first time signing in after activating your account, you will be asked to review and accept the MedTravel Terms of Service before your patient portal is fully activated.
                 </div>
                 <div class="form-group">
                     <!--ie8, ie9 does not support html5 placeholder, so we just show field title for that-->
