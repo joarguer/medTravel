@@ -130,6 +130,9 @@ function normalize_legacy_item_status($status)
     if ($status === '' || $status === 'pending_admin' || $status === 'pending_review') {
         return 'pending_provider';
     }
+    if ($status === 'completed') {
+        return 'treatment_completed';
+    }
     return $status;
 }
 
@@ -420,6 +423,7 @@ function provider_status_label($status)
         'provider_confirmed' => 'Caso aceptado',
         'provider_rejected' => 'Caso rechazado',
         'provider_proposed_change' => 'Cita propuesta',
+        'treatment_completed' => 'Tratamiento completado',
     ];
     $key = trim((string)$status);
     return isset($map[$key]) ? $map[$key] : $key;
@@ -448,6 +452,7 @@ function generic_status_label_es($status)
         'date_proposed' => 'Cita propuesta',
         'date_confirmed' => 'Cita confirmada',
         'rescheduled' => 'Cita reprogramada',
+        'treatment_completed' => 'Tratamiento completado',
         'completed' => 'Atención realizada',
         'cancelled' => 'Caso cerrado',
         'confirmed' => 'Confirmado',
@@ -482,6 +487,7 @@ function appointment_status_label_es($status)
         'date_proposed' => 'Cita propuesta',
         'date_confirmed' => 'Cita confirmada',
         'rescheduled' => 'Cita reprogramada',
+        'treatment_completed' => 'Tratamiento completado',
         'completed' => 'Atención realizada',
         'cancelled' => 'Cita cancelada',
         'confirmed' => 'Cita confirmada',
@@ -1327,6 +1333,7 @@ function fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeP
                 {$assignedStaffExpr} AS assigned_staff_id,
                 CASE
                     WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                    WHEN bri.item_status = 'completed' THEN 'treatment_completed'
                     ELSE bri.item_status
                 END AS current_status,
                 COALESCE(NULLIF(bri.currency, ''), NULLIF(o.currency, ''), NULLIF(ms.currency, ''), 'USD') AS base_currency,
@@ -1691,12 +1698,13 @@ function sync_booking_fee_gate_state($conexion, $bookingRequestId, $hasRequestsS
     $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $normalizedStatusExpr = "CASE
         WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+        WHEN bri.item_status = 'completed' THEN 'treatment_completed'
         ELSE bri.item_status
     END";
 
     $statsSql = "SELECT
                     COUNT(*) AS total_count,
-                    SUM(CASE WHEN {$normalizedStatusExpr} = 'provider_confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
+                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted', 'treatment_completed') THEN 1 ELSE 0 END) AS confirmed_count,
                     SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
                  FROM booking_request_items bri
                  WHERE bri.booking_request_id = ?";
@@ -1793,12 +1801,13 @@ function rollup_booking_status($conexion, $bookingRequestId, $hasRequestsSoftDel
     $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $normalizedStatusExpr = "CASE
         WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+        WHEN bri.item_status = 'completed' THEN 'treatment_completed'
         ELSE bri.item_status
     END";
 
     $statsSql = "SELECT
                     COUNT(*) AS total_count,
-                    SUM(CASE WHEN {$normalizedStatusExpr} = 'provider_confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
+                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted', 'treatment_completed') THEN 1 ELSE 0 END) AS confirmed_count,
                     SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
                  FROM booking_request_items bri
                  WHERE bri.booking_request_id = ?";
@@ -1932,6 +1941,7 @@ $canonicalItemStatuses = [
     'provider_proposed_change',
     'awaiting_client',
     'client_accepted',
+    'treatment_completed',
     'client_rejected',
     'cancelled',
 ];
@@ -1939,6 +1949,7 @@ $providerAllowedTargets = [
     'provider_confirmed',
     'provider_rejected',
     'provider_proposed_change',
+    'treatment_completed',
 ];
 
 $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
@@ -1963,6 +1974,8 @@ $hasProviderProposedDateTo = table_has_column($conexion, 'booking_request_items'
 $hasProviderProposedPrice = table_has_column($conexion, 'booking_request_items', 'provider_proposed_price');
 $hasProviderProposedCurrency = table_has_column($conexion, 'booking_request_items', 'provider_proposed_currency');
 $hasProviderNotes = table_has_column($conexion, 'booking_request_items', 'provider_notes');
+$hasTreatmentCompletedAt = table_has_column($conexion, 'booking_request_items', 'treatment_completed_at');
+$hasTreatmentCompletedByUserId = table_has_column($conexion, 'booking_request_items', 'treatment_completed_by_user_id');
 
 $hasTimelineFrom = table_has_column($conexion, 'booking_requests', 'timeline_from');
 $hasTimelineTo = table_has_column($conexion, 'booking_requests', 'timeline_to');
@@ -3155,9 +3168,16 @@ if ($action === 'propose_dates') {
     }
 
     $currentStatus = normalize_legacy_item_status($itemRow['current_status'] ?? '');
-    $allowedCurrentStatuses = ['pending_provider'];
-    if ($targetStatus === 'provider_proposed_change') {
-        $allowedCurrentStatuses[] = 'provider_proposed_change';
+    $allowedCurrentStatuses = [];
+    if ($targetStatus === 'provider_confirmed' || $targetStatus === 'provider_rejected') {
+        $allowedCurrentStatuses = ['pending_provider'];
+    } elseif ($targetStatus === 'provider_proposed_change') {
+        $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change'];
+    } elseif ($targetStatus === 'treatment_completed') {
+        $allowedCurrentStatuses = ['provider_confirmed', 'client_accepted', 'treatment_completed'];
+    }
+    if (empty($allowedCurrentStatuses)) {
+        json_err('transition_not_allowed', 403);
     }
     if (!in_array($currentStatus, $allowedCurrentStatuses, true)) {
         json_err('transition_not_allowed_from_' . $currentStatus, 409);
@@ -3675,6 +3695,17 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         $params[] = $providerResponseBy;
     }
 
+    if ($targetStatus === 'treatment_completed') {
+        if ($hasTreatmentCompletedAt) {
+            $setParts[] = 'bri.treatment_completed_at = NOW()';
+        }
+        if ($hasTreatmentCompletedByUserId && $providerResponseBy !== null) {
+            $setParts[] = 'bri.treatment_completed_by_user_id = ?';
+            $types .= 'i';
+            $params[] = $providerResponseBy;
+        }
+    }
+
     if ($targetStatus === 'provider_rejected') {
         $reason = trim((string)($_POST['reason'] ?? ''));
         if ($reason === '') {
@@ -3916,6 +3947,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
                         br.email AS client_email,
                         CASE
                             WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                            WHEN bri.item_status = 'completed' THEN 'treatment_completed'
                             ELSE bri.item_status
                         END AS item_status,
                         {$providerNotesExpr} AS provider_notes,

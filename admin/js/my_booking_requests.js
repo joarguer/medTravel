@@ -149,6 +149,16 @@
             sendProviderAction('provider_confirm', { item_id: activeDetailItemId }, reloadActiveDetail);
         });
 
+        $('#my_booking_detail_modal').on('click', '#btn-modal-mark-treatment-completed', function () {
+            if (!activeDetailItemId) return;
+            if (!confirmOperationalAction('marcar este tratamiento como completado')) return;
+            if (!confirm('¿Confirmas que el tratamiento de este item ya fue realizado?')) return;
+            sendProviderAction('update_item_status', {
+                item_id: activeDetailItemId,
+                status: 'treatment_completed'
+            }, reloadActiveDetail, 'Tratamiento marcado como completado');
+        });
+
         $('#my_booking_detail_modal').on('click', '#btn-modal-provider-reject', function () {
             if (!activeDetailItemId) return;
             $('#provider_reject_item_id').val(activeDetailItemId);
@@ -552,8 +562,11 @@
 
     function renderQuickActionsPanel(d, options) {
         options = options || {};
+        var normalizedStatus = normalizeItemStatus(d.item_status || d.provider_status || '');
+        var canMarkTreatmentCompleted = ['provider_confirmed', 'client_accepted', 'treatment_completed'].indexOf(normalizedStatus) !== -1;
+        var alreadyCompleted = normalizedStatus === 'treatment_completed';
         var canAssignStaff = parseInt(d.can_assign_staff, 10) === 1;
-        var hasActions = options.canShowLegacyActions || canAssignStaff;
+        var hasActions = options.canShowLegacyActions || canAssignStaff || canMarkTreatmentCompleted;
         var html = '<div class="mt-panel">';
         html += '<h5 class="mt-panel-title">Acciones rápidas</h5>';
         html += '<p class="mt-panel-subtitle">Gestiona aquí solo la decisión operativa del caso. La conversación y la agenda se continúan desde sus módulos dedicados.</p>';
@@ -572,6 +585,9 @@
                 html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-provider-confirm">' + escapeHtml(parseInt(d.supervisor_override_required, 10) === 1 ? 'Aceptar como supervisión' : 'Aceptar caso') + '</button>';
                 html += '<button type="button" class="btn btn-danger btn-sm" id="btn-modal-provider-reject">' + escapeHtml(parseInt(d.supervisor_override_required, 10) === 1 ? 'Rechazar como supervisión' : 'Rechazar caso') + '</button>';
                 html += '<button type="button" class="btn btn-warning btn-sm" id="btn-modal-provider-propose">' + escapeHtml(parseInt(d.supervisor_override_required, 10) === 1 ? 'Proponer cita como supervisión' : 'Proponer cita') + '</button>';
+            }
+            if (canMarkTreatmentCompleted) {
+                html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-mark-treatment-completed"' + (alreadyCompleted ? ' disabled="disabled"' : '') + '><i class="fa fa-check"></i> ' + escapeHtml(alreadyCompleted ? 'Tratamiento completado' : 'Marcar tratamiento completado') + '</button>';
             }
             if (canAssignStaff) {
                 html += '<button type="button" class="btn btn-info btn-sm" id="btn-modal-assign-staff"><i class="fa fa-user-md"></i> ' + escapeHtml(parseInt(d.assigned_staff_id, 10) > 0 ? 'Reasignar médico' : 'Asignar médico') + '</button>';
@@ -1022,10 +1038,10 @@
 
     function renderStatusBadge(status, options) {
         options = options || {};
-        status = String(status || '').trim();
+        status = normalizeItemStatus(status);
         var css = 'label-default';
         if (['pending_provider', 'required_pending', 'pending'].indexOf(status) !== -1) css = 'label-warning';
-        else if (['provider_confirmed', 'client_accepted', 'paid', 'waived', 'not_applicable', 'disabled_manually', 'date_confirmed', 'doctor_assigned', 'completed'].indexOf(status) !== -1) css = 'label-success';
+        else if (['provider_confirmed', 'client_accepted', 'paid', 'waived', 'not_applicable', 'disabled_manually', 'date_confirmed', 'doctor_assigned', 'completed', 'treatment_completed'].indexOf(status) !== -1) css = 'label-success';
         else if (['provider_rejected', 'client_rejected', 'cancelled'].indexOf(status) !== -1) css = 'label-danger';
         else if (['provider_proposed_change', 'awaiting_client', 'provider_reviewing', 'needs_more_info', 'date_proposed', 'rescheduled'].indexOf(status) !== -1) css = 'label-info';
         var label = options.label || genericStatusLabelEs(status);
@@ -1112,13 +1128,22 @@
             date_proposed: 'Cita propuesta',
             date_confirmed: 'Cita confirmada',
             rescheduled: 'Cita reprogramada',
+            treatment_completed: 'Tratamiento completado',
             completed: 'Atención realizada',
             cancelled: 'Caso cerrado',
             confirmed: 'Confirmado',
             scheduled: 'Programado'
         };
-        status = String(status || '').toLowerCase();
+        status = normalizeItemStatus(status);
         return map[status] || (status ? status : 'Sin definir');
+    }
+
+    function normalizeItemStatus(status) {
+        status = String(status || '').toLowerCase().trim();
+        if (status === 'completed') {
+            return 'treatment_completed';
+        }
+        return status;
     }
 
     function eventTypeLabelEs(eventType) {

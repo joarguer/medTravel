@@ -46,6 +46,9 @@ function client_dashboard_normalize_item_status($status)
     if ($status === '' || $status === 'pending_admin' || $status === 'pending_review') {
         return 'pending_provider';
     }
+    if ($status === 'completed') {
+        return 'treatment_completed';
+    }
     return $status;
 }
 
@@ -205,6 +208,11 @@ function client_dashboard_build_actions($booking, $phaseKey)
             'label' => 'Open messages',
             'url' => $itemInboxUrl,
         ];
+    } elseif ($phaseKey === 'treatment_completed') {
+        $primary = [
+            'label' => 'View case',
+            'url' => $requestUrl,
+        ];
     } elseif ($phaseKey === 'reviewing') {
         $primary = [
             'label' => 'View case',
@@ -245,6 +253,7 @@ function client_dashboard_build_visible_phase(array $booking)
     $hasAwaitingClient = in_array('awaiting_client', $itemStatuses, true);
     $hasProposedChange = in_array('provider_proposed_change', $itemStatuses, true);
     $hasConfirmed = in_array('provider_confirmed', $itemStatuses, true) || in_array('client_accepted', $itemStatuses, true);
+    $hasTreatmentCompleted = in_array('treatment_completed', $itemStatuses, true);
     $terminalStatuses = ['provider_rejected', 'client_rejected', 'cancelled'];
     $allTerminal = !empty($itemStatuses) && count(array_diff($itemStatuses, $terminalStatuses)) === 0;
     $nextProposedEvent = $booking['next_proposed_event'] ?? null;
@@ -261,6 +270,11 @@ function client_dashboard_build_visible_phase(array $booking)
         $headline = 'This case has been closed';
         $description = 'This request is no longer active in your portal.';
         $nextStep = 'You can review the details of this case if needed.';
+    } elseif ($hasTreatmentCompleted) {
+        $phaseKey = 'treatment_completed';
+        $headline = 'Your treatment is complete';
+        $description = 'Your care team marked this treatment as completed.';
+        $nextStep = 'You can review your case details and messages anytime.';
     } elseif ($nextProposedEvent || $hasAwaitingClient || $hasProposedChange) {
         $phaseKey = 'appointment_review';
         $headline = 'Please review your appointment';
@@ -318,6 +332,7 @@ function client_dashboard_phase_priority($phaseKey, $requiresAction)
     }
     $map = [
         'appointment_scheduled' => 80,
+        'treatment_completed' => 70,
         'reviewing' => 60,
         'coordinating' => 50,
         'closed' => 10,
