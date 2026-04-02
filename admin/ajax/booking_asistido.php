@@ -18,7 +18,9 @@ require_once __DIR__ . '/../include/conexion.php';
 require_once __DIR__ . '/../include/roles.php';
 require_once __DIR__ . '/../include/password_utils.php';
 require_once __DIR__ . '/../include/email_config.php';
+require_once __DIR__ . '/../include/provider_medical_staff_helpers.php';
 require_once __DIR__ . '/../../inc/email_template.php';
+require_once __DIR__ . '/../../inc/interaction_email.php';
 
 function ab_json_response(array $payload, $status = 200)
 {
@@ -303,6 +305,609 @@ function ab_selected_offers_are_valid($conexion, $serviceId, array $selectedOffe
     return (int)($row['valid_count'] ?? 0) === count($selectedOffers);
 }
 
+function ab_submit_log($message)
+{
+    $line = date('Y-m-d H:i:s') . ' | ' . $message . PHP_EOL;
+    @file_put_contents(__DIR__ . '/../logs/booking_asistido_submit.log', $line, FILE_APPEND | LOCK_EX);
+}
+
+function ab_table_columns_meta($conexion, $table)
+{
+    static $cache = [];
+    if (isset($cache[$table])) {
+        return $cache[$table];
+    }
+
+    $meta = [];
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}`");
+    if ($res) {
+        while ($row = mysqli_fetch_assoc($res)) {
+            if (!empty($row['Field'])) {
+                $meta[$row['Field']] = $row;
+            }
+        }
+    }
+    $cache[$table] = $meta;
+    return $meta;
+}
+
+function ab_enum_options($type)
+{
+    $type = (string)$type;
+    if (!preg_match("/^enum\\((.*)\\)$/i", $type, $m)) {
+        return [];
+    }
+    $parts = str_getcsv($m[1], ',', "'");
+    $out = [];
+    foreach ($parts as $part) {
+        $value = trim((string)$part);
+        if ($value !== '') {
+            $out[] = $value;
+        }
+    }
+    return $out;
+}
+
+function ab_role_client_exists($conexion)
+{
+    static $checked = null;
+    if ($checked !== null) {
+        return $checked;
+    }
+    $checked = false;
+    if (!ab_table_exists($conexion, 'roles')) {
+        return $checked;
+    }
+    $clientRoleId = (int)(defined('ROLE_CLIENT') ? ROLE_CLIENT : 3);
+    $stmt = mysqli_prepare($conexion, 'SELECT id FROM roles WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return $checked;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $clientRoleId);
+    if (mysqli_stmt_execute($stmt)) {
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        if ($row && !empty($row['id'])) {
+            $checked = true;
+        }
+    }
+    mysqli_stmt_close($stmt);
+    return $checked;
+}
+
+function ab_fill_required_usuario_defaults($conexion, &$data, $email, $userName, $baseToken)
+{
+    $meta = ab_table_columns_meta($conexion, 'usuarios');
+    if (empty($meta)) {
+        return;
+    }
+
+    foreach ($meta as $col => $info) {
+        if (array_key_exists($col, $data)) {
+            continue;
+        }
+
+        $nullAllowed = strtoupper((string)($info['Null'] ?? 'YES')) === 'YES';
+        $hasDefault = array_key_exists('Default', $info) && $info['Default'] !== null;
+        $extra = strtolower((string)($info['Extra'] ?? ''));
+        if ($nullAllowed || $hasDefault || strpos($extra, 'auto_increment') !== false) {
+            continue;
+        }
+
+        $type = strtolower((string)($info['Type'] ?? ''));
+        if ($col === 'email') {
+            $data[$col] = (string)$email;
+            continue;
+        }
+        if ($col === 'usuario' || $col === 'usrlogin') {
+            $data[$col] = (string)$email;
+            continue;
+        }
+        if ($col === 'nombre') {
+            $data[$col] = (string)$userName;
+            continue;
+        }
+        if ($col === 'token') {
+            $data[$col] = (string)$baseToken;
+            continue;
+        }
+        if ($col === 'rol') {
+            $opts = ab_enum_options($type);
+            if (!empty($opts)) {
+                if (in_array('3', $opts, true)) {
+                    $data[$col] = '3';
+                } elseif (in_array('cliente', $opts, true)) {
+                    $data[$col] = 'cliente';
+                } elseif (in_array('client', $opts, true)) {
+                    $data[$col] = 'client';
+                } else {
+                    $data[$col] = $opts[0];
+                }
+            } else {
+                $data[$col] = '3';
+            }
+            continue;
+        }
+        if ($col === 'role_id') {
+            $data[$col] = (int)(defined('ROLE_CLIENT') ? ROLE_CLIENT : 3);
+            continue;
+        }
+        if (strpos($type, 'int') !== false || strpos($type, 'decimal') !== false || strpos($type, 'float') !== false || strpos($type, 'double') !== false) {
+            $data[$col] = 0;
+            continue;
+        }
+        if (strpos($type, 'date') !== false && strpos($type, 'datetime') === false && strpos($type, 'timestamp') === false) {
+            $data[$col] = date('Y-m-d');
+            continue;
+        }
+        if (strpos($type, 'datetime') !== false || strpos($type, 'timestamp') !== false) {
+            $data[$col] = date('Y-m-d H:i:s');
+            continue;
+        }
+        $opts = ab_enum_options($type);
+        if (!empty($opts)) {
+            $data[$col] = $opts[0];
+            continue;
+        }
+        $data[$col] = '';
+    }
+}
+
+function ab_user_is_privileged($row)
+{
+    if (!is_array($row)) {
+        return false;
+    }
+    if (isset($row['ppal']) && (int)$row['ppal'] === 1) {
+        return true;
+    }
+
+    $roleValue = null;
+    if (isset($row['role_id']) && $row['role_id'] !== null && $row['role_id'] !== '') {
+        $roleValue = (int)$row['role_id'];
+    } elseif (isset($row['rol'])) {
+        if (function_exists('normalize_role_value')) {
+            $roleValue = normalize_role_value($row['rol']);
+        } elseif (is_numeric($row['rol'])) {
+            $roleValue = (int)$row['rol'];
+        }
+    }
+
+    return ($roleValue === ROLE_ADMIN || $roleValue === ROLE_ADMINISTRATIVE);
+}
+
+function ab_pick_reusable_user(array $rows)
+{
+    foreach ($rows as $row) {
+        if (!ab_user_is_privileged($row) && !empty($row['id'])) {
+            return $row;
+        }
+    }
+    return null;
+}
+
+function ab_build_user_lookup($conexion, $email)
+{
+    $email = trim((string)$email);
+    $where = [];
+    $types = '';
+    $params = [];
+
+    if (ab_has_column($conexion, 'usuarios', 'email')) {
+        $where[] = 'email = ?';
+        $types .= 's';
+        $params[] = $email;
+    }
+    if (ab_has_column($conexion, 'usuarios', 'usuario')) {
+        $where[] = 'usuario = ?';
+        $types .= 's';
+        $params[] = $email;
+    }
+
+    if (empty($where)) {
+        return null;
+    }
+
+    $sql = "SELECT * FROM usuarios WHERE (" . implode(' OR ', $where) . ")";
+    if (ab_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= " AND is_deleted = 0";
+    }
+    $sql .= " ORDER BY id ASC";
+
+    return [
+        'sql' => $sql,
+        'types' => $types,
+        'params' => $params,
+    ];
+}
+
+function ab_find_or_create_client_user($conexion, $email, $name, $phone, &$isNewUser, &$resetToken)
+{
+    $lookup = ab_build_user_lookup($conexion, $email);
+    if (!$lookup) {
+        ab_submit_log('client_user lookup_missing_columns email=' . $email);
+        return [0, 'lookup_missing_columns'];
+    }
+
+    $stmtFind = mysqli_prepare($conexion, $lookup['sql']);
+    if (!$stmtFind) {
+        return [0, 'lookup_prepare_failed: ' . mysqli_error($conexion)];
+    }
+    $types = $lookup['types'];
+    $params = $lookup['params'];
+    if (!ab_bind_params($stmtFind, $types, $params) || !mysqli_stmt_execute($stmtFind)) {
+        $err = $stmtFind ? mysqli_stmt_error($stmtFind) : mysqli_error($conexion);
+        if ($stmtFind) {
+            mysqli_stmt_close($stmtFind);
+        }
+        return [0, 'lookup_execute_failed: ' . $err];
+    }
+    $resFind = mysqli_stmt_get_result($stmtFind);
+    $rows = [];
+    while ($resFind && ($row = mysqli_fetch_assoc($resFind))) {
+        $rows[] = $row;
+    }
+    mysqli_stmt_close($stmtFind);
+
+    $reusable = ab_pick_reusable_user($rows);
+    if ($reusable && !empty($reusable['id'])) {
+        return [(int)$reusable['id'], null];
+    }
+    foreach ($rows as $row) {
+        if (ab_user_is_privileged($row) && !empty($row['id'])) {
+            return [0, 'privileged_email_conflict'];
+        }
+    }
+
+    $isNewUser = true;
+    $baseToken = function_exists('generate_user_token') ? generate_user_token() : ab_random_hex(16);
+    $randomPassword = ab_random_hex(16);
+    $passwordHash = function_exists('hash_password')
+        ? hash_password($randomPassword, $baseToken)
+        : password_hash($randomPassword, PASSWORD_DEFAULT);
+
+    $data = [];
+    if (ab_has_column($conexion, 'usuarios', 'usuario'))   { $data['usuario'] = $email; }
+    if (ab_has_column($conexion, 'usuarios', 'password'))  { $data['password'] = $passwordHash; }
+    if (ab_has_column($conexion, 'usuarios', 'avatar'))    { $data['avatar'] = 'img/perfil/default.png'; }
+    if (ab_has_column($conexion, 'usuarios', 'nombre'))    { $data['nombre'] = $name !== '' ? $name : 'Client'; }
+    if (ab_has_column($conexion, 'usuarios', 'activo'))    { $data['activo'] = 1; }
+    if (ab_has_column($conexion, 'usuarios', 'token'))     { $data['token'] = $baseToken; }
+    if (ab_has_column($conexion, 'usuarios', 'empresa'))   { $data['empresa'] = ''; }
+    if (ab_has_column($conexion, 'usuarios', 'ppal'))      { $data['ppal'] = 0; }
+    if (ab_has_column($conexion, 'usuarios', 'usrlogin'))  { $data['usrlogin'] = $email; }
+    if (ab_has_column($conexion, 'usuarios', 'cargo'))     { $data['cargo'] = 'Cliente'; }
+    if (ab_has_column($conexion, 'usuarios', 'email'))     { $data['email'] = $email; }
+    if (ab_has_column($conexion, 'usuarios', 'telefono'))  { $data['telefono'] = $phone; }
+    if (ab_has_column($conexion, 'usuarios', 'cambio_password')) { $data['cambio_password'] = 0; }
+    if (ab_has_column($conexion, 'usuarios', 'rol')) {
+        $rolMeta = ab_table_columns_meta($conexion, 'usuarios');
+        $rolType = isset($rolMeta['rol']['Type']) ? strtolower((string)$rolMeta['rol']['Type']) : '';
+        $rolOpts = ab_enum_options($rolType);
+        if (!empty($rolOpts)) {
+            if (in_array('3', $rolOpts, true)) {
+                $data['rol'] = '3';
+            } elseif (in_array('cliente', $rolOpts, true)) {
+                $data['rol'] = 'cliente';
+            } elseif (in_array('client', $rolOpts, true)) {
+                $data['rol'] = 'client';
+            } else {
+                $data['rol'] = $rolOpts[0];
+            }
+        } else {
+            $data['rol'] = '3';
+        }
+    }
+    if (ab_has_column($conexion, 'usuarios', 'role_id') && ab_role_client_exists($conexion)) {
+        $data['role_id'] = (int)(defined('ROLE_CLIENT') ? ROLE_CLIENT : 3);
+    }
+
+    if (empty($data['usuario']) || empty($data['password'])) {
+        return [0, 'missing_required_user_columns'];
+    }
+
+    ab_fill_required_usuario_defaults($conexion, $data, $email, $name !== '' ? $name : 'Client', $baseToken);
+
+    $columns = array_keys($data);
+    $values = array_values($data);
+    $placeholders = implode(',', array_fill(0, count($values), '?'));
+    $types = '';
+    foreach ($values as $value) {
+        $types .= ab_value_type($value);
+    }
+    $sql = "INSERT INTO usuarios (`" . implode('`,`', $columns) . "`) VALUES ({$placeholders})";
+    $stmtInsert = mysqli_prepare($conexion, $sql);
+    if (!$stmtInsert) {
+        return [0, 'create_prepare_failed: ' . mysqli_error($conexion)];
+    }
+    if (!ab_bind_params($stmtInsert, $types, $values) || !mysqli_stmt_execute($stmtInsert)) {
+        $err = $stmtInsert ? mysqli_stmt_error($stmtInsert) : mysqli_error($conexion);
+        $errno = $stmtInsert && function_exists('mysqli_stmt_errno') ? mysqli_stmt_errno($stmtInsert) : mysqli_errno($conexion);
+        if ($stmtInsert) {
+            mysqli_stmt_close($stmtInsert);
+        }
+        if ((int)$errno === 1062) {
+            $stmtRescue = mysqli_prepare($conexion, $lookup['sql']);
+            if ($stmtRescue) {
+                $rescueTypes = $lookup['types'];
+                $rescueParams = $lookup['params'];
+                if (ab_bind_params($stmtRescue, $rescueTypes, $rescueParams) && mysqli_stmt_execute($stmtRescue)) {
+                    $rescueRes = mysqli_stmt_get_result($stmtRescue);
+                    $rescueRows = [];
+                    while ($rescueRes && ($row = mysqli_fetch_assoc($rescueRes))) {
+                        $rescueRows[] = $row;
+                    }
+                    $rescued = ab_pick_reusable_user($rescueRows);
+                    mysqli_stmt_close($stmtRescue);
+                    if ($rescued && !empty($rescued['id'])) {
+                        $isNewUser = false;
+                        return [(int)$rescued['id'], null];
+                    }
+                } else {
+                    mysqli_stmt_close($stmtRescue);
+                }
+            }
+        }
+        return [0, 'create_execute_failed: ' . $err];
+    }
+
+    $userId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmtInsert);
+    $resetToken = $baseToken;
+    return [$userId, null];
+}
+
+function ab_dynamic_insert($conexion, $table, $data, array $requiredCols = [])
+{
+    $result = ['ok' => false, 'id' => 0, 'error' => '', 'columns' => []];
+    if (!ab_table_exists($conexion, $table)) {
+        $result['error'] = 'table_not_found';
+        return $result;
+    }
+
+    $columns = [];
+    $values = [];
+    foreach ($data as $col => $value) {
+        if (ab_has_column($conexion, $table, $col)) {
+            $columns[] = $col;
+            $values[] = $value;
+        }
+    }
+    $result['columns'] = $columns;
+
+    foreach ($requiredCols as $required) {
+        if (!in_array($required, $columns, true)) {
+            $result['error'] = 'missing_required_' . $required;
+            return $result;
+        }
+    }
+
+    if (empty($columns)) {
+        $result['error'] = 'no_columns';
+        return $result;
+    }
+
+    $sql = "INSERT INTO `{$table}` (`" . implode('`,`', $columns) . "`) VALUES (" . implode(',', array_fill(0, count($columns), '?')) . ")";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        $result['error'] = 'prepare_failed: ' . mysqli_error($conexion);
+        return $result;
+    }
+
+    $types = '';
+    foreach ($values as $value) {
+        $types .= ab_value_type($value);
+    }
+    if (!ab_bind_params($stmt, $types, $values)) {
+        $result['error'] = 'bind_failed: ' . mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        return $result;
+    }
+    if (!mysqli_stmt_execute($stmt)) {
+        $result['error'] = 'execute_failed: ' . mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        return $result;
+    }
+
+    $result['ok'] = true;
+    $result['id'] = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($stmt);
+    return $result;
+}
+
+function ab_insert_booking_request_safe($conexion, array $baseData)
+{
+    $primary = [
+        'name' => $baseData['name'] ?? '',
+        'email' => $baseData['email'] ?? '',
+        'phone' => $baseData['phone'] ?? null,
+        'origin' => $baseData['origin'] ?? 'agent_assisted',
+        'booking_datetime' => $baseData['booking_datetime'] ?? date('Y-m-d H:i:s'),
+        'destination' => $baseData['destination'] ?? null,
+        'persons' => $baseData['persons'] ?? 1,
+        'category' => $baseData['category'] ?? null,
+        'special_request' => $baseData['special_request'] ?? null,
+        'selected_offers' => $baseData['selected_offers'] ?? '[]',
+        'budget' => $baseData['budget'] ?? null,
+        'timeline' => $baseData['timeline'] ?? null,
+        'additional_notes' => $baseData['additional_notes'] ?? null,
+        'client_user_id' => $baseData['client_user_id'] ?? null,
+        'creation_source' => $baseData['creation_source'] ?? 'agent_assisted',
+        'created_by_agent' => $baseData['created_by_agent'] ?? null,
+        'agent_channel' => $baseData['agent_channel'] ?? null,
+        'terms_accepted' => array_key_exists('terms_accepted', $baseData) ? $baseData['terms_accepted'] : 0,
+        'terms_accepted_at' => $baseData['terms_accepted_at'] ?? null,
+        'terms_version' => $baseData['terms_version'] ?? null,
+        'terms_ip' => $baseData['terms_ip'] ?? null,
+        'terms_user_agent' => $baseData['terms_user_agent'] ?? null,
+        'utm_source' => $baseData['utm_source'] ?? null,
+        'utm_medium' => $baseData['utm_medium'] ?? null,
+        'utm_campaign' => $baseData['utm_campaign'] ?? null,
+        'utm_content' => $baseData['utm_content'] ?? null,
+        'utm_term' => $baseData['utm_term'] ?? null,
+        'status' => $baseData['status'] ?? 'pending',
+        'created_at' => $baseData['created_at'] ?? date('Y-m-d H:i:s'),
+    ];
+
+    $attemptPrimary = ab_dynamic_insert($conexion, 'booking_requests', $primary, ['name', 'email']);
+    if ($attemptPrimary['ok']) {
+        return $attemptPrimary;
+    }
+
+    $fallback = [
+        'name' => $primary['name'],
+        'email' => $primary['email'],
+        'phone' => $primary['phone'],
+        'origin' => $primary['origin'],
+        'booking_datetime' => $primary['booking_datetime'],
+        'destination' => $primary['destination'],
+        'persons' => $primary['persons'],
+        'category' => $primary['category'],
+        'special_request' => $primary['special_request'],
+        'selected_offers' => $primary['selected_offers'],
+        'budget' => $primary['budget'],
+        'timeline' => $primary['timeline'],
+        'additional_notes' => $primary['additional_notes'],
+        'client_user_id' => $primary['client_user_id'],
+        'terms_accepted' => $primary['terms_accepted'],
+        'status' => $primary['status'],
+        'created_at' => $primary['created_at'],
+    ];
+    $attemptFallback = ab_dynamic_insert($conexion, 'booking_requests', $fallback, ['name', 'email']);
+    if ($attemptFallback['ok']) {
+        return $attemptFallback;
+    }
+
+    $minimal = [
+        'name' => $primary['name'],
+        'email' => $primary['email'],
+        'client_user_id' => $primary['client_user_id'],
+        'terms_accepted' => $primary['terms_accepted'],
+        'status' => $primary['status'],
+        'created_at' => $primary['created_at'],
+    ];
+    $attemptMinimal = ab_dynamic_insert($conexion, 'booking_requests', $minimal, ['name', 'email']);
+    if ($attemptMinimal['ok']) {
+        return $attemptMinimal;
+    }
+
+    return [
+        'ok' => false,
+        'id' => 0,
+        'error' => 'primary=' . $attemptPrimary['error'] . '; fallback=' . $attemptFallback['error'] . '; minimal=' . $attemptMinimal['error'],
+        'columns' => array_values(array_unique(array_merge($attemptPrimary['columns'], $attemptFallback['columns'], $attemptMinimal['columns']))),
+    ];
+}
+
+function ab_escape_html($value)
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
+function ab_build_provider_case_url($requestId, $itemId)
+{
+    return 'https://medtravel.com.co/admin/my_booking_requests.php?item_id=' . (int)$itemId . '&request_id=' . (int)$requestId;
+}
+
+function ab_notify_provider_new_request($conexion, $bookingRequestId, array $item)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $itemId = (int)($item['item_id'] ?? 0);
+    if ($bookingRequestId <= 0 || $itemId <= 0 || !function_exists('interaction_email_fetch_provider_email') || !function_exists('send_interaction_email')) {
+        return ['success' => false, 'error' => 'notification_dependencies_unavailable'];
+    }
+
+    $emailSource = '';
+    $providerEmail = interaction_email_fetch_provider_email($conexion, $itemId, $emailSource);
+    if (!filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'error' => 'provider_email_not_found'];
+    }
+
+    $timelineExpr = ab_has_column($conexion, 'booking_requests', 'timeline') ? 'br.timeline' : "''";
+    $assignedStaffExpr = ab_has_column($conexion, 'booking_request_items', 'assigned_staff_id') ? 'bri.assigned_staff_id' : 'NULL';
+    $detailSql = "SELECT
+                    bri.provider_id,
+                    br.name AS client_name,
+                    br.email AS client_email,
+                    " . (ab_has_column($conexion, 'booking_requests', 'phone') ? 'br.phone' : "''") . " AS client_phone,
+                    br.destination,
+                    {$timelineExpr} AS timeline,
+                    COALESCE(NULLIF(sc.name, ''), NULLIF(o.title, ''), CONCAT('Item #', bri.id)) AS item_name,
+                    {$assignedStaffExpr} AS assigned_staff_id
+                FROM booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+                LEFT JOIN service_catalog sc ON sc.id = o.service_id
+                WHERE bri.id = ? AND bri.booking_request_id = ?
+                LIMIT 1";
+    $stmtDetail = mysqli_prepare($conexion, $detailSql);
+    if ($stmtDetail) {
+        mysqli_stmt_bind_param($stmtDetail, 'ii', $itemId, $bookingRequestId);
+        if (mysqli_stmt_execute($stmtDetail)) {
+            $resDetail = mysqli_stmt_get_result($stmtDetail);
+            $detailRow = $resDetail ? mysqli_fetch_assoc($resDetail) : null;
+            if (is_array($detailRow)) {
+                $item = array_merge($detailRow, $item);
+            }
+        }
+        mysqli_stmt_close($stmtDetail);
+    }
+
+    $requestMeta = function_exists('interaction_email_request_meta')
+        ? interaction_email_request_meta($conexion, 'ITEM', $bookingRequestId, $itemId)
+        : [];
+    $itemTitle = trim((string)($requestMeta['title'] ?? ''));
+    if ($itemTitle === '') {
+        $itemTitle = trim((string)($item['item_name'] ?? 'Item #' . $itemId));
+    }
+    $patientName = trim((string)($item['client_name'] ?? 'Paciente'));
+    $patientEmail = trim((string)($item['client_email'] ?? ''));
+    $patientPhone = trim((string)($item['client_phone'] ?? ''));
+    $destination = trim((string)($item['destination'] ?? ''));
+    $timeline = trim((string)($item['timeline'] ?? ''));
+    $assignedStaffId = (int)($item['assigned_staff_id'] ?? 0);
+    $assignedStaff = $assignedStaffId > 0 && function_exists('provider_staff_fetch_basic_row')
+        ? provider_staff_fetch_basic_row($conexion, $assignedStaffId, (int)($item['provider_id'] ?? 0))
+        : null;
+    $assignedStaffName = trim((string)($assignedStaff['full_name'] ?? ''));
+    $caseUrl = ab_build_provider_case_url($bookingRequestId, $itemId);
+
+    $contentHtml = '<p>A new booking request has been created and is waiting for provider review.</p>'
+        . '<p style="margin:0 0 6px 0;"><strong>Case:</strong> ' . ab_escape_html($itemTitle) . '</p>'
+        . '<p style="margin:0 0 6px 0;"><strong>Patient:</strong> ' . ab_escape_html($patientName) . '</p>'
+        . ($patientEmail !== '' ? '<p style="margin:0 0 6px 0;"><strong>Email:</strong> ' . ab_escape_html($patientEmail) . '</p>' : '')
+        . ($patientPhone !== '' ? '<p style="margin:0 0 6px 0;"><strong>Phone:</strong> ' . ab_escape_html($patientPhone) . '</p>' : '')
+        . ($destination !== '' ? '<p style="margin:0 0 6px 0;"><strong>Destination:</strong> ' . ab_escape_html($destination) . '</p>' : '')
+        . ($timeline !== '' ? '<p style="margin:0 0 6px 0;"><strong>Timeline:</strong> ' . ab_escape_html($timeline) . '</p>' : '')
+        . ($assignedStaffName !== '' ? '<p style="margin:0 0 16px 0;"><strong>Assigned staff:</strong> ' . ab_escape_html($assignedStaffName) . '</p>' : '<p style="margin:0 0 16px 0;"><strong>Assigned staff:</strong> Pending assignment</p>')
+        . '<p>Please open the provider portal to review the case details and continue the workflow.</p>';
+
+    $textBody = "A new booking request has been created and is waiting for provider review.\n\n"
+        . 'Case: ' . $itemTitle . "\n"
+        . 'Patient: ' . $patientName . "\n"
+        . ($patientEmail !== '' ? 'Email: ' . $patientEmail . "\n" : '')
+        . ($patientPhone !== '' ? 'Phone: ' . $patientPhone . "\n" : '')
+        . ($destination !== '' ? 'Destination: ' . $destination . "\n" : '')
+        . ($timeline !== '' ? 'Timeline: ' . $timeline . "\n" : '')
+        . 'Assigned staff: ' . ($assignedStaffName !== '' ? $assignedStaffName : 'Pending assignment') . "\n\n"
+        . 'Open case: ' . $caseUrl;
+
+    return send_interaction_email(
+        $providerEmail,
+        'New booking request received - case #' . $bookingRequestId,
+        $contentHtml,
+        $textBody,
+        [
+            'preheader' => 'A new case is waiting for provider review in MedTravel.',
+            'cta' => ['text' => 'Open case in MedTravel', 'url' => $caseUrl],
+            'footer_note' => 'Please handle the case through your MedTravel portal.',
+            'sender_label' => 'MedTravel Coordination Team',
+        ],
+        $conexion
+    );
+}
+
 // ── action: lookup ────────────────────────────────────────────────────────────
 
 if ($action === 'lookup') {
@@ -483,6 +1088,9 @@ if ($action === 'submit') {
     if ($serviceId <= 0) {
         ab_json_error('A medical service must be selected.');
     }
+    if (empty($selectedOffers)) {
+        ab_json_error('At least one active offer must be selected.', 422, ['code' => 'OFFER_REQUIRED']);
+    }
 
     $categoryRow = ab_load_category_row($conexion, $categoryId);
     if (!$categoryRow) {
@@ -515,105 +1123,28 @@ if ($action === 'submit') {
 
     // ── Find or create client user ────────────────────────────────────────────
     $clientUserId = 0;
-    $isNewUser    = false;
-    $resetToken   = '';
-
-    // Look up by email
-    $lookupWhere = [];
-    $lookupTypes = '';
-    $lookupParams = [];
-    if (ab_has_column($conexion, 'usuarios', 'email')) {
-        $lookupWhere[] = 'email = ?'; $lookupTypes .= 's'; $lookupParams[] = $email;
-    }
-    if (ab_has_column($conexion, 'usuarios', 'usuario')) {
-        $lookupWhere[] = 'usuario = ?'; $lookupTypes .= 's'; $lookupParams[] = $email;
-    }
-
-    if (!empty($lookupWhere)) {
-        $lookupSql = "SELECT id, rol, role_id, ppal FROM usuarios WHERE (" . implode(' OR ', $lookupWhere) . ")";
-        if (ab_has_column($conexion, 'usuarios', 'is_deleted')) $lookupSql .= " AND is_deleted = 0";
-        $lookupSql .= " ORDER BY id ASC LIMIT 5";
-
-        $stmtLookup = mysqli_prepare($conexion, $lookupSql);
-        if ($stmtLookup && ab_bind_params($stmtLookup, $lookupTypes, $lookupParams) && mysqli_stmt_execute($stmtLookup)) {
-            $resLookup = mysqli_stmt_get_result($stmtLookup);
-            while ($resLookup && ($lu = mysqli_fetch_assoc($resLookup))) {
-                // Skip privileged users
-                $roleId = (int)($lu['role_id'] ?? 0);
-                if ((int)($lu['ppal'] ?? 0) === 1) continue;
-                if ($roleId === ROLE_ADMIN || $roleId === ROLE_ADMINISTRATIVE) continue;
-                $clientUserId = (int)$lu['id'];
-                break;
-            }
-            mysqli_stmt_close($stmtLookup);
-        } elseif ($stmtLookup) {
-            mysqli_stmt_close($stmtLookup);
+    $isNewUser = false;
+    $resetToken = '';
+    list($clientUserId, $clientUserError) = ab_find_or_create_client_user($conexion, $email, $name, $phone, $isNewUser, $resetToken);
+    if ($clientUserId <= 0) {
+        ab_submit_log('client_user_failed email=' . $email . ' error=' . (string)$clientUserError);
+        if ($clientUserError === 'privileged_email_conflict') {
+            ab_json_error(
+                'The email belongs to an internal MedTravel user. Use a patient email address or an existing non-admin client account.',
+                409,
+                ['code' => 'PATIENT_EMAIL_CONFLICT']
+            );
         }
-    }
-
-    if ($clientUserId === 0) {
-        // Create new client user
-        $isNewUser = true;
-        $baseToken   = ab_random_hex(16);
-        $randPassword = ab_random_hex(16);
-        $passwordHash = function_exists('hash_password')
-            ? hash_password($randPassword, $baseToken)
-            : password_hash($randPassword, PASSWORD_DEFAULT);
-
-        $userData = [];
-        if (ab_has_column($conexion, 'usuarios', 'usuario'))   $userData['usuario']   = $email;
-        if (ab_has_column($conexion, 'usuarios', 'email'))     $userData['email']     = $email;
-        if (ab_has_column($conexion, 'usuarios', 'nombre'))    $userData['nombre']    = $name;
-        if (ab_has_column($conexion, 'usuarios', 'password'))  $userData['password']  = $passwordHash;
-        if (ab_has_column($conexion, 'usuarios', 'token'))     $userData['token']     = $baseToken;
-        if (ab_has_column($conexion, 'usuarios', 'telefono'))  $userData['telefono']  = $phone;
-        if (ab_has_column($conexion, 'usuarios', 'activo'))    $userData['activo']    = 1;
-        if (ab_has_column($conexion, 'usuarios', 'ppal'))      $userData['ppal']      = 0;
-        if (ab_has_column($conexion, 'usuarios', 'empresa'))   $userData['empresa']   = '';
-        if (ab_has_column($conexion, 'usuarios', 'cargo'))     $userData['cargo']     = 'Cliente';
-        if (ab_has_column($conexion, 'usuarios', 'avatar'))    $userData['avatar']    = 'img/perfil/default.png';
-        if (ab_has_column($conexion, 'usuarios', 'cambio_password')) $userData['cambio_password'] = 0;
-        if (ab_has_column($conexion, 'usuarios', 'usrlogin'))  $userData['usrlogin']  = $email;
-        // terms_accepted intentionally left at DEFAULT 0 — client must accept personally
-        if (ab_has_column($conexion, 'usuarios', 'role_id')) {
-            $userData['role_id'] = defined('ROLE_CLIENT') ? ROLE_CLIENT : 3;
+        if ($clientUserError === 'lookup_missing_columns' || $clientUserError === 'missing_required_user_columns') {
+            ab_json_error('Patient account creation is not available in this environment. Check the usuarios schema.', 500, [
+                'code' => 'PATIENT_ACCOUNT_SCHEMA_ERROR',
+                'detail' => (string)$clientUserError,
+            ]);
         }
-        if (ab_has_column($conexion, 'usuarios', 'rol')) {
-            $userData['rol'] = '3';
-        }
-
-        if (empty($userData['usuario']) || empty($userData['password'])) {
-            ab_json_error('Cannot create user account (missing required columns).', 500);
-        }
-
-        $insertCols = array_keys($userData);
-        $insertVals = array_values($userData);
-        $iTypes = implode('', array_map('ab_value_type', $insertVals));
-        $iPlaceholders = implode(',', array_fill(0, count($insertVals), '?'));
-        $iSql = "INSERT INTO usuarios (`" . implode('`,`', $insertCols) . "`) VALUES ({$iPlaceholders})";
-        $stmtIns = mysqli_prepare($conexion, $iSql);
-        if (!$stmtIns || !ab_bind_params($stmtIns, $iTypes, $insertVals) || !mysqli_stmt_execute($stmtIns)) {
-            $errMsg = $stmtIns ? mysqli_stmt_error($stmtIns) : mysqli_error($conexion);
-            if ($stmtIns) mysqli_stmt_close($stmtIns);
-            // Duplicate email — try rescue lookup
-            if (strpos($errMsg, '1062') !== false || mysqli_errno($conexion) === 1062) {
-                // Re-lookup
-                $stmtRescue = mysqli_prepare($conexion, $lookupSql ?? "SELECT id FROM usuarios WHERE email = ? LIMIT 1");
-                if ($stmtRescue && ab_bind_params($stmtRescue, $lookupTypes, $lookupParams) && mysqli_stmt_execute($stmtRescue)) {
-                    $resR = mysqli_stmt_get_result($stmtRescue);
-                    $rowR = $resR ? mysqli_fetch_assoc($resR) : null;
-                    mysqli_stmt_close($stmtRescue);
-                    if ($rowR) { $clientUserId = (int)$rowR['id']; $isNewUser = false; }
-                } elseif ($stmtRescue) { mysqli_stmt_close($stmtRescue); }
-            }
-            if ($clientUserId === 0) {
-                ab_json_error('Failed to create patient account: ' . $errMsg, 500);
-            }
-        } else {
-            $clientUserId = (int)mysqli_insert_id($conexion);
-            mysqli_stmt_close($stmtIns);
-        }
-        $resetToken = $baseToken;
+        ab_json_error('Failed to create or reuse patient account.', 500, [
+            'code' => 'PATIENT_ACCOUNT_CREATE_FAILED',
+            'detail' => (string)$clientUserError,
+        ]);
     }
 
     // ── Set password reset token (if new user or to trigger set-password flow) ─
@@ -675,36 +1206,16 @@ if ($action === 'submit') {
         'utm_term'     => '',
     ];
 
-    // Build columns dynamically based on what exists in the table
-    $brCols = [];
-    $brVals = [];
-    foreach ($brData as $col => $val) {
-        if (ab_has_column($conexion, 'booking_requests', $col)) {
-            $brCols[] = $col;
-            $brVals[] = $val;
-        }
+    $bookingInsert = ab_insert_booking_request_safe($conexion, $brData);
+    if (empty($bookingInsert['ok']) || (int)($bookingInsert['id'] ?? 0) <= 0) {
+        $bookingInsertError = (string)($bookingInsert['error'] ?? 'unknown_error');
+        ab_submit_log('booking_request_insert_failed email=' . $email . ' error=' . $bookingInsertError);
+        ab_json_error('Failed to create booking request.', 500, [
+            'code' => 'BOOKING_REQUEST_CREATE_FAILED',
+            'detail' => $bookingInsertError,
+        ]);
     }
-
-    // Verify required columns present
-    $requiredBrCols = ['name', 'email', 'phone', 'origin', 'booking_datetime', 'destination', 'persons', 'category', 'special_request', 'selected_offers', 'budget', 'timeline', 'additional_notes'];
-    foreach ($requiredBrCols as $req) {
-        if (!in_array($req, $brCols, true)) {
-            ab_json_error("Missing required column: {$req}. Run the migration SQL.", 500);
-        }
-    }
-
-    $brTypes       = implode('', array_map('ab_value_type', $brVals));
-    $brPlaceholders = implode(',', array_fill(0, count($brVals), '?'));
-    $brSql = "INSERT INTO booking_requests (`" . implode('`,`', $brCols) . "`) VALUES ({$brPlaceholders})";
-
-    $stmtBr = mysqli_prepare($conexion, $brSql);
-    if (!$stmtBr || !ab_bind_params($stmtBr, $brTypes, $brVals) || !mysqli_stmt_execute($stmtBr)) {
-        $errMsg = $stmtBr ? mysqli_stmt_error($stmtBr) : mysqli_error($conexion);
-        if ($stmtBr) mysqli_stmt_close($stmtBr);
-        ab_json_error('Failed to create booking request: ' . $errMsg, 500);
-    }
-    $bookingRequestId = (int)mysqli_insert_id($conexion);
-    mysqli_stmt_close($stmtBr);
+    $bookingRequestId = (int)$bookingInsert['id'];
 
     // ── Insert booking_request_items ──────────────────────────────────────────
     $createdItems = [];
@@ -820,21 +1331,14 @@ if ($action === 'submit') {
 
     // ── Provider notifications ────────────────────────────────────────────────
     if (!empty($createdItems)) {
-        // Include provider notification helper from submit.php functions if available
-        $submitPath = __DIR__ . '/../../booking/submit.php';
-        if (!defined('BOOKING_SUBMIT_FNDEF') && file_exists($submitPath)) {
-            define('BOOKING_SUBMIT_FNDEF', 1);
-            // Only load function definitions — the execution block checks REQUEST_METHOD POST
-            // and won't re-run since we're in an AJAX POST context. But to be safe we spoof:
-            $savedMethod = $_SERVER['REQUEST_METHOD'] ?? 'POST';
-            $_SERVER['REQUEST_METHOD'] = 'GET';
-            @include_once $submitPath;
-            $_SERVER['REQUEST_METHOD'] = $savedMethod;
-        }
-
         foreach ($createdItems as $item) {
-            if (function_exists('booking_notify_provider_new_request_local')) {
-                booking_notify_provider_new_request_local($conexion, $bookingRequestId, $item);
+            $notifyResult = ab_notify_provider_new_request($conexion, $bookingRequestId, $item);
+            if (empty($notifyResult['success'])) {
+                ab_submit_log(
+                    'provider_notify_failed request_id=' . $bookingRequestId
+                    . ' item_id=' . (int)($item['item_id'] ?? 0)
+                    . ' error=' . (string)($notifyResult['error'] ?? 'unknown_error')
+                );
             }
         }
     }
@@ -846,7 +1350,9 @@ if ($action === 'submit') {
         'client_user_id'   => $clientUserId,
         'is_new_user'      => $isNewUser,
         'items_created'    => count($createdItems),
-        'message'          => 'Booking created. Credentials sent to patient.',
+        'message'          => $isNewUser
+            ? 'Booking created. Credentials sent to patient.'
+            : 'Booking created. Existing patient account reused.',
     ]);
 }
 
