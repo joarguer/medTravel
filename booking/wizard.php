@@ -34,6 +34,11 @@ if ($preselected_service_id > 0) {
     }
 }
 
+$contact_name = trim((string)($booking['name'] ?? ''));
+$contact_email = trim((string)($booking['email'] ?? ''));
+$contact_phone = trim((string)($booking['phone'] ?? ''));
+$step1_contact_complete = ($contact_name !== '' && $contact_email !== '');
+
 // Cargar header del wizard desde la base de datos
 $wizard_header = [
     'title' => 'Booking Wizard',
@@ -353,8 +358,28 @@ if ($flow === 'addon' && !empty($addon_route)) {
             margin-bottom: 32px;
             border: 1px solid #e5e7eb;
         }
+        .wizard-summary.is-incomplete {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
         .wizard-summary h2 { margin-top: 0; color: #1e293b; }
         .wizard-summary p { margin-bottom: 6px; }
+        .contact-completion-note {
+            margin-top: 14px;
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: #fff7ed;
+            border: 1px solid #fdba74;
+            color: #9a3412;
+        }
+        .contact-required-indicator {
+            color: #dc2626;
+            font-weight: 700;
+        }
+        .contact-gate-message {
+            margin-top: 12px;
+        }
         .wizard-stage { 
             border: 1px solid #e5e7eb; 
             border-radius: 10px; 
@@ -619,26 +644,54 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 <?php echo htmlspecialchars($submission_message ?: 'Please review the form.'); ?>
             </div>
         <?php endif; ?>
-        <div class="wizard-summary">
-            <h2>Step 1 completed</h2>
-            <p>We captured your contact context so we can continue with the wizard.</p>
-            <?php if (!empty($booking)): ?>
-                <p><strong>Name:</strong> <?php echo htmlspecialchars($booking['name']); ?></p>
-                <p><strong>Email:</strong> <?php echo htmlspecialchars($booking['email']); ?></p>
-                <?php if (!empty($booking['destination'])): ?>
-                    <p><strong>Destination:</strong> <?php echo htmlspecialchars($booking['destination']); ?></p>
-                <?php endif; ?>
-                <?php if (!empty($booking['timeline_from']) || !empty($booking['timeline_to'])): ?>
-                    <p><strong>Preferred dates:</strong>
-                        <?php echo htmlspecialchars($booking['timeline_from'] ?: ''); ?>
-                        <?php echo (!empty($booking['timeline_from']) && !empty($booking['timeline_to'])) ? ' - ' : ''; ?>
-                        <?php echo htmlspecialchars($booking['timeline_to'] ?: ''); ?>
-                    </p>
-                <?php endif; ?>
-                <?php if (!empty($booking['special_request'])): ?>
-                    <p><strong>Special request:</strong> <?php echo htmlspecialchars($booking['special_request']); ?></p>
+        <div class="wizard-summary<?php echo $step1_contact_complete ? '' : ' is-incomplete'; ?>">
+            <?php if ($step1_contact_complete): ?>
+                <h2>Step 1 completed</h2>
+                <p>We captured your contact context so we can continue with the wizard.</p>
+                <p><strong>Name:</strong> <?php echo htmlspecialchars($contact_name); ?></p>
+                <p><strong>Email:</strong> <?php echo htmlspecialchars($contact_email); ?></p>
+                <?php if ($contact_phone !== ''): ?>
+                    <p><strong>Phone:</strong> <?php echo htmlspecialchars($contact_phone); ?></p>
                 <?php endif; ?>
             <?php else: ?>
+                <h2>Step 1 incomplete</h2>
+                <p>We kept your selected service context, but we still need your contact details before submitting.</p>
+                <div class="contact-completion-note">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    Complete <strong>name</strong> and <strong>email</strong> here without restarting the booking flow.
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="wizard-contact-name" class="form-label">Your Name <span class="contact-required-indicator">*</span></label>
+                        <input type="text" class="form-control" id="wizard-contact-name" value="<?php echo htmlspecialchars($contact_name, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="name">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="wizard-contact-email" class="form-label">Your Email <span class="contact-required-indicator">*</span></label>
+                        <input type="email" class="form-control" id="wizard-contact-email" value="<?php echo htmlspecialchars($contact_email, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="email">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="wizard-contact-phone" class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" id="wizard-contact-phone" value="<?php echo htmlspecialchars($contact_phone, ENT_QUOTES, 'UTF-8'); ?>" autocomplete="tel">
+                    </div>
+                </div>
+                <div id="wizard-contact-gate-message" class="alert alert-warning contact-gate-message mb-0" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>Final submit stays blocked until name and email are completed.
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($booking['destination'])): ?>
+                <p><strong>Destination:</strong> <?php echo htmlspecialchars($booking['destination']); ?></p>
+            <?php endif; ?>
+            <?php if (!empty($booking['timeline_from']) || !empty($booking['timeline_to'])): ?>
+                <p><strong>Preferred dates:</strong>
+                    <?php echo htmlspecialchars($booking['timeline_from'] ?: ''); ?>
+                    <?php echo (!empty($booking['timeline_from']) && !empty($booking['timeline_to'])) ? ' - ' : ''; ?>
+                    <?php echo htmlspecialchars($booking['timeline_to'] ?: ''); ?>
+                </p>
+            <?php endif; ?>
+            <?php if (!empty($booking['special_request'])): ?>
+                <p><strong>Special request:</strong> <?php echo htmlspecialchars($booking['special_request']); ?></p>
+            <?php endif; ?>
+            <?php if (empty($booking) && !$step1_contact_complete): ?>
                 <p>No data captured yet.</p>
             <?php endif; ?>
         </div>
@@ -937,6 +990,11 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         <?php foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as $_utmK): ?>
                         <input type="hidden" name="<?php echo $_utmK; ?>" value="<?php echo htmlspecialchars((string)($booking[$_utmK] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                         <?php endforeach; ?>
+                        <?php if (!$step1_contact_complete): ?>
+                            <div class="alert alert-warning mb-4" role="alert">
+                                <i class="fas fa-user-check me-2"></i>Please complete your contact data above before sending this request.
+                            </div>
+                        <?php endif; ?>
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label">Preferred dates</label>
@@ -980,7 +1038,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                     <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
                                 <?php endif; ?>
                             </div>
-                            <button type="submit" class="btn btn-primary px-4 py-3">
+                            <button type="submit" id="wizard-submit-button" class="btn btn-primary px-4 py-3" <?php echo $step1_contact_complete ? '' : 'disabled'; ?>>
                                 <i class="fas fa-paper-plane me-2"></i>Submit Request
                             </button>
                         </div>
@@ -1128,6 +1186,22 @@ if ($flow === 'addon' && !empty($addon_route)) {
             return parseStoredJson(localStorage.getItem(KEY_SELECTED_OFFERS));
         }
 
+        function getDraftPayload() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem('mt_booking_draft') || '{}');
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function saveDraftPayload(draft) {
+            try {
+                localStorage.setItem('mt_booking_draft', JSON.stringify(draft || {}));
+                ensureBookingStarted();
+            } catch (e) {}
+        }
+
         function ensureBookingStarted() {
             try {
                 localStorage.setItem('mt_booking_started', '1');
@@ -1177,13 +1251,108 @@ if ($flow === 'addon' && !empty($addon_route)) {
             field.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
-        function hydrateHiddenBookingContextFromDraft() {
-            let draft = {};
-            try {
-                draft = JSON.parse(localStorage.getItem('mt_booking_draft') || '{}') || {};
-            } catch (e) {
-                draft = {};
+        function setWizardFieldValue(name, value) {
+            const field = document.querySelector('[name="' + name + '"]');
+            if (!field) return;
+            const normalized = String(value === null || value === undefined ? '' : value);
+            if (String(field.value || '') === normalized) return;
+            field.value = normalized;
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function getContactFieldValue(fieldName) {
+            const editorField = document.getElementById('wizard-contact-' + fieldName);
+            if (editorField) {
+                return String(editorField.value || '').trim();
             }
+            const hiddenField = document.querySelector('[name="' + fieldName + '"]');
+            return hiddenField ? String(hiddenField.value || '').trim() : '';
+        }
+
+        function isWizardContactComplete() {
+            return getContactFieldValue('name') !== '' && getContactFieldValue('email') !== '';
+        }
+
+        function updateWizardContactGateState() {
+            const submitButton = document.getElementById('wizard-submit-button');
+            if (submitButton) {
+                submitButton.disabled = !isWizardContactComplete();
+            }
+
+            const gateMessage = document.getElementById('wizard-contact-gate-message');
+            if (!gateMessage) {
+                return;
+            }
+
+            if (isWizardContactComplete()) {
+                gateMessage.className = 'alert alert-success contact-gate-message mb-0';
+                gateMessage.innerHTML = '<i class="fas fa-check-circle me-2"></i>Contact details ready. Your selected offer and service context remain preserved.';
+                return;
+            }
+
+            gateMessage.className = 'alert alert-warning contact-gate-message mb-0';
+            gateMessage.innerHTML = '<i class="fas fa-info-circle me-2"></i>Final submit stays blocked until name and email are completed.';
+        }
+
+        function syncWizardContactEditor() {
+            const nameField = document.getElementById('wizard-contact-name');
+            const emailField = document.getElementById('wizard-contact-email');
+            const phoneField = document.getElementById('wizard-contact-phone');
+            const hasEditor = !!(nameField || emailField || phoneField);
+            if (!hasEditor) {
+                updateWizardContactGateState();
+                return;
+            }
+
+            const draft = getDraftPayload();
+            if (nameField) {
+                draft.name = String(nameField.value || '').trim();
+                setWizardFieldValue('name', draft.name);
+            }
+            if (emailField) {
+                draft.email = String(emailField.value || '').trim();
+                setWizardFieldValue('email', draft.email);
+            }
+            if (phoneField) {
+                draft.phone = String(phoneField.value || '').trim();
+                setWizardFieldValue('phone', draft.phone);
+            }
+            saveDraftPayload(draft);
+            updateWizardContactGateState();
+        }
+
+        function hydrateContactEditorFromDraft() {
+            const draft = getDraftPayload();
+            [
+                ['name', 'wizard-contact-name'],
+                ['email', 'wizard-contact-email'],
+                ['phone', 'wizard-contact-phone']
+            ].forEach(function(tuple) {
+                const fieldName = tuple[0];
+                const fieldId = tuple[1];
+                const field = document.getElementById(fieldId);
+                if (!field || String(field.value || '').trim() !== '') return;
+                const value = String(draft[fieldName] || '').trim();
+                if (value === '') return;
+                field.value = value;
+            });
+            syncWizardContactEditor();
+        }
+
+        function bindWizardContactEditor() {
+            ['wizard-contact-name', 'wizard-contact-email', 'wizard-contact-phone'].forEach(function(fieldId) {
+                const field = document.getElementById(fieldId);
+                if (!field || field.dataset.mtBound === '1') return;
+                field.dataset.mtBound = '1';
+                field.addEventListener('input', syncWizardContactEditor);
+                field.addEventListener('change', syncWizardContactEditor);
+            });
+            updateWizardContactGateState();
+        }
+
+        function hydrateHiddenBookingContextFromDraft() {
+            let draft = getDraftPayload();
 
             setWizardFieldIfEmpty('name', draft.name);
             setWizardFieldIfEmpty('email', draft.email);
@@ -1419,6 +1588,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
             }
             <?php endif; ?>
             hydrateHiddenBookingContextFromDraft();
+            hydrateContactEditorFromDraft();
             const draft = (function() {
                 try { return JSON.parse(localStorage.getItem('mt_booking_draft') || '{}'); } catch (e) { return {}; }
             })();
@@ -1440,6 +1610,8 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 window.dispatchEvent(new Event('mt-booking-state-changed'));
             }
             hydrateWizardFromStorage();
+            bindWizardContactEditor();
+            updateWizardContactGateState();
 
             document.querySelectorAll('.offer-checkbox').forEach(function(cb) {
                 cb.addEventListener('click', function(e) {
@@ -1481,7 +1653,19 @@ if ($flow === 'addon' && !empty($addon_route)) {
 
             const bookingForm = document.getElementById('booking-wizard-form');
             if (bookingForm) {
-                bookingForm.addEventListener('submit', function() {
+                bookingForm.addEventListener('submit', function(e) {
+                    syncWizardContactEditor();
+                    if (!isWizardContactComplete()) {
+                        e.preventDefault();
+                        updateWizardContactGateState();
+                        const missingField = document.getElementById('wizard-contact-name') && getContactFieldValue('name') === ''
+                            ? document.getElementById('wizard-contact-name')
+                            : document.getElementById('wizard-contact-email');
+                        if (missingField) {
+                            missingField.focus();
+                        }
+                        return;
+                    }
                     hydrateHiddenBookingContextFromDraft();
                     renderHiddenSelectionsForSubmit();
                 });
@@ -1492,6 +1676,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
             applyStoredSelectionsToCurrentStep();
             updateSelectionSummary();
             renderHiddenSelectionsForSubmit();
+            updateWizardContactGateState();
         });
     </script>
 </body>

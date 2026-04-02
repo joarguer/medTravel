@@ -2015,6 +2015,12 @@ foreach ($fallbackBooking as $k => $v) {
     }
 }
 
+foreach (['name', 'email', 'phone'] as $contactField) {
+    if (isset($fallbackBooking[$contactField]) && $fallbackBooking[$contactField] !== '') {
+        $booking[$contactField] = $fallbackBooking[$contactField];
+    }
+}
+
 if (empty($booking['origin'])) {
     $booking['origin'] = 'wizard';
 }
