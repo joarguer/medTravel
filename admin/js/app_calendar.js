@@ -103,6 +103,14 @@
         return '';
     }
 
+    function getEventAppointmentMode(event) {
+        var mode = String(getEventExtendedValue(event, 'appointment_mode') || '').toLowerCase();
+        if (mode === 'virtual' || mode === 'in_person' || mode === 'travel') {
+            return mode;
+        }
+        return 'in_person';
+    }
+
     function getEventExtendedValue(event, key) {
         if (!event || !key) return '';
         if (typeof event[key] !== 'undefined' && event[key] !== null && event[key] !== '') {
@@ -633,6 +641,7 @@
         if (options.forceStatus) {
             $form.find('[name="status"]').val(options.forceStatus);
         }
+        $form.find('[name="appointment_mode"]').val(options.appointmentMode || 'in_person');
         if (options.itemId > 0) {
             selectedItemId = parseInt(options.itemId, 10) || 0;
             $('#admin-calendar-create-item-select').val(String(selectedItemId));
@@ -701,6 +710,7 @@
         $('#admin-calendar-detail-request').val(requestId > 0 ? requestId : '');
         $('#admin-calendar-detail-item').val(itemId > 0 ? itemId : '');
         $('#admin-calendar-detail-status').val(getEventStatus(currentEvent));
+        $('#admin-calendar-detail-appointment-mode').val(getEventAppointmentMode(currentEvent));
         $('#admin-calendar-detail-description').val((currentEvent.description || (currentEvent.extendedProps && currentEvent.extendedProps.description) || ''));
         $('#admin-calendar-detail-allday').prop('checked', !!currentEvent.allDay);
         $('#admin-calendar-open-request').attr('href', buildRequestUrl(requestId));
@@ -986,6 +996,7 @@
                 start_at: $.trim($f.find('[name="start_at"]').val() || ''),
                 end_at: $.trim($f.find('[name="end_at"]').val() || ''),
                 status: $.trim($f.find('[name="status"]').val() || 'scheduled'),
+                appointment_mode: $.trim($f.find('[name="appointment_mode"]').val() || 'in_person'),
                 all_day: $f.find('[name="all_day"]').is(':checked') ? 1 : 0
             }, function (res) {
                 setCreateSubmittingState(false);
@@ -1033,6 +1044,7 @@
                 start_at: $.trim($f.find('[name="start_at"]').val() || ''),
                 end_at: $.trim($f.find('[name="end_at"]').val() || ''),
                 status: $.trim($f.find('[name="status"]').val() || 'scheduled'),
+                appointment_mode: $.trim($f.find('[name="appointment_mode"]').val() || 'in_person'),
                 all_day: $f.find('[name="all_day"]').is(':checked') ? 1 : 0
             }, function () {
                 $('#admin-calendar-detail-modal').modal('hide');

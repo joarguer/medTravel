@@ -53,6 +53,68 @@ function calendar_normalize_status($value)
     return in_array($status, $allowed, true) ? $status : 'scheduled';
 }
 
+function calendar_normalize_appointment_mode($value)
+{
+    $mode = strtolower(trim((string)$value));
+    $allowed = ['virtual', 'in_person', 'travel'];
+    return in_array($mode, $allowed, true) ? $mode : '';
+}
+
+function calendar_looks_like_travel_context($text)
+{
+    $text = strtolower(trim((string)$text));
+    if ($text === '') {
+        return false;
+    }
+    return (bool)preg_match('/\b(travel|trip|viaje|traslado|flight|vuelo|hotel|airport|aeropuerto)\b/u', $text);
+}
+
+function calendar_infer_appointment_mode(array $row)
+{
+    $explicit = calendar_normalize_appointment_mode($row['appointment_mode'] ?? '');
+    if ($explicit !== '') {
+        return $explicit;
+    }
+
+    $googleMeetUrl = trim((string)($row['google_meet_url'] ?? ''));
+    $integrationMode = strtolower(trim((string)($row['integration_mode'] ?? '')));
+    if ($googleMeetUrl !== '' || $integrationMode === 'calendar_plus_meet') {
+        return 'virtual';
+    }
+
+    $title = trim((string)($row['title'] ?? ''));
+    $description = trim((string)($row['description'] ?? ''));
+    if (calendar_looks_like_travel_context($title . ' ' . $description)) {
+        return 'travel';
+    }
+
+    return 'in_person';
+}
+
+function calendar_appointment_mode_label_es($mode)
+{
+    $mode = calendar_normalize_appointment_mode($mode);
+    if ($mode === 'virtual') {
+        return 'Cita virtual';
+    }
+    if ($mode === 'travel') {
+        return 'Cita asociada a viaje';
+    }
+    return 'Cita presencial';
+}
+
+function calendar_appointment_mode_label_en($mode)
+{
+    $mode = calendar_normalize_appointment_mode($mode);
+    if ($mode === 'virtual') {
+        return 'Virtual appointment';
+    }
+    if ($mode === 'travel') {
+        return 'Travel-related appointment';
+    }
+    return 'In-person appointment';
+}
+
 function calendar_parse_datetime_input($value)
 {
     $value = trim((string)$value);
@@ -90,6 +152,7 @@ function calendar_json_event_row($row)
     if ($threadId === '') {
         $threadId = calendar_build_thread_id($eventType, $requestId, $itemId);
     }
+    $appointmentMode = calendar_infer_appointment_mode((array)$row);
 
     return [
         'id' => (int)($row['id'] ?? 0),
@@ -108,6 +171,9 @@ function calendar_json_event_row($row)
         'google_html_link' => (string)($row['google_html_link'] ?? ''),
         'google_meet_url' => (string)($row['google_meet_url'] ?? ''),
         'organizer_email' => (string)($row['organizer_email'] ?? ''),
+        'appointment_mode' => $appointmentMode,
+        'appointment_mode_label_es' => calendar_appointment_mode_label_es($appointmentMode),
+        'appointment_mode_label_en' => calendar_appointment_mode_label_en($appointmentMode),
         'is_google_synced' => $isGoogleSynced,
         'extendedProps' => [
             'event_type' => $eventType,
@@ -121,6 +187,9 @@ function calendar_json_event_row($row)
             'google_html_link' => (string)($row['google_html_link'] ?? ''),
             'google_meet_url' => (string)($row['google_meet_url'] ?? ''),
             'organizer_email' => (string)($row['organizer_email'] ?? ''),
+            'appointment_mode' => $appointmentMode,
+            'appointment_mode_label_es' => calendar_appointment_mode_label_es($appointmentMode),
+            'appointment_mode_label_en' => calendar_appointment_mode_label_en($appointmentMode),
             'is_google_synced' => $isGoogleSynced,
         ],
     ];

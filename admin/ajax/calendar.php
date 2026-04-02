@@ -806,8 +806,10 @@ if ($action === 'create_event') {
     $requestId = (int)($_POST['request_id'] ?? 0);
     $itemId = (int)($_POST['item_id'] ?? 0);
     $status = calendar_normalize_status($_POST['status'] ?? 'scheduled');
+    $appointmentMode = calendar_normalize_appointment_mode($_POST['appointment_mode'] ?? '');
     $isProviderActor = empty($scope['is_admin']);
     $providerContext = ['kind' => '', 'id' => 0];
+    $hasAppointmentModeColumn = calendar_table_has_column($conexion, 'calendar_events', 'appointment_mode');
 
     if ($title === '' || $startAt === null) {
         calendar_admin_err('title_and_start_required', 422);
@@ -841,6 +843,15 @@ if ($action === 'create_event') {
     if ($isProviderActor) {
         $status = 'proposed';
     }
+    if ($appointmentMode === '') {
+        $appointmentMode = calendar_infer_appointment_mode([
+            'appointment_mode' => '',
+            'google_meet_url' => '',
+            'integration_mode' => '',
+            'title' => $title,
+            'description' => $description,
+        ]);
+    }
 
     if ($eventType === 'ITEM') {
         $capacity = calendar_get_provider_capacity($conexion, $providerContext);
@@ -869,9 +880,17 @@ if ($action === 'create_event') {
     mysqli_begin_transaction($conexion);
 
     $sql = "INSERT INTO calendar_events
-                (title, description, start_at, end_at, all_day, event_type, request_id, item_id, thread_id, created_by_role, created_by_user_id, provider_id, client_user_id, status, updated_at)
+                (title, description, start_at, end_at, all_day, event_type, request_id, item_id, thread_id, created_by_role, created_by_user_id, provider_id, client_user_id, status";
+    if ($hasAppointmentModeColumn) {
+        $sql .= ", appointment_mode";
+    }
+    $sql .= ", updated_at)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?";
+    if ($hasAppointmentModeColumn) {
+        $sql .= ", ?";
+    }
+    $sql .= ", NOW())";
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
         mysqli_rollback($conexion);
@@ -880,24 +899,46 @@ if ($action === 'create_event') {
     $createdByRole = (string)$scope['role_label'];
     $createdByUserId = (int)$scope['user_id'];
     $providerIdentifier = ((int)$providerContext['id'] > 0) ? (int)$providerContext['id'] : (int)$scope['provider_identifier'];
-    mysqli_stmt_bind_param(
-        $stmt,
-        'ssssisiissiiis',
-        $title,
-        $description,
-        $startAt,
-        $endAt,
-        $allDay,
-        $eventType,
-        $requestId,
-        $itemId,
-        $threadId,
-        $createdByRole,
-        $createdByUserId,
-        $providerIdentifier,
-        $clientUserId,
-        $status
-    );
+    if ($hasAppointmentModeColumn) {
+        mysqli_stmt_bind_param(
+            $stmt,
+            'ssssisiissiiiss',
+            $title,
+            $description,
+            $startAt,
+            $endAt,
+            $allDay,
+            $eventType,
+            $requestId,
+            $itemId,
+            $threadId,
+            $createdByRole,
+            $createdByUserId,
+            $providerIdentifier,
+            $clientUserId,
+            $status,
+            $appointmentMode
+        );
+    } else {
+        mysqli_stmt_bind_param(
+            $stmt,
+            'ssssisiissiiis',
+            $title,
+            $description,
+            $startAt,
+            $endAt,
+            $allDay,
+            $eventType,
+            $requestId,
+            $itemId,
+            $threadId,
+            $createdByRole,
+            $createdByUserId,
+            $providerIdentifier,
+            $clientUserId,
+            $status
+        );
+    }
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
@@ -993,10 +1034,14 @@ if ($action === 'update_event') {
     $endAt = isset($_POST['end_at']) ? calendar_parse_datetime_input($_POST['end_at']) : (string)($existing['end_at'] ?? '');
     $allDay = isset($_POST['all_day']) ? (int)((int)$_POST['all_day'] === 1) : (int)($existing['all_day'] ?? 0);
     $status = isset($_POST['status']) ? calendar_normalize_status($_POST['status']) : (string)$existing['status'];
+    $appointmentMode = isset($_POST['appointment_mode'])
+        ? calendar_normalize_appointment_mode($_POST['appointment_mode'])
+        : calendar_normalize_appointment_mode($existing['appointment_mode'] ?? '');
     $isProviderActor = empty($scope['is_admin']);
     $requestId = isset($_POST['request_id']) ? (int)$_POST['request_id'] : (int)($existing['request_id'] ?? 0);
     $itemId = isset($_POST['item_id']) ? (int)$_POST['item_id'] : (int)($existing['item_id'] ?? 0);
     $providerContext = ['kind' => '', 'id' => 0];
+    $hasAppointmentModeColumn = calendar_table_has_column($conexion, 'calendar_events', 'appointment_mode');
 
     if ($title === '' || $startAt === null) {
         calendar_admin_err('title_and_start_required', 422);
@@ -1034,6 +1079,15 @@ if ($action === 'update_event') {
     if ($isProviderActor) {
         $status = 'proposed';
     }
+    if ($appointmentMode === '') {
+        $appointmentMode = calendar_infer_appointment_mode([
+            'appointment_mode' => '',
+            'google_meet_url' => (string)($existing['google_meet_url'] ?? ''),
+            'integration_mode' => (string)($existing['integration_mode'] ?? ''),
+            'title' => $title,
+            'description' => $description,
+        ]);
+    }
     $providerIdentifier = ((int)$providerContext['id'] > 0) ? (int)$providerContext['id'] : (int)$scope['provider_identifier'];
 
     if ($eventType === 'ITEM') {
@@ -1052,8 +1106,12 @@ if ($action === 'update_event') {
 
     mysqli_begin_transaction($conexion);
 
-    $sql = "UPDATE calendar_events
-            SET title = ?, description = ?, start_at = ?, end_at = ?, all_day = ?, event_type = ?, request_id = ?, item_id = ?, thread_id = ?, provider_id = ?, client_user_id = ?, status = ?, updated_at = NOW()
+        $sql = "UPDATE calendar_events
+            SET title = ?, description = ?, start_at = ?, end_at = ?, all_day = ?, event_type = ?, request_id = ?, item_id = ?, thread_id = ?, provider_id = ?, client_user_id = ?, status = ?";
+        if ($hasAppointmentModeColumn) {
+        $sql .= ", appointment_mode = ?";
+        }
+        $sql .= ", updated_at = NOW()
             WHERE id = ?
             LIMIT 1";
     $stmt = mysqli_prepare($conexion, $sql);
@@ -1061,23 +1119,44 @@ if ($action === 'update_event') {
         mysqli_rollback($conexion);
         calendar_admin_err('prepare_failed', 500);
     }
-    mysqli_stmt_bind_param(
-        $stmt,
-        'ssssisiisiisi',
-        $title,
-        $description,
-        $startAt,
-        $endAt,
-        $allDay,
-        $eventType,
-        $requestId,
-        $itemId,
-        $threadId,
-        $providerIdentifier,
-        $clientUserId,
-        $status,
-        $eventId
-    );
+    if ($hasAppointmentModeColumn) {
+        mysqli_stmt_bind_param(
+            $stmt,
+            'ssssisiisiissi',
+            $title,
+            $description,
+            $startAt,
+            $endAt,
+            $allDay,
+            $eventType,
+            $requestId,
+            $itemId,
+            $threadId,
+            $providerIdentifier,
+            $clientUserId,
+            $status,
+            $appointmentMode,
+            $eventId
+        );
+    } else {
+        mysqli_stmt_bind_param(
+            $stmt,
+            'ssssisiisiisi',
+            $title,
+            $description,
+            $startAt,
+            $endAt,
+            $allDay,
+            $eventType,
+            $requestId,
+            $itemId,
+            $threadId,
+            $providerIdentifier,
+            $clientUserId,
+            $status,
+            $eventId
+        );
+    }
     if (!mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);

@@ -161,6 +161,15 @@ $can_cancel = $can_update;
                                     <option value="cancelled">cancelled</option>
                                 </select>
                             </div>
+                            <div class="form-group">
+                                <label>Modalidad de la cita</label>
+                                <select class="form-control" name="appointment_mode" id="admin-calendar-create-appointment-mode">
+                                    <option value="in_person" selected>Presencial</option>
+                                    <option value="virtual">Virtual</option>
+                                    <option value="travel">Asociada a viaje</option>
+                                </select>
+                                <small class="text-muted">Define explícitamente si la coordinación es virtual, presencial o asociada a viaje.</small>
+                            </div>
                             <div class="form-group" id="admin-calendar-create-status-readonly-group" style="display:none;">
                                 <label>Estado</label>
                                 <p class="form-control-static" id="admin-calendar-create-status-readonly" style="font-weight:600;">Propuesta enviada</p>
@@ -292,6 +301,14 @@ $can_cancel = $can_update;
                             <option value="proposed">proposed</option>
                             <option value="confirmed">confirmed</option>
                             <option value="cancelled">cancelled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Modalidad de la cita</label>
+                        <select class="form-control" name="appointment_mode" id="admin-calendar-detail-appointment-mode">
+                            <option value="in_person">Presencial</option>
+                            <option value="virtual">Virtual</option>
+                            <option value="travel">Asociada a viaje</option>
                         </select>
                     </div>
                     <div class="form-group">

@@ -114,12 +114,43 @@ function client_dashboard_requested_document_label($type)
 
 function client_dashboard_event_mode($eventRow)
 {
+    $appointmentMode = strtolower(trim((string)($eventRow['appointment_mode'] ?? '')));
+    if ($appointmentMode === 'virtual') {
+        return [
+            'key' => 'virtual',
+            'label' => 'Virtual appointment',
+        ];
+    }
+    if ($appointmentMode === 'in_person') {
+        return [
+            'key' => 'in_person',
+            'label' => 'In-person appointment',
+        ];
+    }
+    if ($appointmentMode === 'travel') {
+        return [
+            'key' => 'travel',
+            'label' => 'Travel-related appointment',
+        ];
+    }
+
+    // Legacy fallback for events created before appointment_mode existed.
     $googleMeetUrl = trim((string)($eventRow['google_meet_url'] ?? ''));
     $integrationMode = strtolower(trim((string)($eventRow['integration_mode'] ?? '')));
     if ($googleMeetUrl !== '' || $integrationMode === 'calendar_plus_meet') {
         return [
             'key' => 'virtual',
             'label' => 'Virtual appointment',
+        ];
+    }
+
+    $travelProbe = strtolower(trim(
+        (string)($eventRow['title'] ?? '') . ' ' . (string)($eventRow['description'] ?? '')
+    ));
+    if ($travelProbe !== '' && preg_match('/\b(travel|trip|viaje|traslado|flight|vuelo|hotel|airport|aeropuerto)\b/u', $travelProbe)) {
+        return [
+            'key' => 'travel',
+            'label' => 'Travel-related appointment',
         ];
     }
 
@@ -474,6 +505,11 @@ if ($inClause !== '' && client_table_exists($conexion, 'booking_request_items'))
 
 if ($inClause !== '' && client_table_exists($conexion, 'calendar_events')) {
     $eventCols = ['ce.request_id', 'ce.item_id', 'ce.status', 'ce.start_at', 'ce.end_at', 'ce.title'];
+    if (client_table_has_column($conexion, 'calendar_events', 'appointment_mode')) {
+        $eventCols[] = 'ce.appointment_mode';
+    } else {
+        $eventCols[] = "'' AS appointment_mode";
+    }
     if (client_table_has_column($conexion, 'calendar_events', 'integration_mode')) {
         $eventCols[] = 'ce.integration_mode';
     } else {
@@ -513,6 +549,7 @@ if ($inClause !== '' && client_table_exists($conexion, 'calendar_events')) {
                     'start_at' => $startAt,
                     'end_at' => (string)($eventRow['end_at'] ?? ''),
                     'title' => (string)($eventRow['title'] ?? ''),
+                    'appointment_mode' => (string)($eventRow['appointment_mode'] ?? ''),
                     'integration_mode' => (string)($eventRow['integration_mode'] ?? ''),
                     'google_meet_url' => (string)($eventRow['google_meet_url'] ?? ''),
                 ];
