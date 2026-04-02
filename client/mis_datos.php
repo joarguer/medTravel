@@ -2,10 +2,10 @@
 include __DIR__ . '/include/include.php';
 ?>
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?> - Mis Datos</title>
+    <title><?php echo htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?> - My Profile</title>
     <?php echo $global_first_style; ?>
     <?php echo $theme_global_style; ?>
     <?php echo $theme_layout_style; ?>
@@ -28,10 +28,10 @@ include __DIR__ . '/include/include.php';
     <div class="container-fluid">
         <div class="page-content">
             <div class="breadcrumbs">
-                <h1>Mis Datos</h1>
+                <h1>My Profile</h1>
                 <ol class="breadcrumb">
                     <li><a href="/client/index.php">Home</a></li>
-                    <li class="active">Mis Datos</li>
+                    <li class="active">My Profile</li>
                 </ol>
             </div>
 
@@ -41,24 +41,24 @@ include __DIR__ . '/include/include.php';
                         <div class="portlet-title">
                             <div class="caption">
                                 <i class="icon-user font-blue"></i>
-                                <span class="caption-subject font-blue bold uppercase">Completa tu perfil</span>
+                                <span class="caption-subject font-blue bold uppercase">Complete Your Profile</span>
                             </div>
                         </div>
                         <div class="portlet-body">
                             <form id="misDatosForm" class="mis-datos-form">
                                 <input type="hidden" id="cliente_id" name="cliente_id" value="0">
 
-                                <h4 class="form-section">Información Personal</h4>
+                                <h4 class="form-section">Personal Information</h4>
                                 <div class="row">
                                     <div class="col-md-6" data-field-wrap="nombre">
                                         <div class="form-group">
-                                            <label>Nombre <span class="required-mark" data-required-mark="nombre" style="display:none;">*</span></label>
+                                            <label>First Name <span class="required-mark" data-required-mark="nombre" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="nombre" name="nombre">
                                         </div>
                                     </div>
                                     <div class="col-md-6" data-field-wrap="apellido">
                                         <div class="form-group">
-                                            <label>Apellido <span class="required-mark" data-required-mark="apellido" style="display:none;">*</span></label>
+                                            <label>Last Name <span class="required-mark" data-required-mark="apellido" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="apellido" name="apellido">
                                         </div>
                                     </div>
@@ -73,7 +73,7 @@ include __DIR__ . '/include/include.php';
                                     </div>
                                     <div class="col-md-6" data-field-wrap="fecha_nacimiento">
                                         <div class="form-group">
-                                            <label>Fecha de Nacimiento <span class="required-mark" data-required-mark="fecha_nacimiento" style="display:none;">*</span></label>
+                                            <label>Date of Birth <span class="required-mark" data-required-mark="fecha_nacimiento" style="display:none;">*</span></label>
                                             <input type="date" class="form-control" id="fecha_nacimiento" name="fecha_nacimiento">
                                         </div>
                                     </div>
@@ -82,7 +82,7 @@ include __DIR__ . '/include/include.php';
                                 <div class="row">
                                     <div class="col-md-6" data-field-wrap="telefono">
                                         <div class="form-group">
-                                            <label>Teléfono <span class="required-mark" data-required-mark="telefono" style="display:none;">*</span></label>
+                                            <label>Phone <span class="required-mark" data-required-mark="telefono" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="telefono" name="telefono">
                                         </div>
                                     </div>
@@ -94,23 +94,23 @@ include __DIR__ . '/include/include.php';
                                     </div>
                                 </div>
 
-                                <h4 class="form-section">Ubicación</h4>
+                                <h4 class="form-section">Location</h4>
                                 <div class="row">
                                     <div class="col-md-4" data-field-wrap="pais">
                                         <div class="form-group">
-                                            <label>País <span class="required-mark" data-required-mark="pais" style="display:none;">*</span></label>
+                                            <label>Country <span class="required-mark" data-required-mark="pais" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="pais" name="pais">
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="estado">
                                         <div class="form-group">
-                                            <label>Estado/Provincia <span class="required-mark" data-required-mark="estado" style="display:none;">*</span></label>
+                                            <label>State/Province <span class="required-mark" data-required-mark="estado" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="estado" name="estado">
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="ciudad">
                                         <div class="form-group">
-                                            <label>Ciudad <span class="required-mark" data-required-mark="ciudad" style="display:none;">*</span></label>
+                                            <label>City <span class="required-mark" data-required-mark="ciudad" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="ciudad" name="ciudad">
                                         </div>
                                     </div>
@@ -119,79 +119,79 @@ include __DIR__ . '/include/include.php';
                                 <div class="row">
                                     <div class="col-md-8" data-field-wrap="direccion">
                                         <div class="form-group">
-                                            <label>Dirección <span class="required-mark" data-required-mark="direccion" style="display:none;">*</span></label>
+                                            <label>Address <span class="required-mark" data-required-mark="direccion" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="direccion" name="direccion">
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="codigo_postal">
                                         <div class="form-group">
-                                            <label>Código Postal <span class="required-mark" data-required-mark="codigo_postal" style="display:none;">*</span></label>
+                                            <label>ZIP Code <span class="required-mark" data-required-mark="codigo_postal" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="codigo_postal" name="codigo_postal">
                                         </div>
                                     </div>
                                 </div>
 
-                                <h4 class="form-section">Documentación e Idioma</h4>
+                                <h4 class="form-section">Documentation &amp; Language</h4>
                                 <div class="row">
                                     <div class="col-md-4" data-field-wrap="tipo_documento">
                                         <div class="form-group">
-                                            <label>Tipo de Documento <span class="required-mark" data-required-mark="tipo_documento" style="display:none;">*</span></label>
+                                            <label>Document Type <span class="required-mark" data-required-mark="tipo_documento" style="display:none;">*</span></label>
                                             <select class="form-control" id="tipo_documento" name="tipo_documento"></select>
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="numero_pasaporte">
                                         <div class="form-group">
-                                            <label>Número de Documento <span class="required-mark" data-required-mark="numero_pasaporte" style="display:none;">*</span></label>
+                                            <label>Document Number <span class="required-mark" data-required-mark="numero_pasaporte" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="numero_pasaporte" name="numero_pasaporte">
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="idioma_preferido">
                                         <div class="form-group">
-                                            <label>Idioma Preferido <span class="required-mark" data-required-mark="idioma_preferido" style="display:none;">*</span></label>
+                                            <label>Preferred Language <span class="required-mark" data-required-mark="idioma_preferido" style="display:none;">*</span></label>
                                             <select class="form-control" id="idioma_preferido" name="idioma_preferido"></select>
                                         </div>
                                     </div>
                                 </div>
 
-                                <h4 class="form-section">Contacto de Emergencia</h4>
+                                <h4 class="form-section">Emergency Contact</h4>
                                 <div class="row">
                                     <div class="col-md-4" data-field-wrap="contacto_emergencia_nombre">
                                         <div class="form-group">
-                                            <label>Nombre <span class="required-mark" data-required-mark="contacto_emergencia_nombre" style="display:none;">*</span></label>
+                                            <label>Name <span class="required-mark" data-required-mark="contacto_emergencia_nombre" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="contacto_emergencia_nombre" name="contacto_emergencia_nombre">
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="contacto_emergencia_telefono">
                                         <div class="form-group">
-                                            <label>Teléfono <span class="required-mark" data-required-mark="contacto_emergencia_telefono" style="display:none;">*</span></label>
+                                            <label>Phone <span class="required-mark" data-required-mark="contacto_emergencia_telefono" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="contacto_emergencia_telefono" name="contacto_emergencia_telefono">
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="contacto_emergencia_relacion">
                                         <div class="form-group">
-                                            <label>Relación <span class="required-mark" data-required-mark="contacto_emergencia_relacion" style="display:none;">*</span></label>
+                                            <label>Relationship <span class="required-mark" data-required-mark="contacto_emergencia_relacion" style="display:none;">*</span></label>
                                             <input type="text" class="form-control" id="contacto_emergencia_relacion" name="contacto_emergencia_relacion">
                                         </div>
                                     </div>
                                 </div>
 
-                                <h4 class="form-section">Información Médica Básica</h4>
+                                <h4 class="form-section">Basic Medical Information</h4>
                                 <div class="row">
                                     <div class="col-md-4" data-field-wrap="condiciones_medicas">
                                         <div class="form-group">
-                                            <label>Condiciones Médicas <span class="required-mark" data-required-mark="condiciones_medicas" style="display:none;">*</span></label>
+                                            <label>Medical Conditions <span class="required-mark" data-required-mark="condiciones_medicas" style="display:none;">*</span></label>
                                             <textarea class="form-control" id="condiciones_medicas" name="condiciones_medicas" rows="3"></textarea>
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="alergias">
                                         <div class="form-group">
-                                            <label>Alergias <span class="required-mark" data-required-mark="alergias" style="display:none;">*</span></label>
+                                            <label>Allergies <span class="required-mark" data-required-mark="alergias" style="display:none;">*</span></label>
                                             <textarea class="form-control" id="alergias" name="alergias" rows="3"></textarea>
                                         </div>
                                     </div>
                                     <div class="col-md-4" data-field-wrap="medicamentos_actuales">
                                         <div class="form-group">
-                                            <label>Medicamentos Actuales <span class="required-mark" data-required-mark="medicamentos_actuales" style="display:none;">*</span></label>
+                                            <label>Current Medications <span class="required-mark" data-required-mark="medicamentos_actuales" style="display:none;">*</span></label>
                                             <textarea class="form-control" id="medicamentos_actuales" name="medicamentos_actuales" rows="3"></textarea>
                                         </div>
                                     </div>
@@ -199,7 +199,7 @@ include __DIR__ . '/include/include.php';
 
                                 <div class="form-actions">
                                     <button type="submit" class="btn btn-primary" id="btnGuardarMisDatos">
-                                        <i class="fa fa-save"></i> Guardar
+                                        <i class="fa fa-save"></i> Save
                                     </button>
                                 </div>
                             </form>
@@ -253,7 +253,7 @@ include __DIR__ . '/include/include.php';
         $select.empty();
         var options = (meta && meta.enum_options) ? meta.enum_options : [];
         if (!options.length) {
-            $select.append('<option value="">Seleccione...</option>');
+            $select.append('<option value="">Select...</option>');
         } else {
             for (var i = 0; i < options.length; i++) {
                 var opt = options[i];
@@ -300,7 +300,7 @@ include __DIR__ . '/include/include.php';
             data: { tipo: 'get_profile' }
         }).done(function(resp){
             if (!resp || !resp.ok) {
-                showError((resp && resp.message) ? resp.message : 'No fue posible cargar tu perfil.');
+                showError((resp && resp.message) ? resp.message : 'Could not load your profile.');
                 return;
             }
 
@@ -312,10 +312,10 @@ include __DIR__ . '/include/include.php';
             populateData(resp.data || {});
 
             if (resp.created_profile) {
-                showSuccess('Se creó tu registro mínimo de cliente. Completa los datos faltantes y guarda.');
+                showSuccess('Your patient profile was created. Please complete the missing fields and save.');
             }
         }).fail(function(xhr){
-            showError('Error al cargar Mis Datos (' + xhr.status + ').');
+            showError('Error loading profile (' + xhr.status + ').');
         });
     }
 
@@ -336,7 +336,7 @@ include __DIR__ . '/include/include.php';
             }
         }
         if (missing.length) {
-            showError('Completa los campos obligatorios antes de guardar.');
+            showError('Please fill in all required fields before saving.');
             return;
         }
 
@@ -348,15 +348,15 @@ include __DIR__ . '/include/include.php';
             data: data
         }).done(function(resp){
             if (!resp || !resp.ok) {
-                showError((resp && resp.message) ? resp.message : 'No fue posible guardar tus datos.');
+                showError((resp && resp.message) ? resp.message : 'Could not save your data.');
                 return;
             }
-            showSuccess('Datos guardados correctamente.');
+            showSuccess('Data saved successfully.');
             if (resp.data) {
                 populateData(resp.data);
             }
         }).fail(function(xhr){
-            showError('Error al guardar Mis Datos (' + xhr.status + ').');
+            showError('Error saving profile (' + xhr.status + ').');
         }).always(function(){
             $('#btnGuardarMisDatos').prop('disabled', false);
         });
