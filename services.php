@@ -266,14 +266,14 @@ function format_price($amount, $currency){
                                             <span class="price-label">Starting from</span>
                                             <span class="price-amount"><?php echo format_price($svc['sale_price'], $svc['currency']); ?></span>
                                         </div>
-                                        <button type="button" class="btn-add-package add-service-btn" 
+                                        <button type="button" class="btn-add-package add-service-btn"
                                             data-id="<?php echo (int)$svc['id']; ?>"
                                             data-name="<?php echo htmlspecialchars($svc['service_name'], ENT_QUOTES); ?>"
                                             data-price="<?php echo htmlspecialchars($svc['sale_price'], ENT_QUOTES); ?>"
                                             data-currency="<?php echo htmlspecialchars($svc['currency'], ENT_QUOTES); ?>"
                                             data-type="<?php echo htmlspecialchars($svc['service_type'], ENT_QUOTES); ?>"
                                             data-provider="<?php echo htmlspecialchars($svc['provider_name'], ENT_QUOTES); ?>">
-                                            Añadir al paquete
+                                            ADD TO PACKAGE
                                         </button>
                                     </div>
                                 </div>
@@ -283,24 +283,24 @@ function format_price($amount, $currency){
                 </div>
                 <?php } ?>
                 <?php } else { ?>
-                <div class="row"><div class="col-12 text-center"><p>No hay servicios disponibles en este momento.</p></div></div>
+                <div class="row"><div class="col-12 text-center"><p>No services available at this time.</p></div></div>
                 <?php } ?>
                 <div id="package-summary" class="package-summary bg-white border rounded shadow-sm p-3 mt-4 d-none">
                     <div class="d-flex flex-wrap align-items-center gap-3">
                         <div class="flex-grow-1">
-                            <h5 class="mb-1">Tu paquete</h5>
-                            <div id="package-summary-list" class="small text-muted">No has añadido servicios.</div>
+                            <h5 class="mb-1">Your Package</h5>
+                            <div id="package-summary-list" class="small text-muted">No services added yet.</div>
                         </div>
                         <div id="package-summary-total" class="fw-bold text-primary"></div>
                         <div class="d-flex gap-2 flex-wrap">
-                            <button id="package-summary-booking" type="button" class="btn btn-primary">Continuar al booking</button>
-                            <button id="package-summary-clear" type="button" class="btn btn-outline-secondary">Limpiar</button>
+                            <button id="package-summary-booking" type="button" class="btn btn-primary">Continue to Booking</button>
+                            <button id="package-summary-clear" type="button" class="btn btn-outline-secondary">Clear</button>
                         </div>
                     </div>
                 </div>
                 <div class="row mt-4">
                     <div class="col-12 text-center">
-                        <button type="button" class="btn btn-primary rounded-pill py-3 px-5" onclick="scrollToBooking();">Continuar al booking</button>
+                        <button type="button" class="btn btn-primary rounded-pill py-3 px-5" onclick="scrollToBooking();">Continue to Booking</button>
                     </div>
                 </div>
             </div>
@@ -349,7 +349,7 @@ function format_price($amount, $currency){
                     if (!curr) return '';
                     return (curr === 'USD' ? '$' : '') + val.toLocaleString('en-US') + ' ' + curr;
                 }).filter(Boolean);
-                return parts.length ? 'Total estimado: ' + parts.join(' / ') : '';
+                return parts.length ? 'Estimated total: ' + parts.join(' / ') : '';
             }
 
             function updateButtons(selection) {
@@ -357,14 +357,14 @@ function format_price($amount, $currency){
                 buttons.forEach(function(btn) {
                     var isActive = selectedIds.has(btn.dataset.id);
                     btn.classList.toggle('active', isActive);
-                    btn.textContent = isActive ? 'Añadido' : 'Añadir al paquete';
+                    btn.textContent = isActive ? 'ADDED' : 'ADD TO PACKAGE';
                 });
             }
 
             function updateSummary(selection) {
                 if (!selection.length) {
                     summary.classList.add('d-none');
-                    summaryList.textContent = 'No has añadido servicios.';
+                    summaryList.textContent = 'No services added yet.';
                     summaryTotal.textContent = '';
                     return;
                 }
@@ -374,7 +374,7 @@ function format_price($amount, $currency){
                     return item.name + ' (' + item.type + ')';
                 }).join(' · ');
                 if (selection.length > 3) {
-                    preview += ' + ' + (selection.length - 3) + ' más';
+                    preview += ' + ' + (selection.length - 3) + ' more';
                 }
                 summaryList.textContent = preview;
                 summaryTotal.textContent = formatTotals(selection);
