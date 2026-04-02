@@ -129,7 +129,14 @@
         return googleEventId !== '' || integrationMode === 'calendar_only' || integrationMode === 'calendar_plus_meet';
     }
 
+    function isLinkedMedicalStaffSession() {
+        return !!config.isLinkedMedicalStaffSession;
+    }
+
     function getOfficialFlowLabel() {
+        if (isLinkedMedicalStaffSession()) {
+            return 'Mis solicitudes asignadas';
+        }
         return isProviderView() ? 'Mis Solicitudes' : 'Inbox o Mis Solicitudes';
     }
 
@@ -220,7 +227,7 @@
         if (!normalizedLabel) {
             normalizedLabel = 'ITEM #' + itemId;
             if (requestId > 0) {
-                normalizedLabel = 'Request #' + requestId + ' - ' + normalizedLabel;
+                normalizedLabel = 'Solicitud #' + requestId + ' - ' + normalizedLabel;
             }
         }
         knownItemOptions[itemId] = normalizedLabel;
@@ -230,7 +237,7 @@
             status: $.trim(String(status || ''))
         };
         if (requestId > 0 && !knownRequestOptions[requestId]) {
-            knownRequestOptions[requestId] = 'Request #' + requestId;
+            knownRequestOptions[requestId] = 'Solicitud #' + requestId;
         }
     }
 
@@ -239,7 +246,7 @@
             var itemId = getEventItemId(e);
             var requestId = getEventRequestId(e);
             if (requestId > 0 && !knownRequestOptions[requestId]) {
-                knownRequestOptions[requestId] = 'Request #' + requestId;
+                knownRequestOptions[requestId] = 'Solicitud #' + requestId;
             }
             if (itemId <= 0) return;
             registerItemOption(itemId, buildItemOptionLabel(itemId, e), requestId, getEventStatus(e));
@@ -248,7 +255,7 @@
             registerItemOption(selectedItemId, 'ITEM #' + selectedItemId, selectedRequestId, '');
         }
         if (selectedRequestId > 0 && !knownRequestOptions[selectedRequestId]) {
-            knownRequestOptions[selectedRequestId] = 'Request #' + selectedRequestId;
+            knownRequestOptions[selectedRequestId] = 'Solicitud #' + selectedRequestId;
         }
     }
 
@@ -266,7 +273,7 @@
         $wrap.toggle(shouldShow);
         if (!shouldShow) return;
 
-        var html = ['<option value="">Selecciona un ITEM...</option>'];
+        var html = ['<option value="">' + (isLinkedMedicalStaffSession() ? 'Selecciona una solicitud asignada...' : 'Selecciona un ITEM...') + '</option>'];
         keys.forEach(function (id) {
             var label = knownItemOptions[id] || ('ITEM #' + id);
             var selected = selectedItemId === id ? ' selected' : '';
@@ -287,7 +294,7 @@
                 .map(function (k) { return parseInt(k, 10) || 0; })
                 .filter(function (n) { return n > 0; })
                 .sort(function (a, b) { return a - b; });
-            var itemHtml = ['<option value="">Select item (required)</option>'];
+            var itemHtml = ['<option value="">Selecciona un item (obligatorio)</option>'];
             itemKeys.forEach(function (id) {
                 var selected = selectedItemId === id ? ' selected' : '';
                 itemHtml.push('<option value="' + id + '"' + selected + '>' + esc(knownItemOptions[id] || ('ITEM #' + id)) + '</option>');
@@ -303,13 +310,13 @@
                 .map(function (k) { return parseInt(k, 10) || 0; })
                 .filter(function (n) { return n > 0; })
                 .sort(function (a, b) { return a - b; });
-            var requestHtml = ['<option value="">Select booking request</option>'];
+            var requestHtml = ['<option value="">Selecciona una solicitud</option>'];
             requestKeys.forEach(function (id) {
                 var selected = selectedRequestId === id ? ' selected' : '';
                 requestHtml.push('<option value="' + id + '"' + selected + '>' + esc(knownRequestOptions[id]) + '</option>');
             });
             if (selectedRequestId > 0 && requestKeys.indexOf(selectedRequestId) === -1) {
-                requestHtml.push('<option value="' + selectedRequestId + '" selected>' + esc('Request #' + selectedRequestId) + '</option>');
+                requestHtml.push('<option value="' + selectedRequestId + '" selected>' + esc('Solicitud #' + selectedRequestId) + '</option>');
             }
             $requestSelect.html(requestHtml.join(''));
         }
@@ -356,7 +363,9 @@
             if (selectedItemId > 0) {
                 $empty.text('Aún no hay citas coordinadas para este item. Haz clic en una fecha para proponer un horario.');
             } else {
-                $empty.text('Aún no hay citas coordinadas. Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario.');
+                $empty.text(isLinkedMedicalStaffSession()
+                    ? 'Aún no hay citas coordinadas. Selecciona una solicitud asignada y luego elige fecha y hora para proponer un horario.'
+                    : 'Aún no hay citas coordinadas. Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario.');
             }
         } else {
             $empty.text('Aún no hay citas coordinadas.');
@@ -420,7 +429,7 @@
         if (focusState.requestId > 0) {
             selectedRequestId = focusState.requestId;
             if (!knownRequestOptions[selectedRequestId]) {
-                knownRequestOptions[selectedRequestId] = 'Request #' + selectedRequestId;
+                knownRequestOptions[selectedRequestId] = 'Solicitud #' + selectedRequestId;
             }
         }
         if (!$filter.length) return;
@@ -644,14 +653,16 @@
 
     function openCreateFromSelection(start, end, allDay) {
         if (isProviderView() && selectedItemId <= 0) {
-            toastr.warning('Please select an ITEM thread first.');
+            toastr.warning(isLinkedMedicalStaffSession()
+                ? 'Selecciona primero una solicitud asignada.'
+                : 'Selecciona primero un hilo ITEM.');
             return;
         }
         if (isProviderView()) {
             openCreateModal(start, end, allDay, {
                 eventType: 'ITEM',
                 itemId: selectedItemId,
-                defaultTitle: 'Proposed schedule',
+                defaultTitle: 'Horario propuesto',
                 forceStatus: 'proposed',
                 forceThirtyMinutes: true
             });

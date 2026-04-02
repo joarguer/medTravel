@@ -31,6 +31,7 @@ $es_cliente = (
     && $session_role_id !== null
     && intval($session_role_id) === ROLE_CLIENT
 );
+$is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
 
 $can_view_my_bookings = (
     !$es_admin
@@ -550,6 +551,7 @@ $can_manage_complementary_services = user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE
 $can_manage_packages = user_can(PERM_PACKAGES_MANAGE);
 $can_view_clients = (
     !$es_admin &&
+    !$is_linked_medical_staff_session &&
     user_can(PERM_BOOKING_VIEW)
 );
 
@@ -724,16 +726,44 @@ if ($es_admin) {
     // ═══════════════════════════════════════════════════════════════════════════
     // PRESTADOR/MÉDICO — menú por dominios funcionales
     // ═══════════════════════════════════════════════════════════════════════════
+    if ($is_linked_medical_staff_session) {
+        if ($can_view_my_bookings) {
+            $top_header_2 .= '
+                        <li'.menu_li_class($operacion_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+                            <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
+                                <i class="icon-calendar"></i> Operación asignada </a>
+                            <ul class="dropdown-menu dropdown-menu-fw">
+                                <li'.menu_li_class('my_booking_requests.php').'>
+                                    <a href="./my_booking_requests.php">
+                                        <i class="icon-layers"></i> Mis solicitudes asignadas </a>
+                                </li>
+                                <li'.menu_li_class('app_inbox.php').'>
+                                    <a href="./app_inbox.php">
+                                        <i class="icon-envelope-open"></i> Inbox asignado </a>
+                                </li>
+                                <li'.menu_li_class('app_calendar.php').'>
+                                    <a href="./app_calendar.php">
+                                        <i class="icon-clock"></i> Agenda asignada </a>
+                                </li>
+                            </ul>
+                        </li>';
+        }
 
-    // ── 1. OPERACIÓN: Solicitudes, Inbox, Agenda, Pacientes/Clientes ──────────
-    if ($can_view_my_bookings || $can_view_clients) {
         $top_header_2 .= '
+                        <li'.menu_li_class('mis_datos.php', 'dropdown dropdown-fw dropdown-fw-disabled').'>
+                            <a href="./mis_datos.php" class="text-uppercase">
+                                <i class="icon-user"></i> Mi Perfil </a>
+                        </li>';
+    } else {
+        // ── 1. OPERACIÓN: Solicitudes, Inbox, Agenda, Pacientes/Clientes ──────────
+        if ($can_view_my_bookings || $can_view_clients) {
+            $top_header_2 .= '
                         <li'.menu_li_class($operacion_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
                                 <i class="icon-calendar"></i> Operación </a>
                             <ul class="dropdown-menu dropdown-menu-fw">';
-        if ($can_view_my_bookings) {
-            $top_header_2 .= '
+            if ($can_view_my_bookings) {
+                $top_header_2 .= '
                                 <li'.menu_li_class('my_booking_requests.php').'>
                                     <a href="./my_booking_requests.php">
                                         <i class="icon-layers"></i> Mis Solicitudes </a>
@@ -746,21 +776,21 @@ if ($es_admin) {
                                     <a href="./app_calendar.php">
                                         <i class="icon-clock"></i> Agenda </a>
                                 </li>';
-        }
-        if ($can_view_clients) {
-            $top_header_2 .= '
+            }
+            if ($can_view_clients) {
+                $top_header_2 .= '
                                 <li'.menu_li_class('clientes.php').'>
                                     <a href="./clientes.php">
                                         <i class="icon-users"></i> Pacientes / Clientes </a>
                                 </li>';
-        }
-        $top_header_2 .= '
+            }
+            $top_header_2 .= '
                             </ul>
                         </li>';
-    }
+        }
 
-    // ── 2. SERVICIOS: Mis Servicios (catálogo habilitado) + Mis Ofertas ─────────
-    $top_header_2 .= '
+        // ── 2. SERVICIOS: Mis Servicios (catálogo habilitado) + Mis Ofertas ─────────
+        $top_header_2 .= '
                         <li'.menu_li_class($servicios_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
                                 <i class="fa fa-th-list"></i> Servicios </a>
@@ -776,8 +806,8 @@ if ($es_admin) {
                             </ul>
                         </li>';
 
-    // ── 3. PRESENCIA: Mi Blog ─────────────────────────────────────────────────
-    $top_header_2 .= '
+        // ── 3. PRESENCIA: Mi Blog ─────────────────────────────────────────────────
+        $top_header_2 .= '
                         <li'.menu_li_class($presencia_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
                                 <i class="icon-speech"></i> Presencia </a>
@@ -789,8 +819,8 @@ if ($es_admin) {
                             </ul>
                         </li>';
 
-    // ── 4. MI EMPRESA / CONFIGURACIÓN: Datos empresa + Staff médico + Mi Perfil
-    $top_header_2 .= '
+        // ── 4. MI EMPRESA / CONFIGURACIÓN: Datos empresa + Staff médico + Mi Perfil
+        $top_header_2 .= '
                         <li'.menu_li_class($empresa_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
                             <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
                                 <i class="icon-briefcase"></i> Mi Empresa </a>
@@ -813,6 +843,7 @@ if ($es_admin) {
                                 </li>
                             </ul>
                         </li>';
+    }
 
 } else {
     // ─── COMPLEMENTARIO y otros no-admin ──────────────────────────────────────

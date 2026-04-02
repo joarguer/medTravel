@@ -27,6 +27,8 @@ function calendar_admin_scope()
     $providerId = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
     $serviceProviderId = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
     $isAdmin = is_role_admin_session();
+    $linkedStaffId = $isAdmin ? 0 : current_provider_medical_staff_id($GLOBALS['conexion'] ?? null);
+    $isLinkedStaff = !$isAdmin && $linkedStaffId > 0;
     $userId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
     $roleId = current_role_id();
 
@@ -41,7 +43,23 @@ function calendar_admin_scope()
     $scopeTypes = '';
     $scopeParams = [];
     if (!$isAdmin) {
-        if ($providerId > 0 && $serviceProviderId > 0) {
+        if ($isLinkedStaff) {
+            if (!calendar_table_has_column($GLOBALS['conexion'], 'booking_request_items', 'assigned_staff_id')) {
+                $scopeWhere = ' AND 1=0';
+            } elseif ($providerId > 0 && $serviceProviderId > 0) {
+                $scopeWhere = ' AND (bri.provider_id = ? OR bri.service_provider_id = ?) AND COALESCE(bri.assigned_staff_id, 0) = ?';
+                $scopeTypes = 'iii';
+                $scopeParams = [$providerId, $serviceProviderId, $linkedStaffId];
+            } elseif ($providerId > 0) {
+                $scopeWhere = ' AND ((bri.provider_id IS NOT NULL AND bri.provider_id = ?) OR (bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?)) AND COALESCE(bri.assigned_staff_id, 0) = ?';
+                $scopeTypes = 'iii';
+                $scopeParams = [$providerId, $providerId, $linkedStaffId];
+            } else {
+                $scopeWhere = ' AND ((bri.service_provider_id IS NOT NULL AND bri.service_provider_id = ?) OR (bri.provider_id IS NOT NULL AND bri.provider_id = ?)) AND COALESCE(bri.assigned_staff_id, 0) = ?';
+                $scopeTypes = 'iii';
+                $scopeParams = [$serviceProviderId, $serviceProviderId, $linkedStaffId];
+            }
+        } elseif ($providerId > 0 && $serviceProviderId > 0) {
             $scopeWhere = ' AND (bri.provider_id = ? OR bri.service_provider_id = ?)';
             $scopeTypes = 'ii';
             $scopeParams = [$providerId, $serviceProviderId];
@@ -59,12 +77,16 @@ function calendar_admin_scope()
     $roleLabel = 'PROVIDER';
     if ($isAdmin) {
         $roleLabel = ((int)$roleId === (int)ROLE_ADMINISTRATIVE) ? 'PATIENTCARE' : 'ADMIN';
+    } elseif ($isLinkedStaff) {
+        $roleLabel = 'PROVIDER_STAFF';
     }
     $providerIdentifier = $providerId > 0 ? $providerId : $serviceProviderId;
 
     return [
         'ok' => true,
         'is_admin' => $isAdmin,
+        'is_linked_staff' => $isLinkedStaff,
+        'linked_staff_id' => $linkedStaffId,
         'user_id' => $userId,
         'role_label' => $roleLabel,
         'provider_identifier' => $providerIdentifier,

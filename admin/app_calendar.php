@@ -10,6 +10,20 @@ if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $service_provider_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
 $can_admin_view = is_role_admin_session();
+$is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
+$page_heading = $is_linked_medical_staff_session ? 'Agenda asignada' : 'Agenda';
+$page_breadcrumb = $page_heading;
+$page_caption = $is_linked_medical_staff_session ? 'Agenda operativa del staff asignado' : 'Agenda de coordinación';
+$page_intro_class = $is_linked_medical_staff_session ? 'info' : 'warning';
+$page_intro_title = $is_linked_medical_staff_session ? 'Coordinación sobre solicitudes asignadas' : 'Coordinación y supervisión del prestador';
+$page_intro_body = $is_linked_medical_staff_session
+    ? 'Esta agenda muestra únicamente citas y propuestas de los items que ya quedaron bajo tu responsabilidad operativa.'
+    : 'Cuando un item ya tiene staff asignado, la coordinación normal debe llevarla esa persona. Desde aquí puedes mantener visibilidad total e intervenir como supervisión cuando haga falta.';
+$page_guide = $is_linked_medical_staff_session
+    ? 'Selecciona una solicitud asignada y luego elige fecha y hora para proponer o ajustar una coordinación con el paciente.'
+    : 'Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario coordinado.';
+$item_select_label = $is_linked_medical_staff_session ? 'Solicitud asignada' : 'Hilo ITEM';
+$item_select_placeholder = $is_linked_medical_staff_session ? 'Selecciona una solicitud asignada...' : 'Selecciona un ITEM...';
 if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
     http_response_code(403);
     echo 'Acceso denegado';
@@ -25,7 +39,7 @@ $can_cancel = $can_update;
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title;?> - Agenda</title>
+    <title><?php echo $title;?> - <?php echo htmlspecialchars($page_heading, ENT_QUOTES); ?></title>
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
@@ -68,10 +82,10 @@ $can_cancel = $can_update;
     <div class="container-fluid">
         <div class="page-content">
             <div class="breadcrumbs">
-                <h1>Agenda</h1>
+                <h1><?php echo htmlspecialchars($page_heading, ENT_QUOTES); ?></h1>
                 <ol class="breadcrumb">
                     <li><a href="index.php">Inicio</a></li>
-                    <li class="active">Agenda</li>
+                    <li class="active"><?php echo htmlspecialchars($page_breadcrumb, ENT_QUOTES); ?></li>
                 </ol>
             </div>
 
@@ -80,7 +94,7 @@ $can_cancel = $can_update;
                     <div class="portlet-title">
                         <div class="caption">
                             <i class="icon-calendar font-blue"></i>
-                            <span class="caption-subject font-blue bold uppercase">Agenda de coordinación</span>
+                            <span class="caption-subject font-blue bold uppercase"><?php echo htmlspecialchars($page_caption, ENT_QUOTES); ?></span>
                         </div>
                         <div class="actions">
                             <?php if ($can_admin_view): ?>
@@ -93,13 +107,17 @@ $can_cancel = $can_update;
                         </div>
                     </div>
                     <div class="portlet-body">
+                        <div class="alert alert-<?php echo $page_intro_class; ?>" style="margin-bottom:15px;">
+                            <strong><?php echo htmlspecialchars($page_intro_title, ENT_QUOTES); ?></strong><br>
+                            <?php echo htmlspecialchars($page_intro_body, ENT_QUOTES); ?>
+                        </div>
                         <div id="admin-calendar-provider-guide" class="alert alert-info" style="display:none; margin-bottom:15px;">
-                            Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario coordinado.
+                            <?php echo htmlspecialchars($page_guide, ENT_QUOTES); ?>
                         </div>
                         <div id="admin-calendar-item-selector-wrap" style="display:none; margin-bottom:15px;">
-                            <label for="admin-calendar-item-select" style="font-weight:600; margin-right:8px;">Hilo ITEM</label>
+                            <label for="admin-calendar-item-select" style="font-weight:600; margin-right:8px;"><?php echo htmlspecialchars($item_select_label, ENT_QUOTES); ?></label>
                             <select id="admin-calendar-item-select" class="form-control input-sm" style="display:inline-block; min-width:260px; max-width:420px;">
-                                <option value="">Selecciona un ITEM...</option>
+                                <option value=""><?php echo htmlspecialchars($item_select_placeholder, ENT_QUOTES); ?></option>
                             </select>
                         </div>
                         <div id="admin-calendar-empty-state" class="alert alert-warning" style="display:none; margin-bottom:15px;"></div>
@@ -307,6 +325,7 @@ $can_cancel = $can_update;
 window.AdminCalendarConfig = {
     canAdmin: <?php echo $can_admin_view ? 'true' : 'false'; ?>,
     isProvider: <?php echo (!$can_admin_view && ($provider_id > 0 || $service_provider_id > 0)) ? 'true' : 'false'; ?>,
+    isLinkedMedicalStaffSession: <?php echo $is_linked_medical_staff_session ? 'true' : 'false'; ?>,
     canCreate: <?php echo $can_create ? 'true' : 'false'; ?>,
     canUpdate: <?php echo $can_update ? 'true' : 'false'; ?>,
     canCancel: <?php echo $can_cancel ? 'true' : 'false'; ?>,

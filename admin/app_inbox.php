@@ -10,6 +10,14 @@ if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $service_provider_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
 $can_admin_view = is_role_admin_session();
+$is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
+$page_heading = $is_linked_medical_staff_session ? 'Inbox asignado' : 'Inbox';
+$page_breadcrumb = $page_heading;
+$page_intro_class = $is_linked_medical_staff_session ? 'info' : 'warning';
+$page_intro_title = $is_linked_medical_staff_session ? 'Seguimiento operativo de tus casos asignados' : 'Seguimiento operativo del prestador';
+$page_intro_body = $is_linked_medical_staff_session
+    ? 'Este inbox concentra la comunicación de los items que ya quedaron bajo tu responsabilidad operativa. Si un caso sigue sin asignación clínica, la administración del prestador debe decidir quién lo toma.'
+    : 'Cuando un item ya tiene staff asignado, el seguimiento operativo normal debe llevarlo esa persona. Desde aquí puedes supervisar el caso o intervenir de forma explícita cuando haga falta.';
 if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
     http_response_code(403);
     echo 'Acceso denegado';
@@ -20,7 +28,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title><?php echo $title;?> - Inbox</title>
+    <title><?php echo $title;?> - <?php echo htmlspecialchars($page_heading, ENT_QUOTES); ?></title>
     <?php echo $global_first_style;?>
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
@@ -486,22 +494,26 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
     <div class="container-fluid">
         <div class="page-content">
             <div class="breadcrumbs">
-                <h1>Inbox</h1>
+                <h1><?php echo htmlspecialchars($page_heading, ENT_QUOTES); ?></h1>
                 <ol class="breadcrumb">
                     <li><a href="index.php">Home</a></li>
-                    <li class="active">Inbox</li>
+                    <li class="active"><?php echo htmlspecialchars($page_breadcrumb, ENT_QUOTES); ?></li>
                 </ol>
             </div>
 
             <div class="page-content-container">
+                <div class="alert alert-<?php echo $page_intro_class; ?>" style="margin-bottom:15px;">
+                    <strong><?php echo htmlspecialchars($page_intro_title, ENT_QUOTES); ?></strong><br>
+                    <?php echo htmlspecialchars($page_intro_body, ENT_QUOTES); ?>
+                </div>
                 <div class="inbox">
                     <div class="row">
                         <div class="col-md-3 inbox-sidebar">
                             <button type="button" class="btn btn-sm btn-default compose-btn btn-block" id="admin-inbox-refresh">
-                                <i class="fa fa-refresh"></i> Refresh
+                                <i class="fa fa-refresh"></i> Actualizar
                             </button>
                             <ul class="inbox-nav" id="admin-inbox-thread-list">
-                                <li><a href="javascript:;">Loading threads...</a></li>
+                                <li><a href="javascript:;">Cargando conversaciones...</a></li>
                             </ul>
                         </div>
                         <div class="col-md-9 inbox-body">
@@ -798,6 +810,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
 window.AdminInboxHelpConfig = {
     userId: <?php echo (int)($_SESSION['id_usuario'] ?? 0); ?>,
     role: <?php echo json_encode((string)($_SESSION['rol'] ?? '')); ?>,
+    isLinkedMedicalStaffSession: <?php echo $is_linked_medical_staff_session ? 'true' : 'false'; ?>,
     realtimeBaseUrl: <?php echo json_encode(MT_REALTIME_BASE_URL); ?>,
     realtimeSocketPath: <?php echo json_encode(MT_REALTIME_SOCKET_PATH); ?>,
     realtimeTokenUrl: "/admin/ajax/realtime_token.php"

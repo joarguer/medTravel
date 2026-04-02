@@ -20,6 +20,28 @@ function fetch_count($conexion, $sql, $types = '', $params = []) {
     return 0;
 }
 
+function dashboard_table_exists($conexion, $table) {
+    $table = trim((string)$table);
+    if ($table === '') {
+        return false;
+    }
+    $table = mysqli_real_escape_string($conexion, $table);
+    $res = mysqli_query($conexion, "SHOW TABLES LIKE '{$table}'");
+    return $res && mysqli_num_rows($res) > 0;
+}
+
+function dashboard_column_exists($conexion, $table, $column) {
+    $table = trim((string)$table);
+    $column = trim((string)$column);
+    if ($table === '' || $column === '') {
+        return false;
+    }
+    $table = str_replace('`', '``', $table);
+    $column = mysqli_real_escape_string($conexion, $column);
+    $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+    return $res && mysqli_num_rows($res) > 0;
+}
+
 function month_labels() {
     $labels = [];
     $map = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -51,13 +73,44 @@ function monthly_counts($conexion, $table, $where = '1', $types = '', $params = 
     return $data;
 }
 
+function monthly_counts_query($conexion, $sql, $types = '', $params = []) {
+    $data = [];
+    if ($stmt = mysqli_prepare($conexion, $sql)) {
+        if (!empty($types) && !empty($params)) {
+            mysqli_stmt_bind_param($stmt, $types, ...$params);
+        }
+        if (mysqli_stmt_execute($stmt)) {
+            $res = mysqli_stmt_get_result($stmt);
+            while ($row = mysqli_fetch_assoc($res)) {
+                $key = (string)($row['ym'] ?? '');
+                if ($key === '') {
+                    continue;
+                }
+                $data[$key] = (int)($row['total'] ?? 0);
+            }
+        } else {
+            error_log('monthly_counts_query exec error: ' . mysqli_error($conexion));
+        }
+        mysqli_stmt_close($stmt);
+    }
+    return $data;
+}
+
 // Datos base
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
+$is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
+$linked_staff_id = $is_linked_medical_staff_session ? current_provider_medical_staff_id($conexion ?? null) : 0;
 $series_data = [];
 $pie_data = [];
 $metric_cards = [];
 $provider_onboarding_steps = [];
 $provider_operation_links = [];
+$dashboard_heading = $is_linked_medical_staff_session ? 'Panel de staff médico' : 'Panel Administrativo';
+$dashboard_breadcrumb = $dashboard_heading;
+$series_primary_label = 'Servicios';
+$series_secondary_label = 'Ofertas';
+$series_primary_balloon = 'Servicios [[category]]: [[value]]';
+$series_secondary_balloon = 'Ofertas [[category]]: [[value]]';
 
 if ($es_admin) {
     $metric_cards = [
@@ -73,6 +126,126 @@ if ($es_admin) {
 
     $services_month = monthly_counts($conexion, 'medtravel_services_catalog', '1');
     $offers_month = monthly_counts($conexion, 'provider_service_offers', '1');
+} elseif ($is_linked_medical_staff_session) {
+    $dashboard_heading = 'Panel de staff médico';
+    $dashboard_breadcrumb = 'Panel de staff médico';
+    $provider_operation_links = [
+        ['label' => 'Mis solicitudes asignadas', 'href' => 'my_booking_requests.php'],
+        ['label' => 'Inbox asignado', 'href' => 'app_inbox.php'],
+        ['label' => 'Agenda asignada', 'href' => 'app_calendar.php'],
+    ];
+
+    $metric_cards = [
+        ['label' => 'Casos asignados', 'value' => 0, 'icon' => 'icon-layers', 'class' => 'font-green-sharp'],
+        ['label' => 'Pendientes por coordinar', 'value' => 0, 'icon' => 'icon-hourglass', 'class' => 'font-red-haze'],
+        ['label' => 'Próximas citas', 'value' => 0, 'icon' => 'icon-calendar', 'class' => 'font-blue-sharp'],
+        ['label' => 'Citas confirmadas', 'value' => 0, 'icon' => 'icon-check', 'class' => 'font-purple-soft'],
+    ];
+    $chart1_title = 'Solicitudes y agenda asignada';
+    $chart1_subtitle = 'últimos 12 meses';
+    $chart2_title = 'Estado de mis casos';
+    $chart2_subtitle = 'resumen operativo actual';
+    $series_primary_label = 'Solicitudes';
+    $series_secondary_label = 'Citas';
+    $series_primary_balloon = 'Solicitudes [[category]]: [[value]]';
+    $series_secondary_balloon = 'Citas [[category]]: [[value]]';
+
+    $hasItemsTable = dashboard_table_exists($conexion, 'booking_request_items');
+    $hasCalendarTable = dashboard_table_exists($conexion, 'calendar_events');
+    $hasAssignedStaffId = $hasItemsTable && dashboard_column_exists($conexion, 'booking_request_items', 'assigned_staff_id');
+    $hasItemsSoftDelete = $hasItemsTable && dashboard_column_exists($conexion, 'booking_request_items', 'is_deleted');
+    $hasItemStatus = $hasItemsTable && dashboard_column_exists($conexion, 'booking_request_items', 'item_status');
+    $hasItemCreatedAt = $hasItemsTable && dashboard_column_exists($conexion, 'booking_request_items', 'created_at');
+
+    if ($linked_staff_id > 0 && $hasItemsTable && $hasAssignedStaffId) {
+        $itemsBaseWhere = " FROM booking_request_items bri WHERE bri.assigned_staff_id = ?";
+        if ($hasItemsSoftDelete) {
+            $itemsBaseWhere .= " AND COALESCE(bri.is_deleted, 0) = 0";
+        }
+        $normalizedStatusExpr = $hasItemStatus
+            ? "CASE WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider' ELSE bri.item_status END"
+            : "'pending_provider'";
+
+        $metric_cards[0]['value'] = fetch_count($conexion, "SELECT COUNT(*)" . $itemsBaseWhere, 'i', [$linked_staff_id]);
+        $metric_cards[1]['value'] = fetch_count(
+            $conexion,
+            "SELECT COUNT(*)" . $itemsBaseWhere . " AND {$normalizedStatusExpr} IN ('pending_provider', 'provider_proposed_change', 'awaiting_client')",
+            'i',
+            [$linked_staff_id]
+        );
+
+        if ($hasItemCreatedAt) {
+            $services_month = monthly_counts_query(
+                $conexion,
+                "SELECT DATE_FORMAT(bri.created_at,'%Y-%m') AS ym, COUNT(*) AS total"
+                . $itemsBaseWhere
+                . " GROUP BY ym ORDER BY ym",
+                'i',
+                [$linked_staff_id]
+            );
+        } else {
+            $services_month = [];
+        }
+
+        $confirmedAssignedCount = fetch_count(
+            $conexion,
+            "SELECT COUNT(*)" . $itemsBaseWhere . " AND {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted')",
+            'i',
+            [$linked_staff_id]
+        );
+        $pie_data = [
+            ['segment' => 'Pendientes por coordinar', 'value' => $metric_cards[1]['value']],
+            ['segment' => 'Confirmados / aceptados', 'value' => $confirmedAssignedCount],
+            ['segment' => 'Casos activos asignados', 'value' => $metric_cards[0]['value']],
+        ];
+    } else {
+        $services_month = [];
+        $pie_data = [
+            ['segment' => 'Pendientes por coordinar', 'value' => 0],
+            ['segment' => 'Confirmados / aceptados', 'value' => 0],
+            ['segment' => 'Casos activos asignados', 'value' => 0],
+        ];
+    }
+
+    if ($linked_staff_id > 0 && $hasCalendarTable && $hasItemsTable && $hasAssignedStaffId) {
+        $eventsBaseSql = " FROM calendar_events ce
+                           INNER JOIN booking_request_items bri ON bri.id = ce.item_id
+                           WHERE bri.assigned_staff_id = ?";
+        if ($hasItemsSoftDelete) {
+            $eventsBaseSql .= " AND COALESCE(bri.is_deleted, 0) = 0";
+        }
+        if (dashboard_column_exists($conexion, 'calendar_events', 'status')) {
+            $eventsBaseSql .= " AND COALESCE(ce.status, 'scheduled') <> 'cancelled'";
+        }
+
+        $metric_cards[2]['value'] = fetch_count(
+            $conexion,
+            "SELECT COUNT(*)" . $eventsBaseSql . " AND ce.start_at >= NOW()",
+            'i',
+            [$linked_staff_id]
+        );
+        $metric_cards[3]['value'] = fetch_count(
+            $conexion,
+            "SELECT COUNT(*)" . $eventsBaseSql . " AND ce.start_at >= NOW() AND COALESCE(ce.status, 'scheduled') = 'confirmed'",
+            'i',
+            [$linked_staff_id]
+        );
+
+        if (dashboard_column_exists($conexion, 'calendar_events', 'start_at')) {
+            $offers_month = monthly_counts_query(
+                $conexion,
+                "SELECT DATE_FORMAT(ce.start_at,'%Y-%m') AS ym, COUNT(*) AS total"
+                . $eventsBaseSql
+                . " GROUP BY ym ORDER BY ym",
+                'i',
+                [$linked_staff_id]
+            );
+        } else {
+            $offers_month = [];
+        }
+    } else {
+        $offers_month = [];
+    }
 } else {
     $metric_cards = [
         ['label' => 'Mis servicios publicados', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM medtravel_services_catalog WHERE is_active = 1 AND provider_id = ?", 'i', [$provider_id]), 'icon' => 'icon-grid', 'class' => 'font-green-sharp'],
@@ -208,7 +381,7 @@ if ($es_admin) {
         ['segment' => 'Proveedores complementarios', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM service_providers WHERE is_active = 1")],
         ['segment' => 'Bookings pendientes', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE status = 'pending'")],
     ];
-} else {
+} elseif (!$is_linked_medical_staff_session) {
     $pie_data = [
         ['segment' => 'Mis servicios', 'value' => $metric_cards[0]['value']],
         ['segment' => 'Mis ofertas', 'value' => $metric_cards[1]['value']],
@@ -346,17 +519,40 @@ if ($es_admin) {
                 <div class="page-content">
                     <!-- BEGIN BREADCRUMBS -->
                     <div class="breadcrumbs">
-                        <h1>Panel Administrativo</h1>
+                        <h1><?php echo htmlspecialchars($dashboard_heading, ENT_QUOTES); ?></h1>
                         <ol class="breadcrumb">
                             <li>
                                 <a href="#">Home</a>
                             </li>
-                            <li class="active">Panel Administrativo</li>
+                            <li class="active"><?php echo htmlspecialchars($dashboard_breadcrumb, ENT_QUOTES); ?></li>
                         </ol>
                     </div>
                     <!-- END BREADCRUMBS -->
                     <!-- BEGIN PAGE BASE CONTENT -->
-                    <?php if (!$es_admin): ?>
+                    <?php if (!$es_admin && $is_linked_medical_staff_session): ?>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="portlet light bordered provider-onboarding-panel">
+                                <div class="portlet-title" style="border-bottom:0; margin-bottom:0;">
+                                    <div class="caption">
+                                        <span class="caption-subject font-dark bold uppercase">Panel operativo del staff</span>
+                                        <span class="caption-helper" style="display:block; margin-top:4px;">Aquí ves únicamente la operación que ya quedó bajo tu responsabilidad clínica y de coordinación.</span>
+                                    </div>
+                                </div>
+                                <div class="portlet-body" style="padding-top:0;">
+                                    <p class="provider-onboarding-intro">
+                                        Usa este panel como punto de entrada para tus solicitudes asignadas. La administración del prestador conserva la supervisión general, pero el seguimiento operativo diario debe llevarse desde tus vistas asignadas.
+                                    </p>
+                                    <div class="provider-onboarding-links">
+                                        <?php foreach ($provider_operation_links as $link): ?>
+                                        <a class="btn btn-sm btn-outline blue" href="<?php echo htmlspecialchars($link['href'], ENT_QUOTES); ?>"><?php echo htmlspecialchars($link['label'], ENT_QUOTES); ?></a>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php elseif (!$es_admin): ?>
                     <div class="row">
                         <div class="col-md-12">
                             <div class="portlet light provider-onboarding-panel">
@@ -524,6 +720,10 @@ if ($es_admin) {
         jQuery(function() {
             var seriesData = <?php echo json_encode($series_data); ?>;
             var pieData = <?php echo json_encode($pie_data); ?>;
+            var chartSeriesPrimaryLabel = <?php echo json_encode($series_primary_label); ?>;
+            var chartSeriesSecondaryLabel = <?php echo json_encode($series_secondary_label); ?>;
+            var chartSeriesPrimaryBalloon = <?php echo json_encode($series_primary_balloon); ?>;
+            var chartSeriesSecondaryBalloon = <?php echo json_encode($series_secondary_balloon); ?>;
             var $onboardingCollapse = $('#provider-dashboard-onboarding-collapse');
 
             function syncOnboardingToggle(isOpen) {
@@ -551,19 +751,19 @@ if ($es_admin) {
                 startDuration: 0.4,
                 graphs: [
                     {
-                        balloonText: 'Servicios [[category]]: [[value]]',
+                        balloonText: chartSeriesPrimaryBalloon,
                         fillAlphas: 0.7,
                         lineAlpha: 0.2,
-                        title: 'Servicios',
+                        title: chartSeriesPrimaryLabel,
                         type: 'column',
                         valueField: 'servicios',
                         lineColor: '#36c6d3'
                     },
                     {
-                        balloonText: 'Ofertas [[category]]: [[value]]',
+                        balloonText: chartSeriesSecondaryBalloon,
                         bullet: 'round',
                         lineThickness: 2,
-                        title: 'Ofertas',
+                        title: chartSeriesSecondaryLabel,
                         valueField: 'ofertas',
                         lineColor: '#8E44AD'
                     }
