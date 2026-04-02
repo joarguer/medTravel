@@ -78,13 +78,13 @@ function safe(val){
 }
 
 function renderRating(val){
-    var rating = parseInt(val || 0, 10);
-    if (!rating) return '';
-    var html = '';
-    for (var i = 1; i <= 5; i++) {
-        html += '<i class="fas fa-star ' + (i <= rating ? 'text-primary' : 'text-muted') + '"></i>';
-    }
-    return html;
+    var parsed = parseFloat(val || 0);
+    if (!parsed || parsed <= 0) return '';
+    var rating = Math.max(0, Math.min(5, Math.round(parsed)));
+    var filled = '★'.repeat(rating);
+    var empty = '☆'.repeat(5 - rating);
+    return '<span style="color:#f39c12; font-size:16px; letter-spacing:1px;" title="' + rating + '/5">'
+        + filled + empty + '</span>';
 }
 
 function renderStatus(val){
