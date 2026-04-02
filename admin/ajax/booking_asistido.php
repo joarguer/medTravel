@@ -127,6 +127,109 @@ function ab_status_conditions($conexion, $table, $alias)
     return $conditions;
 }
 
+function ab_fetch_eligible_staff_ids($conexion, $providerId, $providerCatalogServiceId = 0, $serviceId = 0)
+{
+    $providerId = (int)$providerId;
+    $providerCatalogServiceId = (int)$providerCatalogServiceId;
+    $serviceId = (int)$serviceId;
+    if ($providerId <= 0 || $serviceId <= 0) {
+        return [];
+    }
+    if (!ab_table_exists($conexion, 'provider_medical_staff') || !ab_table_exists($conexion, 'provider_medical_staff_services')) {
+        return [];
+    }
+
+    $hasRelActive = ab_has_column($conexion, 'provider_medical_staff_services', 'active');
+    $hasRelProviderCatalogServiceId = ab_has_column($conexion, 'provider_medical_staff_services', 'provider_catalog_service_id');
+    $staffStatusColumn = provider_staff_status_column_name($conexion);
+
+    $sql = "SELECT DISTINCT pms.id
+            FROM provider_medical_staff_services rel
+            INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id
+            WHERE pms.provider_id = ?";
+    $types = 'i';
+    $params = [$providerId];
+
+    if ($hasRelActive) {
+        $sql .= ' AND rel.active = 1';
+    }
+    if ($staffStatusColumn !== '') {
+        $sql .= ' AND pms.`' . $staffStatusColumn . '` = 1';
+    }
+
+    if ($providerCatalogServiceId > 0 && $hasRelProviderCatalogServiceId) {
+        $sql .= ' AND (rel.provider_catalog_service_id = ?';
+        $types .= 'i';
+        $params[] = $providerCatalogServiceId;
+        $sql .= ' OR (COALESCE(rel.provider_catalog_service_id, 0) = 0 AND rel.service_id = ?))';
+        $types .= 'i';
+        $params[] = $serviceId;
+    } else {
+        $sql .= ' AND rel.service_id = ?';
+        $types .= 'i';
+        $params[] = $serviceId;
+    }
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return [];
+    }
+    if (!ab_bind_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return [];
+    }
+
+    $res = mysqli_stmt_get_result($stmt);
+    $ids = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $staffId = (int)($row['id'] ?? 0);
+        if ($staffId > 0) {
+            $ids[] = $staffId;
+        }
+    }
+    mysqli_stmt_close($stmt);
+    return array_values(array_unique($ids));
+}
+
+function ab_resolve_unique_staff_id($conexion, $providerId, $providerCatalogServiceId = 0, $serviceId = 0)
+{
+    $eligibleIds = ab_fetch_eligible_staff_ids($conexion, $providerId, $providerCatalogServiceId, $serviceId);
+    return count($eligibleIds) === 1 ? (int)$eligibleIds[0] : 0;
+}
+
+function ab_assign_initial_staff_to_item($conexion, $itemId, $providerId, $providerCatalogServiceId = 0, $serviceId = 0)
+{
+    $itemId = (int)$itemId;
+    $providerId = (int)$providerId;
+    if ($itemId <= 0 || $providerId <= 0 || !ab_has_column($conexion, 'booking_request_items', 'assigned_staff_id')) {
+        return 0;
+    }
+
+    $staffId = ab_resolve_unique_staff_id($conexion, $providerId, $providerCatalogServiceId, $serviceId);
+    if ($staffId <= 0) {
+        return 0;
+    }
+
+    $setParts = ['assigned_staff_id = ?'];
+    $types = 'ii';
+    $params = [$staffId, $itemId];
+    if (ab_has_column($conexion, 'booking_request_items', 'assigned_at')) {
+        $setParts[] = 'assigned_at = NOW()';
+    }
+
+    $sql = 'UPDATE booking_request_items SET ' . implode(', ', $setParts) . ' WHERE id = ? LIMIT 1';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return 0;
+    }
+    if (!ab_bind_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return 0;
+    }
+    mysqli_stmt_close($stmt);
+    return $staffId;
+}
+
 function ab_load_category_row($conexion, $categoryId)
 {
     $categoryId = (int)$categoryId;
@@ -1233,6 +1336,7 @@ if ($action === 'submit') {
         $offerMetaSql = "SELECT
                             o.provider_id,
                             o.service_id,
+                            " . (ab_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id') ? 'o.provider_catalog_service_id' : 'NULL AS provider_catalog_service_id') . ",
                             o.price_from,
                             COALESCE(NULLIF(o.currency,''), 'USD') AS currency
                          FROM provider_service_offers o
@@ -1261,6 +1365,8 @@ if ($action === 'submit') {
             if (!$offerRow || empty($offerRow['provider_id'])) continue;
 
             $providerId  = (int)$offerRow['provider_id'];
+            $serviceId   = (int)($offerRow['service_id'] ?? 0);
+            $providerCatalogServiceId = (int)($offerRow['provider_catalog_service_id'] ?? 0);
             $price       = is_numeric($offerRow['price_from']) ? round((float)$offerRow['price_from'], 2) : null;
             $currency    = strtoupper(trim((string)($offerRow['currency'] ?? 'USD')));
 
@@ -1286,7 +1392,21 @@ if ($action === 'submit') {
             }
             $itemId = (int)mysqli_insert_id($conexion);
             mysqli_stmt_close($stmtItem);
-            $createdItems[] = ['item_id' => $itemId, 'offer_id' => $offerId, 'provider_id' => $providerId];
+            $assignedStaffId = ab_assign_initial_staff_to_item(
+                $conexion,
+                $itemId,
+                $providerId,
+                $providerCatalogServiceId,
+                $serviceId
+            );
+            $createdItems[] = [
+                'item_id' => $itemId,
+                'offer_id' => $offerId,
+                'provider_id' => $providerId,
+                'service_id' => $serviceId,
+                'provider_catalog_service_id' => $providerCatalogServiceId,
+                'assigned_staff_id' => $assignedStaffId,
+            ];
         }
     }
 
