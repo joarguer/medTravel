@@ -53,9 +53,10 @@ G. **Implementado — Traduccion portal del paciente al ingles**
 - `client/mis_datos.php` migrado semanticamente a "My Profile".
 - Nav links del portal actualizados en `client/include/include.php`.
 
-**Decision operativa aprobada — Ownership por staff asignado (pendiente implementacion tecnica)**
+**Decision operativa aprobada + MVP implementado — Ownership por staff asignado**
 - Se aprueba que el staff asignado a un item tiende a ser el owner operativo del item despues de la asignacion.
-- La implementacion tecnica (rol `provider_staff`, landing "Mis solicitudes asignadas", scope RBAC) queda como siguiente frente pendiente.
+- **MVP visible implementado (commit `7f67648`)**: `admin/my_booking_requests.php` ya expone ownership operativo visible por item con columna "Responsable", chip de modo y avisos contextuales antes de acciones.
+- La formalizacion tecnica completa (rol `provider_staff`, landing propia del staff, scope RBAC duro, auto-asignacion persistida, extension a otras superficies) queda como siguiente frente pendiente.
 
 **Decision**
 - Las decisiones A-G quedan registradas como implementadas en produccion a partir de 2026-04-02.
@@ -74,7 +75,7 @@ G. **Implementado — Traduccion portal del paciente al ingles**
 - [ ] Politica de reenvio de credenciales para casos asistidos con gate de terminos pendiente
 
 **Transition note**
-- Los archivos modificados pero no commiteados en el momento de esta canonizacion (`admin/ajax/my_booking_requests.php`, `admin/js/my_booking_requests.js`, `admin/my_booking_requests.php`) representan trabajo en progreso y no deben considerarse como funcionalidad cerrada hasta su commit.
+- El commit `7f67648` (posterior a la canonizacion inicial del dia) cierra el MVP de ownership visible en `my_booking_requests`. Los tres archivos afectados estan commiteados y deben tratarse como funcionalidad cerrada para esta superficie.
 
 ---
 

@@ -463,5 +463,10 @@ El portal del paciente muestra un panel unico de seguimiento del caso que reempl
 
 - El modelo de datos ya soporta `booking_request_items.assigned_staff_id`.
 - El staff puede ser asignado a un item desde el panel admin.
-- La implementacion de scope de acceso del staff al panel (landing "Mis solicitudes asignadas") y la formalizacion del rol `provider_staff` estan pendientes.
+- **MVP visible implementado (2026-04-02, commit `7f67648`)**: `admin/my_booking_requests.php` ya expone ownership operativo visible por item:
+  - columna "Responsable" con nombre del staff asignado o "Administración del prestador / sin asignar"
+  - chip de modo: `Responsable actual`, `Supervisión`, `Seguimiento del staff` o `Sin asignación clínica`
+  - aviso contextual antes de acciones cuando el actor en sesion no es el owner del item
+  - campo `linked_staff_auto_claim_available` preparado para futura auto-asignacion al primer staff que actue sobre el item en `pending_provider`
+- La **formalizacion tecnica completa** (rol `provider_staff`, landing propia del staff, scope RBAC duro, extension a otras superficies) sigue pendiente.
 - Ver backlog frente "Paso 6 — Acceso del staff al panel admin".

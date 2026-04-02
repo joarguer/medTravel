@@ -666,6 +666,43 @@ Se implemento un mecanismo de sincronizacion minima en `inc/google_calendar.php`
 - No reemplaza las acciones estructuradas del item (aceptar, rechazar, solicitar info, proponer cita).
 - No implementa aun `appointment_mode` ni `treatment_completed` ni `post_treatment_follow_up` como atributos formales del item.
 
+## Ownership operativo visible por item en my_booking_requests (MVP, desde 2026-04-02)
+
+**Commit:** `7f67648`
+
+### Alcance implementado
+
+- `admin/ajax/my_booking_requests.php` incluye la funcion `apply_operational_owner_meta()` que enriquece cada fila de item con metadatos de ownership operativo.
+- `admin/my_booking_requests.php` y `admin/js/my_booking_requests.js` exponen una columna "Responsable" en la tabla de items con nombre del staff asignado o label de fallback al provider admin.
+- Incluye chip de modo: `Responsable actual`, `Supervisión`, `Seguimiento del staff` o `Sin asignación clínica`.
+- Aviso contextual (`supervisor_override_message`) antes de acciones cuando el actor en sesion no es el owner del item.
+- El campo `linked_staff_auto_claim_available` senala que un staff vinculado puede auto-asignarse al actuar sobre un item `pending_provider` sin staff asignado.
+
+### Campos expuestos por `apply_operational_owner_meta()`
+
+| Campo | Descripcion |
+|---|---|
+| `operational_owner_type` | `assigned_staff` o `provider_admin` |
+| `operational_owner_label` | Nombre del staff o label de fallback |
+| `operational_owner_short_label` | Version corta del label |
+| `operational_owner_role_label_es` | `Staff asignado` o `Administración del prestador` |
+| `operational_owner_note_es` | Nota contextual del estado de ownership |
+| `has_operational_owner_staff` | 1 si hay staff asignado, 0 si no |
+| `current_user_is_operational_owner` | 1 si el actor en sesion es el staff asignado |
+| `supervisor_override_required` | 1 si admin actua sobre item asignado a otro staff |
+| `supervisor_override_message` | Texto del aviso de supervision |
+| `linked_staff_auto_claim_available` | 1 si staff puede auto-asignarse (estado `pending_provider`, sin staff) |
+| `linked_staff_auto_claim_message` | Texto del aviso de auto-claim |
+| `ownership_mode_label_es` | Label del chip de modo visible en la UI |
+
+### Lo que este MVP NO cubre todavia
+
+- No implementa scope RBAC duro: el staff vinculado puede ver info pero no hay restriccion de acceso por `assigned_staff_id`.
+- No existe landing propia del staff ("Mis solicitudes asignadas") con scope restringido.
+- No existe rol tecnico `provider_staff` separado de ROLE_PROVIDER / ROLE_PROVIDER_ADMIN.
+- La auto-asignacion (`linked_staff_auto_claim`) senala disponibilidad pero no persiste la asignacion automaticamente; eso es frente pendiente.
+- Este MVP aplica solo a `my_booking_requests`; otras superficies admin (inbox, app_calendar, detalle de solicitud) no tienen aun la misma logica de ownership visible.
+
 ## Nuevo esquema de trazabilidad (migracion 2026_04_02_agent_assisted_booking)
 
 ### Columnas nuevas en `booking_requests`

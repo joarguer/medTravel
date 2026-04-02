@@ -102,19 +102,24 @@ Alias al backlog / pasos de ejecución canónico.
 
 ### Frente especifico — Ownership operativo por staff asignado
 
-#### Decision aprobada (2026-04-02)
+#### Canon cerrado (2026-04-02)
 
 - El staff asignado debe tender a ser el owner operativo del item despues de la asignacion.
 - Antes de la asignacion, el owner operativo es el provider/admin del prestador.
-- Esta decision es operativa y de producto; la implementacion tecnica en RBAC y scope de acceso del staff es el siguiente frente.
+- DONE MVP 2026-04-02 (commit `7f67648`): ownership operativo visible implementado en `admin/my_booking_requests.php`:
+  - columna "Responsable" con nombre del staff o fallback al provider admin
+  - chip de modo: `Responsable actual`, `Supervisión`, `Seguimiento del staff`, `Sin asignación clínica`
+  - aviso contextual antes de acciones cuando el actor no es el owner del item
+  - campo `linked_staff_auto_claim_available` preparado para futura auto-asignacion
 
-#### Pendientes de implementacion
+#### Pendientes de formalizacion tecnica completa
 
 - [ ] Formalizar el rol tecnico `provider_staff` (Paso 6 — sin reutilizar ROLE_PROVIDER ni ROLE_PROVIDER_ADMIN)
-- [ ] Implementar landing "Mis solicitudes asignadas" como scope del staff autenticado
-- [ ] Scope duro por `booking_request_items.assigned_staff_id` para el acceso del staff al panel
+- [ ] Implementar landing propia del staff "Mis solicitudes asignadas" con scope restringido
+- [ ] Scope duro RBAC por `booking_request_items.assigned_staff_id` para acceso del staff al panel
+- [ ] Implementar persistencia de auto-asignacion cuando `linked_staff_auto_claim_available = 1` y el staff actua
+- [ ] Extender logica de ownership visible a otras superficies admin: inbox, detalle de solicitud, app_calendar
 - [ ] Notificaciones dirigidas al staff asignado tras la asignacion (email / inbox)
-- [ ] Revisando que el ownership del item se transfiera semanticamente al staff asignado en la UI admin
 
 ### Frente especifico — Servicios medicos, staff y ofertas
 
