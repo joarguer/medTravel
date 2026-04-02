@@ -218,8 +218,12 @@ Estos estados son de negocio y deben guiar la UI operativa. Pueden convivir con 
 - `date_proposed`
 - `date_confirmed`
 - `rescheduled`
-- `completed`
+- `treatment_completed`
+- `post_treatment_follow_up`
 - `cancelled`
+
+Compatibilidad legacy:
+- `completed` se considera alias legacy de `treatment_completed` en runtime y no debe usarse como nuevo estado canonico.
 
 ### Acciones oficiales del item
 
@@ -229,6 +233,8 @@ Las acciones de negocio oficialmente reconocidas para un item son:
 - Rechazar caso
 - Solicitar informacion
 - Proponer cita
+- Marcar tratamiento completado
+- Iniciar seguimiento post tratamiento
 
 Estas acciones deben reflejarse en vocabulario UI y trazabilidad, incluso si internamente algunas implementaciones actuales aun usan nombres tecnicos legacy.
 
@@ -435,6 +441,14 @@ El portal del paciente muestra un panel unico de seguimiento del caso que reempl
 - La UX del paciente debe mantenerse simple, comprensible y orientada al journey del proceso medico, no al modelo interno de la plataforma.
 - El paciente no ve la nomenclatura de roles ni la estructura operation / provider / staff; solo ve quien lo atiende, que sigue y cual es el estado de su caso.
 
+### Lifecycle visible actualizado del paciente
+
+- La modalidad de cita se presenta de forma simple como virtual, in-person o travel-related.
+- El paciente puede ver la fase de tratamiento completado en lenguaje no tecnico.
+- El paciente puede ver la fase de seguimiento post tratamiento en lenguaje simple: "We are following up on your recovery".
+- No se expone terminologia interna como `item_status`.
+- Regla de idioma: portal del paciente en ingles; admin/provider/staff en espanol.
+
 ### Implementacion
 
 - `client/ajax/dashboard_overview.php`: endpoint que resuelve el resumen del caso, items, nombres de servicio y estados visibles.
@@ -449,7 +463,7 @@ El portal del paciente muestra un panel unico de seguimiento del caso que reempl
 - Esta regla se aplica a todos los labels, mensajes, titulos y acciones visibles del portal del cliente.
 - Las excepciones solo aplican a datos de contenido editados en espanol por el prestador o por admin (nombres de servicios, notas, etc.).
 
-## Ownership operativo por staff asignado (decision aprobada, implementacion pendiente)
+## Ownership operativo por staff asignado (decision aprobada, implementacion parcial reforzada)
 
 ### Decision operativa (aprobada 2026-04-02)
 
@@ -470,3 +484,23 @@ El portal del paciente muestra un panel unico de seguimiento del caso que reempl
   - campo `linked_staff_auto_claim_available` preparado para futura auto-asignacion al primer staff que actue sobre el item en `pending_provider`
 - La **formalizacion tecnica completa** (rol `provider_staff`, landing propia del staff, scope RBAC duro, extension a otras superficies) sigue pendiente.
 - Ver backlog frente "Paso 6 — Acceso del staff al panel admin".
+
+### Runtime staff reforzado en superficies asignadas (implementado)
+
+- En sesiones de staff vinculado, la navegacion se reduce a operacion asignada: `Mis solicitudes asignadas`, `Inbox asignado` y `Agenda asignada`.
+- En agenda operativa se aplica scope por `assigned_staff_id` para eventos ITEM de solicitudes asignadas al staff.
+- La UI de inbox y agenda muestra contexto explicito de seguimiento asignado para evitar confusion con supervision general del provider.
+
+### Regla canónica de asignación inicial del staff (implementada)
+
+- La asignacion inicial de `assigned_staff_id` queda alineada entre booking publico y booking asistido por agente.
+- Regla uniforme:
+  - si existe exactamente un unico staff elegible para el servicio/item, se autoasigna
+  - si hay multiples elegibles o ninguno, el item queda sin asignar
+- Esta regla evita asignaciones ambiguas y prepara ownership operativo consistente desde la creacion del item.
+
+### Distincion operativa obligatoria
+
+- Oferta comercial: publicacion en `provider_service_offers`.
+- Staff elegible por servicio: universo posible derivado de `provider_medical_staff_services`.
+- Staff asignado operativamente: responsable real del item en `booking_request_items.assigned_staff_id`.

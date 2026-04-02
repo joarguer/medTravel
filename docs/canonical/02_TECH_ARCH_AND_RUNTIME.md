@@ -664,7 +664,78 @@ Se implemento un mecanismo de sincronizacion minima en `inc/google_calendar.php`
 
 - Esta sincronizacion es minima e intencional: mueve `item_status` cuando hay un evento de calendario asociado.
 - No reemplaza las acciones estructuradas del item (aceptar, rechazar, solicitar info, proponer cita).
-- No implementa aun `appointment_mode` ni `treatment_completed` ni `post_treatment_follow_up` como atributos formales del item.
+- Convive con el lifecycle formalizado del item (`treatment_completed`, `post_treatment_follow_up`) y con modalidad explicita de cita (`appointment_mode`) sin mezclar dominios.
+
+## Runtime staff reforzado en superficies asignadas (desde 2026-04-02)
+
+**Commit principal:** `69e62dc`
+
+### Implementado
+
+- Navegacion diferenciada para sesion de staff vinculado: operacion asignada, inbox asignado, agenda asignada.
+- Agenda staff en `admin/ajax/calendar.php` con scope por `booking_request_items.assigned_staff_id` para eventos ITEM.
+- Contexto UI de inbox/agenda ajustado para indicar responsabilidad operativa asignada y evitar ambiguedad con modo supervision.
+- Header/menu de provider ajustado para no mostrar superficies no alineadas al scope del staff vinculado.
+
+### Alcance real del scope
+
+- Scope endurecido en superficies principales reforzadas (agenda/inbox/menu operativo del staff).
+- La formalizacion RBAC total de `provider_staff` y cobertura 100% de todas las superficies admin sigue como frente pendiente en backlog.
+
+## Regla tecnica uniforme de asignacion inicial de `assigned_staff_id` (desde 2026-04-02)
+
+**Commit principal:** `9c05fdb`
+
+### Regla implementada
+
+- La asignacion inicial del item en booking asistido se alinea con booking publico.
+- Si existe exactamente un unico staff elegible para el servicio, se asigna automaticamente ese staff.
+- Si hay multiples elegibles o ninguno, el item nace sin `assigned_staff_id`.
+
+### Objetivo operativo
+
+- Evitar asignaciones arbitrarias al crear el caso.
+- Mantener consistencia entre canales de creacion del booking.
+- Preparar ownership operativo por item desde el inicio sin romper compatibilidad.
+
+## Lifecycle operativo del item formalizado (desde 2026-04-02)
+
+### `appointment_mode` en cita (`calendar_events`)
+
+- Implementado en runtime por commit `32e2c30`.
+- Persistencia en `calendar_events.appointment_mode` con valores: `virtual`, `in_person`, `travel`.
+- Fallback seguro por inferencia cuando la columna no existe o viene vacia.
+
+### `treatment_completed` en item (`booking_request_items`)
+
+- Implementado por commit `87748d4`.
+- Estado formal del item para cierre de fase de tratamiento.
+- Compatibilidad legacy: `completed` se normaliza a `treatment_completed`.
+
+### `post_treatment_follow_up` en item (`booking_request_items`)
+
+- Implementado por commit `16cac36`.
+- Transicion formal posterior a `treatment_completed`.
+- Metadata opcional soportada con guard de columnas: `follow_up_started_at`, `follow_up_started_by_user_id`.
+
+### Regla de separacion de dominio
+
+- El item concentra lifecycle operativo/clínico (`treatment_completed`, `post_treatment_follow_up`).
+- La cita mantiene su dominio propio de agenda y modalidad (`appointment_mode`, estado de evento).
+- No debe modelarse el lifecycle clinico como estado de la cita.
+
+## Migraciones requeridas antes del smoke integral
+
+Pendientes de ejecucion previa al smoke end-to-end:
+
+- `sql/2026_04_02_calendar_events_appointment_mode.sql`
+- `sql/2026_04_02_booking_request_items_treatment_completed.sql`
+- `sql/2026_04_02_booking_request_items_post_treatment_follow_up.sql`
+
+Regla de compatibilidad durante despliegue por fases:
+
+- El runtime usa guards `has_column`/`table_has_column` para no romper entornos que aun no hayan corrido migraciones.
+- Antes del smoke integral estas migraciones deben ejecutarse para validar persistencia completa, no solo fallback.
 
 ## Ownership operativo visible por item en my_booking_requests (MVP, desde 2026-04-02)
 
@@ -697,11 +768,11 @@ Se implemento un mecanismo de sincronizacion minima en `inc/google_calendar.php`
 
 ### Lo que este MVP NO cubre todavia
 
-- No implementa scope RBAC duro: el staff vinculado puede ver info pero no hay restriccion de acceso por `assigned_staff_id`.
-- No existe landing propia del staff ("Mis solicitudes asignadas") con scope restringido.
+- No implementa scope RBAC duro global para todo el admin; el endurecimiento actual cubre superficies reforzadas principales y no reemplaza el rol tecnico `provider_staff` pendiente.
+- La landing operativa de staff existe en superficies reforzadas, pero la formalizacion total de permisos por rol tecnico aun esta pendiente.
 - No existe rol tecnico `provider_staff` separado de ROLE_PROVIDER / ROLE_PROVIDER_ADMIN.
 - La auto-asignacion (`linked_staff_auto_claim`) senala disponibilidad pero no persiste la asignacion automaticamente; eso es frente pendiente.
-- Este MVP aplica solo a `my_booking_requests`; otras superficies admin (inbox, app_calendar, detalle de solicitud) no tienen aun la misma logica de ownership visible.
+- La semantica de ownership visible nacio en `my_booking_requests`; la cobertura y consistencia completa en todas las superficies sigue como frente abierto.
 
 ## Nuevo esquema de trazabilidad (migracion 2026_04_02_agent_assisted_booking)
 

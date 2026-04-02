@@ -88,12 +88,12 @@ Alias al backlog / pasos de ejecución canónico.
 - DONE 2026-04-02: mapeo canónico: proposed/scheduled → `appointment_proposed`, confirmed → `appointment_confirmed`, cancelled → `appointment_cancelled`, reschedule → `appointment_requested_change`
 - DONE 2026-04-02: normalizacion de estados legacy `pending_admin` / `pending_review` → `pending_provider`
 
-#### Atributos del item pendientes de formalizar
+#### Atributos del item/cita formalizados (DONE)
 
-- [ ] `appointment_mode` — modalidad presencial / virtual como atributo estructural del item o de la cita
-- [ ] `treatment_completed` — flag o estado que marque la finalizacion clinica del item
-- [ ] `post_treatment_follow_up` — estado o tarea que represente seguimiento post-atencion
-- [ ] Formalizar el pipeline de estados extendido del item para que incluya estos hitos de lifecycle
+- DONE 2026-04-02 (commit `32e2c30`): `appointment_mode` formalizado en `calendar_events` (`virtual`, `in_person`, `travel`) con fallback de compatibilidad
+- DONE 2026-04-02 (commit `87748d4`): `treatment_completed` formalizado como estado real de `booking_request_items`
+- DONE 2026-04-02 (commit `16cac36`): `post_treatment_follow_up` formalizado como estado real de `booking_request_items`
+- DONE 2026-04-02: pipeline operativo del item extendido para distinguir tratamiento realizado vs seguimiento post tratamiento
 
 #### Pendientes de endurecimiento
 
@@ -111,15 +111,31 @@ Alias al backlog / pasos de ejecución canónico.
   - chip de modo: `Responsable actual`, `Supervisión`, `Seguimiento del staff`, `Sin asignación clínica`
   - aviso contextual antes de acciones cuando el actor no es el owner del item
   - campo `linked_staff_auto_claim_available` preparado para futura auto-asignacion
+- DONE 2026-04-02 (commit `69e62dc`): runtime staff reforzado en superficies principales:
+  - navegacion operativa asignada
+  - inbox asignado
+  - agenda asignada
+  - scope de agenda por `booking_request_items.assigned_staff_id`
+- DONE 2026-04-02 (commit `9c05fdb`): asignacion inicial de staff alineada entre booking publico y booking asistido:
+  - autoasignacion solo cuando existe un unico staff elegible
+  - sin asignacion cuando hay multiples elegibles o ninguno
 
 #### Pendientes de formalizacion tecnica completa
 
 - [ ] Formalizar el rol tecnico `provider_staff` (Paso 6 — sin reutilizar ROLE_PROVIDER ni ROLE_PROVIDER_ADMIN)
-- [ ] Implementar landing propia del staff "Mis solicitudes asignadas" con scope restringido
-- [ ] Scope duro RBAC por `booking_request_items.assigned_staff_id` para acceso del staff al panel
+- [ ] Completar RBAC total de staff en todo el admin (no solo superficies reforzadas)
 - [ ] Implementar persistencia de auto-asignacion cuando `linked_staff_auto_claim_available = 1` y el staff actua
 - [ ] Extender logica de ownership visible a otras superficies admin: inbox, detalle de solicitud, app_calendar
 - [ ] Notificaciones dirigidas al staff asignado tras la asignacion (email / inbox)
+
+### Bloque pre-smoke integral (pendiente obligatorio)
+
+- [ ] Ejecutar `sql/2026_04_02_calendar_events_appointment_mode.sql`
+- [ ] Ejecutar `sql/2026_04_02_booking_request_items_treatment_completed.sql`
+- [ ] Ejecutar `sql/2026_04_02_booking_request_items_post_treatment_follow_up.sql`
+- [ ] Correr smoke test end-to-end integral despues de migraciones
+- [ ] Publicar observabilidad Fase 1 del bloque staff/lifecycle (checklist de validacion y resultados)
+- [ ] Definir fase terminal/cierre final del lifecycle del item para cierre canónico completo
 
 ### Frente especifico — Servicios medicos, staff y ofertas
 

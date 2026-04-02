@@ -1,5 +1,51 @@
 # Changelog Decisions
 
+## 2026-04-02 — Runtime staff reforzado + lifecycle clínico-operativo formalizado
+
+**Commits**: `69e62dc`, `9c05fdb`, `32e2c30`, `87748d4`, `16cac36`
+
+**Outcome**
+
+A. **Implementado — Runtime staff reforzado en superficies asignadas**
+- Navegacion diferenciada para staff vinculado con foco en operacion asignada.
+- `app_inbox` y `app_calendar` presentan contexto de trabajo asignado para staff.
+- `admin/ajax/calendar.php` endurece scope de agenda ITEM por `booking_request_items.assigned_staff_id` en sesion staff vinculada.
+
+B. **Implementado — Regla uniforme de asignacion inicial de staff**
+- Booking asistido (`admin/ajax/booking_asistido.php`) se alinea con el booking publico.
+- Regla aplicada: autoasignar solo cuando hay exactamente un unico staff elegible; en multiples/ninguno el item queda sin asignar.
+
+C. **Implementado — `appointment_mode` formalizado**
+- Se formaliza `calendar_events.appointment_mode` con valores `virtual`, `in_person`, `travel`.
+- Admin y patient journey consumen modalidad explicita con fallback de compatibilidad.
+
+D. **Implementado — `treatment_completed` formalizado**
+- `booking_request_items.item_status` incorpora `treatment_completed` como estado real.
+- Compatibilidad legacy: `completed` se normaliza a `treatment_completed`.
+
+E. **Implementado — `post_treatment_follow_up` formalizado**
+- `booking_request_items.item_status` incorpora `post_treatment_follow_up` como continuacion natural posterior a `treatment_completed`.
+- Se agrega persistencia opcional de metadata de inicio de seguimiento (`follow_up_started_at`, `follow_up_started_by_user_id`) cuando columnas existen.
+
+**Decision**
+
+- Queda consolidado que el lifecycle operativo/clínico vive en el item; la cita mantiene su dominio de agenda separado.
+- Queda consolidado que el runtime staff reforzado ya opera en superficies principales, sin declarar cerrado el RBAC total del rol tecnico `provider_staff`.
+- Queda consolidado que paciente mantiene UX simple en ingles sin exponer nomenclatura tecnica de `item_status`.
+
+**Migraciones requeridas antes del smoke integral**
+
+- `sql/2026_04_02_calendar_events_appointment_mode.sql`
+- `sql/2026_04_02_booking_request_items_treatment_completed.sql`
+- `sql/2026_04_02_booking_request_items_post_treatment_follow_up.sql`
+
+**Pendiente**
+
+- Ejecutar las tres migraciones anteriores en el entorno objetivo.
+- Ejecutar smoke test end-to-end integral del bloque staff + lifecycle.
+- Cerrar formalizacion total de `provider_staff` y RBAC completo por ownership.
+- Definir fase terminal clara para cierre final del lifecycle del item.
+
 ## 2026-04-02 — Booking asistido, gate de términos, sincronización item/cita y panel de paciente
 
 **Commits**: `d5f1467`, `7f29902`, `ee33eac`, `fac28a7`, `7f8c60e`, `aa52def`, `fad5bed`, `8e97385`, `59e9093`, `8d2a1bf`, `69f85c3`, `f23b9bf`
@@ -66,9 +112,9 @@ G. **Implementado — Traduccion portal del paciente al ingles**
 - El ownership operativo por staff asignado queda aprobado como decision de producto; la implementacion tecnica es el proximo frente.
 
 **Pendientes generados**
-- [ ] `appointment_mode` como atributo estructural del item/cita
-- [ ] `treatment_completed` como hito del lifecycle del item
-- [ ] `post_treatment_follow_up` como hito/tarea del lifecycle del item
+- [x] `appointment_mode` como atributo estructural del item/cita (DONE 2026-04-02, commit `32e2c30`)
+- [x] `treatment_completed` como hito del lifecycle del item (DONE 2026-04-02, commit `87748d4`)
+- [x] `post_treatment_follow_up` como hito/tarea del lifecycle del item (DONE 2026-04-02, commit `16cac36`)
 - [ ] Rol tecnico `provider_staff` y landing "Mis solicitudes asignadas"
 - [ ] Scope RBAC por `assigned_staff_id` para acceso del staff al panel
 - [ ] Endurecimiento de admin/inbox donde persiste mezcla semantica entre comunicacion y cambio de estado
