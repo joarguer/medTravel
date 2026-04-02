@@ -43,6 +43,11 @@ function clientes_bind_stmt_params($stmt, $types, &$values)
     return call_user_func_array([$stmt, 'bind_param'], $bind);
 }
 
+function clientes_normalized_email_expr($expr)
+{
+    return "LOWER(TRIM(CONVERT({$expr} USING utf8mb4))) COLLATE utf8mb4_unicode_ci";
+}
+
 $tipo = isset($_POST['tipo']) ? $_POST['tipo'] : '';
 $id_usuario = $_SESSION['id_usuario'];
 
@@ -97,14 +102,14 @@ if ($tipo == 'get') {
 
         $clientMatchParts = [];
         if ($hasBrEmail) {
-            $clientMatchParts[] = "LOWER(TRIM(br.email)) = LOWER(TRIM(c.email))";
+            $clientMatchParts[] = clientes_normalized_email_expr('br.email') . " = " . clientes_normalized_email_expr('c.email');
         }
         if ($hasBrClientUserId && $hasUsuariosEmail) {
             $clientMatchParts[] = "EXISTS (
                 SELECT 1
                 FROM usuarios u_cli
                 WHERE u_cli.id = br.client_user_id
-                  AND LOWER(TRIM(u_cli.email)) = LOWER(TRIM(c.email))
+                  AND " . clientes_normalized_email_expr('u_cli.email') . " = " . clientes_normalized_email_expr('c.email') . "
             )";
         }
 
