@@ -101,6 +101,12 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
     }
     
     $texts = get_booking_texts();
+    $booking_form_ui_texts = [
+        'selected_complementary_services' => 'Selected complementary services:',
+        'service_fallback' => 'Service',
+        'provider_fallback' => 'Provider',
+        'additional_services_suffix' => 'additional services',
+    ];
     $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
     ?>
     <style>
@@ -238,6 +244,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
             var KEY_PRESELECTED_SERVICE = 'mt_preselected_service_id';
             var RETRY_DELAYS = [0, 250, 1000];
             var DEBUG = !!window.MT_DEBUG;
+            var UI_TEXTS = <?php echo json_encode($booking_form_ui_texts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 
             function logDebug() {
                 if (!DEBUG || !window.console || !console.log) return;
@@ -283,12 +290,12 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
 
                 var summary = items.slice(0, 5).map(function(item) {
                     var price = item.price ? ' - ' + item.price + ' ' + (item.currency || '') : '';
-                    return '- ' + (item.type || 'Servicio') + ': ' + (item.name || '') + ' (' + (item.provider || 'Proveedor') + ')' + price;
+                    return '- ' + (item.type || UI_TEXTS.service_fallback) + ': ' + (item.name || '') + ' (' + (item.provider || UI_TEXTS.provider_fallback) + ')' + price;
                 }).join('\n');
                 if (items.length > 5) {
-                    summary += '\n- + ' + (items.length - 5) + ' servicios adicionales';
+                    summary += '\n- + ' + (items.length - 5) + ' ' + UI_TEXTS.additional_services_suffix;
                 }
-                message.value = 'Servicios complementarios seleccionados:\n' + summary;
+                message.value = UI_TEXTS.selected_complementary_services + '\n' + summary;
                 emitFieldEvents(message);
             }
 
