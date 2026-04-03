@@ -74,12 +74,18 @@ Alias al backlog / pasos de ejecución canónico.
 - DONE 2026-04-02: aviso contextual en `login.php` y `set_password.php` para clientes con terminos pendientes
 - DONE 2026-04-02: social links y URLs publicas unificados en `inc/public_site_links.php`
 - DONE 2026-04-02: patron has_column guard canonizado para columnas opcionales tipo `is_deleted`
+- DONE 2026-04-03: cierre del frente `administrative` documentado y contrastado contra `sql/medtravelcom_medtravel.sql`
+  - scope final: CARE + booking asistido + perfil propio
+  - login permitido sin bypass global
+  - guard central de clientes consistente
+  - migración versionada para `role_permissions`: `sql/2026_04_03_administrative_role_permissions_scope.sql`
 
 #### Deuda pendiente de este frente
 
 - [ ] Agregar campo `agent_channel` al listado de solicitudes admin para visibilidad operativa del origen del caso
 - [ ] Definir politica de reenvio de credenciales para casos asistidos cuando el email no llega o el paciente no completa el gate
 - [ ] Auditar el flujo de booking asistido cuando el email del paciente ya existe como usuario interno con otro rol
+- [ ] Ejecutar smoke post-deploy en servidor real tras aplicar la migración del rol `administrative`
 
 ### Frente especifico — Sincronizacion item ↔ cita y atributos pendientes del item
 

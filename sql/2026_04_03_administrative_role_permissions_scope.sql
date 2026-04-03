@@ -1,13 +1,18 @@
 -- =======================================================
 -- MIGRACION: alinear scope real de role `administrative`
 -- Fecha: 2026-04-03
+-- Idempotente: si
 -- Objetivo:
 --   - dejar al rol `administrative` solo con permisos de coordinación CARE
 --   - booking.view
 --   - booking.assisted.create
+-- Fuente de contraste:
+--   - sql/medtravelcom_medtravel.sql (dump real del servidor)
+--   - docs/canonical/04_CHANGELOG_DECISIONS.md
 -- Nota:
 --   El hardening en PHP se mantiene como defensa adicional, pero la fuente
 --   de verdad en BD debe reflejar este scope.
+--   Si el dump real ya está alineado, esta migración no cambia el resultado.
 -- =======================================================
 
 START TRANSACTION;

@@ -708,3 +708,37 @@ Cambios principales:
   - gestión global de clientes/bookings
 - la restricción debe existir en menú, guards y backend; no solo en ocultamiento visual
 - el universo técnico mínimo de “MedTravel Coordination” se acota a superficies CARE existentes, sin introducir un nuevo modelo de scope en esta pasada
+
+### Cierre formal y contraste con fuente de verdad
+
+- fecha de cierre documental: 2026-04-03
+- commits relacionados:
+  - `127c16c` — Restrict administrative role to coordination scope
+  - `b8ba79e` — Allow administrative login without admin bypass
+  - `919f92b` — Align admin auth runtime with scoped model
+  - `b754344` — Align administrative scope with canonical auth flow
+- migración relacionada:
+  - `sql/2026_04_03_administrative_role_permissions_scope.sql`
+- problema detectado durante la auditoría:
+  - el hardening PHP ya restringía `administrative`, pero existía riesgo de desalineación si `role_permissions` reales seguían más amplios que el canon
+  - además persistían residuos funcionales menores en `booking_asistido.php`, `clientes.php` y `login_context`
+- contraste usado para cerrar el frente:
+  - `sql/medtravelcom_medtravel.sql` se tomó como representación de la BD real del servidor
+  - los canónicos y el SQL versionado se usaron como rastro formal complementario
+  - las bases locales o snapshots con drift no redefinen la verdad del proyecto
+- correcciones cerradas en código:
+  - `administrative` mantiene login permitido sin recuperar bypass global
+  - auth runtime queda alineado al modelo scopeado con compatibilidad legacy guardada
+  - `booking_asistido.php` reutiliza el back target correcto para `administrative`
+  - `clientes.php` queda bloqueado desde el guard central y mantiene defensa adicional en AJAX
+  - `login_context` contempla `usrlogin`, alineado con el contrato real del login
+- estado final esperado del rol `administrative`:
+  - acceso restringido a inbox CARE
+  - calendar CARE
+  - booking asistido
+  - perfil propio
+  - sin acceso global a usuarios, roles, clientes, contenido web o configuración sensible
+- estado de BD / despliegue:
+  - la migración `sql/2026_04_03_administrative_role_permissions_scope.sql` queda versionada como artefacto formal para alinear entornos rezagados
+  - el dump `sql/medtravelcom_medtravel.sql` debe prevalecer sobre cualquier conclusión derivada de una BD local con drift
+  - validación operativa posterior a despliegue: login admin principal, login `administrative`, assisted booking y bloqueos de clientes/usuarios para `administrative`
