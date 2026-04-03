@@ -198,10 +198,10 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
             <div class="carousel-header">
                 <div id="carouselId" class="carousel slide" data-bs-ride="carousel">
                     <ol class="carousel-indicators">
-                        <?php 
+                        <?php
                             $n = 0;
-                            while($fil = mysqli_fetch_array($busca_carrucel)){ 
-                                if($n == 0){ 
+                            while($fil = mysqli_fetch_array($busca_carrucel)){
+                                if($n == 0){
                                     $active = 'active';
                                 } else {
                                     $active = '';
@@ -209,15 +209,15 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                         ?>
                             <li data-bs-target="#carouselId" data-bs-slide-to="<?php echo $n;?>" class="<?php echo $active;?>"></li>
                         <?php
-                            $n++; 
-                            } 
+                            $n++;
+                            }
                         ?>
                     </ol>
                     <div class="carousel-inner" role="listbox">
-                        <?php 
+                        <?php
                             $n = 0;
-                            while($fil = mysqli_fetch_array($busca_carrucel_2)){ 
-                                if($n == 0){ 
+                            while($fil = mysqli_fetch_array($busca_carrucel_2)){
+                                if($n == 0){
                                     $active = 'active';
                                 } else {
                                     $active = '';
@@ -238,8 +238,8 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                             </div>
                         </div>
                         <?php
-                            $n++; 
-                            } 
+                            $n++;
+                            }
                         ?>
                     </div>
                     <button class="carousel-control-prev" type="button" data-bs-target="#carouselId" data-bs-slide="prev">
@@ -697,7 +697,10 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                     <div class="col-sm-6 col-lg-3">
                         <article class="home-specialist-card">
                             <?php if ($specialist['photo'] !== '') { ?>
-                                <img src="<?php echo htmlspecialchars($specialist['photo'], ENT_QUOTES, 'UTF-8'); ?>" class="home-specialist-photo" alt="<?php echo htmlspecialchars($specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?>">
+                                <img src="<?php echo htmlspecialchars($specialist['photo'], ENT_QUOTES, 'UTF-8'); ?>"
+                                     class="home-specialist-photo"
+                                     alt="<?php echo htmlspecialchars($specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                     onerror="this.onerror=null;this.src='<?php echo htmlspecialchars($specialist['photo_fallback'] ?: 'img/site/placeholder-medical.jpg', ENT_QUOTES, 'UTF-8'); ?>';">
                             <?php } else { ?>
                                 <div class="home-specialist-avatar"><?php echo htmlspecialchars(mt_home_specialist_initials($specialist['full_name']), ENT_QUOTES, 'UTF-8'); ?></div>
                             <?php } ?>
@@ -810,15 +813,15 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
         <!-- Footer Start -->
         <?php echo $footer; ?>
         <!-- Footer End -->
-        
+
         <!-- Copyright Start -->
         <?php echo $copyright; ?>
         <!-- Copyright End -->
 
         <!-- Back to Top -->
-        <a href="#" class="btn btn-primary btn-primary-outline-0 btn-md-square back-to-top"><i class="fa fa-arrow-up"></i></a>   
+        <a href="#" class="btn btn-primary btn-primary-outline-0 btn-md-square back-to-top"><i class="fa fa-arrow-up"></i></a>
 
-        
+
         <!-- JavaScript Libraries -->
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -827,7 +830,7 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
         <script src="lib/owlcarousel/owl.carousel.min.js"></script>
         <script src="lib/lightbox/js/lightbox.min.js"></script>
         <?php echo $script; ?>
-        
+
 
         <!-- Template Javascript -->
         <script src="<?php echo htmlspecialchars(mt_asset_url('js/main.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>

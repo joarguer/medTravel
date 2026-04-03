@@ -1,5 +1,45 @@
 <?php
 
+if (!function_exists('mt_home_specialist_placeholder_photo')) {
+    function mt_home_specialist_placeholder_photo()
+    {
+        $jpg = 'img/site/placeholder-medical.jpg';
+        if (is_file(__DIR__ . '/../' . $jpg)) {
+            return $jpg;
+        }
+
+        $svg = 'img/site/placeholder-medical.svg';
+        if (is_file(__DIR__ . '/../' . $svg)) {
+            return $svg;
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('mt_home_specialist_resolve_photo')) {
+    function mt_home_specialist_resolve_photo($photo)
+    {
+        $photo = trim((string)$photo);
+        $fallback = mt_home_specialist_placeholder_photo();
+        if ($photo === '') {
+            return $fallback;
+        }
+
+        if (preg_match('~^https?://~i', $photo)) {
+            return $photo;
+        }
+
+        $photoPath = parse_url($photo, PHP_URL_PATH);
+        $photoPath = is_string($photoPath) ? ltrim($photoPath, '/') : '';
+        if ($photoPath !== '' && is_file(__DIR__ . '/../' . $photoPath)) {
+            return $photo;
+        }
+
+        return $fallback !== '' ? $fallback : $photo;
+    }
+}
+
 if (!function_exists('mt_home_specialists_fetch')) {
     function mt_home_specialists_fetch($conexion, $limit = 8)
     {
@@ -90,6 +130,8 @@ if (!function_exists('mt_home_specialists_fetch')) {
             $providerName = trim((string)($row['provider_name'] ?? ''));
             $providerId = (int)($row['provider_id'] ?? 0);
             $providerLogo = trim((string)($row['provider_logo'] ?? ''));
+            $photo = mt_home_specialist_resolve_photo($row['photo'] ?? '');
+            $photoFallback = mt_home_specialist_placeholder_photo();
             if ($providerLogo !== '' && strpos($providerLogo, '://') === false && strpos($providerLogo, '/') === false && $providerId > 0) {
                 $providerLogo = 'img/providers/' . $providerId . '/' . $providerLogo;
             }
@@ -102,7 +144,8 @@ if (!function_exists('mt_home_specialists_fetch')) {
                 'specialty' => $specialty,
                 'display_role' => $specialty !== '' ? $specialty : ($roleTitle !== '' ? $roleTitle : 'Medical Specialist'),
                 'bio_short' => $bioShort,
-                'photo' => trim((string)($row['photo'] ?? '')),
+                'photo' => $photo,
+                'photo_fallback' => $photoFallback,
                 'clinic_name' => $clinicName,
                 'provider_name' => $providerName,
                 'provider_city' => trim((string)($row['provider_city'] ?? '')),
