@@ -30,6 +30,22 @@
         };
     }
 
+    function getSummaryTexts() {
+        var els = getSummaryElements();
+        var dataset = (els.summary && els.summary.dataset) ? els.summary.dataset : {};
+        return {
+            emptyText: dataset.emptyText || 'No services added yet.',
+            moreSuffix: dataset.moreSuffix || 'more',
+            estimatedTotalPrefix: dataset.estimatedTotalPrefix || 'Estimated total: ',
+            servicePrefix: dataset.servicePrefix || 'Service #',
+            offerPrefix: dataset.offerPrefix || 'Offer #',
+            preselectedMedicalOfferPrefix: dataset.preselectedMedicalOfferPrefix || 'Preselected medical offer #',
+            destinationPrefix: dataset.destinationPrefix || 'Destination: ',
+            datesPrefix: dataset.datesPrefix || 'Dates: ',
+            notAvailable: dataset.notAvailable || 'N/A'
+        };
+    }
+
     function ensureSummaryStyle() {
         if (document.getElementById('wizard-package-summary-style')) return;
         var style = document.createElement('style');
@@ -48,10 +64,11 @@
 
     function hideSummary() {
         var els = getSummaryElements();
+        var texts = getSummaryTexts();
         if (!els.summary || !els.list || !els.total) return;
         els.summary.classList.add('d-none');
         document.body.classList.remove('summary-active');
-        els.list.textContent = 'No has añadido servicios.';
+        els.list.textContent = texts.emptyText;
         els.total.textContent = '';
     }
 
@@ -59,6 +76,7 @@
         var opts = options || {};
         var addBodyClass = (typeof opts.addBodyClass === 'boolean') ? opts.addBodyClass : isWizardPage();
         var els = getSummaryElements();
+        var texts = getSummaryTexts();
         if (!els.summary || !els.list || !els.total) return;
 
         var selected = Array.isArray(items) ? items : [];
@@ -81,7 +99,7 @@
             return type ? (name + ' (' + type + ')') : name;
         }).join(' · ');
         if (selected.length > 3) {
-            preview += ' + ' + (selected.length - 3) + ' más';
+            preview += ' + ' + (selected.length - 3) + ' ' + texts.moreSuffix;
         }
         els.list.textContent = preview;
 
@@ -99,11 +117,12 @@
             var symbol = currency === 'USD' ? '$' : (currency === 'COP' ? '$' : '');
             return (symbol + val.toLocaleString('en-US') + ' ' + currency).trim();
         });
-        els.total.textContent = parts.length ? ('Total estimado: ' + parts.join(' / ')) : '';
+        els.total.textContent = parts.length ? (texts.estimatedTotalPrefix + parts.join(' / ')) : '';
     }
 
     function buildItemsFromStorage() {
         var items = [];
+        var texts = getSummaryTexts();
         var selectedServices = parseJson(localStorage.getItem(KEY_SELECTED_SERVICES));
         if (Array.isArray(selectedServices)) {
             selectedServices.forEach(function (service) {
@@ -112,7 +131,7 @@
                 items.push({
                     value: id,
                     dataset: {
-                        name: service.name || ('Servicio #' + id),
+                        name: service.name || (texts.servicePrefix + id),
                         type: service.type || 'complementary_service',
                         price: service.price || '0',
                         currency: service.currency || ''
@@ -129,7 +148,7 @@
                 items.push({
                     value: id,
                     dataset: {
-                        name: offer.name || ('Oferta #' + id),
+                        name: offer.name || (texts.offerPrefix + id),
                         type: offer.type || 'medical_offer',
                         price: offer.price || '0',
                         currency: offer.currency || ''
@@ -143,7 +162,7 @@
             items.push({
                 value: preOffer,
                 dataset: {
-                    name: 'Oferta médica preseleccionada #' + preOffer,
+                    name: texts.preselectedMedicalOfferPrefix + preOffer,
                     type: 'medical_offer',
                     price: '0',
                     currency: ''
@@ -156,7 +175,7 @@
             items.push({
                 value: 'destination',
                 dataset: {
-                    name: 'Destino: ' + draft.destination,
+                    name: texts.destinationPrefix + draft.destination,
                     type: 'context',
                     price: '0',
                     currency: ''
@@ -167,7 +186,7 @@
             items.push({
                 value: 'timeline',
                 dataset: {
-                    name: 'Fechas: ' + (draft.timeline_from || 'N/D') + ' - ' + (draft.timeline_to || 'N/D'),
+                    name: texts.datesPrefix + (draft.timeline_from || texts.notAvailable) + ' - ' + (draft.timeline_to || texts.notAvailable),
                     type: 'context',
                     price: '0',
                     currency: ''

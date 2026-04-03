@@ -43,6 +43,27 @@ $consent_privacy_checked = ((string)($booking['consent_privacy'] ?? '') === '1' 
 $consent_insurance_checked = ((string)($booking['consent_insurance'] ?? '') === '1' || (string)($booking['terms_accepted'] ?? '') === '1');
 $step1_consents_complete = ($consent_terms_checked && $consent_privacy_checked && $consent_insurance_checked);
 $step1_recovery_needed = (!$step1_contact_complete || !$step1_consents_complete);
+$wizard_ui_texts = [
+    'add' => 'Add',
+    'remove' => 'Remove',
+    'previous' => 'Previous',
+    'next' => 'Next',
+    'preselected_medical_offer_prefix' => 'Preselected medical offer #',
+];
+$wizard_summary_ui_texts = [
+    'title' => 'Your package',
+    'empty' => 'No services added yet.',
+    'continue' => 'Continue to booking',
+    'clear' => 'Clear',
+    'more_suffix' => 'more',
+    'estimated_total_prefix' => 'Estimated total: ',
+    'service_prefix' => 'Service #',
+    'offer_prefix' => 'Offer #',
+    'preselected_medical_offer_prefix' => $wizard_ui_texts['preselected_medical_offer_prefix'],
+    'destination_prefix' => 'Destination: ',
+    'dates_prefix' => 'Dates: ',
+    'not_available' => 'N/A',
+];
 
 // Cargar header del wizard desde la base de datos
 $wizard_header = [
@@ -846,7 +867,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                                         <small>Price on request</small>
                                                     </div>
                                                 <?php endif; ?>
-                                                <button type="button" class="btn-add-service mt-2" data-service-trigger="<?php echo (int)$service['id']; ?>" onclick="event.stopPropagation();">Agregar</button>
+                                                <button type="button" class="btn-add-service mt-2" data-service-trigger="<?php echo (int)$service['id']; ?>" onclick="event.stopPropagation();"><?php echo htmlspecialchars($wizard_ui_texts['add']); ?></button>
                                             </div>
                                         </div>
                                     </div>
@@ -861,10 +882,10 @@ if ($flow === 'addon' && !empty($addon_route)) {
                     <div class="d-flex justify-content-between align-items-center mt-4">
                         <div>
                             <?php if ($prev_step_url !== ''): ?>
-                                <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
+                                <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i><?php echo htmlspecialchars($wizard_ui_texts['previous']); ?></a>
                             <?php endif; ?>
                         </div>
-                        <a class="btn btn-primary" href="<?php echo htmlspecialchars($next_step_url); ?>">Siguiente<i class="fas fa-arrow-right ms-2"></i></a>
+                        <a class="btn btn-primary" href="<?php echo htmlspecialchars($next_step_url); ?>"><?php echo htmlspecialchars($wizard_ui_texts['next']); ?><i class="fas fa-arrow-right ms-2"></i></a>
                     </div>
                 </div>
             <?php elseif ($flow === 'medical'): ?>
@@ -1000,10 +1021,10 @@ if ($flow === 'addon' && !empty($addon_route)) {
                     <div class="d-flex justify-content-between align-items-center mt-4">
                         <div>
                             <?php if ($prev_step_url !== ''): ?>
-                                <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
+                                <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i><?php echo htmlspecialchars($wizard_ui_texts['previous']); ?></a>
                             <?php endif; ?>
                         </div>
-                        <a class="btn btn-primary" href="<?php echo htmlspecialchars($next_step_url); ?>">Siguiente<i class="fas fa-arrow-right ms-2"></i></a>
+                        <a class="btn btn-primary" href="<?php echo htmlspecialchars($next_step_url); ?>"><?php echo htmlspecialchars($wizard_ui_texts['next']); ?><i class="fas fa-arrow-right ms-2"></i></a>
                     </div>
                 </div>
             <?php else: ?>
@@ -1074,7 +1095,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <?php if ($prev_step_url !== ''): ?>
-                                    <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i>Anterior</a>
+                                    <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i><?php echo htmlspecialchars($wizard_ui_texts['previous']); ?></a>
                                 <?php endif; ?>
                             </div>
                             <button type="submit" id="wizard-submit-button" class="btn btn-primary px-4 py-3" <?php echo $step1_recovery_needed ? 'disabled' : ''; ?>>
@@ -1175,6 +1196,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
     <script src="../js/main.js"></script>
 
     <script>
+        const WIZARD_UI_TEXTS = <?php echo json_encode($wizard_ui_texts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
         const KEY_SELECTED_SERVICES = 'mt_selected_services';
         const KEY_SELECTED_OFFERS = 'mt_selected_offers';
         const KEY_PRESELECTED_OFFER = 'mt_preselected_offer_id';
@@ -1473,7 +1495,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
             const button = card.querySelector('[data-service-trigger]');
             if (!button) return;
             button.classList.toggle('active', checked);
-            button.textContent = checked ? 'Quitar' : 'Agregar';
+            button.textContent = checked ? WIZARD_UI_TEXTS.remove : WIZARD_UI_TEXTS.add;
         }
 
         function syncOfferCheckbox(checkbox) {
@@ -1578,7 +1600,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 summaryItems.push({
                     value: preOffer,
                     dataset: {
-                        name: 'Oferta médica preseleccionada #' + preOffer,
+                        name: WIZARD_UI_TEXTS.preselected_medical_offer_prefix + preOffer,
                         type: 'medical_offer',
                         price: '0',
                         currency: ''
