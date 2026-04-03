@@ -133,15 +133,236 @@ function login_redirect_error($reason, $legacyParams = array(), $userRow = array
     exit();
 }
 
+function login_table_exists($conexion, $table) {
+    if (function_exists('mt_db_table_exists')) {
+        return mt_db_table_exists($conexion, $table);
+    }
+    static $cache = array();
+    if (array_key_exists($table, $cache)) return $cache[$table];
+    $tableEsc = mysqli_real_escape_string($conexion, $table);
+    $q = mysqli_query($conexion, "SHOW TABLES LIKE '{$tableEsc}'");
+    $cache[$table] = ($q && mysqli_num_rows($q) > 0);
+    return $cache[$table];
+}
+
 function login_table_has_column($conexion, $table, $column) {
+    if (function_exists('mt_db_table_has_column')) {
+        return mt_db_table_has_column($conexion, $table, $column);
+    }
     static $cache = array();
     $key = $table . '.' . $column;
     if (array_key_exists($key, $cache)) return $cache[$key];
+    if (!login_table_exists($conexion, $table)) {
+        $cache[$key] = false;
+        return false;
+    }
     $tableEsc = mysqli_real_escape_string($conexion, $table);
     $columnEsc = mysqli_real_escape_string($conexion, $column);
-    $q = mysqli_query($conexion, "SHOW COLUMNS FROM {$tableEsc} LIKE '{$columnEsc}'");
+    $q = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
     $cache[$key] = ($q && mysqli_num_rows($q) > 0);
     return $cache[$key];
+}
+
+function login_stmt_bind_params($stmt, $types, array $values) {
+    $bind = array($stmt, $types);
+    foreach ($values as $idx => $value) {
+        $values[$idx] = $value;
+        $bind[] = &$values[$idx];
+    }
+    return call_user_func_array('mysqli_stmt_bind_param', $bind);
+}
+
+function login_fetch_user_row($conexion, $identifier) {
+    if (!$conexion || !login_table_exists($conexion, 'usuarios')) {
+        return null;
+    }
+
+    $select = array(
+        'id',
+        'usuario',
+        'password',
+        login_table_has_column($conexion, 'usuarios', 'nombre') ? 'nombre' : 'usuario AS nombre',
+        login_table_has_column($conexion, 'usuarios', 'rol') ? 'rol' : "'' AS rol",
+        login_table_has_column($conexion, 'usuarios', 'role_id') ? 'role_id' : 'NULL AS role_id',
+        login_table_has_column($conexion, 'usuarios', 'email') ? 'email' : "'' AS email",
+        login_table_has_column($conexion, 'usuarios', 'provider_id') ? 'provider_id' : 'NULL AS provider_id',
+        login_table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'service_provider_id' : 'NULL AS service_provider_id',
+        login_table_has_column($conexion, 'usuarios', 'activo') ? 'activo' : '1 AS activo',
+        login_table_has_column($conexion, 'usuarios', 'is_deleted') ? 'is_deleted' : '0 AS is_deleted',
+        login_table_has_column($conexion, 'usuarios', 'terms_accepted') ? 'terms_accepted' : '1 AS terms_accepted',
+        login_table_has_column($conexion, 'usuarios', 'token') ? 'token' : "'' AS token",
+        login_table_has_column($conexion, 'usuarios', 'ppal') ? 'ppal' : '0 AS ppal',
+        login_table_has_column($conexion, 'usuarios', 'usrlogin') ? 'usrlogin' : 'usuario AS usrlogin',
+        login_table_has_column($conexion, 'usuarios', 'cambio_password') ? 'cambio_password' : '0 AS cambio_password',
+        login_table_has_column($conexion, 'usuarios', 'cargo') ? 'cargo' : "'' AS cargo",
+        login_table_has_column($conexion, 'usuarios', 'ciudad') ? 'ciudad' : "'' AS ciudad",
+        login_table_has_column($conexion, 'usuarios', 'telefono') ? 'telefono' : "'' AS telefono",
+        login_table_has_column($conexion, 'usuarios', 'celular') ? 'celular' : "'' AS celular",
+        login_table_has_column($conexion, 'usuarios', 'avatar') ? 'avatar' : "'' AS avatar",
+        login_table_has_column($conexion, 'usuarios', 'empresa') ? 'empresa' : "'' AS empresa"
+    );
+
+    $where = array('usuario = ?');
+    $bindValues = array($identifier);
+    if (login_table_has_column($conexion, 'usuarios', 'email')) {
+        $where[] = 'email = ?';
+        $bindValues[] = $identifier;
+    }
+    if (login_table_has_column($conexion, 'usuarios', 'usrlogin')) {
+        $where[] = 'usrlogin = ?';
+        $bindValues[] = $identifier;
+    }
+
+    $sql = 'SELECT ' . implode(', ', $select) . ' FROM usuarios WHERE (' . implode(' OR ', $where) . ')';
+    if (login_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= ' AND COALESCE(is_deleted, 0) = 0';
+    }
+    $sql .= ' ORDER BY id ASC LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        error_log('DB prepare error: ' . mysqli_error($conexion));
+        return null;
+    }
+
+    if (!login_stmt_bind_params($stmt, str_repeat('s', count($bindValues)), $bindValues)) {
+        mysqli_stmt_close($stmt);
+        error_log('DB bind error: ' . mysqli_error($conexion));
+        return null;
+    }
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        error_log('DB execute error: ' . mysqli_error($conexion));
+        return null;
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    return $row ?: null;
+}
+
+function login_build_default_context($userRow) {
+    $label = trim((string)v($userRow, 'nombre', ''));
+    if ($label === '') {
+        $label = trim((string)v($userRow, 'usuario', 'User'));
+    }
+    return array(
+        'id' => 1,
+        'rasocial' => $label !== '' ? $label : 'User',
+        'nit' => '000000000',
+        'activo' => 0,
+        'logo' => ''
+    );
+}
+
+function login_try_legacy_company_context($conexion, $userRow, $context) {
+    $empresa = trim((string)v($userRow, 'empresa', ''));
+    if (
+        $empresa === ''
+        || !login_table_exists($conexion, 'empresas')
+        || !login_table_has_column($conexion, 'empresas', 'rasocial')
+    ) {
+        return $context;
+    }
+
+    $stmt = mysqli_prepare($conexion, 'SELECT * FROM empresas WHERE rasocial = ? LIMIT 1');
+    if (!$stmt) {
+        return $context;
+    }
+    mysqli_stmt_bind_param($stmt, 's', $empresa);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return $context;
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    if (!$row) {
+        return $context;
+    }
+
+    $context['id'] = (int)v($row, 'id', $context['id']);
+    $context['rasocial'] = (string)v($row, 'rasocial', $context['rasocial']);
+    $context['nit'] = (string)v($row, 'nit', $context['nit']);
+    $context['activo'] = (int)v($row, 'activo', $context['activo']);
+    $context['logo'] = (string)v($row, 'logo', $context['logo']);
+    return $context;
+}
+
+function login_record_legacy_visit($conexion, $visitante, $usuario, $ip) {
+    if (
+        !$conexion
+        || !login_table_exists($conexion, 'visitas')
+        || !login_table_has_column($conexion, 'visitas', 'fecha')
+        || !login_table_has_column($conexion, 'visitas', 'hora')
+        || !login_table_has_column($conexion, 'visitas', 'hora2')
+        || !login_table_has_column($conexion, 'visitas', 'visitante')
+        || !login_table_has_column($conexion, 'visitas', 'usuario')
+        || !login_table_has_column($conexion, 'visitas', 'dispositivo')
+        || !login_table_has_column($conexion, 'visitas', 'ip')
+    ) {
+        return;
+    }
+
+    $fecha = date("Y-m-d", time() - 18000);
+    $hora = date("H:i:s", time() - 18000);
+    $detect = '';
+    $sql = "INSERT INTO visitas(fecha,hora,hora2,visitante,usuario,dispositivo,ip) VALUES(?, ?, NULL, ?, ?, ?, ?)";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return;
+    }
+    mysqli_stmt_bind_param($stmt, 'ssssss', $fecha, $hora, $visitante, $usuario, $detect, $ip);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+}
+
+function login_register_legacy_session($conexion, $visitante, $usuario, $ip) {
+    if (
+        !$conexion
+        || !login_table_exists($conexion, 'sessiones_activas')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'fecha')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'hora')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'visitante')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'usuario')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'ip')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'latitud')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'longitud')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'cobrador')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'hora2')
+    ) {
+        return true;
+    }
+
+    $stmt = mysqli_prepare($conexion, 'SELECT visitante, usuario, ip FROM sessiones_activas WHERE visitante = ? AND usuario = ? LIMIT 1');
+    if (!$stmt) {
+        return true;
+    }
+    mysqli_stmt_bind_param($stmt, 'ss', $visitante, $usuario);
+    if (!mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        return true;
+    }
+    $res = mysqli_stmt_get_result($stmt);
+    $existing = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+
+    $existingUser = (string)($existing['usuario'] ?? '');
+    $existingIp = (string)($existing['ip'] ?? '');
+    if ($existing && $existingUser === $usuario && $existingIp !== '' && $existingIp !== $ip) {
+        return false;
+    }
+
+    $fecha = date("Y-m-d", time() - 18000);
+    $hora = date("H:i:s", time() - 18000);
+    $insert = mysqli_prepare($conexion, "INSERT INTO sessiones_activas(`fecha`, `hora`, `visitante`, `usuario`, `ip`, `latitud`, `longitud`, `cobrador`, `hora2`) VALUES(?, ?, ?, ?, ?, '0', '0', '0', '00:00:00')");
+    if (!$insert) {
+        return true;
+    }
+    mysqli_stmt_bind_param($insert, 'sssss', $fecha, $hora, $visitante, $usuario, $ip);
+    mysqli_stmt_execute($insert);
+    mysqli_stmt_close($insert);
+    return true;
 }
 
 // Defensa de conexión a base de datos
@@ -221,253 +442,175 @@ if ($password === '') {
     login_redirect_error('missing_password', array('pass' => 'vacio'));
 }
 
-$stmt_user = mysqli_prepare($conexion, "SELECT * FROM usuarios WHERE (usuario = ? OR email = ?) LIMIT 1");
-if (!$stmt_user) {
-    error_log('DB prepare error: '.mysqli_error($conexion));
-    login_redirect_error('db_prepare_error', array('error' => 'db'));
-}
-mysqli_stmt_bind_param($stmt_user, 'ss', $usrname, $usrname);
-if (!mysqli_stmt_execute($stmt_user)) {
-    mysqli_stmt_close($stmt_user);
-    error_log('DB execute error: '.mysqli_error($conexion));
-    login_redirect_error('db_execute_error', array('error' => 'db'));
-}
-$busca_usua = mysqli_stmt_get_result($stmt_user);
-if (!$busca_usua) {
-    mysqli_stmt_close($stmt_user);
-    error_log('DB result error: '.mysqli_error($conexion));
-    login_redirect_error('db_result_error', array('error' => 'db'));
-}
-//empresa
-if (mysqli_num_rows($busca_usua) > 0) {
-    $fil = mysqli_fetch_array($busca_usua);
-    mysqli_stmt_close($stmt_user);
-    auth_dev_log("found_user_id=" . v($fil, 'id', 0) . " role_id=" . v($fil, 'role_id', 'null') . " token_len=" . strlen((string)v($fil, 'token', '')) . " pass_len=" . strlen((string)v($fil, 'password', '')));
-
-    if (intval(v($fil, 'activo', 0)) !== 1) {
-        login_redirect_error('user_inactive', array('usuario' => 'nulo'), $fil);
-    }
-    
-    // Verificación canónica compartida con create/reset password.
-    $password_valido = verify_password_for_user($password, $fil);
-    
-	    if ($password_valido) {
-	        medtravel_session_mark_login();
-	        //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC
-	        $rasocial = v($fil,'empresa','');
-	        $role_id_val = (isset($fil['role_id']) && is_numeric($fil['role_id'])) ? intval($fil['role_id']) : normalize_role_value(v($fil, 'rol', ''));
-	        $is_global_admin_role = ($role_id_val === ROLE_ADMIN || v($fil, 'ppal', '') === '1');
-	        $is_administrative_panel_role = ($role_id_val === ROLE_ADMINISTRATIVE);
-	        $is_medical_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
-	        $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
-	        $is_client_role = ($role_id_val === ROLE_CLIENT);
-	        $provider_id_val = !empty($fil['provider_id']) ? intval($fil['provider_id']) : 0;
-	        $service_provider_id_val = !empty($fil['service_provider_id']) ? intval($fil['service_provider_id']) : 0;
-	        $is_protected_superuser = ((int)v($fil, 'id', 0) === 1);
-
-	        if ($is_protected_superuser) {
-	            $is_global_admin_role = true;
-	            $is_medical_role = false;
-	            $is_complementary_role = false;
-	            $is_client_role = false;
-	            $provider_id_val = 0;
-	            $service_provider_id_val = 0;
-	        }
-
-        if ($is_medical_role) {
-            if ($provider_id_val <= 0) {
-                login_redirect_error('provider_scope_required', array('error' => 'empresa'), $fil);
-            }
-            $provider_name = login_fetch_medical_provider_name($conexion, $provider_id_val);
-            if ($provider_name === null || $provider_name === '') {
-                login_redirect_error('provider_invalid_or_inactive', array('error' => 'empresa'), $fil);
-            }
-            if ($rasocial === '') {
-                $rasocial = $provider_name;
-            }
-            $fil['provider_id'] = $provider_id_val;
-            $fil['service_provider_id'] = null;
-        } elseif ($is_complementary_role) {
-            if ($service_provider_id_val <= 0) {
-                login_redirect_error('service_provider_scope_required', array('error' => 'empresa'), $fil);
-            }
-            $service_provider_name = login_fetch_active_service_provider_name($conexion, $service_provider_id_val);
-            if ($service_provider_name === null || $service_provider_name === '') {
-                login_redirect_error('service_provider_invalid_or_inactive', array('error' => 'empresa'), $fil);
-            }
-            if ($rasocial === '') {
-                $rasocial = $service_provider_name;
-            }
-            $fil['service_provider_id'] = $service_provider_id_val;
-            $fil['provider_id'] = null;
-        }
-
-        $rasocial_esc = mysqli_real_escape_string($conexion, $rasocial);
-        
-        // Resolver contexto "empresa virtual" según dominio del usuario.
-        if (empty($rasocial) && !empty($fil['provider_id'])) {
-            $query = mysqli_query($conexion, "SELECT id, name as rasocial, name as nit, 0 as activo, '' as logo FROM providers WHERE id = ".(int)$fil['provider_id']." LIMIT 1");
-        } elseif (empty($rasocial) && !empty($fil['service_provider_id'])) {
-            $query = mysqli_query($conexion, "SELECT id, provider_name as rasocial, provider_name as nit, 0 as activo, '' as logo FROM service_providers WHERE id = ".(int)$fil['service_provider_id']." AND is_active = 1 LIMIT 1");
-        } else {
-            $query = mysqli_query($conexion, "SELECT * FROM empresas WHERE rasocial = '".$rasocial_esc."' LIMIT 1");
-        }
-        
-        if (!$query) {
-            error_log('DB error: '.mysqli_error($conexion));
-            login_redirect_error('empresa_query_error', array('error' => 'query'), $fil);
-        }
-        if (mysqli_num_rows($query) == 0) {
-            // Para roles internos del panel sin empresa resoluble, usar empresa virtual.
-            if ($is_global_admin_role || $is_administrative_panel_role || $is_medical_role || $is_complementary_role || empty($rasocial)) {
-                $fila = [
-                    'id' => 1,
-                    'rasocial' => v($fil,'nombre','Usuario'),
-                    'nit' => '000000000',
-                    'activo' => 0,
-                    'logo' => ''
-                ];
-            } else {
-                login_redirect_error('empresa_invalid', array('error' => 'empresa'), $fil);
-            }
-        } else {
-            $fila = mysqli_fetch_array($query);
-        }
-        $_SESSION['nitEmpresa'] = v($fila,'nit','');
-        if (v($fila,'activo',0) == 1) {
-            header("location:../../index.php?usuario=nulo1");
-            exit();
-        }
-        //-----------------------------------------
-        setcookie("usuario_nombre", v($fila,'rasocial',''));
-        if (v($fil,'ppal','')=="1") {
-            $_SESSION["ppal"]='ppal';
-        } else {
-            $_SESSION["ppal"]='agente';
-        }
-        $_SESSION['chatuser']		=	v($fil,'id',0);
-        $_SESSION['usrlogin']		=	v($fil,'usrlogin','');
-        $_SESSION["tipo"]			=	'empresa';
-        $fecha						=	date("Y-m-d", time()-18000);
-        $time						=	date("H:i:s", time()-18000);
-        $id						=	v($fila,'id',0);
-        $usrlogin				=	v($fil,'usrlogin','');
-        $usu					=	v($fila,'rasocial','');
-        $_SESSION["usrlogin"]		=	$usrlogin;
-        
-        if (isset($_SERVER["HTTP_CLIENT_IP"])) {
-            $ip	= $_SERVER["HTTP_CLIENT_IP"];
-        } else if (isset($_SERVER["HTTP_X_FORWARDED_FOR"])) {
-            $ip	= $_SERVER["HTTP_X_FORWARDED_FOR"];
-        } else if (isset($_SERVER["HTTP_X_FORWARDED"])) {
-            $ip	= $_SERVER["HTTP_X_FORWARDED"];
-        } else if (isset($_SERVER["HTTP_FORWARDED_FOR"])) {
-            $ip	= $_SERVER["HTTP_FORWARDED_FOR"];
-        } else if (isset($_SERVER["HTTP_FORWARDED"])) {
-            $ip	= $_SERVER["HTTP_FORWARDED"];
-        } else {
-            $ip	= $_SERVER["REMOTE_ADDR"];
-        }
-        
-        $detect = '';// new Mobile_Detect;
-        $insert_vis_sql = "INSERT INTO visitas(fecha,hora,hora2,visitante, usuario, dispositivo, ip) VALUES('".mysqli_real_escape_string($conexion,$fecha)."', '".mysqli_real_escape_string($conexion,$time)."', NULL, '".mysqli_real_escape_string($conexion,$usu)."', '".mysqli_real_escape_string($conexion,$usrlogin)."', '".mysqli_real_escape_string($conexion,$detect)."', '".mysqli_real_escape_string($conexion,$ip)."')";
-        $insert_vis = mysqli_query($conexion, $insert_vis_sql);
-        if (!$insert_vis) {
-            error_log('DB error (visitas insert): '.mysqli_error($conexion));
-        }
-        //, INET_NTOA(ip) AS ips
-        $ver_sessiones_activas_sql = "SELECT * FROM sessiones_activas WHERE visitante='".mysqli_real_escape_string($conexion, v($fila,'rasocial',''))."' AND usuario='".mysqli_real_escape_string($conexion, v($fil,'usrlogin',''))."'";
-        $ver_sessiones_activas = mysqli_query($conexion, $ver_sessiones_activas_sql);
-        $sessiones_activas = [];
-        if ($ver_sessiones_activas && mysqli_num_rows($ver_sessiones_activas) > 0) {
-            $sessiones_activas = mysqli_fetch_array($ver_sessiones_activas);
-        }
-        $_SESSION["id_empresa"]		=   v($fila,'id',0);
-        $_SESSION["id_usuario"]		=   v($fil,'id',0);
-        // Mapear user -> provider (si existe) y guardar provider_id en sesión
-        // NUEVO: Leer provider_id directamente de la tabla usuarios
-	        if ($is_protected_superuser) {
-	            if (isset($_SESSION['provider_id'])) unset($_SESSION['provider_id']);
-	        } elseif (!empty($fil['provider_id']) && (int)$fil['provider_id'] > 0) {
-	            $_SESSION['provider_id'] = (int)$fil['provider_id'];
-	        } else {
-	            // Fallback: buscar en tabla provider_users (sistema antiguo)
-	            $provider_id = null;
-	            if (isset($conexion) && is_int((int)$_SESSION["id_usuario"])) {
-	                $stmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1");
-	                if ($stmt) {
-	                    $uid = (int) $_SESSION["id_usuario"];
-                    mysqli_stmt_bind_param($stmt, "i", $uid);
-                    mysqli_stmt_execute($stmt);
-                    mysqli_stmt_bind_result($stmt, $p_id);
-                    if (mysqli_stmt_fetch($stmt)) {
-                        $_SESSION['provider_id'] = (int) $p_id;
-                    } else {
-                        if (isset($_SESSION['provider_id'])) unset($_SESSION['provider_id']);
-                    }
-                    mysqli_stmt_close($stmt);
-                }
-            }
-        }
-        // Ownership complementario: service_provider_id -> service_providers.id
-	        if ($is_protected_superuser) {
-	            if (isset($_SESSION['service_provider_id'])) unset($_SESSION['service_provider_id']);
-	        } elseif (!empty($fil['service_provider_id']) && (int)$fil['service_provider_id'] > 0) {
-	            $_SESSION['service_provider_id'] = (int)$fil['service_provider_id'];
-	        } else {
-	            if (isset($_SESSION['service_provider_id'])) unset($_SESSION['service_provider_id']);
-        }
-        $_SESSION["nombre_usuario"]	=   v($fil,'nombre','');
-        $_SESSION["usuario"]		=   v($fil,'usuario','');
-        $_SESSION["token"]		    =   v($fil,'token','');
-        $_SESSION["rasocial"]		=   v($fila,'rasocial','');
-        $_SESSION["nit"]			=   v($fila,'nit','');
-        $_SESSION['usrlogin']		=   v($fil,'usuario','');
-        $_SESSION['logo']			=   v($fila,'logo','');
-
-        $anio = date("Y",time()-18000);
-        $_SESSION["anio_bd"] = 'ejemagic_admin_'.$anio;
-        
-        $_SESSION['avatar']    =   v($fil,'avatar','');
-        $_SESSION['nombre_perfil']  =   v($fil,'nombre','');
-        $_SESSION['rol']            =   v($fil,'rol','');
-        $_SESSION['role_id']        =   $role_id_val;
-        $_SESSION['ppal']           =   v($fil,'ppal','');
-        $_SESSION["usuario_cargo"]  =   v($fil,'cargo','');
-        $_SESSION["usuario_email"]	=   v($fil,'email','');
-        $_SESSION["usuario_ciudad"]	=   v($fil,'ciudad','');
-        $_SESSION["usuario_telefono"]	=   v($fil,'telefono','');
-        $_SESSION["usuario_celular"]	=   v($fil,'celular','');
-        $visitante = v($fila,'rasocial','');
-        //echo $sessiones_activas["visitante"].' != '.$fila["rasocial"].' && '.$sessiones_activas["usuario"].' != '.$fil["id"].' && '.$sessiones_activas["ips"].' != '.$ip;
-        //exit();
-        $sess_user = v($sessiones_activas,'usuario','');
-        $sess_ips = v($sessiones_activas,'ips','');
-        if($sess_user != v($fil,'id','') && $sess_ips != $ip) {
-            mysqli_query($conexion,"INSERT INTO sessiones_activas(`fecha`, `hora`, `visitante`, `usuario`, `ip`, `latitud`, `longitud`, `cobrador`, `hora2`) VALUES('".mysqli_real_escape_string($conexion,$fecha)."', '".mysqli_real_escape_string($conexion,$time)."', '".mysqli_real_escape_string($conexion,$visitante)."', '".mysqli_real_escape_string($conexion,$usrlogin)."', '".mysqli_real_escape_string($conexion,$ip)."', '0', '0', '0', '00:00:00')");
-            $default_next = $is_client_role ? '../../client/index.php' : '../index.php';
-            if(v($fil,'cambio_password',0) == 1){
-                $next = $is_client_role ? '../../client/index.php?password_change=1' : '../index.php#cambio_password';
-                if (login_is_debug_mode()) {
-                    login_debug_response(true, 'ok', $fil, array('next' => $next));
-                }
-                header("location:" . $next);
-                exit();
-            } else {
-                if (login_is_debug_mode()) {
-                    login_debug_response(true, 'ok', $fil, array('next' => $default_next));
-                }
-                header("location:" . $default_next);
-                exit();
-            }
-        } else {
-            login_redirect_error('session_conflict', array('session' => 'error'), $fil);
-        }
-    } else{
-        login_redirect_error('password_mismatch', array('usuario' => 'nulo2'), $fil);
-    }
-} else {
-    mysqli_stmt_close($stmt_user);
+$fil = login_fetch_user_row($conexion, $usrname);
+if (!$fil) {
     login_redirect_error('user_not_found', array('usuario' => 'nulo'));
 }
+
+auth_dev_log(
+    "found_user_id=" . v($fil, 'id', 0)
+    . " role_id=" . v($fil, 'role_id', 'null')
+    . " token_len=" . strlen((string)v($fil, 'token', ''))
+    . " pass_len=" . strlen((string)v($fil, 'password', ''))
+);
+
+if (!login_table_has_column($conexion, 'usuarios', 'rol') && !login_table_has_column($conexion, 'usuarios', 'role_id')) {
+    login_redirect_error('auth_schema_invalid', array('error' => 'schema'), $fil);
+}
+
+if ((int)v($fil, 'activo', 1) !== 1) {
+    login_redirect_error('user_inactive', array('usuario' => 'nulo'), $fil);
+}
+
+$password_valido = verify_password_for_user($password, $fil);
+if (!$password_valido) {
+    login_redirect_error('password_mismatch', array('usuario' => 'nulo2'), $fil);
+}
+
+medtravel_session_mark_login();
+
+$role_id_val = (isset($fil['role_id']) && is_numeric($fil['role_id'])) ? intval($fil['role_id']) : normalize_role_value(v($fil, 'rol', ''));
+$provider_id_val = !empty($fil['provider_id']) ? intval($fil['provider_id']) : 0;
+$service_provider_id_val = !empty($fil['service_provider_id']) ? intval($fil['service_provider_id']) : 0;
+$is_protected_superuser = ((int)v($fil, 'id', 0) === 1);
+$is_global_admin_role = ($is_protected_superuser || $role_id_val === ROLE_ADMIN || (string)v($fil, 'ppal', '0') === '1');
+$is_administrative_panel_role = ($role_id_val === ROLE_ADMINISTRATIVE);
+$is_medical_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
+$is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
+$is_client_role = ($role_id_val === ROLE_CLIENT);
+
+if ($is_protected_superuser) {
+    $provider_id_val = 0;
+    $service_provider_id_val = 0;
+    $is_medical_role = false;
+    $is_complementary_role = false;
+    $is_client_role = false;
+}
+
+$fila = login_build_default_context($fil);
+if ($is_medical_role) {
+    if ($provider_id_val <= 0) {
+        login_redirect_error('provider_scope_required', array('error' => 'empresa'), $fil);
+    }
+    $provider_name = login_fetch_medical_provider_name($conexion, $provider_id_val);
+    if ($provider_name === null || $provider_name === '') {
+        login_redirect_error('provider_invalid_or_inactive', array('error' => 'empresa'), $fil);
+    }
+    $fila['id'] = $provider_id_val;
+    $fila['rasocial'] = $provider_name;
+    $fila['nit'] = $provider_name;
+} elseif ($is_complementary_role) {
+    if ($service_provider_id_val <= 0) {
+        login_redirect_error('service_provider_scope_required', array('error' => 'empresa'), $fil);
+    }
+    $service_provider_name = login_fetch_active_service_provider_name($conexion, $service_provider_id_val);
+    if ($service_provider_name === null || $service_provider_name === '') {
+        login_redirect_error('service_provider_invalid_or_inactive', array('error' => 'empresa'), $fil);
+    }
+    $fila['id'] = $service_provider_id_val;
+    $fila['rasocial'] = $service_provider_name;
+    $fila['nit'] = $service_provider_name;
+} elseif (!$is_global_admin_role && !$is_administrative_panel_role) {
+    $fila = login_try_legacy_company_context($conexion, $fil, $fila);
+}
+
+$_SESSION['nitEmpresa'] = v($fila, 'nit', '');
+setcookie("usuario_nombre", v($fila, 'rasocial', ''));
+
+$_SESSION["ppal"] = $is_global_admin_role ? '1' : '0';
+$_SESSION['chatuser'] = v($fil, 'id', 0);
+$_SESSION["tipo"] = 'empresa';
+$_SESSION["id_empresa"] = v($fila, 'id', 1);
+$_SESSION["id_usuario"] = v($fil, 'id', 0);
+$_SESSION["nombre_usuario"] = (string)v($fil, 'nombre', v($fil, 'usuario', ''));
+$_SESSION["usuario"] = (string)v($fil, 'usuario', '');
+$_SESSION["token"] = (string)v($fil, 'token', '');
+$_SESSION["rasocial"] = (string)v($fila, 'rasocial', '');
+$_SESSION["nit"] = (string)v($fila, 'nit', '');
+$_SESSION['usrlogin'] = (string)v($fil, 'usrlogin', v($fil, 'usuario', ''));
+$_SESSION['logo'] = (string)v($fila, 'logo', '');
+$_SESSION['avatar'] = (string)v($fil, 'avatar', '');
+$_SESSION['nombre_perfil'] = (string)v($fil, 'nombre', '');
+$_SESSION['rol'] = (string)v($fil, 'rol', '');
+$_SESSION['role_id'] = $role_id_val;
+$_SESSION["usuario_cargo"] = (string)v($fil, 'cargo', '');
+$_SESSION["usuario_email"] = (string)v($fil, 'email', '');
+$_SESSION["usuario_ciudad"] = (string)v($fil, 'ciudad', '');
+$_SESSION["usuario_telefono"] = (string)v($fil, 'telefono', '');
+$_SESSION["usuario_celular"] = (string)v($fil, 'celular', '');
+
+$anio = date("Y", time() - 18000);
+$_SESSION["anio_bd"] = 'ejemagic_admin_' . $anio;
+
+if ($is_protected_superuser) {
+    unset($_SESSION['provider_id'], $_SESSION['service_provider_id']);
+} else {
+    if ($provider_id_val > 0) {
+        $_SESSION['provider_id'] = $provider_id_val;
+    } else {
+        unset($_SESSION['provider_id']);
+        if (
+            login_table_exists($conexion, 'provider_users')
+            && login_table_has_column($conexion, 'provider_users', 'provider_id')
+            && login_table_has_column($conexion, 'provider_users', 'user_id')
+        ) {
+            $stmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1");
+            if ($stmt) {
+                $uid = (int)$_SESSION["id_usuario"];
+                mysqli_stmt_bind_param($stmt, "i", $uid);
+                if (mysqli_stmt_execute($stmt)) {
+                    mysqli_stmt_bind_result($stmt, $legacy_provider_id);
+                    if (mysqli_stmt_fetch($stmt) && (int)$legacy_provider_id > 0) {
+                        $_SESSION['provider_id'] = (int)$legacy_provider_id;
+                    }
+                }
+                mysqli_stmt_close($stmt);
+            }
+        }
+    }
+
+    if ($service_provider_id_val > 0) {
+        $_SESSION['service_provider_id'] = $service_provider_id_val;
+    } else {
+        unset($_SESSION['service_provider_id']);
+    }
+}
+
+if (isset($_SERVER["HTTP_CLIENT_IP"])) {
+    $ip = $_SERVER["HTTP_CLIENT_IP"];
+} else if (isset($_SERVER["HTTP_X_FORWARDED_FOR"])) {
+    $ip = $_SERVER["HTTP_X_FORWARDED_FOR"];
+} else if (isset($_SERVER["HTTP_X_FORWARDED"])) {
+    $ip = $_SERVER["HTTP_X_FORWARDED"];
+} else if (isset($_SERVER["HTTP_FORWARDED_FOR"])) {
+    $ip = $_SERVER["HTTP_FORWARDED_FOR"];
+} else if (isset($_SERVER["HTTP_FORWARDED"])) {
+    $ip = $_SERVER["HTTP_FORWARDED"];
+} else {
+    $ip = $_SERVER["REMOTE_ADDR"] ?? '';
+}
+
+$visitante = (string)v($fila, 'rasocial', '');
+$usrlogin = (string)v($fil, 'usrlogin', v($fil, 'usuario', ''));
+login_record_legacy_visit($conexion, $visitante, $usrlogin, $ip);
+
+if (!login_register_legacy_session($conexion, $visitante, $usrlogin, $ip)) {
+    login_redirect_error('session_conflict', array('session' => 'error'), $fil);
+}
+
+$default_next = $is_client_role ? '../../client/index.php' : '../index.php';
+if ((int)v($fil, 'cambio_password', 0) === 1) {
+    $next = $is_client_role ? '../../client/index.php?password_change=1' : '../index.php#cambio_password';
+    if (login_is_debug_mode()) {
+        login_debug_response(true, 'ok', $fil, array('next' => $next));
+    }
+    header("location:" . $next);
+    exit();
+}
+
+if (login_is_debug_mode()) {
+    login_debug_response(true, 'ok', $fil, array('next' => $default_next));
+}
+header("location:" . $default_next);
+exit();
 ?>

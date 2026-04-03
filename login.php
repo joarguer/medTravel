@@ -41,7 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         $loginHasColumn('usuarios', 'activo') ? 'activo' : '1 AS activo',
     ];
 
-    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM usuarios WHERE (usuario = ? OR email = ?)';
+    $whereParts = ['usuario = ?'];
+    if ($loginHasColumn('usuarios', 'email')) {
+        $whereParts[] = 'email = ?';
+    }
+    $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM usuarios WHERE (' . implode(' OR ', $whereParts) . ')';
     if ($loginHasColumn('usuarios', 'is_deleted')) {
         $sql .= ' AND is_deleted = 0';
     }
@@ -53,7 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         exit;
     }
 
-    mysqli_stmt_bind_param($stmt, 'ss', $identifier, $identifier);
+    if (count($whereParts) > 1) {
+        mysqli_stmt_bind_param($stmt, 'ss', $identifier, $identifier);
+    } else {
+        mysqli_stmt_bind_param($stmt, 's', $identifier);
+    }
     if (!mysqli_stmt_execute($stmt)) {
         mysqli_stmt_close($stmt);
         echo json_encode(['success' => true, 'show_terms_notice' => false]);

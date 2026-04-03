@@ -51,6 +51,24 @@ if (APP_ENV === 'dev' && is_file($localPath)) {
     $config = require $localPath;
 }
 
+// En desarrollo, .env define la BD efectiva del workspace y puede sobreescribir
+// credenciales legacy de conexion.local.php para evitar drift entre ambos.
+$envConfig = [
+    'DB_HOST' => getenv('DB_HOST'),
+    'DB_PORT' => getenv('DB_PORT'),
+    'DB_USER' => getenv('DB_USER'),
+    'DB_PASS' => getenv('DB_PASS'),
+    'DB_NAME' => getenv('DB_NAME'),
+];
+if (APP_ENV === 'dev' && $config) {
+    foreach ($envConfig as $key => $value) {
+        if ($value === false || $value === '') {
+            continue;
+        }
+        $config[$key] = ($key === 'DB_PORT') ? (int)$value : $value;
+    }
+}
+
 /**
  * Fallback a variables de entorno
  */
@@ -88,6 +106,36 @@ if (!$conexion) {
 
 mysqli_set_charset($conexion, 'utf8mb4');
 
+if (!function_exists('mt_db_table_exists')) {
+    function mt_db_table_exists($conexion, $table) {
+        static $cache = [];
+        if (!$conexion) return false;
+        if (array_key_exists($table, $cache)) return $cache[$table];
+        $tableEsc = mysqli_real_escape_string($conexion, $table);
+        $res = mysqli_query($conexion, "SHOW TABLES LIKE '{$tableEsc}'");
+        $cache[$table] = ($res && mysqli_num_rows($res) > 0);
+        return $cache[$table];
+    }
+}
+
+if (!function_exists('mt_db_table_has_column')) {
+    function mt_db_table_has_column($conexion, $table, $column) {
+        static $cache = [];
+        if (!$conexion) return false;
+        $key = $table . '.' . $column;
+        if (array_key_exists($key, $cache)) return $cache[$key];
+        if (!mt_db_table_exists($conexion, $table)) {
+            $cache[$key] = false;
+            return false;
+        }
+        $tableEsc = mysqli_real_escape_string($conexion, $table);
+        $columnEsc = mysqli_real_escape_string($conexion, $column);
+        $res = mysqli_query($conexion, "SHOW COLUMNS FROM `{$tableEsc}` LIKE '{$columnEsc}'");
+        $cache[$key] = ($res && mysqli_num_rows($res) > 0);
+        return $cache[$key];
+    }
+}
+
 // Helper: requiere sesión válida para endpoints AJAX del admin
 function require_login_ajax(){
 	medtravel_session_start();
@@ -119,9 +167,20 @@ function require_login_ajax(){
 	)) {
 		// resolve username -> id from DB
 		$uname = $_SESSION['usuario'];
-		if ($conexion) {
-			if ($stmt = mysqli_prepare($conexion, "SELECT id FROM usuarios WHERE usuario = ? OR usrlogin = ? LIMIT 1")) {
-				mysqli_stmt_bind_param($stmt, 'ss', $uname, $uname);
+		if ($conexion && mt_db_table_exists($conexion, 'usuarios')) {
+			$sql = 'SELECT id FROM usuarios WHERE usuario = ?';
+			$bindTypes = 's';
+			if (mt_db_table_has_column($conexion, 'usuarios', 'usrlogin')) {
+				$sql .= ' OR usrlogin = ?';
+				$bindTypes .= 's';
+			}
+			$sql .= ' LIMIT 1';
+			if ($stmt = mysqli_prepare($conexion, $sql)) {
+				if ($bindTypes === 'ss') {
+					mysqli_stmt_bind_param($stmt, $bindTypes, $uname, $uname);
+				} else {
+					mysqli_stmt_bind_param($stmt, $bindTypes, $uname);
+				}
 				if (mysqli_stmt_execute($stmt)) {
 					mysqli_stmt_bind_result($stmt, $found_id);
 					if (mysqli_stmt_fetch($stmt)) {
@@ -145,6 +204,9 @@ function require_login_ajax(){
 		echo json_encode(['ok' => false, 'error' => 'UNAUTHORIZED']);
 		exit;
 	}
+	if (empty($_SESSION['id_usuario'])) {
+		$_SESSION['id_usuario'] = (int)$user_id;
+	}
 
 		$is_protected_superuser = ((int)$user_id === 1);
 		if ($is_protected_superuser) {
@@ -153,18 +215,33 @@ function require_login_ajax(){
 		}
 
 		// hydrate provider_id/service_provider_id in session if not present
-		if (!$is_protected_superuser && $conexion && (empty($_SESSION['provider_id']) || empty($_SESSION['service_provider_id']))) {
-			if ($ustmt = mysqli_prepare($conexion, "SELECT provider_id, service_provider_id FROM usuarios WHERE id = ? LIMIT 1")) {
+		if (
+			!$is_protected_superuser
+			&& $conexion
+			&& mt_db_table_exists($conexion, 'usuarios')
+			&& (empty($_SESSION['provider_id']) || empty($_SESSION['service_provider_id']))
+		) {
+			$selectParts = [];
+			if (mt_db_table_has_column($conexion, 'usuarios', 'provider_id')) {
+				$selectParts[] = 'provider_id';
+			}
+			if (mt_db_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+				$selectParts[] = 'service_provider_id';
+			}
+			if (!empty($selectParts) && ($ustmt = mysqli_prepare($conexion, 'SELECT ' . implode(', ', $selectParts) . ' FROM usuarios WHERE id = ? LIMIT 1'))) {
 				$uid = (int) $user_id;
 				mysqli_stmt_bind_param($ustmt, 'i', $uid);
 			if (mysqli_stmt_execute($ustmt)) {
-				mysqli_stmt_bind_result($ustmt, $db_provider_id, $db_service_provider_id);
-				if (mysqli_stmt_fetch($ustmt)) {
-					if (empty($_SESSION['provider_id']) && !empty($db_provider_id)) {
-						$_SESSION['provider_id'] = (int) $db_provider_id;
+				$res = mysqli_stmt_get_result($ustmt);
+				$row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+				if ($row) {
+					$db_provider_id = isset($row['provider_id']) ? (int)$row['provider_id'] : 0;
+					$db_service_provider_id = isset($row['service_provider_id']) ? (int)$row['service_provider_id'] : 0;
+					if (empty($_SESSION['provider_id']) && $db_provider_id > 0) {
+						$_SESSION['provider_id'] = $db_provider_id;
 					}
-					if (empty($_SESSION['service_provider_id']) && !empty($db_service_provider_id)) {
-						$_SESSION['service_provider_id'] = (int) $db_service_provider_id;
+					if (empty($_SESSION['service_provider_id']) && $db_service_provider_id > 0) {
+						$_SESSION['service_provider_id'] = $db_service_provider_id;
 					}
 				}
 			}
@@ -173,7 +250,14 @@ function require_login_ajax(){
 	}
 
 	// backward compatibility: old mapping table for medical providers
-		if (!$is_protected_superuser && empty($_SESSION['provider_id']) && $conexion) {
+		if (
+			!$is_protected_superuser
+			&& empty($_SESSION['provider_id'])
+			&& $conexion
+			&& mt_db_table_exists($conexion, 'provider_users')
+			&& mt_db_table_has_column($conexion, 'provider_users', 'provider_id')
+			&& mt_db_table_has_column($conexion, 'provider_users', 'user_id')
+		) {
 			if ($pstmt = mysqli_prepare($conexion, "SELECT provider_id FROM provider_users WHERE user_id = ? LIMIT 1")) {
 				$uid = (int) $user_id;
 				mysqli_stmt_bind_param($pstmt, 'i', $uid);
