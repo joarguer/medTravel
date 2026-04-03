@@ -103,7 +103,8 @@ function format_price($amount, $currency){
                 border-color: #d1d5db;
             }
             .service-card .card-img-top {
-                height: 220px;
+                width: 100%;
+                aspect-ratio: 16 / 9;
                 object-fit: cover;
                 background: #f1f5f9;
             }
@@ -222,12 +223,25 @@ function format_price($amount, $currency){
                     <p class="mb-0"><?php echo $description; ?></p>
                 </div>
                 <?php if(!empty($catalog)){ ?>
-                <?php foreach($catalog as $type => $items){ ?>
+                <?php foreach($catalog as $type => $items){ 
+                    $total_items = count($items);
+                    if($total_items == 1){
+                        $first_row_col = 'col-12';
+                    } elseif($total_items == 2){
+                        $first_row_col = 'col-sm-6 col-12';
+                    } elseif($total_items == 3){
+                        $first_row_col = 'col-lg-4 col-sm-6 col-12';
+                    } else {
+                        $first_row_col = 'col-xl-3 col-lg-4 col-sm-6 col-12';
+                    }
+                    $standard_col = 'col-xl-3 col-lg-4 col-sm-6 col-12';
+                ?>
                 <div class="row g-4 mb-4">
                     <div class="col-12">
                         <h4 class="text-primary mb-3" style="text-transform: capitalize;"><?php echo htmlspecialchars($type); ?></h4>
                     </div>
-                    <?php foreach($items as $svc){ 
+                    <?php foreach($items as $idx => $svc){ 
+                        $svc_col = ($idx < 4) ? $first_row_col : $standard_col;
                         $status_class = '';
                         switch($svc['availability_status']){
                             case 'available': $status_class = 'available'; break;
@@ -237,7 +251,7 @@ function format_price($amount, $currency){
                         }
                         $image_path = !empty($svc['image_url']) ? htmlspecialchars($svc['image_url']) : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f1f5f9" width="400" height="300"/%3E%3Ctext fill="%2399a1ab" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedTravel Service%3C/text%3E%3C/svg%3E';
                     ?>
-                        <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12 d-flex">
+                        <div class="<?php echo $svc_col; ?> d-flex">
                             <div class="service-card card h-100 w-100">
                                 <div class="position-relative">
                                     <img src="<?php echo $image_path; ?>" 
