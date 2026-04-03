@@ -210,12 +210,19 @@
     }
 
     function getFilterValue() {
+        if (isCareOnlyCoordination()) {
+            return 'CARE';
+        }
         var v = $('#admin-calendar-filter').val();
         return String(v || 'ITEM').toUpperCase();
     }
 
     function isProviderView() {
         return !!config.isProvider;
+    }
+
+    function isCareOnlyCoordination() {
+        return !!config.isCareOnlyCoordination;
     }
 
     function buildItemOptionLabel(itemId, event) {
@@ -271,6 +278,10 @@
         var $wrap = $('#admin-calendar-item-selector-wrap');
         var $select = $('#admin-calendar-item-select');
         if (!$wrap.length || !$select.length) return;
+        if (isCareOnlyCoordination()) {
+            $wrap.hide();
+            return;
+        }
 
         var keys = Object.keys(knownItemOptions)
             .map(function (k) { return parseInt(k, 10) || 0; })
@@ -346,10 +357,13 @@
             }
             var list = Array.isArray(res.threads) ? res.threads : [];
             list.forEach(function (thread) {
+                var requestId = parseInt(thread.request_id || '0', 10) || 0;
+                var label = $.trim(String(thread.label || ''));
+                if (requestId > 0 && !knownRequestOptions[requestId]) {
+                    knownRequestOptions[requestId] = label || ('Solicitud #' + requestId);
+                }
                 var itemId = parseInt(thread.item_id || '0', 10) || 0;
                 if (itemId <= 0) return;
-                var label = $.trim(String(thread.label || ''));
-                var requestId = parseInt(thread.request_id || '0', 10) || 0;
                 registerItemOption(itemId, label, requestId, thread.status || '');
             });
             renderItemSelector();
@@ -375,6 +389,10 @@
                     ? 'Aún no hay citas coordinadas. Selecciona una solicitud asignada y luego elige fecha y hora para proponer un horario.'
                     : 'Aún no hay citas coordinadas. Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario.');
             }
+        } else if (isCareOnlyCoordination()) {
+            $empty.text(selectedRequestId > 0
+                ? 'Aún no hay eventos CARE para esta solicitud. Haz clic en una fecha para registrar una coordinación.'
+                : 'Aún no hay eventos CARE. Selecciona una solicitud y luego elige fecha y hora para registrar una coordinación.');
         } else {
             $empty.text('Aún no hay citas coordinadas.');
         }
@@ -417,6 +435,9 @@
     function buildRequestUrl(requestId) {
         var base = config.requestBase || 'my_booking_requests.php';
         if (!requestId) return base;
+        if (String(config.requestMode || '') === 'care_thread') {
+            return base + '?thread_id=' + encodeURIComponent('CARE:' + String(requestId));
+        }
         return base + '?request_id=' + encodeURIComponent(String(requestId));
     }
 
@@ -516,6 +537,9 @@
         var $form = $('#admin-calendar-create-form');
         var eventType = String($form.find('[name="event_type"]').val() || 'ITEM').toUpperCase();
         var isProvider = isProviderView();
+        if (isCareOnlyCoordination()) {
+            eventType = 'CARE';
+        }
         var isItem = eventType === 'ITEM';
 
         $('#admin-calendar-create-type-group').toggle(!isProvider);
@@ -530,6 +554,9 @@
         if (isProvider) {
             $form.find('[name="event_type"]').val('ITEM').prop('disabled', true);
             $form.find('[name="status"]').val('proposed').prop('disabled', true);
+        } else if (isCareOnlyCoordination()) {
+            $form.find('[name="event_type"]').val('CARE').prop('disabled', true);
+            $form.find('[name="status"]').prop('disabled', false);
         } else {
             $form.find('[name="event_type"]').prop('disabled', false);
             $form.find('[name="status"]').prop('disabled', false);
@@ -667,6 +694,10 @@
                 : 'Selecciona primero un hilo ITEM.');
             return;
         }
+        if (isCareOnlyCoordination() && selectedRequestId <= 0) {
+            toastr.warning('Selecciona primero una solicitud CARE.');
+            return;
+        }
         if (isProviderView()) {
             openCreateModal(start, end, allDay, {
                 eventType: 'ITEM',
@@ -674,6 +705,13 @@
                 defaultTitle: 'Horario propuesto',
                 forceStatus: 'proposed',
                 forceThirtyMinutes: true
+            });
+            return;
+        }
+        if (isCareOnlyCoordination()) {
+            openCreateModal(start, end, allDay, {
+                eventType: 'CARE',
+                requestId: selectedRequestId
             });
             return;
         }

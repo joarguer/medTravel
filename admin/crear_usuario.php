@@ -23,8 +23,11 @@ if (!$can_view_roles_help && function_exists('user_can')) {
 function crear_usuario_scope_type($role_id, $role_slug) {
     $rid = (int)$role_id;
     $slug = strtolower(trim((string)$role_slug));
-    if ($rid === ROLE_ADMIN || $rid === ROLE_ADMINISTRATIVE || strpos($slug, 'principal') !== false || strpos($slug, 'administrative') !== false) {
+    if ($rid === ROLE_ADMIN || strpos($slug, 'principal') !== false) {
         return 'admin';
+    }
+    if ($rid === ROLE_ADMINISTRATIVE || strpos($slug, 'administrative') !== false) {
+        return 'none';
     }
     if ($rid === ROLE_PROVIDER || $rid === ROLE_PROVIDER_ADMIN || (strpos($slug, 'provider') !== false && strpos($slug, 'complement') === false)) {
         return 'medical_provider';

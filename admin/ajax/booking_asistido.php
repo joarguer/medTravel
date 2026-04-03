@@ -6,7 +6,7 @@
  *   lookup  — check if email already exists as a client user
  *   submit  — create booking_request + items + client user + send credentials
  *
- * Security: requires valid admin session with PERM_BOOKING_MANAGE.
+ * Security: requires valid session with PERM_BOOKING_ASSISTED_CREATE.
  * Terms acceptance: deliberately NOT set on behalf of client (terms_accepted = 0).
  * The client must personally accept on first login via the terms gate.
  */
@@ -62,7 +62,7 @@ register_shutdown_function(function () {
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 
-if (!user_can(PERM_BOOKING_MANAGE)) {
+if (!user_can(PERM_BOOKING_ASSISTED_CREATE)) {
     ab_json_error('Access denied', 403);
 }
 
@@ -577,7 +577,7 @@ function ab_user_is_privileged($row)
         }
     }
 
-    return ($roleValue === ROLE_ADMIN || $roleValue === ROLE_ADMINISTRATIVE);
+    return ($roleValue === ROLE_ADMIN);
 }
 
 function ab_pick_reusable_user(array $rows)

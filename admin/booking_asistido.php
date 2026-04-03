@@ -1,11 +1,14 @@
 <?php
 include("include/include.php");
 
-if (!user_can(PERM_BOOKING_MANAGE)) {
+if (!user_can(PERM_BOOKING_ASSISTED_CREATE)) {
     http_response_code(403);
     echo 'Access denied';
     exit;
 }
+
+$assisted_booking_back_href = is_administrative_session() ? 'index.php' : 'booking_requests.php';
+$assisted_booking_back_label = is_administrative_session() ? 'Coordination' : 'Booking Requests';
 
 function ab_page_has_column($conexion, $table, $column)
 {
@@ -130,7 +133,7 @@ if ($categoriesRes) {
                 <h1>Assisted Booking <span class="agent-badge">Agent mode</span></h1>
                 <ol class="breadcrumb">
                     <li><a href="index.php">Home</a></li>
-                    <li><a href="booking_requests.php">Booking Requests</a></li>
+                    <li><a href="<?php echo htmlspecialchars($assisted_booking_back_href, ENT_QUOTES); ?>"><?php echo htmlspecialchars($assisted_booking_back_label, ENT_QUOTES); ?></a></li>
                     <li class="active">Assisted Booking</li>
                 </ol>
             </div>

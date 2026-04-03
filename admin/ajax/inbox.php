@@ -376,7 +376,7 @@ function admin_inbox_build_scope($conexion)
 {
     $providerId = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
     $serviceProviderId = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
-    $isAdmin = is_role_admin_session();
+    $isAdmin = is_coordination_admin_session();
     $userId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
     $roleId = current_role_id();
 

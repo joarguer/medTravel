@@ -139,7 +139,10 @@ INSERT INTO `permissions` (`id`, `slug`, `name`, `description`) VALUES
   (11,'providers.partner.view', 'Ver partners', 'Puede ver proveedores complementarios'),
   (12,'providers.partner.edit', 'Editar partners', 'Puede editar proveedores complementarios'),
   (7, 'reports.view', 'Ver reportes', 'Puede ver reportes'),
-  (8, 'offers.manage', 'Gestionar ofertas', 'Puede crear/editar ofertas')
+  (8, 'offers.manage', 'Gestionar ofertas', 'Puede crear/editar ofertas'),
+  (13, 'booking.view', 'Ver booking operativo', 'Puede acceder a inbox/calendar operativos de booking'),
+  (14, 'booking.manage', 'Gestionar bookings', 'Puede administrar solicitudes de booking globales'),
+  (15, 'booking.assisted.create', 'Crear booking asistido', 'Puede crear bookings asistidos en nombre del paciente')
 ON DUPLICATE KEY UPDATE
   `slug` = VALUES(`slug`),
   `name` = VALUES(`name`),
@@ -149,7 +152,8 @@ ON DUPLICATE KEY UPDATE
 INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`) VALUES
   (1, 1),(1, 2),(1, 3),(1, 4),(1, 5),(1, 6),(1, 7),(1, 8), -- Admin: todo
   (1, 9),(1,10),(1,11),(1,12),
-  (2, 1),(2, 2),(2, 3),(2, 5),(2, 6),(2, 8),(2,9),(2,10),  -- Administrativo: medical
+  (1,13),(1,14),(1,15),
+  (2,13),(2,15),                                            -- Administrativo: coordinación CARE + booking asistido
   (11,7),                                                  -- Contable: reportes
   (12,1),(12,2),(12,3),(12,5),(12,6),(12,8),(12,9),(12,10),(12,11),(12,12), -- Admin prestador: todo en su contexto
   (4, 1),(4, 3),(4, 5),(4, 6),(4, 8),(4,9),(4,10);         -- Proveedor: sin crear usuarios, medical

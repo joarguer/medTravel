@@ -256,7 +256,7 @@ if (mysqli_num_rows($busca_usua) > 0) {
 	        //cREAMOS USUARIO Y CLAVE PARA ACCESO A DOC
 	        $rasocial = v($fil,'empresa','');
 	        $role_id_val = (isset($fil['role_id']) && is_numeric($fil['role_id'])) ? intval($fil['role_id']) : normalize_role_value(v($fil, 'rol', ''));
-	        $is_global_admin_role = ($role_id_val === ROLE_ADMIN || $role_id_val === ROLE_ADMINISTRATIVE || v($fil, 'ppal', '') === '1');
+	        $is_global_admin_role = ($role_id_val === ROLE_ADMIN || v($fil, 'ppal', '') === '1');
 	        $is_medical_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
 	        $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
 	        $is_client_role = ($role_id_val === ROLE_CLIENT);

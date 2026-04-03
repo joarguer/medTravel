@@ -142,7 +142,7 @@ function is_complementary_user_role($roleId) {
 }
 
 function is_global_admin_user_role($roleId) {
-    return in_array(intval($roleId), [ROLE_ADMIN, ROLE_ADMINISTRATIVE], true);
+    return intval($roleId) === ROLE_ADMIN;
 }
 
 function generate_temp_password($length = 14) {

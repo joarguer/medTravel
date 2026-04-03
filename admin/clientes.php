@@ -1,5 +1,10 @@
 <?php
 include("include/include.php");
+if (is_administrative_session()) {
+    http_response_code(403);
+    echo 'Acceso denegado';
+    exit;
+}
 $id_usuario = $_SESSION['id_usuario'];
 ?>
 <!DOCTYPE html>

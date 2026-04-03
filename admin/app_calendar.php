@@ -9,19 +9,24 @@ if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
 
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $service_provider_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
-$can_admin_view = is_role_admin_session();
+$can_admin_view = is_coordination_admin_session();
+$is_full_admin = is_role_admin_session();
+$is_administrative_coordination = is_administrative_session();
+$is_care_only_coordination = $is_administrative_coordination && !$is_full_admin;
 $is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
-$page_heading = $is_linked_medical_staff_session ? 'Agenda asignada' : 'Agenda';
+$page_heading = $is_linked_medical_staff_session ? 'Agenda asignada' : ($is_care_only_coordination ? 'Agenda de Coordinación' : 'Agenda');
 $page_breadcrumb = $page_heading;
-$page_caption = $is_linked_medical_staff_session ? 'Agenda operativa del staff asignado' : 'Agenda de coordinación';
-$page_intro_class = $is_linked_medical_staff_session ? 'info' : 'warning';
-$page_intro_title = $is_linked_medical_staff_session ? 'Coordinación sobre solicitudes asignadas' : 'Coordinación y supervisión del prestador';
+$page_caption = $is_linked_medical_staff_session ? 'Agenda operativa del staff asignado' : ($is_care_only_coordination ? 'Agenda CARE de MedTravel Coordination' : 'Agenda de coordinación');
+$page_intro_class = $is_linked_medical_staff_session ? 'info' : ($is_care_only_coordination ? 'info' : 'warning');
+$page_intro_title = $is_linked_medical_staff_session ? 'Coordinación sobre solicitudes asignadas' : ($is_care_only_coordination ? 'Coordinación MedTravel sobre solicitudes CARE' : 'Coordinación y supervisión del prestador');
 $page_intro_body = $is_linked_medical_staff_session
     ? 'Esta agenda muestra únicamente citas y propuestas de los items que ya quedaron bajo tu responsabilidad operativa.'
-    : 'Cuando un item ya tiene staff asignado, la coordinación normal debe llevarla esa persona. Desde aquí puedes mantener visibilidad total e intervenir como supervisión cuando haga falta.';
+    : ($is_care_only_coordination
+        ? 'Esta agenda muestra únicamente eventos CARE del scope de coordinación MedTravel. No expone agendas ITEM ni superficies administrativas globales.'
+        : 'Cuando un item ya tiene staff asignado, la coordinación normal debe llevarla esa persona. Desde aquí puedes mantener visibilidad total e intervenir como supervisión cuando haga falta.');
 $page_guide = $is_linked_medical_staff_session
     ? 'Selecciona una solicitud asignada y luego elige fecha y hora para proponer o ajustar una coordinación con el paciente.'
-    : 'Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario coordinado.';
+    : ($is_care_only_coordination ? 'Selecciona una solicitud CARE y luego elige fecha y hora para registrar la coordinación MedTravel.' : 'Selecciona un hilo ITEM y luego elige fecha y hora para proponer un horario coordinado.');
 $item_select_label = $is_linked_medical_staff_session ? 'Solicitud asignada' : 'Hilo ITEM';
 $item_select_placeholder = $is_linked_medical_staff_session ? 'Selecciona una solicitud asignada...' : 'Selecciona un ITEM...';
 if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
@@ -34,6 +39,8 @@ $can_create = $can_admin_view || $provider_id > 0 || $service_provider_id > 0;
 $can_update = $can_create;
 $can_delete = $can_admin_view;
 $can_cancel = $can_update;
+$calendar_request_base = $is_full_admin ? 'booking_requests.php' : ($is_care_only_coordination ? 'app_inbox.php' : 'my_booking_requests.php');
+$calendar_request_mode = $is_care_only_coordination ? 'care_thread' : 'request';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -97,7 +104,7 @@ $can_cancel = $can_update;
                             <span class="caption-subject font-blue bold uppercase"><?php echo htmlspecialchars($page_caption, ENT_QUOTES); ?></span>
                         </div>
                         <div class="actions">
-                            <?php if ($can_admin_view): ?>
+                            <?php if ($is_full_admin): ?>
                             <select id="admin-calendar-filter" class="form-control input-sm" style="min-width:180px;">
                                 <option value="ALL">Todos los eventos</option>
                                 <option value="CARE">Hilos CARE</option>
@@ -181,10 +188,14 @@ $can_cancel = $can_update;
                             <div class="form-group" id="admin-calendar-create-type-group">
                                 <label>Tipo de evento</label>
                                 <select class="form-control" name="event_type" id="admin-calendar-create-type">
-                                    <?php if ($can_admin_view): ?>
+                                    <?php if ($is_full_admin): ?>
                                     <option value="CARE">CARE</option>
-                                    <?php endif; ?>
                                     <option value="ITEM" selected>ITEM</option>
+                                    <?php elseif ($is_care_only_coordination): ?>
+                                    <option value="CARE" selected>CARE</option>
+                                    <?php else: ?>
+                                    <option value="ITEM" selected>ITEM</option>
+                                    <?php endif; ?>
                                 </select>
                             </div>
                             <div class="form-group" id="admin-calendar-create-type-readonly-group" style="display:none;">
@@ -321,7 +332,7 @@ $can_cancel = $can_update;
                     </div>
                     <hr>
                     <p style="margin-bottom:0;">
-                        <a href="#" id="admin-calendar-open-request" target="_blank">Abrir solicitud</a> |
+                        <a href="#" id="admin-calendar-open-request" target="_blank"><?php echo $is_care_only_coordination ? 'Abrir seguimiento CARE' : 'Abrir solicitud'; ?></a> |
                         <a href="#" id="admin-calendar-open-inbox" target="_blank">Abrir hilo en Inbox</a>
                     </p>
                 </div>
@@ -341,6 +352,9 @@ $can_cancel = $can_update;
 <script type="text/javascript">
 window.AdminCalendarConfig = {
     canAdmin: <?php echo $can_admin_view ? 'true' : 'false'; ?>,
+    isFullAdmin: <?php echo $is_full_admin ? 'true' : 'false'; ?>,
+    isAdministrativeCoordination: <?php echo $is_administrative_coordination ? 'true' : 'false'; ?>,
+    isCareOnlyCoordination: <?php echo $is_care_only_coordination ? 'true' : 'false'; ?>,
     isProvider: <?php echo (!$can_admin_view && ($provider_id > 0 || $service_provider_id > 0)) ? 'true' : 'false'; ?>,
     isLinkedMedicalStaffSession: <?php echo $is_linked_medical_staff_session ? 'true' : 'false'; ?>,
     canCreate: <?php echo $can_create ? 'true' : 'false'; ?>,
@@ -349,7 +363,8 @@ window.AdminCalendarConfig = {
     canDelete: <?php echo $can_delete ? 'true' : 'false'; ?>,
     listUrl: 'ajax/calendar.php',
     inboxBase: 'app_inbox.php',
-    requestBase: '<?php echo $can_admin_view ? 'booking_requests.php' : 'my_booking_requests.php'; ?>'
+    requestBase: '<?php echo $calendar_request_base; ?>',
+    requestMode: '<?php echo $calendar_request_mode; ?>'
 };
 </script>
 <script src="js/app_calendar.js" type="text/javascript"></script>

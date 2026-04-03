@@ -26,7 +26,9 @@ function calendar_admin_scope()
 {
     $providerId = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
     $serviceProviderId = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
-    $isAdmin = is_role_admin_session();
+    $isFullAdmin = is_role_admin_session();
+    $isAdministrative = is_administrative_session();
+    $isAdmin = $isFullAdmin || $isAdministrative;
     $linkedStaffId = $isAdmin ? 0 : current_provider_medical_staff_id($GLOBALS['conexion'] ?? null);
     $isLinkedStaff = !$isAdmin && $linkedStaffId > 0;
     $userId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
@@ -85,6 +87,8 @@ function calendar_admin_scope()
     return [
         'ok' => true,
         'is_admin' => $isAdmin,
+        'is_full_admin' => $isFullAdmin,
+        'is_administrative' => $isAdministrative,
         'is_linked_staff' => $isLinkedStaff,
         'linked_staff_id' => $linkedStaffId,
         'user_id' => $userId,
@@ -420,6 +424,8 @@ function calendar_fetch_event_row_admin($conexion, $eventId, $scope)
         }
         $sql .= " AND ce.event_type = 'ITEM'";
         $sql .= (string)$scope['scope_where'];
+    } elseif (!empty($scope['is_administrative'])) {
+        $sql .= " AND ce.event_type = 'CARE'";
     }
     $sql .= " LIMIT 1";
 
@@ -674,6 +680,36 @@ if ($action === 'list_threads') {
            END"
         : "'pending_provider'";
 
+    if (!empty($scope['is_administrative'])) {
+        $threads = [];
+        $requestSql = "SELECT br.id AS request_id
+                       FROM booking_requests br
+                       WHERE 1=1";
+        if ($hasRequestsSoftDelete) {
+            $requestSql .= " AND br.is_deleted = 0";
+        }
+        $requestSql .= " ORDER BY br.created_at DESC, br.id DESC LIMIT " . $limit;
+        $requestRes = mysqli_query($conexion, $requestSql);
+        if ($requestRes) {
+            while ($row = mysqli_fetch_assoc($requestRes)) {
+                $requestId = (int)($row['request_id'] ?? 0);
+                if ($requestId <= 0) {
+                    continue;
+                }
+                $threads[] = [
+                    'thread_id' => 'CARE:' . $requestId,
+                    'thread_type' => 'CARE',
+                    'item_id' => 0,
+                    'request_id' => $requestId,
+                    'status' => '',
+                    'label' => 'Solicitud #' . $requestId,
+                ];
+            }
+        }
+
+        calendar_admin_ok(['threads' => $threads]);
+    }
+
     $sql = "SELECT
                 bri.id AS item_id,
                 bri.booking_request_id AS request_id,
@@ -763,6 +799,8 @@ if ($action === 'list_events') {
         }
         $sql .= " AND ce.event_type = 'ITEM'";
         $sql .= (string)$scope['scope_where'];
+    } elseif (!empty($scope['is_administrative'])) {
+        $sql .= " AND ce.event_type = 'CARE'";
     }
     $sql .= " ORDER BY ce.start_at ASC, ce.id ASC";
 
@@ -816,6 +854,9 @@ if ($action === 'create_event') {
     }
     if ($eventType === '') {
         calendar_admin_err('invalid_event_type', 422);
+    }
+    if (!empty($scope['is_administrative']) && $eventType !== 'CARE') {
+        calendar_admin_err('forbidden_item_for_administrative', 403);
     }
     if (empty($scope['is_admin']) && $eventType !== 'ITEM') {
         calendar_admin_err('forbidden_care_for_provider', 403);
@@ -1023,6 +1064,9 @@ if ($action === 'update_event') {
     $eventType = calendar_normalize_event_type($_POST['event_type'] ?? $existing['event_type'] ?? '');
     if ($eventType === '') {
         calendar_admin_err('invalid_event_type', 422);
+    }
+    if (!empty($scope['is_administrative']) && $eventType !== 'CARE') {
+        calendar_admin_err('forbidden_item_for_administrative', 403);
     }
     if (empty($scope['is_admin']) && $eventType !== 'ITEM') {
         calendar_admin_err('forbidden_care_for_provider', 403);

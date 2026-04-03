@@ -19,6 +19,7 @@ define('PERM_PROVIDERS_MEDICAL_MANAGE', 'providers.medical.manage');
 define('PERM_PROVIDERS_COMPLEMENTARY_MANAGE', 'providers.complementary.manage');
 define('PERM_BOOKING_VIEW', 'booking.view');
 define('PERM_BOOKING_MANAGE', 'booking.manage');
+define('PERM_BOOKING_ASSISTED_CREATE', 'booking.assisted.create');
 define('PERM_PACKAGES_MANAGE', 'packages.manage');
 define('PERM_USERS_MANAGE', 'users.manage');
 define('PERM_REPORTS_VIEW', 'reports.view');
@@ -45,17 +46,33 @@ function is_role_admin_session() {
     if (isset($_SESSION['ppal']) && intval($_SESSION['ppal']) === 1) return true;
     if (isset($_SESSION['rol'])) {
         $nr = normalize_role_value($_SESSION['rol']);
-        if ($nr === ROLE_ADMIN || $nr === ROLE_ADMINISTRATIVE) return true;
+        if ($nr === ROLE_ADMIN) return true;
     }
     if (isset($_SESSION['role_id']) && is_numeric($_SESSION['role_id'])) {
         $rid = intval($_SESSION['role_id']);
-        if ($rid === ROLE_ADMIN || $rid === ROLE_ADMINISTRATIVE) return true;
+        if ($rid === ROLE_ADMIN) return true;
     }
     return false;
 }
 
+function is_administrative_session() {
+    if (isset($_SESSION['ppal']) && intval($_SESSION['ppal']) === 1) return false;
+    if (isset($_SESSION['role_id']) && is_numeric($_SESSION['role_id'])) {
+        return intval($_SESSION['role_id']) === ROLE_ADMINISTRATIVE;
+    }
+    if (isset($_SESSION['rol'])) {
+        return normalize_role_value($_SESSION['rol']) === ROLE_ADMINISTRATIVE;
+    }
+    return false;
+}
+
+function is_coordination_admin_session() {
+    return is_role_admin_session() || is_administrative_session();
+}
+
 function has_minimum_role_2() {
     if (is_role_admin_session()) return true;
+    if (is_administrative_session()) return true;
     if (isset($_SESSION['rol'])) {
         $nr = normalize_role_value($_SESSION['rol']);
         if ($nr !== null && $nr <= 2) return true; // lower number == higher privilege in current app
@@ -84,6 +101,7 @@ function get_granular_permissions_catalog() {
         PERM_PROVIDERS_COMPLEMENTARY_MANAGE => 'Gestionar proveedores complementarios',
         PERM_BOOKING_VIEW => 'Ver bookings',
         PERM_BOOKING_MANAGE => 'Gestionar bookings',
+        PERM_BOOKING_ASSISTED_CREATE => 'Crear booking asistido',
         PERM_PACKAGES_MANAGE => 'Gestionar paquetes',
         PERM_USERS_MANAGE => 'Gestionar usuarios',
         PERM_REPORTS_VIEW => 'Ver reportes',
@@ -103,6 +121,7 @@ function get_permission_alias_map() {
         PERM_PROVIDERS_COMPLEMENTARY_MANAGE => [],
         PERM_BOOKING_VIEW => ['reports.view'],
         PERM_BOOKING_MANAGE => ['reports.view'],
+        PERM_BOOKING_ASSISTED_CREATE => [],
         PERM_USERS_MANAGE => ['users.edit', 'users.create'],
         PERM_REPORTS_VIEW => ['reports.view'],
         PERM_SETTINGS_MANAGE => ['roles.manage'],
@@ -112,6 +131,11 @@ function get_permission_alias_map() {
 
 function get_role_fallback_permissions($role_id) {
     switch (intval($role_id)) {
+        case ROLE_ADMINISTRATIVE:
+            return [
+                PERM_BOOKING_VIEW,
+                PERM_BOOKING_ASSISTED_CREATE,
+            ];
         case ROLE_COMPLEMENTARY_ADMIN:
             return [
                 PERM_SERVICES_COMPLEMENTARY_MANAGE,
@@ -550,10 +574,20 @@ function is_provider_linked_medical_staff_session($conexion = null) {
     return current_provider_medical_staff_id($conexion) > 0;
 }
 
+function get_administrative_allowed_permissions() {
+    return [
+        PERM_BOOKING_VIEW,
+        PERM_BOOKING_ASSISTED_CREATE,
+    ];
+}
+
 function user_can($permission_slug){
     if(is_role_admin_session()) return true; // admin principal tiene todo
     $rid = current_role_id();
     if($rid === null) return false;
+    if ((int)$rid === ROLE_ADMINISTRATIVE) {
+        return in_array((string)$permission_slug, get_administrative_allowed_permissions(), true);
+    }
 
     if (is_provider_linked_medical_staff_session()) {
         $blockedForLinkedStaff = [

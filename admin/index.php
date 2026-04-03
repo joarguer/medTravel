@@ -98,6 +98,7 @@ function monthly_counts_query($conexion, $sql, $types = '', $params = []) {
 
 // Datos base
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
+$is_administrative_coordination = is_administrative_session();
 $is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
 $linked_staff_id = $is_linked_medical_staff_session ? current_provider_medical_staff_id($conexion ?? null) : 0;
 $series_data = [];
@@ -126,6 +127,41 @@ if ($es_admin) {
 
     $services_month = monthly_counts($conexion, 'medtravel_services_catalog', '1');
     $offers_month = monthly_counts($conexion, 'provider_service_offers', '1');
+} elseif ($is_administrative_coordination) {
+    $dashboard_heading = 'Panel de Coordinación MedTravel';
+    $dashboard_breadcrumb = 'Panel de Coordinación';
+    $provider_operation_links = [
+        ['label' => 'Inbox Coordinación', 'href' => 'app_inbox.php'],
+        ['label' => 'Calendar Coordinación', 'href' => 'app_calendar.php'],
+    ];
+    if (user_can(PERM_BOOKING_ASSISTED_CREATE)) {
+        $provider_operation_links[] = ['label' => 'Booking Asistido', 'href' => 'booking_asistido.php'];
+    }
+
+    $metric_cards = [
+        ['label' => 'Solicitudes CARE', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests"), 'icon' => 'icon-envelope-open', 'class' => 'font-green-sharp'],
+        ['label' => 'Pendientes por coordinar', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE status = 'pending'"), 'icon' => 'icon-hourglass', 'class' => 'font-red-haze'],
+        ['label' => 'Eventos CARE próximos', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM calendar_events WHERE event_type = 'CARE' AND start_at >= NOW() AND COALESCE(status, 'scheduled') <> 'cancelled'"), 'icon' => 'icon-calendar', 'class' => 'font-blue-sharp'],
+        ['label' => 'Eventos CARE confirmados', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM calendar_events WHERE event_type = 'CARE' AND COALESCE(status, 'scheduled') = 'confirmed'"), 'icon' => 'icon-check', 'class' => 'font-purple-soft'],
+    ];
+    $chart1_title = 'Solicitudes CARE y agenda';
+    $chart1_subtitle = 'últimos 12 meses';
+    $chart2_title = 'Estado de coordinación';
+    $chart2_subtitle = 'universo CARE actual';
+    $series_primary_label = 'Solicitudes CARE';
+    $series_secondary_label = 'Eventos CARE';
+    $series_primary_balloon = 'Solicitudes CARE [[category]]: [[value]]';
+    $series_secondary_balloon = 'Eventos CARE [[category]]: [[value]]';
+
+    $services_month = monthly_counts($conexion, 'booking_requests', '1');
+    $offers_month = monthly_counts_query(
+        $conexion,
+        "SELECT DATE_FORMAT(start_at,'%Y-%m') AS ym, COUNT(*) AS total
+         FROM calendar_events
+         WHERE event_type = 'CARE'
+         GROUP BY ym
+         ORDER BY ym"
+    );
 } elseif ($is_linked_medical_staff_session) {
     $dashboard_heading = 'Panel de staff médico';
     $dashboard_breadcrumb = 'Panel de staff médico';
@@ -380,6 +416,12 @@ if ($es_admin) {
         ['segment' => 'Servicios médicos', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM medtravel_services_catalog WHERE is_active = 1")],
         ['segment' => 'Proveedores complementarios', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM service_providers WHERE is_active = 1")],
         ['segment' => 'Bookings pendientes', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM booking_requests WHERE status = 'pending'")],
+    ];
+} elseif ($is_administrative_coordination) {
+    $pie_data = [
+        ['segment' => 'Solicitudes CARE', 'value' => $metric_cards[0]['value']],
+        ['segment' => 'Pendientes por coordinar', 'value' => $metric_cards[1]['value']],
+        ['segment' => 'Eventos CARE próximos', 'value' => $metric_cards[2]['value']],
     ];
 } elseif (!$is_linked_medical_staff_session) {
     $pie_data = [

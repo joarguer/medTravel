@@ -692,3 +692,19 @@ Cambios principales:
 - Mejoras de homepage:
   - hero configurable (carousel / video / disabled)
   - toggle global y por ítem para “Servicios Detallados”
+
+## 2026-04-03 — RBAC hardening for `administrative`
+
+- `administrative` deja de compartir bypass de admin principal
+- scope operativo mínimo del rol:
+  - inbox de coordinación CARE
+  - calendar de coordinación CARE
+  - booking asistido
+  - perfil propio
+- fuera de scope:
+  - administración global de usuarios/roles
+  - configuración sensible
+  - contenido web
+  - gestión global de clientes/bookings
+- la restricción debe existir en menú, guards y backend; no solo en ocultamiento visual
+- el universo técnico mínimo de “MedTravel Coordination” se acota a superficies CARE existentes, sin introducir un nuevo modelo de scope en esta pasada

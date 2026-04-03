@@ -8,14 +8,17 @@ $nombre_usuario = isset($_SESSION["nombre_usuario"]) ? trim((string)$_SESSION["n
 $title = 'MedTravel';
 
 // ROLE FLAGS: determinar permisos de menú
-// Determinación robusta de roles: acepta 'ppal' numérico, rol numérico o texto que contenga 'admin'
 $es_admin = false;
+$es_administrative = false;
+$es_coordination_admin = false;
 $es_prestador = false;
 $es_complementario = false;
 // Load roles helpers
 require_once __DIR__ . '/roles.php';
 require_once __DIR__ . '/data_deletion_service.php';
 $es_admin = is_role_admin_session();
+$es_administrative = is_administrative_session();
+$es_coordination_admin = is_coordination_admin_session();
 if (isset($_SESSION['provider_id']) && !empty($_SESSION['provider_id'])) {
     $es_prestador = true;
 }
@@ -69,6 +72,7 @@ $can_view_my_bookings = (
         || ($es_complementario && current_service_provider_id() > 0)
     )
 );
+$can_access_assisted_booking = user_can(PERM_BOOKING_ASSISTED_CREATE) || user_can(PERM_BOOKING_MANAGE);
 
 // Contadores y notificaciones de booking pending
 $booking_pending_count = 0;
@@ -519,6 +523,8 @@ $top_header .= '
                             <span>Hi, '.$nombre_usuario.' ';
 if ($es_admin) {
     $top_header .= '<span class="badge badge-danger">ADMIN</span>';
+} elseif ($es_administrative) {
+    $top_header .= '<span class="badge badge-warning">COORDINATION</span>';
 } elseif ($es_prestador || $es_complementario) {
     $top_header .= '<span class="badge badge-info">PRESTADOR</span>';
 }
@@ -533,6 +539,14 @@ if ($es_admin) {
                             <li><a href="app_calendar.php"><i class="icon-clock"></i> Calendar</a></li>
                             <li><a href="usuarios.php"><i class="icon-users"></i> Users</a></li>
                             <li class="divider"> </li>
+                            <li><a href="mis_datos.php"><i class="icon-user"></i> My Profile</a></li>';
+} elseif ($es_administrative) {
+    $top_header .= '      <li><a href="index.php"><i class="icon-home"></i> Dashboard</a></li>';
+    if ($can_access_assisted_booking) {
+        $top_header .= '  <li><a href="booking_asistido.php"><i class="fa fa-headset"></i> Assisted Booking</a></li>';
+    }
+    $top_header .= '      <li><a href="app_inbox.php"><i class="icon-envelope-open"></i> Inbox</a></li>
+                            <li><a href="app_calendar.php"><i class="icon-clock"></i> Calendar</a></li>
                             <li><a href="mis_datos.php"><i class="icon-user"></i> My Profile</a></li>';
 } else {
     $top_header .= '      <li><a href="index.php"><i class="icon-home"></i> Dashboard</a></li>';
@@ -570,6 +584,7 @@ $medical_group_pages = array('service_categories.php','service_catalog.php','pro
 $complementary_group_pages = array('providers_complementary.php','medtravel_services.php','paquetes.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $complementary_scope_pages = array('providers_complementary.php','medtravel_services.php','my_booking_requests.php','app_inbox.php','app_calendar.php');
 $clients_booking_pages = array('clientes.php','booking_requests.php','booking_asistido.php','app_inbox.php','app_calendar.php','testimonials.php');
+$coordination_pages = array('booking_asistido.php','app_inbox.php','app_calendar.php','mis_datos.php');
 $admin_section_pages = array('mis_datos.php','crear_usuario.php','usuarios.php','roles.php','email_settings.php','google_calendar_settings.php','data_deletion_requests.php','cleanup.php');
 $admin_users_pages = array('mis_datos.php','usuarios.php','crear_usuario.php','roles.php');
 $site_pages = array('home_edit.php','about_edit.php','services_edit.php','offers_header_edit.php','offer_detail_edit.php','booking_header_edit.php','contact_header_edit.php','blog_edit.php','wizard_header_edit.php');
@@ -579,6 +594,7 @@ $can_manage_complementary_services = user_can(PERM_SERVICES_COMPLEMENTARY_MANAGE
 $can_manage_packages = user_can(PERM_PACKAGES_MANAGE);
 $can_view_clients = (
     !$es_admin &&
+    !$es_administrative &&
     !$is_linked_medical_staff_session &&
     user_can(PERM_BOOKING_VIEW)
 );
@@ -649,7 +665,7 @@ if ($es_admin) {
                                         <li'.menu_li_class('booking_requests.php').'>
                                             <a href="./booking_requests.php">Solicitudes de Booking</a>
                                         </li>
-                                        '.($es_admin || user_can(PERM_BOOKING_MANAGE) ? '<li'.menu_li_class('booking_asistido.php').'><a href="./booking_asistido.php"><i class="fa fa-headset" style="margin-right:4px;font-size:11px;"></i> Booking Asistido</a></li>' : '').'
+                                        '.($can_access_assisted_booking ? '<li'.menu_li_class('booking_asistido.php').'><a href="./booking_asistido.php"><i class="fa fa-headset" style="margin-right:4px;font-size:11px;"></i> Booking Asistido</a></li>' : '').'
                                         <li'.menu_li_class('testimonials.php').'>
                                             <a href="./testimonials.php">Testimonials</a>
                                         </li>
@@ -750,6 +766,30 @@ if ($es_admin) {
                             </ul>
                         </li>';
 
+} elseif ($es_administrative) {
+    $top_header_2 .= '
+                        <li'.menu_li_class($coordination_pages, 'dropdown dropdown-fw dropdown-fw-disabled').'>
+                            <a href="javascript:;" class="text-uppercase dropdown-toggle" data-toggle="dropdown">
+                                <i class="icon-support"></i> Coordinación </a>
+                            <ul class="dropdown-menu dropdown-menu-fw">
+                                '.($can_access_assisted_booking ? '<li'.menu_li_class('booking_asistido.php').'>
+                                    <a href="./booking_asistido.php">
+                                        <i class="fa fa-headset"></i> Booking Asistido </a>
+                                </li>' : '').'
+                                <li'.menu_li_class('app_inbox.php').'>
+                                    <a href="./app_inbox.php">
+                                        <i class="icon-envelope-open"></i> Inbox Coordinación </a>
+                                </li>
+                                <li'.menu_li_class('app_calendar.php').'>
+                                    <a href="./app_calendar.php">
+                                        <i class="icon-clock"></i> Calendar Coordinación </a>
+                                </li>
+                                <li'.menu_li_class('mis_datos.php').'>
+                                    <a href="./mis_datos.php">
+                                        <i class="icon-user"></i> Mi Perfil </a>
+                                </li>
+                            </ul>
+                        </li>';
 } elseif ($es_prestador) {
     // ═══════════════════════════════════════════════════════════════════════════
     // PRESTADOR/MÉDICO — menú por dominios funcionales

@@ -5,6 +5,12 @@ require_once '../include/roles.php';
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
 
+if (is_administrative_session()) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'forbidden']);
+    exit;
+}
+
 function clientes_table_exists($conexion, $table)
 {
     static $cache = [];

@@ -9,15 +9,20 @@ if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
 
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $service_provider_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
-$can_admin_view = is_role_admin_session();
+$can_admin_view = is_coordination_admin_session();
+$is_administrative_coordination = is_administrative_session();
 $is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
-$page_heading = $is_linked_medical_staff_session ? 'Inbox asignado' : 'Inbox';
+$page_heading = $is_linked_medical_staff_session ? 'Inbox asignado' : ($is_administrative_coordination ? 'Inbox de Coordinación' : 'Inbox');
 $page_breadcrumb = $page_heading;
-$page_intro_class = $is_linked_medical_staff_session ? 'info' : 'warning';
-$page_intro_title = $is_linked_medical_staff_session ? 'Seguimiento operativo de tus casos asignados' : 'Seguimiento operativo del prestador';
+$page_intro_class = $is_linked_medical_staff_session ? 'info' : ($is_administrative_coordination ? 'info' : 'warning');
+$page_intro_title = $is_linked_medical_staff_session
+    ? 'Seguimiento operativo de tus casos asignados'
+    : ($is_administrative_coordination ? 'Coordinación MedTravel sobre hilos CARE' : 'Seguimiento operativo del prestador');
 $page_intro_body = $is_linked_medical_staff_session
     ? 'Este inbox concentra la comunicación de los items que ya quedaron bajo tu responsabilidad operativa. Si un caso sigue sin asignación clínica, la administración del prestador debe decidir quién lo toma.'
-    : 'Cuando un item ya tiene staff asignado, el seguimiento operativo normal debe llevarlo esa persona. Desde aquí puedes supervisar el caso o intervenir de forma explícita cuando haga falta.';
+    : ($is_administrative_coordination
+        ? 'Este inbox concentra únicamente solicitudes CARE del scope de coordinación MedTravel. Desde aquí puedes acompañar al paciente y dar continuidad operativa sin acceso a la administración global del sistema.'
+        : 'Cuando un item ya tiene staff asignado, el seguimiento operativo normal debe llevarlo esa persona. Desde aquí puedes supervisar el caso o intervenir de forma explícita cuando haga falta.');
 if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
     http_response_code(403);
     echo 'Acceso denegado';

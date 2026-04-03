@@ -111,7 +111,7 @@ if($tipo == 'crear_usuario'){
     $service_provider_session_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : null;
 
     $role_id_val = is_numeric($rol) ? intval($rol) : normalize_role_value($rol);
-    $is_global_admin_role = in_array($role_id_val, [ROLE_ADMIN, ROLE_ADMINISTRATIVE], true);
+    $is_global_admin_role = ((int)$role_id_val === ROLE_ADMIN);
     $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
     $is_medical_provider_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
 
