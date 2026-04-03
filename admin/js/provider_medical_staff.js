@@ -516,6 +516,7 @@
             var linkedUserActive = parseInt(item.linked_user_active || 0, 10) === 1;
             var accessEnabled = parseInt(item.can_access_admin || 0, 10) === 1;
             var accessOperational = linkedUserId > 0 && accessEnabled && linkedUserActive;
+            var allowHomePublication = parseInt(item.allow_home_publication || 0, 10) === 1;
             var accessStatusText = linkedUserId > 0
                 ? (item.access_status_label || (accessOperational ? 'Acceso al panel activo' : 'Acceso al panel desactivado'))
                 : 'Sin acceso al panel';
@@ -547,6 +548,7 @@
                 + '<td class="text-center">' + avatarHtml(item) + '</td>'
                 + '<td>'
                 + '<strong>' + escapeHtml(withFallback(item.full_name, 'Sin nombre')) + '</strong>'
+                + (allowHomePublication ? ' <span class="label label-success">Home</span>' : '')
                 + '<div class="text-muted small">' + escapeHtml(withFallback(item.email, 'Sin correo')) + ' · ' + escapeHtml(withFallback(item.phone, 'Sin teléfono')) + '</div>'
                 + '<div class="small"><span class="label label-default">' + escapeHtml(serviceSummary) + '</span></div>'
                 + '</td>'
@@ -1023,6 +1025,7 @@
             professional_license: '',
             clinic_name: '',
             notes: '',
+            allow_home_publication: 0,
             is_active: parseInt(ownerItem.is_active || ownerItem.active || 1, 10) === 1 ? 1 : 0,
             active: parseInt(ownerItem.is_active || ownerItem.active || 1, 10) === 1 ? 1 : 0,
             is_primary_doctor: 0,
@@ -1043,6 +1046,7 @@
         $('#pms-sort-order').val('');
         $('#pms-is-active').prop('checked', true);
         $('#pms-is-primary-doctor').prop('checked', false);
+        $('#pms-allow-home-publication').prop('checked', false);
         $('#pms-enable-user-access').prop('checked', true);
         $('#pms-can-access-admin').prop('checked', false);
         $('input[name="pms_access_level"][value="scoped"]').prop('checked', true);
@@ -1148,6 +1152,7 @@
         $('#pms-notes').val(item.notes || '');
         $('#pms-is-active').prop('checked', parseInt(item.is_active || item.active, 10) === 1);
         $('#pms-is-primary-doctor').prop('checked', parseInt(item.is_primary_doctor, 10) === 1);
+        $('#pms-allow-home-publication').prop('checked', parseInt(item.allow_home_publication || 0, 10) === 1);
         $('#pms-enable-user-access').prop('checked', parseInt(item.can_access_admin, 10) === 1);
         $('#pms-can-access-admin').prop('checked', parseInt(item.can_access_admin, 10) === 1);
         $('input[name="pms_access_level"][value="scoped"]').prop('checked', true);
@@ -1507,6 +1512,7 @@
 
             if ($('#pms-is-active').is(':checked'))        { fd.append('is_active', 1); }
             if ($('#pms-is-primary-doctor').is(':checked')) { fd.append('is_primary_doctor', 1); }
+            if ($('#pms-allow-home-publication').is(':checked')) { fd.append('allow_home_publication', 1); }
             if (accessEnabled) { fd.append('can_access_admin', 1); }
 
             var $btn = $('#btn-save-medical-staff');

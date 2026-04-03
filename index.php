@@ -5,8 +5,9 @@ error_reporting(E_ALL);
 $page_title = 'Medical Tourism in Colombia | MedTravel';
 $page_description = 'We connect patients from the United States with certified medical providers in Colombia and coordinate flights, accommodation, transportation, meals, and support.';
 $page_canonical = 'https://medtravel.com.co/';
-include('inc/include.php'); 
+include('inc/include.php');
 require_once __DIR__ . '/inc/testimonials.php';
+require_once __DIR__ . '/inc/public_specialists.php';
 
 function home_hero_table_exists_public($conexion) {
     $query = mysqli_query($conexion, "SHOW TABLES LIKE 'home_hero_settings'");
@@ -86,12 +87,86 @@ if (home_hero_table_exists_public($conexion) && home_hero_column_exists_public($
 }
 $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
+$home_specialists = mt_home_specialists_fetch($conexion, 8);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 
     <head>
         <?php echo $head; ?>
+        <style>
+            .home-specialist-card {
+                height: 100%;
+                background: #fff;
+                border-radius: 14px;
+                overflow: hidden;
+                box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+                border: 1px solid rgba(226, 232, 240, 0.9);
+            }
+            .home-specialist-photo,
+            .home-specialist-avatar {
+                width: 100%;
+                height: 320px;
+                object-fit: cover;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .home-specialist-avatar {
+                background: linear-gradient(135deg, #13357b, #1d4ed8);
+                color: #fff;
+                font-size: 72px;
+                font-weight: 700;
+                letter-spacing: 0.06em;
+            }
+            .home-specialist-body {
+                padding: 24px;
+            }
+            .home-specialist-provider {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: #64748b;
+                margin-bottom: 12px;
+            }
+            .home-specialist-provider-logo {
+                width: 28px;
+                height: 28px;
+                object-fit: cover;
+                border-radius: 50%;
+                border: 1px solid #e2e8f0;
+                background: #fff;
+            }
+            .home-specialist-role {
+                color: #13357b;
+                font-weight: 600;
+                margin-bottom: 10px;
+            }
+            .home-specialist-bio {
+                color: #64748b;
+                margin-bottom: 0;
+                min-height: 72px;
+            }
+            .home-specialist-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 16px;
+            }
+            .home-specialist-meta span {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                background: #eff6ff;
+                color: #1d4ed8;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+        </style>
     </head>
 
     <body>
@@ -607,6 +682,53 @@ $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo 
             </div>
         </div>
         <!-- Servicios Detallados End -->
+        <?php } ?>
+
+        <?php if (!empty($home_specialists)) { ?>
+        <div class="container-fluid guide py-5 bg-light">
+            <div class="container py-5">
+                <div class="mx-auto text-center mb-5" style="max-width: 900px;">
+                    <h5 class="section-title px-3">Our Specialists</h5>
+                    <h1 class="mb-4">Meet the Physicians Behind Our Trusted Provider Network</h1>
+                    <p class="mb-0 text-muted">Discover real doctors and clinical specialists from active providers in the MedTravel network. Each profile below is published with explicit authorization from the provider side to help patients in the United States evaluate who may be involved in their care journey.</p>
+                </div>
+                <div class="row g-4 justify-content-center">
+                    <?php foreach ($home_specialists as $specialist) { ?>
+                    <div class="col-sm-6 col-lg-3">
+                        <article class="home-specialist-card">
+                            <?php if ($specialist['photo'] !== '') { ?>
+                                <img src="<?php echo htmlspecialchars($specialist['photo'], ENT_QUOTES, 'UTF-8'); ?>" class="home-specialist-photo" alt="<?php echo htmlspecialchars($specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php } else { ?>
+                                <div class="home-specialist-avatar"><?php echo htmlspecialchars(mt_home_specialist_initials($specialist['full_name']), ENT_QUOTES, 'UTF-8'); ?></div>
+                            <?php } ?>
+                            <div class="home-specialist-body">
+                                <div class="home-specialist-provider">
+                                    <?php if ($specialist['provider_logo'] !== '') { ?>
+                                        <img src="<?php echo htmlspecialchars($specialist['provider_logo'], ENT_QUOTES, 'UTF-8'); ?>" class="home-specialist-provider-logo" alt="<?php echo htmlspecialchars($specialist['provider_name'], ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?php } ?>
+                                    <span><?php echo htmlspecialchars($specialist['provider_label'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                </div>
+                                <h4 class="mt-2 mb-2"><?php echo htmlspecialchars($specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?></h4>
+                                <p class="home-specialist-role"><?php echo htmlspecialchars($specialist['display_role'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                <p class="home-specialist-bio"><?php echo htmlspecialchars($specialist['bio_short'] !== '' ? $specialist['bio_short'] : 'Part of a trusted Colombian provider available through MedTravel coordination.', ENT_QUOTES, 'UTF-8'); ?></p>
+                                <div class="home-specialist-meta">
+                                    <?php if ($specialist['is_primary_doctor'] === 1) { ?>
+                                        <span>Lead specialist</span>
+                                    <?php } ?>
+                                    <?php if ($specialist['provider_name'] !== '') { ?>
+                                        <span><?php echo htmlspecialchars($specialist['provider_name'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php } ?>
+                                    <?php if ($specialist['provider_city'] !== '') { ?>
+                                        <span><?php echo htmlspecialchars($specialist['provider_city'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php } ?>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                    <?php } ?>
+                </div>
+            </div>
+        </div>
         <?php } ?>
 
         <!-- Call to Action Start -->

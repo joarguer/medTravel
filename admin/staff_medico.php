@@ -349,6 +349,14 @@ $hasMedicalStaffJs   = is_file(__DIR__ . '/js/provider_medical_staff.js');
                                 <textarea class="form-control" id="pms-bio-short" name="bio_short" rows="3"></textarea>
                                 <span class="help-block"><i class="fa fa-globe"></i> Write in English — this text may be shown to patients on the platform.</span>
                             </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="mt-checkbox mt-checkbox-outline">
+                                    <input type="checkbox" id="pms-allow-home-publication" name="allow_home_publication" value="1" />
+                                    Autorizo publicar la imagen y el perfil profesional de este staff en la homepage pública de MedTravel para promocionar al prestador y su equipo médico.
+                                    <span></span>
+                                </label>
+                                <span class="help-block">Solo los perfiles activos con esta autorización explícita podrán mostrarse en la sección pública <strong>Our Specialists</strong>.</span>
+                            </div>
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">

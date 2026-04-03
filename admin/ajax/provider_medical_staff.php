@@ -2490,6 +2490,7 @@ switch ($action) {
         $notes = pms_clean_long_text($_POST['notes'] ?? '');
         $isPrimaryDoctor = pms_requested_flag('is_primary_doctor');
         $isActive = isset($_POST['is_active']) ? pms_requested_flag('is_active') : pms_requested_flag('active');
+        $allowHomePublication = pms_requested_flag('allow_home_publication');
         $sortOrderRaw = trim((string)($_POST['sort_order'] ?? ''));
         $sortOrder = ($sortOrderRaw === '')
             ? ($currentRow ? (int)($currentRow['sort_order'] ?? 0) : pms_next_sort_order($conexion, $providerId))
@@ -2640,6 +2641,11 @@ switch ($action) {
                     $types .= 'i';
                     $params[] = $sortOrder;
                 }
+                if (provider_staff_table_has_column($conexion, 'allow_home_publication')) {
+                    $fields[] = 'allow_home_publication = ?';
+                    $types .= 'i';
+                    $params[] = $allowHomePublication;
+                }
                 if (provider_staff_table_has_column($conexion, 'professional_license')) {
                     $fields[] = 'professional_license = ?';
                     $types .= 's';
@@ -2747,6 +2753,12 @@ switch ($action) {
                     $placeholders[] = '?';
                     $types .= 'i';
                     $params[] = $sortOrder;
+                }
+                if (provider_staff_table_has_column($conexion, 'allow_home_publication')) {
+                    $columns[] = 'allow_home_publication';
+                    $placeholders[] = '?';
+                    $types .= 'i';
+                    $params[] = $allowHomePublication;
                 }
                 if (provider_staff_table_has_column($conexion, 'professional_license')) {
                     $columns[] = 'professional_license';

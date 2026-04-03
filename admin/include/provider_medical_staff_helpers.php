@@ -105,6 +105,7 @@ if (!function_exists('provider_staff_select_columns')) {
             provider_staff_table_has_column($conexion, 'email') ? ($alias . '.email') : "'' AS email",
             provider_staff_table_has_column($conexion, 'is_primary_doctor') ? ($alias . '.is_primary_doctor') : '0 AS is_primary_doctor',
             provider_staff_status_select_expr($conexion, $alias) . ' AS is_active',
+            provider_staff_table_has_column($conexion, 'allow_home_publication') ? ($alias . '.allow_home_publication') : '0 AS allow_home_publication',
             provider_staff_sort_select_expr($conexion, $alias) . ' AS sort_order',
             provider_staff_table_has_column($conexion, 'professional_license') ? ($alias . '.professional_license') : 'NULL AS professional_license',
             provider_staff_table_has_column($conexion, 'clinic_name') ? ($alias . '.clinic_name') : 'NULL AS clinic_name',
@@ -137,6 +138,7 @@ if (!function_exists('provider_staff_normalize_row')) {
         $row['notes'] = (string)($row['notes'] ?? '');
         $row['is_primary_doctor'] = ((int)($row['is_primary_doctor'] ?? 0) === 1) ? 1 : 0;
         $row['is_active'] = ((int)($row['is_active'] ?? $row['active'] ?? 1) === 1) ? 1 : 0;
+        $row['allow_home_publication'] = ((int)($row['allow_home_publication'] ?? 0) === 1) ? 1 : 0;
         $row['active'] = $row['is_active'];
         $row['sort_order'] = isset($row['sort_order']) && $row['sort_order'] !== null && $row['sort_order'] !== ''
             ? (int)$row['sort_order']
