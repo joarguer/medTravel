@@ -399,6 +399,11 @@ if ($flow === 'addon' && !empty($addon_route)) {
             border: 1px solid #fdba74;
             color: #9a3412;
         }
+        .contact-completion-note.is-complete {
+            background: #ecfdf5;
+            border-color: #86efac;
+            color: #166534;
+        }
         .contact-required-indicator {
             color: #dc2626;
             font-weight: 700;
@@ -680,19 +685,19 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 <?php echo htmlspecialchars($submission_message ?: 'Please review the form.'); ?>
             </div>
         <?php endif; ?>
-        <div class="wizard-summary<?php echo $step1_recovery_needed ? ' is-incomplete' : ''; ?>">
+        <div id="wizard-step1-summary" class="wizard-summary<?php echo $step1_recovery_needed ? ' is-incomplete' : ''; ?>">
             <?php if (!$step1_recovery_needed): ?>
-                <h2>Step 1 completed</h2>
-                <p>We captured your contact context so we can continue with the wizard.</p>
+                <h2 id="wizard-step1-summary-title">Step 1 ready</h2>
+                <p id="wizard-step1-summary-copy">Required Step 1 details are ready so you can continue with the wizard.</p>
                 <p><strong>Name:</strong> <?php echo htmlspecialchars($contact_name); ?></p>
                 <p><strong>Email:</strong> <?php echo htmlspecialchars($contact_email); ?></p>
                 <?php if ($contact_phone !== ''): ?>
                     <p><strong>Phone:</strong> <?php echo htmlspecialchars($contact_phone); ?></p>
                 <?php endif; ?>
             <?php else: ?>
-                <h2>Step 1 incomplete</h2>
-                <p>We kept your selected service context, but we still need the required Step 1 details before submitting.</p>
-                <div class="contact-completion-note">
+                <h2 id="wizard-step1-summary-title">Step 1 incomplete</h2>
+                <p id="wizard-step1-summary-copy">We kept your selected service context, but we still need the required Step 1 details before submitting.</p>
+                <div id="wizard-contact-completion-note" class="contact-completion-note">
                     <i class="fas fa-exclamation-circle me-2"></i>
                     Complete the required contact data and consent items here without restarting the booking flow.
                 </div>
@@ -1051,7 +1056,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                         <input type="hidden" name="<?php echo $_utmK; ?>" value="<?php echo htmlspecialchars((string)($booking[$_utmK] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                         <?php endforeach; ?>
                         <?php if ($step1_recovery_needed): ?>
-                            <div class="alert alert-warning mb-4" role="alert">
+                            <div id="wizard-contact-submit-warning" class="alert alert-warning mb-4" role="alert">
                                 <i class="fas fa-user-check me-2"></i>Please complete the required Step 1 details above before sending this request.
                             </div>
                         <?php endif; ?>
@@ -1355,9 +1360,40 @@ if ($flow === 'addon' && !empty($addon_route)) {
         }
 
         function updateWizardContactGateState() {
+            const step1Complete = isWizardStep1Complete();
             const submitButton = document.getElementById('wizard-submit-button');
             if (submitButton) {
-                submitButton.disabled = !isWizardStep1Complete();
+                submitButton.disabled = !step1Complete;
+            }
+
+            const summary = document.getElementById('wizard-step1-summary');
+            if (summary) {
+                summary.classList.toggle('is-incomplete', !step1Complete);
+            }
+
+            const summaryTitle = document.getElementById('wizard-step1-summary-title');
+            if (summaryTitle) {
+                summaryTitle.textContent = step1Complete ? 'Step 1 ready' : 'Step 1 incomplete';
+            }
+
+            const summaryCopy = document.getElementById('wizard-step1-summary-copy');
+            if (summaryCopy) {
+                summaryCopy.textContent = step1Complete
+                    ? 'Required Step 1 details are ready. You can still review or edit them below before submitting.'
+                    : 'We kept your selected service context, but we still need the required Step 1 details before submitting.';
+            }
+
+            const completionNote = document.getElementById('wizard-contact-completion-note');
+            if (completionNote) {
+                completionNote.classList.toggle('is-complete', step1Complete);
+                completionNote.innerHTML = step1Complete
+                    ? '<i class="fas fa-check-circle me-2"></i>Required contact data and consent items are complete. You can still update them below if needed.'
+                    : '<i class="fas fa-exclamation-circle me-2"></i>Complete the required contact data and consent items here without restarting the booking flow.';
+            }
+
+            const submitWarning = document.getElementById('wizard-contact-submit-warning');
+            if (submitWarning) {
+                submitWarning.classList.toggle('d-none', step1Complete);
             }
 
             const gateMessage = document.getElementById('wizard-contact-gate-message');
@@ -1365,7 +1401,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
                 return;
             }
 
-            if (isWizardStep1Complete()) {
+            if (step1Complete) {
                 gateMessage.className = 'alert alert-success contact-gate-message mb-0';
                 gateMessage.innerHTML = '<i class="fas fa-check-circle me-2"></i>Required Step 1 details are ready. Your selected offer and service context remain preserved.';
                 return;
