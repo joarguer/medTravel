@@ -80,8 +80,22 @@ function get_required_permission_for_script($script_name) {
     return isset($map[$script_name]) ? $map[$script_name] : null;
 }
 
+function is_script_forbidden_for_current_session($script_name) {
+    if ($script_name === 'clientes.php' && function_exists('is_administrative_session') && is_administrative_session()) {
+        return true;
+    }
+    return false;
+}
+
 $current = basename($_SERVER['PHP_SELF']);
 $required_permission = get_required_permission_for_script($current);
+
+if (is_script_forbidden_for_current_session($current)) {
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    require __DIR__ . '/../error_403.php';
+    exit();
+}
 
 if ($required_permission !== null) {
     if ($current === 'blog_edit.php') {

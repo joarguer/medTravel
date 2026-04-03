@@ -328,7 +328,7 @@ if ($categoriesRes) {
                                         <button type="submit" class="btn btn-primary btn-lg" id="btn-submit-booking">
                                             <i class="fa fa-paper-plane"></i> Create booking &amp; send credentials
                                         </button>
-                                        <a href="booking_requests.php" class="btn btn-default btn-lg" style="margin-left:8px;">Cancel</a>
+                                        <a href="<?php echo htmlspecialchars($assisted_booking_back_href, ENT_QUOTES); ?>" class="btn btn-default btn-lg" style="margin-left:8px;">Cancel</a>
                                     </div>
 
                                 </form>
@@ -350,6 +350,7 @@ if ($categoriesRes) {
 (function () {
     'use strict';
 
+    var assistedBookingBackHref = <?php echo json_encode($assisted_booking_back_href, JSON_UNESCAPED_SLASHES); ?>;
     var categorySelect = document.getElementById('category_id');
     var serviceSelect  = document.getElementById('service_id');
     var servicesLoading = document.getElementById('services-loading');
@@ -531,7 +532,7 @@ if ($categoriesRes) {
                 } else {
                     toastr.success(res.message || 'Booking created successfully.');
                 }
-                setTimeout(function () { window.location = 'booking_requests.php'; }, 2000);
+                setTimeout(function () { window.location = assistedBookingBackHref; }, 2000);
             } else {
                 toastr.error(res.message || 'Could not create booking. Check fields and try again.');
                 btn.disabled = false;

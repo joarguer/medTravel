@@ -42,8 +42,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     ];
 
     $whereParts = ['usuario = ?'];
+    $bindValues = [$identifier];
     if ($loginHasColumn('usuarios', 'email')) {
         $whereParts[] = 'email = ?';
+        $bindValues[] = $identifier;
+    }
+    if ($loginHasColumn('usuarios', 'usrlogin')) {
+        $whereParts[] = 'usrlogin = ?';
+        $bindValues[] = $identifier;
     }
     $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM usuarios WHERE (' . implode(' OR ', $whereParts) . ')';
     if ($loginHasColumn('usuarios', 'is_deleted')) {
@@ -57,10 +63,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         exit;
     }
 
-    if (count($whereParts) > 1) {
-        mysqli_stmt_bind_param($stmt, 'ss', $identifier, $identifier);
+    $bindCount = count($bindValues);
+    if ($bindCount === 3) {
+        mysqli_stmt_bind_param($stmt, 'sss', $bindValues[0], $bindValues[1], $bindValues[2]);
+    } elseif ($bindCount === 2) {
+        mysqli_stmt_bind_param($stmt, 'ss', $bindValues[0], $bindValues[1]);
     } else {
-        mysqli_stmt_bind_param($stmt, 's', $identifier);
+        mysqli_stmt_bind_param($stmt, 's', $bindValues[0]);
     }
     if (!mysqli_stmt_execute($stmt)) {
         mysqli_stmt_close($stmt);
