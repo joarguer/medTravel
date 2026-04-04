@@ -2,8 +2,8 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-$page_title = 'Medical Tourism in Colombia | MedTravel';
-$page_description = 'We connect patients from the United States with certified medical providers in Colombia and coordinate flights, accommodation, transportation, meals, and support.';
+$page_title = 'Medical Care Coordination in Colombia | MedTravel';
+$page_description = 'MedTravel coordinates international patient case reviews with independent providers in Colombia, including scheduling and travel logistics support.';
 $page_canonical = 'https://medtravel.com.co/';
 include('inc/include.php');
 require_once __DIR__ . '/inc/testimonials.php';

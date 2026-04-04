@@ -2,8 +2,8 @@
 include_once(__DIR__ . '/admin/include/conexion.php');
 require_once __DIR__ . '/inc/public_specialists.php';
 
-$page_title = 'Specialists | MedTravel Provider Network';
-$page_description = 'Explore specialists published by active independent providers in the MedTravel network.';
+$page_title = 'Specialists in Colombia | MedTravel Care Coordination Network';
+$page_description = 'Explore specialists from active independent providers in Colombia coordinated through MedTravel for international patient case planning.';
 $page_canonical = 'https://medtravel.com.co/specialists.php';
 
 $specialists = mt_home_specialists_fetch($conexion, 12);
@@ -12,7 +12,7 @@ $page_schema_jsonld = [[
     '@context' => 'https://schema.org',
     '@type' => 'CollectionPage',
     'name' => 'MedTravel Specialists',
-    'description' => 'Profiles of specialists from independent providers coordinated through MedTravel.',
+    'description' => 'Profiles of specialists from independent providers coordinated through MedTravel for medical travel planning.',
     'isPartOf' => ['@id' => 'https://medtravel.com.co/#website'],
     'about' => ['@id' => 'https://medtravel.com.co/#organization'],
 ]];
@@ -42,6 +42,17 @@ include(__DIR__ . '/inc/include.php');
         .sp-role { color: #13357B; font-weight: 600; margin-bottom: 8px; }
         .sp-provider { color: #64748b; font-size: 14px; margin-bottom: 8px; }
         .sp-bio { color: #475569; font-size: 14px; margin-bottom: 0; }
+        .sp-trust-list {
+            margin: 0;
+            padding-left: 18px;
+            color: #334155;
+        }
+        .sp-card-cta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
     </style>
 </head>
 <body>
@@ -58,7 +69,7 @@ include(__DIR__ . '/inc/include.php');
     <div class="container-fluid bg-breadcrumb">
         <div class="container text-center py-5" style="max-width: 900px;">
             <h1 class="text-white display-4 mb-3">Our Specialists</h1>
-            <p class="text-white mb-0">Specialists from independent providers coordinated through MedTravel.</p>
+            <p class="text-white mb-0">Independent specialists from active providers in Colombia, presented for transparent care coordination planning.</p>
         </div>
     </div>
 
@@ -66,10 +77,17 @@ include(__DIR__ . '/inc/include.php');
         <div class="row justify-content-center mb-4">
             <div class="col-lg-10">
                 <div class="p-4 bg-light rounded">
+                    <h2 class="h4 mb-3">Trusted specialist visibility for your case review</h2>
                     <p class="mb-2"><strong>Important:</strong> MedTravel coordinates communication and planning. We are not a hospital or clinic.</p>
-                    <p class="mb-0">Clinical evaluation and treatment are delivered by independent providers and specialists.</p>
+                    <p class="mb-3">Clinical evaluation and treatment are delivered by independent providers and specialists.</p>
+                    <ul class="sp-trust-list mb-3">
+                        <li>Profiles shown here come from the same public specialist source used on Home and About.</li>
+                        <li>Specialist publication is controlled by provider-side authorization settings.</li>
+                        <li>MedTravel supports coordination, logistics, and patient communication across the journey.</li>
+                    </ul>
                     <div class="d-flex gap-2 flex-wrap mt-3">
                         <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Request care coordination</a>
+                        <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
                         <a href="/how-medtravel-works.php" class="btn btn-outline-primary rounded-pill py-2 px-4">How MedTravel works</a>
                         <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
                     </div>
@@ -91,6 +109,9 @@ include(__DIR__ . '/inc/include.php');
                                 <p class="sp-role"><?php echo htmlspecialchars((string)$specialist['display_role'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <p class="sp-provider"><?php echo htmlspecialchars((string)$specialist['provider_label'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <p class="sp-bio"><?php echo htmlspecialchars((string)($specialist['bio_short'] !== '' ? $specialist['bio_short'] : 'Independent specialist available through MedTravel coordination.'), ENT_QUOTES, 'UTF-8'); ?></p>
+                                <div class="sp-card-cta">
+                                    <a href="/booking.php#booking-section" class="btn btn-sm btn-primary rounded-pill">Start your case review</a>
+                                </div>
                             </div>
                         </article>
                     </div>

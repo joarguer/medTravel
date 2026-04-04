@@ -157,7 +157,9 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
                         <p class="text-white mb-0"><strong>What MedTravel does not do:</strong> direct medical treatment, clinical diagnosis, or medical decision-making.</p>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        <a href="offers.php" class="btn btn-light text-primary rounded-pill py-3 px-4">Request care coordination</a>
+                        <a href="booking.php#booking-section" class="btn btn-light text-primary rounded-pill py-3 px-4">Request care coordination</a>
+                        <a href="specialists.php" class="btn btn-outline-light rounded-pill py-3 px-4">View specialists</a>
+                        <a href="services.php" class="btn btn-outline-light rounded-pill py-3 px-4">View services</a>
                         <a href="faq.php" class="btn btn-outline-light rounded-pill py-3 px-4">Review FAQ</a>
                         <a href="how-medtravel-works.php" class="btn btn-outline-light rounded-pill py-3 px-4">How it works</a>
                     </div>

@@ -21,6 +21,7 @@ $urls = [
     ['loc' => $baseUrl . '/contact.php', 'changefreq' => 'monthly', 'priority' => '0.7'],
     ['loc' => $baseUrl . '/booking.php', 'changefreq' => 'weekly', 'priority' => '0.8'],
     ['loc' => $baseUrl . '/blog.php', 'changefreq' => 'daily', 'priority' => '0.8'],
+    ['loc' => $baseUrl . '/privacy/', 'changefreq' => 'yearly', 'priority' => '0.5'],
     ['loc' => $baseUrl . '/terms.php', 'changefreq' => 'yearly', 'priority' => '0.4'],
     ['loc' => $baseUrl . '/data-deletion.php', 'changefreq' => 'yearly', 'priority' => '0.4'],
 ];

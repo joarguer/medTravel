@@ -28,14 +28,14 @@ if($res_catalog){
 }
 
 $seo_source_title = trim((string)$services_header_title);
-$page_title = ($seo_source_title !== '' ? $seo_source_title : 'Our Services') . ' | MedTravel';
+$page_title = 'Medical Travel Coordination Services | MedTravel';
 $seo_description = trim((string)$description);
 if ($seo_description === '') {
     $seo_description = trim((string)$subtitle);
 }
 $page_description = $seo_description !== ''
     ? $seo_description
-    : 'Medical tourism services in Colombia. We connect international patients with trusted providers and coordinate their care.';
+    : 'Explore MedTravel coordination services for international patients connecting with independent providers in Colombia.';
 $page_canonical = 'https://medtravel.com.co/services.php';
 
 $services_schema_items = [];
@@ -229,6 +229,7 @@ function format_price($amount, $currency){
                             <p class="mb-0"><strong>Clinical clarity:</strong> MedTravel is not a hospital or clinic. Medical care is provided by independent providers and specialists.</p>
                             <div class="d-flex gap-2 flex-wrap mt-3">
                                 <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
+                                <a href="/specialists.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View specialists</a>
                                 <a href="/how-medtravel-works.php" class="btn btn-outline-primary rounded-pill py-2 px-4">How MedTravel works</a>
                                 <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
                             </div>
