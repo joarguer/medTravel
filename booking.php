@@ -167,7 +167,7 @@ $booking_testimonials = mt_testimonials_fetch_approved($conexion, 2);
                         </ul>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        <a href="booking.php#booking-section" class="btn btn-light text-primary rounded-pill py-3 px-4">Request care coordination</a>
+                        <a href="#booking-section" class="btn btn-light text-primary rounded-pill py-3 px-4">Request care coordination</a>
                         <a href="specialists.php" class="btn btn-outline-light rounded-pill py-3 px-4">View specialists</a>
                         <a href="services.php" class="btn btn-outline-light rounded-pill py-3 px-4">View services</a>
                         <a href="for-us-patients.php" class="btn btn-outline-light rounded-pill py-3 px-4">For U.S. patients</a>

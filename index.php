@@ -88,7 +88,6 @@ if (home_hero_table_exists_public($conexion) && home_hero_column_exists_public($
 $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $home_specialists = mt_home_specialists_fetch($conexion, 8);
-$home_testimonials = mt_testimonials_fetch_approved($conexion, 2);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -357,30 +356,6 @@ $home_testimonials = mt_testimonials_fetch_approved($conexion, 2);
                     <a href="/medical-travel-armenia-colombia.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">Armenia, Colombia</a>
                     <a href="/for-us-patients.php" class="btn btn-outline-primary rounded-pill py-2 px-4">For U.S. patients</a>
                 </div>
-                <?php if (!empty($home_testimonials)) { ?>
-                <div class="row g-3 mt-3">
-                    <div class="col-12">
-                        <div class="p-3 bg-light border rounded text-center">
-                            <h3 class="h6 mb-2">Patient feedback on coordination clarity</h3>
-                            <p class="text-muted mb-0">Real approved testimonials focused on communication, planning, and next steps.</p>
-                        </div>
-                    </div>
-                    <?php foreach ($home_testimonials as $testimonial) { ?>
-                    <div class="col-md-6">
-                        <div class="p-3 h-100 bg-white border rounded">
-                            <div class="mb-2"><?php echo mt_testimonials_render_stars((int)($testimonial['rating'] ?? 5)); ?></div>
-                            <p class="mb-2 text-muted">"<?php echo mt_testimonials_escape((string)($testimonial['comment'] ?? '')); ?>"</p>
-                            <p class="mb-0 small text-secondary">
-                                <?php echo mt_testimonials_escape((string)($testimonial['client_name'] ?? 'Patient')); ?>
-                                <?php if (!empty($testimonial['client_location'])) { ?>
-                                    - <?php echo mt_testimonials_escape((string)$testimonial['client_location']); ?>
-                                <?php } ?>
-                            </p>
-                        </div>
-                    </div>
-                    <?php } ?>
-                </div>
-                <?php } ?>
             </div>
         </div>
         <!-- Cómo Funciona End -->
