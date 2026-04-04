@@ -112,6 +112,35 @@ $organization_schema = [
     'name' => 'MedTravel',
     'url' => 'https://medtravel.com.co/',
     'logo' => 'https://medtravel.com.co/img/site/logo_800_182.png',
+    'description' => 'MedTravel is a medical travel coordination platform that helps international patients connect with independent clinics and specialists in Colombia. MedTravel coordinates the journey and logistics; medical care is provided by independent providers.',
+    'areaServed' => [
+        [
+            '@type' => 'AdministrativeArea',
+            'name' => 'Florida, United States',
+        ],
+        [
+            '@type' => 'Country',
+            'name' => 'United States',
+        ],
+        [
+            '@type' => 'Country',
+            'name' => 'Colombia',
+        ],
+    ],
+    'contactPoint' => [
+        [
+            '@type' => 'ContactPoint',
+            'contactType' => 'customer support',
+            'telephone' => '+1-561-698-8069',
+            'email' => 'info@medtravel.com.co',
+            'availableLanguage' => ['English', 'Spanish'],
+            'areaServed' => ['US', 'CO'],
+        ],
+    ],
+    'sameAs' => [
+        'https://www.facebook.com/share/181t1WGHUw/?mibextid=wwXIfr',
+        'https://www.instagram.com/medtravel.usa?igsh=NzJoc2Y1dTdmdDBx&utm_source=qr',
+    ],
 ];
 
 $website_schema = [
@@ -204,6 +233,8 @@ $logo = '<a href="index.php" class="navbar-brand p-0">
 
 $company_links = [
     ['label' => 'About',     'path' => 'about.php'],
+    ['label' => 'How It Works', 'path' => 'how-medtravel-works.php'],
+    ['label' => 'FAQ',       'path' => 'faq.php'],
     ['label' => 'Services',  'path' => 'services.php'],
     ['label' => 'Blog',      'path' => 'blog.php'],
     ['label' => 'Press',     'path' => 'press.php'],
@@ -269,12 +300,20 @@ $services_active = (in_array($current_page, ['offers.php', 'offer_detail.php', '
 $blog_active = (in_array($current_page, ['blog.php', 'blog_post.php'])) ? 'active' : '';
 $booking_active = ($current_page == 'booking.php') ? 'active' : '';
 $contact_active = ($current_page == 'contact.php') ? 'active' : '';
+$resources_active = (in_array($current_page, ['faq.php', 'how-medtravel-works.php'])) ? 'active' : '';
 
 $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
     <div class="navbar-nav ms-auto py-0">
         <a href="index.php" class="nav-item nav-link ' . $home_active . '">Home</a>
         <a href="about.php" class="nav-item nav-link ' . $about_active . '">About</a>
         <a href="services.php" class="nav-item nav-link ' . $services_active . '">Services</a>
+        <div class="nav-item dropdown">
+            <a href="#" class="nav-link dropdown-toggle ' . $resources_active . '" data-bs-toggle="dropdown">Resources</a>
+            <div class="dropdown-menu m-0">
+                <a href="how-medtravel-works.php" class="dropdown-item"><i class="fas fa-route me-2"></i>How MedTravel Works</a>
+                <a href="faq.php" class="dropdown-item"><i class="fas fa-question-circle me-2"></i>FAQ</a>
+            </div>
+        </div>
         <a href="blog.php" class="nav-item nav-link ' . $blog_active . '">Blog</a>
         <a href="booking.php" class="nav-item nav-link ' . $booking_active . '">Booking</a>
         <div class="nav-item dropdown">

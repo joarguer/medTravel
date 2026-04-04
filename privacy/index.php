@@ -1,22 +1,9 @@
 <?php
+$page_title = 'MedTravel | Privacy Policy';
+$page_description = 'Learn how MedTravel collects, uses, and shares information for medical coordination services, including cross-border data transfers and payment processing.';
+$page_canonical = 'https://medtravel.com.co/privacy/';
+$page_meta_extra = '<base href="/">';
 include(__DIR__ . '/../inc/include.php');
-
-// Override base <title> and meta description for SEO
-$head_privacy = str_replace(
-    ['<title>MedTravel - Tourism and Health </title>', '<meta content="" name="description">'],
-    [
-        '<title>MedTravel | Privacy Policy</title>',
-        '<meta content="Learn how MedTravel collects, uses, and shares information for medical coordination services, including cross-border data transfers and payments processed in the United States." name="description">'
-    ],
-    $head
-);
-
-// Ensure assets resolve from the site root when served from /privacy/
-$head_privacy = str_replace(
-    '<meta content="width=device-width, initial-scale=1.0" name="viewport">',
-    '<meta content="width=device-width, initial-scale=1.0" name="viewport">' . "\n    <base href=\"/\">",
-    $head_privacy
-);
 
 // Version string (do NOT break if constants missing)
 $privacy_version = defined('PRIVACY_VERSION') ? PRIVACY_VERSION : 'v1.2-FL-USA';
@@ -25,7 +12,7 @@ $effective_date = 'April 1, 2026';
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <?php echo $head_privacy; ?>
+        <?php echo $head; ?>
     </head>
     <body>
         <!-- Spinner Start -->

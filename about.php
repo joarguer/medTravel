@@ -1,5 +1,6 @@
 <?php
 include_once(__DIR__ . '/admin/include/conexion.php');
+require_once __DIR__ . '/inc/public_specialists.php';
 $busca_header = mysqli_query($conexion,"SELECT * FROM about_header WHERE activo = '0' ORDER BY id ASC LIMIT 1");
 $rst_header = mysqli_fetch_array($busca_header);
 $busca_us = mysqli_query($conexion,"SELECT * FROM about_us WHERE activo = '0' ORDER BY id ASC LIMIT 1");
@@ -16,6 +17,7 @@ if ($about_description === '') {
 $page_description = mb_substr($about_description, 0, 160, 'UTF-8');
 $page_canonical = 'https://medtravel.com.co/about.php';
 include('inc/include.php');
+$about_specialists = mt_home_specialists_fetch($conexion, 8);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -84,7 +86,7 @@ include('inc/include.php');
                             }
                             ?>
                         </div>
-                        <a class="btn btn-primary rounded-pill py-3 px-5 mt-2" href="">Read More</a>
+                        <a class="btn btn-primary rounded-pill py-3 px-5 mt-2" href="/how-medtravel-works.php">How MedTravel Works</a>
                     </div>
                 </div>
             </div>
@@ -99,6 +101,30 @@ include('inc/include.php');
                     <h1 class="mb-0">Meet Our Specialist</h1>
                 </div>
                 <div class="row g-4 justify-content-center">
+                    <?php if (!empty($about_specialists)) { ?>
+                    <?php foreach ($about_specialists as $specialist) { ?>
+                    <div class="col-sm-6 col-md-4 col-lg-3">
+                        <div class="guide-item h-100 d-flex flex-column">
+                            <div class="guide-img flex-shrink-0">
+                                <div class="guide-img-efects">
+                                    <?php $specialistPhoto = trim((string)($specialist['photo'] ?? '')); ?>
+                                    <?php if ($specialistPhoto !== '') { ?>
+                                    <img src="<?php echo htmlspecialchars($specialistPhoto, ENT_QUOTES, 'UTF-8'); ?>" class="img-fluid w-100 rounded-top" alt="<?php echo htmlspecialchars($specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?>" style="height: 320px; object-fit: cover;">
+                                    <?php } else { ?>
+                                    <img src="img/site/placeholder-medical.jpg" class="img-fluid w-100 rounded-top" alt="<?php echo htmlspecialchars($specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?>" style="height: 320px; object-fit: cover;">
+                                    <?php } ?>
+                                </div>
+                            </div>
+                            <div class="guide-title text-center rounded-bottom p-4 flex-grow-1 d-flex flex-column justify-content-center">
+                                <div class="guide-title-inner">
+                                    <h4 class="mt-2 mb-3"><?php echo htmlspecialchars($specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?></h4>
+                                    <p class="mb-0 text-muted"><?php echo htmlspecialchars($specialist['display_role'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php } ?>
+                    <?php } else { ?>
                     <?php 
                     $busca_specialist = mysqli_query($conexion,"SELECT * FROM specialist_list WHERE activo = '0' ORDER BY id ASC");
                     while($rst_specialist = mysqli_fetch_array($busca_specialist)){
@@ -126,6 +152,7 @@ include('inc/include.php');
                     <?php
                     }
                     ?>
+                    <?php } ?>
                 </div>
             </div>
         </div>
