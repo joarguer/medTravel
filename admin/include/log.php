@@ -317,6 +317,38 @@ function login_record_legacy_visit($conexion, $visitante, $usuario, $ip) {
     mysqli_stmt_close($stmt);
 }
 
+function login_cleanup_stale_legacy_sessions($conexion, $usuario) {
+    if (
+        !$conexion
+        || trim((string)$usuario) === ''
+        || !login_table_exists($conexion, 'sessiones_activas')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'usuario')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'fecha')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'hora')
+    ) {
+        return;
+    }
+
+    $cutoff = date('Y-m-d H:i:s', time() - 18000 - MEDTRAVEL_SESSION_MAX_LIFETIME);
+    $stmt = mysqli_prepare(
+        $conexion,
+        "DELETE FROM sessiones_activas
+          WHERE usuario = ?
+            AND (
+                fecha IS NULL
+                OR hora IS NULL
+                OR TIMESTAMP(fecha, hora) < ?
+            )"
+    );
+    if (!$stmt) {
+        return;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'ss', $usuario, $cutoff);
+    mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+}
+
 function login_register_legacy_session($conexion, $visitante, $usuario, $ip) {
     if (
         !$conexion
@@ -334,11 +366,20 @@ function login_register_legacy_session($conexion, $visitante, $usuario, $ip) {
         return true;
     }
 
-    $stmt = mysqli_prepare($conexion, 'SELECT visitante, usuario, ip FROM sessiones_activas WHERE visitante = ? AND usuario = ? LIMIT 1');
+    login_cleanup_stale_legacy_sessions($conexion, $usuario);
+
+    $stmt = mysqli_prepare(
+        $conexion,
+        'SELECT id, visitante, usuario, ip, fecha, hora
+           FROM sessiones_activas
+          WHERE usuario = ?
+          ORDER BY fecha DESC, hora DESC, id DESC
+          LIMIT 1'
+    );
     if (!$stmt) {
         return true;
     }
-    mysqli_stmt_bind_param($stmt, 'ss', $visitante, $usuario);
+    mysqli_stmt_bind_param($stmt, 's', $usuario);
     if (!mysqli_stmt_execute($stmt)) {
         mysqli_stmt_close($stmt);
         return true;
@@ -349,6 +390,9 @@ function login_register_legacy_session($conexion, $visitante, $usuario, $ip) {
 
     $existingUser = (string)($existing['usuario'] ?? '');
     $existingIp = (string)($existing['ip'] ?? '');
+    if ($existing && $existingUser === $usuario && $existingIp !== '' && $existingIp === $ip) {
+        return true;
+    }
     if ($existing && $existingUser === $usuario && $existingIp !== '' && $existingIp !== $ip) {
         return false;
     }
