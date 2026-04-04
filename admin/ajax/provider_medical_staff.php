@@ -948,7 +948,7 @@ function pms_build_staff_welcome_email_payload($staffName, $providerName, $login
             'text' => 'Create your password',
             'url' => $setPasswordUrl,
         ],
-        'MedTravel Patient Care'
+        'MedTravel Provider Team'
     );
 
     $alt = "Hello {$staffName},\n\n"
@@ -2865,7 +2865,17 @@ switch ($action) {
         $responseStatus = $staffId > 0 ? 'updated' : 'created';
         $postCommitWarnings = [];
         $mailMeta = null;
-        if (!empty($accessProvision['enabled']) && $linkedUserId > 0) {
+        // Send welcome email only when access is newly provisioned:
+        // - new user created, OR existing user newly linked (not a re-save of existing link).
+        $isNewProvision = !empty($accessProvision['enabled']) && $linkedUserId > 0
+            && (
+                ($accessProvision['provision_status'] ?? '') === 'created_user'
+                || (
+                    ($accessProvision['provision_status'] ?? '') === 'linked_existing_user'
+                    && $currentLinkedUserId !== $linkedUserId
+                )
+            );
+        if ($isNewProvision) {
             $tokenResult = pms_issue_staff_access_token($conexion, $linkedUserId);
             if (empty($tokenResult['ok'])) {
                 $responseStatus = ($accessProvision['provision_status'] === 'created_user')
