@@ -472,12 +472,20 @@ medtravel_session_mark_login();
 $role_id_val = (isset($fil['role_id']) && is_numeric($fil['role_id'])) ? intval($fil['role_id']) : normalize_role_value(v($fil, 'rol', ''));
 $provider_id_val = !empty($fil['provider_id']) ? intval($fil['provider_id']) : 0;
 $service_provider_id_val = !empty($fil['service_provider_id']) ? intval($fil['service_provider_id']) : 0;
+$linked_staff_context = function_exists('mt_db_fetch_linked_staff_context')
+    ? mt_db_fetch_linked_staff_context($conexion, (int)v($fil, 'id', 0))
+    : null;
+$is_linked_staff_login = !empty($linked_staff_context['provider_id']);
 $is_protected_superuser = ((int)v($fil, 'id', 0) === 1);
 $is_global_admin_role = ($is_protected_superuser || $role_id_val === ROLE_ADMIN || (string)v($fil, 'ppal', '0') === '1');
 $is_administrative_panel_role = ($role_id_val === ROLE_ADMINISTRATIVE);
 $is_medical_role = in_array($role_id_val, [ROLE_PROVIDER, ROLE_PROVIDER_ADMIN], true);
 $is_complementary_role = ($role_id_val === ROLE_COMPLEMENTARY_ADMIN);
 $is_client_role = ($role_id_val === ROLE_CLIENT);
+
+if ($provider_id_val <= 0 && $is_linked_staff_login) {
+    $provider_id_val = (int)$linked_staff_context['provider_id'];
+}
 
 if ($is_protected_superuser) {
     $provider_id_val = 0;
@@ -567,6 +575,10 @@ if ($is_protected_superuser) {
                 mysqli_stmt_close($stmt);
             }
         }
+
+        if (empty($_SESSION['provider_id']) && $is_linked_staff_login) {
+            $_SESSION['provider_id'] = (int)$linked_staff_context['provider_id'];
+        }
     }
 
     if ($service_provider_id_val > 0) {
@@ -598,9 +610,13 @@ if (!login_register_legacy_session($conexion, $visitante, $usrlogin, $ip)) {
     login_redirect_error('session_conflict', array('session' => 'error'), $fil);
 }
 
-$default_next = $is_client_role ? '../../client/index.php' : '../index.php';
+$default_next = $is_client_role
+    ? '../../client/index.php'
+    : ($is_linked_staff_login ? '../my_booking_requests.php' : '../index.php');
 if ((int)v($fil, 'cambio_password', 0) === 1) {
-    $next = $is_client_role ? '../../client/index.php?password_change=1' : '../index.php#cambio_password';
+    $next = $is_client_role
+        ? '../../client/index.php?password_change=1'
+        : '../index.php#cambio_password';
     if (login_is_debug_mode()) {
         login_debug_response(true, 'ok', $fil, array('next' => $next));
     }

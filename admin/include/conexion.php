@@ -136,6 +136,53 @@ if (!function_exists('mt_db_table_has_column')) {
     }
 }
 
+if (!function_exists('mt_db_fetch_linked_staff_context')) {
+    function mt_db_fetch_linked_staff_context($conexion, $userId) {
+        static $cache = [];
+        $userId = (int)$userId;
+        if (!$conexion || $userId <= 0) return null;
+        if (array_key_exists($userId, $cache)) return $cache[$userId];
+        if (
+            !mt_db_table_exists($conexion, 'provider_medical_staff')
+            || !mt_db_table_has_column($conexion, 'provider_medical_staff', 'provider_id')
+            || !mt_db_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')
+            || !mt_db_table_has_column($conexion, 'provider_medical_staff', 'can_access_admin')
+        ) {
+            $cache[$userId] = null;
+            return null;
+        }
+
+        $statusColumn = '';
+        if (mt_db_table_has_column($conexion, 'provider_medical_staff', 'is_active')) {
+            $statusColumn = 'is_active';
+        } elseif (mt_db_table_has_column($conexion, 'provider_medical_staff', 'active')) {
+            $statusColumn = 'active';
+        }
+
+        $sql = 'SELECT pms.id, pms.provider_id, pms.linked_user_id
+                  FROM provider_medical_staff pms
+                 WHERE pms.linked_user_id = ?
+                   AND pms.can_access_admin = 1';
+        if ($statusColumn !== '') {
+            $sql .= ' AND pms.`' . $statusColumn . '` = 1';
+        }
+        $sql .= ' ORDER BY pms.id ASC LIMIT 1';
+
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            $cache[$userId] = null;
+            return null;
+        }
+        mysqli_stmt_bind_param($stmt, 'i', $userId);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+        mysqli_stmt_close($stmt);
+        $cache[$userId] = $row ?: null;
+        return $cache[$userId];
+    }
+}
+
 // Helper: requiere sesión válida para endpoints AJAX del admin
 function require_login_ajax(){
 	medtravel_session_start();
@@ -275,6 +322,17 @@ function require_login_ajax(){
 				// también escribir en log local dev
 				@file_put_contents(__DIR__ . '/../logs/dev.log', date('Y-m-d H:i:s') . " - require_login_ajax provider_users prepare error: " . mysqli_error($conexion) . "\n", FILE_APPEND | LOCK_EX);
 			}
+	}
+
+	if (
+		!$is_protected_superuser
+		&& empty($_SESSION['provider_id'])
+		&& function_exists('mt_db_fetch_linked_staff_context')
+	) {
+		$linkedStaffContext = mt_db_fetch_linked_staff_context($conexion, (int)$user_id);
+		if (!empty($linkedStaffContext['provider_id'])) {
+			$_SESSION['provider_id'] = (int)$linkedStaffContext['provider_id'];
+		}
 	}
 }
 ?> 
