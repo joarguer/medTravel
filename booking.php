@@ -146,7 +146,7 @@ $booking_testimonials = mt_testimonials_fetch_approved($conexion, 2);
     </div>
 
     <!-- Tour Booking Start -->
-    <div class="container-fluid booking py-5" <?php echo $booking_style; ?>>
+    <div id="booking-section" class="container-fluid booking py-5" <?php echo $booking_style; ?>>
         <div class="container py-5">
             <div class="row g-5 align-items-center">
                 <div class="col-lg-6">

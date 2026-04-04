@@ -1,4 +1,5 @@
 <?php
+ob_start();
 header('Content-Type: application/xml; charset=utf-8');
 
 include_once __DIR__ . '/admin/include/conexion.php';
@@ -64,6 +65,10 @@ if (isset($conexion) && $conexion instanceof mysqli) {
             }
         }
     }
+}
+
+if (ob_get_length()) {
+    ob_clean();
 }
 
 echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
