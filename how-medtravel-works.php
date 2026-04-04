@@ -84,6 +84,7 @@ include(__DIR__ . '/inc/include.php');
                     <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4 me-2">Request care coordination</a>
                     <a href="/contact.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">Request assistance</a>
                     <a href="/specialists.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">View specialists</a>
+                    <a href="/for-us-patients.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">For U.S. patients</a>
                     <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">Read FAQ</a>
                     <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
                 </div>

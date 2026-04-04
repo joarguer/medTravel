@@ -233,6 +233,9 @@ $logo = '<a href="index.php" class="navbar-brand p-0">
 
 $company_links = [
     ['label' => 'About',     'path' => 'about.php'],
+    ['label' => 'Medical Travel Colombia', 'path' => 'medical-travel-colombia.php'],
+    ['label' => 'Armenia, Colombia', 'path' => 'medical-travel-armenia-colombia.php'],
+    ['label' => 'For U.S. Patients', 'path' => 'for-us-patients.php'],
     ['label' => 'How It Works', 'path' => 'how-medtravel-works.php'],
     ['label' => 'FAQ',       'path' => 'faq.php'],
     ['label' => 'Specialists', 'path' => 'specialists.php'],
@@ -301,7 +304,7 @@ $services_active = (in_array($current_page, ['offers.php', 'offer_detail.php', '
 $blog_active = (in_array($current_page, ['blog.php', 'blog_post.php'])) ? 'active' : '';
 $booking_active = ($current_page == 'booking.php') ? 'active' : '';
 $contact_active = ($current_page == 'contact.php') ? 'active' : '';
-$resources_active = (in_array($current_page, ['faq.php', 'how-medtravel-works.php', 'specialists.php'])) ? 'active' : '';
+$resources_active = (in_array($current_page, ['faq.php', 'how-medtravel-works.php', 'specialists.php', 'medical-travel-colombia.php', 'medical-travel-armenia-colombia.php', 'for-us-patients.php'])) ? 'active' : '';
 
 $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
     <div class="navbar-nav ms-auto py-0">
@@ -311,6 +314,10 @@ $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
         <div class="nav-item dropdown">
             <a href="#" class="nav-link dropdown-toggle ' . $resources_active . '" data-bs-toggle="dropdown">Resources</a>
             <div class="dropdown-menu m-0">
+                <a href="medical-travel-colombia.php" class="dropdown-item"><i class="fas fa-map-marked-alt me-2"></i>Medical Travel Colombia</a>
+                <a href="medical-travel-armenia-colombia.php" class="dropdown-item"><i class="fas fa-city me-2"></i>Armenia, Colombia</a>
+                <a href="for-us-patients.php" class="dropdown-item"><i class="fas fa-flag-usa me-2"></i>For U.S. Patients</a>
+                <div class="dropdown-divider"></div>
                 <a href="how-medtravel-works.php" class="dropdown-item"><i class="fas fa-route me-2"></i>How MedTravel Works</a>
                 <a href="faq.php" class="dropdown-item"><i class="fas fa-question-circle me-2"></i>FAQ</a>
                 <a href="specialists.php" class="dropdown-item"><i class="fas fa-user-md me-2"></i>Specialists</a>

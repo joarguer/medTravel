@@ -331,6 +331,31 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                         </div>
                     </div>
                 </div>
+                <div class="row g-4 mt-2">
+                    <div class="col-md-4">
+                        <div class="p-4 h-100 bg-white rounded border">
+                            <h3 class="h5 mb-2">Why patients choose MedTravel</h3>
+                            <p class="mb-0 text-muted">Clear coordination, bilingual support, and transparent planning with independent providers in Colombia.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-4 h-100 bg-white rounded border">
+                            <h3 class="h5 mb-2">What to expect after you submit your case</h3>
+                            <p class="mb-0 text-muted">A coordination review, next-step guidance, and provider-aligned planning before your trip.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-4 h-100 bg-white rounded border">
+                            <h3 class="h5 mb-2">Bilingual coordination for international patients</h3>
+                            <p class="mb-0 text-muted">Our team supports English and Spanish communication for patients and families in the U.S.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center mt-4">
+                    <a href="/medical-travel-colombia.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">Medical travel in Colombia</a>
+                    <a href="/medical-travel-armenia-colombia.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">Armenia, Colombia</a>
+                    <a href="/for-us-patients.php" class="btn btn-outline-primary rounded-pill py-2 px-4">For U.S. patients</a>
+                </div>
             </div>
         </div>
         <!-- Cómo Funciona End -->

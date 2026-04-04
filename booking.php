@@ -156,10 +156,19 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
                         <p class="text-white mb-2"><strong>What MedTravel does:</strong> case coordination, provider matching support, scheduling guidance, and travel logistics support.</p>
                         <p class="text-white mb-0"><strong>What MedTravel does not do:</strong> direct medical treatment, clinical diagnosis, or medical decision-making.</p>
                     </div>
+                    <div class="p-3 rounded mb-3" style="background: rgba(0,0,0,0.18); border-left: 3px solid rgba(255,255,255,0.55);">
+                        <p class="text-white mb-2"><strong>What happens after you submit:</strong></p>
+                        <ul class="text-white mb-0" style="padding-left: 18px;">
+                            <li>Case intake review by our coordination team.</li>
+                            <li>Follow-up to confirm your timeline and priorities.</li>
+                            <li>Next-step planning with independent providers.</li>
+                        </ul>
+                    </div>
                     <div class="d-flex gap-2 flex-wrap">
                         <a href="booking.php#booking-section" class="btn btn-light text-primary rounded-pill py-3 px-4">Request care coordination</a>
                         <a href="specialists.php" class="btn btn-outline-light rounded-pill py-3 px-4">View specialists</a>
                         <a href="services.php" class="btn btn-outline-light rounded-pill py-3 px-4">View services</a>
+                        <a href="for-us-patients.php" class="btn btn-outline-light rounded-pill py-3 px-4">For U.S. patients</a>
                         <a href="faq.php" class="btn btn-outline-light rounded-pill py-3 px-4">Review FAQ</a>
                         <a href="how-medtravel-works.php" class="btn btn-outline-light rounded-pill py-3 px-4">How it works</a>
                     </div>
