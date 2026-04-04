@@ -33,10 +33,43 @@ if (!function_exists('mt_home_specialist_resolve_photo')) {
         $photoPath = parse_url($photo, PHP_URL_PATH);
         $photoPath = is_string($photoPath) ? ltrim($photoPath, '/') : '';
         if ($photoPath !== '' && is_file(__DIR__ . '/../' . $photoPath)) {
-            return $photo;
+            return ltrim($photo, '/');
+        }
+
+        // Legacy avatars from admin profile are saved under admin/img/perfil.
+        if ($photoPath !== '' && strpos($photoPath, 'img/perfil/') === 0) {
+            $adminPath = 'admin/' . $photoPath;
+            if (is_file(__DIR__ . '/../' . $adminPath)) {
+                $query = parse_url($photo, PHP_URL_QUERY);
+                return $adminPath . ($query ? ('?' . $query) : '');
+            }
         }
 
         return $fallback !== '' ? $fallback : $photo;
+    }
+}
+
+if (!function_exists('mt_home_specialist_is_legacy_placeholder')) {
+    function mt_home_specialist_is_legacy_placeholder($photo)
+    {
+        $photo = trim((string)$photo);
+        if ($photo === '') {
+            return true;
+        }
+
+        $photoPath = parse_url($photo, PHP_URL_PATH);
+        $photoPath = is_string($photoPath) ? strtolower(ltrim($photoPath, '/')) : '';
+        $basename = $photoPath !== '' ? strtolower((string)basename($photoPath)) : '';
+
+        if ($basename === 'placeholder-medical.jpg' || $basename === 'placeholder-medical.svg') {
+            return true;
+        }
+
+        if (($photoPath === 'img/perfil/default.png' || $photoPath === 'admin/img/perfil/default.png') && $basename === 'default.png') {
+            return true;
+        }
+
+        return false;
     }
 }
 
@@ -138,8 +171,13 @@ if (!function_exists('mt_home_specialists_fetch')) {
             $providerLogo = trim((string)($row['provider_logo'] ?? ''));
             $staffPhoto = trim((string)($row['photo'] ?? ''));
             $linkedUserAvatar = trim((string)($row['linked_user_avatar'] ?? ''));
-            $photo = mt_home_specialist_resolve_photo($staffPhoto !== '' ? $staffPhoto : $linkedUserAvatar);
             $photoFallback = mt_home_specialist_placeholder_photo();
+
+            $primaryPhoto = mt_home_specialist_is_legacy_placeholder($staffPhoto) ? $linkedUserAvatar : $staffPhoto;
+            $photo = mt_home_specialist_resolve_photo($primaryPhoto);
+            if ($photo === $photoFallback && $linkedUserAvatar !== '' && $primaryPhoto !== $linkedUserAvatar) {
+                $photo = mt_home_specialist_resolve_photo($linkedUserAvatar);
+            }
             if ($providerLogo !== '' && strpos($providerLogo, '://') === false && strpos($providerLogo, '/') === false && $providerId > 0) {
                 $providerLogo = 'img/providers/' . $providerId . '/' . $providerLogo;
             }
