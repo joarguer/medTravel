@@ -80,6 +80,10 @@ if (!function_exists('mt_home_specialists_fetch')) {
         $sortExpr = mt_db_table_has_column($conexion, 'provider_medical_staff', 'sort_order')
             ? 'pms.sort_order'
             : 'pms.id';
+        $canJoinUsersAvatar = mt_db_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')
+            && mt_db_table_exists($conexion, 'usuarios')
+            && mt_db_table_has_column($conexion, 'usuarios', 'id')
+            && mt_db_table_has_column($conexion, 'usuarios', 'avatar');
 
         $select = [
             'pms.id',
@@ -91,6 +95,7 @@ if (!function_exists('mt_home_specialists_fetch')) {
                 ? 'pms.bio_short'
                 : (mt_db_table_has_column($conexion, 'provider_medical_staff', 'notes') ? 'pms.notes AS bio_short' : "'' AS bio_short"),
             mt_db_table_has_column($conexion, 'provider_medical_staff', 'photo') ? 'pms.photo' : "'' AS photo",
+            $canJoinUsersAvatar ? 'u.avatar AS linked_user_avatar' : "'' AS linked_user_avatar",
             mt_db_table_has_column($conexion, 'provider_medical_staff', 'clinic_name') ? 'pms.clinic_name' : "'' AS clinic_name",
             mt_db_table_has_column($conexion, 'provider_medical_staff', 'is_primary_doctor') ? 'pms.is_primary_doctor' : '0 AS is_primary_doctor',
             'p.name AS provider_name',
@@ -100,7 +105,8 @@ if (!function_exists('mt_home_specialists_fetch')) {
 
         $sql = 'SELECT ' . implode(', ', $select) . '
                 FROM provider_medical_staff pms
-                INNER JOIN providers p ON p.id = pms.provider_id
+                                INNER JOIN providers p ON p.id = pms.provider_id'
+                                . ($canJoinUsersAvatar ? ' LEFT JOIN usuarios u ON u.id = pms.linked_user_id' : '') . '
                 WHERE pms.allow_home_publication = 1
                   AND ' . $staffStatusExpr . ' = 1' . $providerStatusWhere . '
                 ORDER BY ' . (mt_db_table_has_column($conexion, 'provider_medical_staff', 'is_primary_doctor') ? 'pms.is_primary_doctor DESC, ' : '')
@@ -130,7 +136,9 @@ if (!function_exists('mt_home_specialists_fetch')) {
             $providerName = trim((string)($row['provider_name'] ?? ''));
             $providerId = (int)($row['provider_id'] ?? 0);
             $providerLogo = trim((string)($row['provider_logo'] ?? ''));
-            $photo = mt_home_specialist_resolve_photo($row['photo'] ?? '');
+            $staffPhoto = trim((string)($row['photo'] ?? ''));
+            $linkedUserAvatar = trim((string)($row['linked_user_avatar'] ?? ''));
+            $photo = mt_home_specialist_resolve_photo($staffPhoto !== '' ? $staffPhoto : $linkedUserAvatar);
             $photoFallback = mt_home_specialist_placeholder_photo();
             if ($providerLogo !== '' && strpos($providerLogo, '://') === false && strpos($providerLogo, '/') === false && $providerId > 0) {
                 $providerLogo = 'img/providers/' . $providerId . '/' . $providerLogo;

@@ -143,6 +143,22 @@ if (move_uploaded_file($tmpName, $ruta)) {
     // actualizar sesión local
     $_SESSION['foto_perfil'] = $rutaResp;
     $_SESSION['avatar'] = $rutaResp;
+
+    // Si el usuario está vinculado a staff médico, sincroniza su foto pública.
+    if (
+        function_exists('mt_db_table_exists')
+        && function_exists('mt_db_table_has_column')
+        && mt_db_table_exists($conexion, 'provider_medical_staff')
+        && mt_db_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')
+        && mt_db_table_has_column($conexion, 'provider_medical_staff', 'photo')
+    ) {
+        $sync = mysqli_prepare($conexion, "UPDATE provider_medical_staff SET photo = ? WHERE linked_user_id = ?");
+        if ($sync) {
+            mysqli_stmt_bind_param($sync, 'si', $rutaResp, $id);
+            mysqli_stmt_execute($sync);
+            mysqli_stmt_close($sync);
+        }
+    }
     
     error_log("uploadImg.php: Avatar actualizado exitosamente. ID: $id, Ruta: $rutaResp");
     

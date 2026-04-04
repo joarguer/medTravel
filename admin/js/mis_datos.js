@@ -85,12 +85,22 @@ function subirImg(){
             processData: false,
             success: function(respuesta) {
                 console.log(respuesta);
-                if (respuesta != 'null') {
-                    $("#avatar").attr('src',respuesta);
-                    $("#imgAvatar").attr('src',respuesta);
-                    $("#foto_perfil").attr('src',respuesta);
-                    $('.img-responsive').attr('src',respuesta);
-                    $('#avatar_header').attr('src',respuesta);
+                var payload = respuesta;
+                if (typeof payload === 'string') {
+                    try {
+                        payload = JSON.parse(payload);
+                    } catch (e) {
+                        payload = { ok: payload !== 'null', avatar: payload };
+                    }
+                }
+
+                if (payload && payload.ok && payload.avatar) {
+                    var avatarPath = payload.avatar;
+                    $("#avatar").attr('src',avatarPath);
+                    $("#imgAvatar").attr('src',avatarPath);
+                    $("#foto_perfil").attr('src',avatarPath);
+                    $('.img-responsive').attr('src',avatarPath);
+                    $('#avatar_header').attr('src',avatarPath);
                     toastr.success("La imagen se ha actualizado correctamente", "Actualización Imagen")
 
                     toastr.options = {
