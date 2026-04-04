@@ -222,6 +222,19 @@ function format_price($amount, $currency){
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
                     <p class="mb-0"><?php echo $description; ?></p>
                 </div>
+                <div class="row justify-content-center mb-4">
+                    <div class="col-lg-10">
+                        <div class="p-4 bg-white rounded border">
+                            <p class="mb-2"><strong>Commercial clarity:</strong> MedTravel coordinates your case review, provider communication, and travel planning.</p>
+                            <p class="mb-0"><strong>Clinical clarity:</strong> MedTravel is not a hospital or clinic. Medical care is provided by independent providers and specialists.</p>
+                            <div class="d-flex gap-2 flex-wrap mt-3">
+                                <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
+                                <a href="/how-medtravel-works.php" class="btn btn-outline-primary rounded-pill py-2 px-4">How MedTravel works</a>
+                                <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <?php if(!empty($catalog)){ ?>
                 <?php foreach($catalog as $type => $items){ 
                     $total_items = count($items);
@@ -314,7 +327,7 @@ function format_price($amount, $currency){
                 </div>
                 <div class="row mt-4">
                     <div class="col-12 text-center">
-                        <button type="button" class="btn btn-primary rounded-pill py-3 px-5" onclick="scrollToBooking();">Continue to Booking</button>
+                        <button type="button" class="btn btn-primary rounded-pill py-3 px-5" onclick="scrollToBooking();">Start your case review</button>
                     </div>
                 </div>
             </div>
@@ -496,8 +509,9 @@ function format_price($amount, $currency){
                         <h1 class="text-white mb-4">Plan Your Medical Journey With Us</h1>
                         <p class="text-white mb-5">Our coordinators can help you compare services, review options, and prepare your next step with confidence.</p>
                         <div class="d-flex justify-content-center gap-3 flex-wrap">
-                            <a href="offers.php" class="btn btn-primary rounded-pill py-3 px-5">Explore Offers</a>
-                            <a href="booking.php#booking-section" class="btn btn-outline-light rounded-pill py-3 px-5">Start Booking</a>
+                            <a href="booking.php#booking-section" class="btn btn-primary rounded-pill py-3 px-5">Request care coordination</a>
+                            <a href="contact.php" class="btn btn-outline-light rounded-pill py-3 px-5">Request assistance</a>
+                            <a href="about.php" class="btn btn-outline-light rounded-pill py-3 px-5">About MedTravel</a>
                     </div>
                 </div>
             </div>

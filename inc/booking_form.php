@@ -5,13 +5,13 @@ function get_booking_texts() {
     global $conexion;
     $default = [
         'intro_title' => 'Online Booking',
-        'intro_paragraph' => 'Tell us about the care you need, your travel preferences, and any special requests so our medical concierge can assemble a seamless experience from consultation to recovery.',
-        'secondary_paragraph' => 'Complete the form to request your custom proposal, and we’ll respond with trusted providers, tailored schedules, and concierge support for your trip to Colombia.',
+        'intro_paragraph' => 'Request care coordination by sharing your needs, preferred travel timeline, and key context so our team can organize your next steps with independent providers in Colombia.',
+        'secondary_paragraph' => 'Start your case review with this form. MedTravel coordinates planning and logistics, while independent clinics and specialists provide medical evaluation and treatment.',
         'background_img' => 'img/tour-booking-bg.jpg',
-        'cta_text' => 'Submit your request',
+        'cta_text' => 'Start your case review',
         'cta_subtext' => 'Our coordinating team replies within 24 hours.',
-        'form_title' => 'Request Your Personalized Plan',
-        'form_paragraph' => 'Complete the form and our team will contact you with options tailored to your treatment and travel needs.',
+        'form_title' => 'Request care coordination',
+        'form_paragraph' => 'Complete this step and our team will contact you with coordination options aligned with your treatment and travel needs.',
     ];
     if ($conexion) {
         $q = "SELECT intro_title,intro_paragraph,secondary_paragraph,background_img,cta_text,cta_subtext FROM home_booking WHERE activo = 1 ORDER BY id DESC LIMIT 1";

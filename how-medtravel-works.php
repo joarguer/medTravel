@@ -81,8 +81,10 @@ include(__DIR__ . '/inc/include.php');
                 <div class="p-4 bg-light rounded">
                     <h4 class="mb-3">Ready to begin?</h4>
                     <p class="mb-3">Start your request and our team will guide your next coordination steps.</p>
-                    <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4 me-2">Start Your Request</a>
-                    <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
+                    <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4 me-2">Request care coordination</a>
+                    <a href="/contact.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">Request assistance</a>
+                    <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">Read FAQ</a>
+                    <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
                 </div>
             </div>
         </div>

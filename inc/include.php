@@ -235,6 +235,7 @@ $company_links = [
     ['label' => 'About',     'path' => 'about.php'],
     ['label' => 'How It Works', 'path' => 'how-medtravel-works.php'],
     ['label' => 'FAQ',       'path' => 'faq.php'],
+    ['label' => 'Specialists', 'path' => 'specialists.php'],
     ['label' => 'Services',  'path' => 'services.php'],
     ['label' => 'Blog',      'path' => 'blog.php'],
     ['label' => 'Press',     'path' => 'press.php'],
@@ -300,7 +301,7 @@ $services_active = (in_array($current_page, ['offers.php', 'offer_detail.php', '
 $blog_active = (in_array($current_page, ['blog.php', 'blog_post.php'])) ? 'active' : '';
 $booking_active = ($current_page == 'booking.php') ? 'active' : '';
 $contact_active = ($current_page == 'contact.php') ? 'active' : '';
-$resources_active = (in_array($current_page, ['faq.php', 'how-medtravel-works.php'])) ? 'active' : '';
+$resources_active = (in_array($current_page, ['faq.php', 'how-medtravel-works.php', 'specialists.php'])) ? 'active' : '';
 
 $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
     <div class="navbar-nav ms-auto py-0">
@@ -312,6 +313,7 @@ $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
             <div class="dropdown-menu m-0">
                 <a href="how-medtravel-works.php" class="dropdown-item"><i class="fas fa-route me-2"></i>How MedTravel Works</a>
                 <a href="faq.php" class="dropdown-item"><i class="fas fa-question-circle me-2"></i>FAQ</a>
+                <a href="specialists.php" class="dropdown-item"><i class="fas fa-user-md me-2"></i>Specialists</a>
             </div>
         </div>
         <a href="blog.php" class="nav-item nav-link ' . $blog_active . '">Blog</a>
@@ -526,7 +528,7 @@ $booking_widget = (function() {
                     <h1 class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['intro_title']); ?></h1>
                     <p class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['intro_paragraph']); ?></p>
                     <p class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['secondary_paragraph']); ?></p>
-                    <a href="https://medtravel.com.co/offers.php" class="btn btn-light text-primary rounded-pill py-3 px-5 mt-2">Explore Offers</a>
+                    <a href="https://medtravel.com.co/booking.php#booking-section" class="btn btn-light text-primary rounded-pill py-3 px-5 mt-2">Start your case review</a>
                 </div>
                 <div class="col-lg-6">
                     <h1 class="text-white mb-3"><?php echo htmlspecialchars($booking_texts['form_title']); ?></h1>

@@ -15,6 +15,7 @@ $urls = [
     ['loc' => $baseUrl . '/services.php', 'changefreq' => 'weekly', 'priority' => '0.9'],
     ['loc' => $baseUrl . '/offers.php', 'changefreq' => 'daily', 'priority' => '0.9'],
     ['loc' => $baseUrl . '/about.php', 'changefreq' => 'monthly', 'priority' => '0.7'],
+    ['loc' => $baseUrl . '/specialists.php', 'changefreq' => 'weekly', 'priority' => '0.8'],
     ['loc' => $baseUrl . '/how-medtravel-works.php', 'changefreq' => 'monthly', 'priority' => '0.8'],
     ['loc' => $baseUrl . '/faq.php', 'changefreq' => 'monthly', 'priority' => '0.8'],
     ['loc' => $baseUrl . '/contact.php', 'changefreq' => 'monthly', 'priority' => '0.7'],

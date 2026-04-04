@@ -196,7 +196,9 @@ include(__DIR__ . '/inc/include.php');
                 <div class="mt-5 p-4 bg-light rounded">
                     <h4 class="mb-3">Need a personalized answer?</h4>
                     <p class="mb-3">Our team can review your case and explain the next coordination steps.</p>
-                    <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4 me-2">Start Your Request</a>
+                    <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4 me-2">Start your case review</a>
+                    <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">View services</a>
+                    <a href="/specialists.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">View specialists</a>
                     <a href="/how-medtravel-works.php" class="btn btn-outline-primary rounded-pill py-2 px-4">See How MedTravel Works</a>
                 </div>
             </div>

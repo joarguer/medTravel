@@ -319,6 +319,18 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                     </div>
                     <?php } ?>
                 </div>
+                <div class="row justify-content-center mt-4">
+                    <div class="col-lg-10">
+                        <div class="p-4 bg-light rounded">
+                            <p class="mb-2"><strong>MedTravel is a coordination platform.</strong> We are not a hospital or clinic. Medical care is provided by independent specialists and providers.</p>
+                            <div class="d-flex gap-2 flex-wrap mt-3">
+                                <a href="/how-medtravel-works.php" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
+                                <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
+                                <a href="/about.php" class="btn btn-outline-primary rounded-pill py-2 px-4">About MedTravel</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <!-- Cómo Funciona End -->
@@ -730,6 +742,10 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                     </div>
                     <?php } ?>
                 </div>
+                <div class="text-center mt-4">
+                    <a href="/specialists.php" class="btn btn-primary rounded-pill py-2 px-4 me-2">View specialists</a>
+                    <a href="/booking.php#booking-section" class="btn btn-outline-primary rounded-pill py-2 px-4">Request care coordination</a>
+                </div>
             </div>
         </div>
         <?php } ?>
@@ -740,10 +756,11 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                 <div class="mx-auto" style="max-width: 900px;">
                     <h5 class="section-title px-3 text-white">READY TO PLAN YOUR MEDICAL JOURNEY?</h5>
                     <h1 class="mb-4 text-white">Start Your MedTravel Experience</h1>
-                    <p class="mb-4 text-white">We help connect patients from the United States with verified medical providers in Colombia and coordinate the travel support they need, including flights, accommodation, transportation, meals, and ongoing assistance.</p>
+                    <p class="mb-4 text-white">We coordinate care planning and travel logistics for patients from the United States. Independent providers in Colombia are responsible for medical evaluation and treatment.</p>
                     <div class="d-flex justify-content-center gap-3 flex-wrap">
-                        <a href="https://medtravel.com.co/offers.php" class="btn btn-light rounded-pill py-3 px-5">Explore Offers</a>
-                        <a href="https://medtravel.com.co/services.php" class="btn btn-outline-light rounded-pill py-3 px-5">View Services</a>
+                        <a href="https://medtravel.com.co/booking.php#booking-section" class="btn btn-light rounded-pill py-3 px-5">Request care coordination</a>
+                        <a href="https://medtravel.com.co/contact.php" class="btn btn-outline-light rounded-pill py-3 px-5">Request assistance</a>
+                        <a href="https://medtravel.com.co/services.php" class="btn btn-outline-light rounded-pill py-3 px-5">View services</a>
                     </div>
                 </div>
             </div>

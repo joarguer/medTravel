@@ -86,7 +86,12 @@ $about_specialists = mt_home_specialists_fetch($conexion, 8);
                             }
                             ?>
                         </div>
+                        <div class="p-3 rounded mb-3" style="background: rgba(19,53,123,0.08); border-left: 3px solid #13357B;">
+                            <p class="mb-1"><strong>What we do:</strong> MedTravel coordinates case review, provider communication, and travel logistics.</p>
+                            <p class="mb-0"><strong>What we do not do:</strong> MedTravel is not a clinic or hospital and does not provide direct medical treatment.</p>
+                        </div>
                         <a class="btn btn-primary rounded-pill py-3 px-5 mt-2" href="/how-medtravel-works.php">How MedTravel Works</a>
+                        <a class="btn btn-outline-primary rounded-pill py-3 px-5 mt-2" href="/booking.php#booking-section">Request care coordination</a>
                     </div>
                 </div>
             </div>
@@ -153,6 +158,10 @@ $about_specialists = mt_home_specialists_fetch($conexion, 8);
                     }
                     ?>
                     <?php } ?>
+                </div>
+                <div class="text-center mt-4">
+                    <a href="/specialists.php" class="btn btn-primary rounded-pill py-2 px-4 me-2">View specialists</a>
+                    <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
                 </div>
             </div>
         </div>

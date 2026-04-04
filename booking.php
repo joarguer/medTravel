@@ -137,7 +137,7 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
             <p class="text-white mb-4"><?php echo htmlspecialchars($bookingHeaderSubtitle, ENT_QUOTES, 'UTF-8'); ?></p>
             <ol class="breadcrumb justify-content-center mb-0">
                 <li class="breadcrumb-item"><a href="index.php">Home</a></li>
-                <li class="breadcrumb-item"><a href="#">Pages</a></li>
+                <li class="breadcrumb-item"><a href="how-medtravel-works.php">How It Works</a></li>
                 <li class="breadcrumb-item active text-white">Online Booking</li>
             </ol>
         </div>
@@ -152,7 +152,15 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
                 <h1 class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['intro_title']); ?></h1>
                 <p class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['intro_paragraph']); ?></p>
                 <p class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['secondary_paragraph']); ?></p>
-                    <a href="offers.php" class="btn btn-light text-primary rounded-pill py-3 px-5 mt-2">Explore Offers</a>
+                    <div class="p-3 rounded mb-3" style="background: rgba(255,255,255,0.12); border-left: 3px solid rgba(255,193,7,0.9);">
+                        <p class="text-white mb-2"><strong>What MedTravel does:</strong> case coordination, provider matching support, scheduling guidance, and travel logistics support.</p>
+                        <p class="text-white mb-0"><strong>What MedTravel does not do:</strong> direct medical treatment, clinical diagnosis, or medical decision-making.</p>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="offers.php" class="btn btn-light text-primary rounded-pill py-3 px-4">Request care coordination</a>
+                        <a href="faq.php" class="btn btn-outline-light rounded-pill py-3 px-4">Review FAQ</a>
+                        <a href="how-medtravel-works.php" class="btn btn-outline-light rounded-pill py-3 px-4">How it works</a>
+                    </div>
                 </div>
                 <div class="col-lg-6">
                     <h1 class="text-white mb-3"><?php echo htmlspecialchars($booking_texts['form_title']); ?></h1>
@@ -169,11 +177,11 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
         <div class="container text-center py-5">
             <div class="mx-auto text-center" style="max-width: 900px;">
                 <h5 class="subscribe-title px-3">Need Help Now?</h5>
-                <h1 class="text-white mb-4">Talk to a MedTravel Coordinator</h1>
+                <h1 class="text-white mb-4">Request Assistance From a MedTravel Coordinator</h1>
                 <p class="text-white mb-5">Questions about providers, travel logistics, or treatment planning? Our team can guide you before you submit your request.</p>
                 <div class="d-flex justify-content-center gap-3 flex-wrap">
-                    <a href="contact.php" class="btn btn-primary rounded-pill py-3 px-5">Contact Us</a>
-                    <a href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer" class="btn btn-outline-light rounded-pill py-3 px-5">WhatsApp</a>
+                    <a href="contact.php" class="btn btn-primary rounded-pill py-3 px-5">Request assistance</a>
+                    <a href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer" class="btn btn-outline-light rounded-pill py-3 px-5">Start your case review</a>
                 </div>
             </div>
         </div>
