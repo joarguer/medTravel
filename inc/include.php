@@ -57,6 +57,28 @@ function mt_asset_url(string $path): string {
     return $prefix . $trimmed . '?v=' . $version;
 }
 
+if (!function_exists('mt_has_public_complementary_services')) {
+    function mt_has_public_complementary_services($conexion): bool
+    {
+        if (
+            !$conexion
+            || !function_exists('mt_db_table_exists')
+            || !function_exists('mt_db_table_has_column')
+            || !mt_db_table_exists($conexion, 'medtravel_services_catalog')
+            || !mt_db_table_has_column($conexion, 'medtravel_services_catalog', 'is_active')
+        ) {
+            return false;
+        }
+
+        $sql = "SELECT id
+                FROM medtravel_services_catalog
+                WHERE is_active = 1
+                LIMIT 1";
+        $result = mysqli_query($conexion, $sql);
+        return $result && mysqli_num_rows($result) > 0;
+    }
+}
+
 function mt_is_assoc_array(array $array): bool {
     if ($array === []) {
         return false;
@@ -305,12 +327,15 @@ $blog_active = (in_array($current_page, ['blog.php', 'blog_post.php'])) ? 'activ
 $booking_active = ($current_page == 'booking.php') ? 'active' : '';
 $contact_active = ($current_page == 'contact.php') ? 'active' : '';
 $resources_active = (in_array($current_page, ['faq.php', 'how-medtravel-works.php', 'specialists.php', 'medical-travel-colombia.php', 'medical-travel-armenia-colombia.php', 'for-us-patients.php'])) ? 'active' : '';
+$show_public_services_link = mt_has_public_complementary_services($conexion);
 
 $menu = '<div class="collapse navbar-collapse" id="navbarCollapse">
     <div class="navbar-nav ms-auto py-0">
         <a href="index.php" class="nav-item nav-link ' . $home_active . '">Home</a>
         <a href="about.php" class="nav-item nav-link ' . $about_active . '">About</a>
-        <a href="services.php" class="nav-item nav-link ' . $services_active . '">Services</a>
+        ' . ($show_public_services_link
+            ? '<a href="services.php" class="nav-item nav-link ' . $services_active . '">Services</a>'
+            : '') . '
         <div class="nav-item dropdown">
             <a href="#" class="nav-link dropdown-toggle ' . $resources_active . '" data-bs-toggle="dropdown">Resources</a>
             <div class="dropdown-menu m-0">
