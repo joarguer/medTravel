@@ -1,5 +1,56 @@
 # Changelog Decisions
 
+## 2026-04-03 — Cierre cronológico del frente comercial/SEO público (Fase 0 a Fase 4)
+
+**Commits**: `6d4db96`, `71166d4ceaa073318aecb6f6cacdceb3a0d10e69`, `754b29666f01ddf82457157dd5df633044dd4edb`, `eaa5364`, `bbbce46`, `3f38d03`
+
+**Outcome**
+- Se consolida la evolución comercial/SEO pública por fases, sin migración de template y sin refactor amplio.
+- Se deja operativa la malla de páginas comerciales clave: home, booking, services, specialists, faq, how-it-works y landings de intención.
+- Se formaliza la diferenciación semántica de landings para reducir riesgo de canibalización:
+  - `medical-travel-colombia.php` (intención país)
+  - `medical-travel-armenia-colombia.php` (intención local)
+  - `for-us-patients.php` (intención audiencia)
+
+**Decision**
+- El frente comercial/SEO público queda cerrado en su fase de implementación en código con microajustes de QA y conversión.
+- Se mantiene la frontera canónica: MedTravel coordina/intermedia y no presta acto médico directo.
+
+**SQL impact**
+- Sin cambios SQL en este frente.
+
+## 2026-04-03 — Microfixes post-deploy de funnel y XML
+
+**Commit**: `e9466ad`
+
+**Outcome**
+- Se corrige ancla de conversión en booking (`#booking-section`) para consistencia de CTA internos.
+- Se corrige robustez de salida XML de `sitemap.php` para evitar ruido previo y errores de parser.
+
+**Decision**
+- Los fixes se registran como hardening post-despliegue, no como nueva fase funcional.
+
+**SQL impact**
+- Sin cambios SQL.
+
+## 2026-04-03 — Publicación técnica robusta de `robots.txt` y `sitemap.xml`
+
+**Commit**: `6362c06`
+
+**Outcome**
+- Se formaliza publicación por rewrite:
+  - `/robots.txt` → `robots.php`
+  - `/sitemap.xml` → `sitemap.php`
+- `robots.php` expone `Sitemap: https://medtravel.com.co/sitemap.xml`.
+- Se prioriza `sitemap.xml` como enlace público en footer.
+
+**Decision**
+- La publicación técnica SEO queda canonizada como mecanismo operativo robusto para entorno real compartido.
+- La validación externa confirma 200 para UA navegador y bots principales probados; se registra comportamiento WAF con 403 para algunos agentes no-browser/terceros.
+
+**SQL impact**
+- Sin cambios SQL.
+
 ## 2026-04-02 — Inbox cliente: filtros de entrada canonizados por ambito de conversacion
 
 **Outcome**

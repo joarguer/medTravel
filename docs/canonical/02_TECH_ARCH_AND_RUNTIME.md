@@ -149,6 +149,13 @@ Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
 - Cuando falten campos dedicados, el sistema debe soportar derivacion segura o alias logicos sin inventar una tabla definitiva que aun no exista.
 - La separacion operativa canonica ya es obligatoria a nivel de documentacion, aunque la persistencia siga madurando por fases.
 
+### Publicación técnica SEO del runtime web público
+
+- Para robustez operativa de publicación en entorno real:
+  - `/robots.txt` se publica por rewrite hacia endpoint PHP (`robots.php`).
+  - `/sitemap.xml` se publica por rewrite hacia endpoint PHP (`sitemap.php`).
+- Esta decisión es de publicación técnica (runtime web), no de modelo de negocio ni de esquema SQL.
+
 ### Capacidad global de concurrencia en agenda (`calendar_capacity`)
 
 - El runtime actual expone `calendar_capacity` como un atributo configurable del provider en `Mi Empresa`.

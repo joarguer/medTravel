@@ -4,6 +4,34 @@ Alias al backlog / pasos de ejecución canónico.
 
 - Ver: [NEXT_STEPS_SERVICES.md](../../NEXT_STEPS_SERVICES.md)
 
+## Frente específico — Comercial / SEO público (Fase 0-4 + microfixes post-deploy)
+
+### Estado consolidado actual
+
+- DONE 2026-04-03 (commit `6d4db96`): Fase 0 SEO/credibilidad baseline en superficies públicas.
+- DONE 2026-04-03 (commit `71166d4ceaa073318aecb6f6cacdceb3a0d10e69`): Fase 1A trust copy + hardening de CTA de campaña.
+- DONE 2026-04-03 (commit `754b29666f01ddf82457157dd5df633044dd4edb`): Fase 1B/1C autoridad de especialistas + on-page SEO.
+- DONE 2026-04-03 (commit `eaa5364`): Fase 2 hardening de conversión + landings de intención:
+  - `medical-travel-colombia.php`
+  - `medical-travel-armenia-colombia.php`
+  - `for-us-patients.php`
+- DONE 2026-04-03 (commit `bbbce46`): Fase 3 trust signals + diferenciación anti-canibalización de landings.
+- DONE 2026-04-03 (commit `3f38d03`): Fase 4 funnel QA micro polish.
+- DONE 2026-04-03 (commit `e9466ad`): microfix post-deploy:
+  - ancla `#booking-section` funcional en `booking.php`
+  - salida XML limpia en `sitemap.php`
+- DONE 2026-04-03 (commit `6362c06`): publicación técnica robusta de `robots.txt` y `sitemap.xml` por rewrite a endpoints PHP.
+- DONE 2026-04-03: validación operativa pública:
+  - superficie comercial pública activa (home, booking, services, specialists, faq, how-it-works y landings)
+  - `robots.txt` y `sitemap.xml` publicados y válidos para UA navegador/bots principales probados
+
+### Pendientes reales de operación (sin refactor)
+
+- [ ] Search Console: envío y monitoreo inicial de `https://medtravel.com.co/sitemap.xml`.
+- [ ] Operación de campañas con URLs definidas (general, Colombia, Armenia/Quindío, U.S. patients, booking).
+- [ ] Monitoreo inicial de indexación y cobertura de URLs estratégicas.
+- [ ] Evaluar ajuste WAF para validadores/crawlers de terceros si negocio lo requiere.
+
 ## Frente prioritario — Canonizacion del nuevo modelo operativo MedTravel
 
 ### Paso 1 — Canon producto y operacion
