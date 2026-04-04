@@ -342,7 +342,7 @@ $contact_link = mt_valid_public_page('contact.php') ? 'contact.php' : null;
 $terms_candidates = ['terms.php', 'terms.html', 'terms-and-conditions.php', 'terms-and-conditions.html'];
 $cookie_candidates = ['cookie.php', 'cookies.php', 'cookie-policy.php', 'cookie-policy.html'];
 $legal_candidates = ['legal.php', 'legal.html', 'legal-notice.php', 'legal-notice.html'];
-$sitemap_candidates = ['sitemap.php', 'sitemap.html', 'sitemap.xml'];
+$sitemap_candidates = ['sitemap.xml', 'sitemap.php', 'sitemap.html'];
 
 $terms_link = null;
 foreach ($terms_candidates as $candidate) {
