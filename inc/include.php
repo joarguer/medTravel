@@ -357,15 +357,21 @@ foreach ($public_social_links as $social) {
     $footer_social_html .= '<a class="btn-square btn btn-primary rounded-circle mx-1" href="' . $socialUrl . '" target="_blank" rel="noopener noreferrer" aria-label="' . $socialLabel . '"><i class="fab ' . $socialIcon . '"></i></a>';
 }
 
+$public_contact_email = 'info@medtravel.com.co';
+$public_contact_phone_href = '+15616988069';
+$public_contact_phone_label = '+1 (561) 698-8069';
+$public_contact_whatsapp_href = '+573502431667';
+$public_contact_whatsapp_label = '+57 350 2431667';
+
 $footer = '<div class="container-fluid footer py-5">
     <div class="container py-5">
         <div class="row g-5">
             <div class="col-md-6 col-lg-6 col-xl-3">
                 <div class="footer-item d-flex flex-column">
                     <h4 class="mb-4 text-white">Get In Touch</h4>
-                    <a href=""><i class="fas fa-envelope me-2"></i> info@medtravel.com</a>
-                    <a href="tel:+573502431667"><i class="fas fa-phone me-2"></i> +561 698 8069</a>
-                    <a href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer" class="mb-3"><i class="fab fa-whatsapp me-2"></i> Whatsapp: +57 350 2431667</a>
+                    <a href="mailto:' . $public_contact_email . '"><i class="fas fa-envelope me-2"></i> ' . $public_contact_email . '</a>
+                    <a href="tel:' . $public_contact_phone_href . '"><i class="fas fa-phone me-2"></i> ' . $public_contact_phone_label . '</a>
+                    <a href="https://wa.me/' . $public_contact_whatsapp_href . '" target="_blank" rel="noopener noreferrer" class="mb-3"><i class="fab fa-whatsapp me-2"></i> Whatsapp: ' . $public_contact_whatsapp_label . '</a>
                     <div class="d-flex align-items-center">
                         <i class="fas fa-share fa-2x text-white me-2"></i>
                         ' . $footer_social_html . '
@@ -446,50 +452,23 @@ $contact = '<div class="container-fluid contact bg-light py-5">
                                 <div class="text-center mb-4">
                                     <i class="fa fa-phone-alt fa-3x text-primary mb-3"></i>
                                     <h4 class="text-primary">Mobile</h4>
-                                    <p class="mb-0"><a href="phone:+1561698-8069">+1 (561) 698-8069</a></p>
+                                    <p class="mb-0"><a href="tel:' . $public_contact_phone_href . '">' . $public_contact_phone_label . '</a></p>
                                 </div>
                             
                                 <div class="text-center">
                                     <i class="fa fa-envelope-open fa-3x text-primary mb-3"></i>
                                     <h4 class="text-primary">Email</h4>
-                                    <p class="mb-0">info@medtravel.com.co</p>
+                                    <p class="mb-0"><a href="mailto:' . $public_contact_email . '">' . $public_contact_email . '</a></p>
                                 </div>
                             </div>
                         </div>
                         <div class="col-lg-8">
                             <h3 class="mb-2">Send us a message</h3>
-                            <p class="mb-4">The contact form is currently inactive. Get a functional and working contact form with Ajax & PHP in a few minutes. Just copy and paste the files, add a little code and youre done. <a href="https://htmlcodex.com/contact-form">Download Now</a>.</p>
-                            <form>
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <div class="form-floating">
-                                            <input type="text" class="form-control border-0" id="name" placeholder="Your Name">
-                                            <label for="name">Your Name</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="form-floating">
-                                            <input type="email" class="form-control border-0" id="email" placeholder="Your Email">
-                                            <label for="email">Your Email</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-12">
-                                        <div class="form-floating">
-                                            <input type="text" class="form-control border-0" id="subject" placeholder="Subject">
-                                            <label for="subject">Subject</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-12">
-                                        <div class="form-floating">
-                                            <textarea class="form-control border-0" placeholder="Leave a message here" id="message" style="height: 160px"></textarea>
-                                            <label for="message">Message</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-12">
-                                        <a class="btn btn-primary w-100 py-3" onclick="submit()">Send Message</a>
-                                    </div>
-                                </div>
-                            </form>
+                            <p class="mb-4">Our coordination team responds within 24 hours. Contact us by WhatsApp or start your booking request and we will guide you step by step.</p>
+                            <div class="d-flex gap-3 flex-wrap">
+                                <a href="https://wa.me/' . $public_contact_whatsapp_href . '" target="_blank" rel="noopener noreferrer" class="btn btn-success py-3 px-5"><i class="fab fa-whatsapp me-2"></i>Chat on WhatsApp</a>
+                                <a href="/booking.php#booking-section" class="btn btn-primary py-3 px-5"><i class="fas fa-calendar-check me-2"></i>Start Booking</a>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -152,7 +152,7 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
                 <h1 class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['intro_title']); ?></h1>
                 <p class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['intro_paragraph']); ?></p>
                 <p class="text-white mb-4"><?php echo htmlspecialchars($booking_texts['secondary_paragraph']); ?></p>
-                    <a href="#" class="btn btn-light text-primary rounded-pill py-3 px-5 mt-2">Read More</a>
+                    <a href="offers.php" class="btn btn-light text-primary rounded-pill py-3 px-5 mt-2">Explore Offers</a>
                 </div>
                 <div class="col-lg-6">
                     <h1 class="text-white mb-3"><?php echo htmlspecialchars($booking_texts['form_title']); ?></h1>
@@ -168,12 +168,12 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
     <div class="container-fluid subscribe py-5">
         <div class="container text-center py-5">
             <div class="mx-auto text-center" style="max-width: 900px;">
-                <h5 class="subscribe-title px-3">Subscribe</h5>
-                <h1 class="text-white mb-4">Our Newsletter</h1>
-                <p class="text-white mb-5">Lorem ipsum dolor sit amet consectetur adipisicing elit. Laborum tempore nam, architecto doloremque velit explicabo? Voluptate sunt eveniet fuga eligendi! Expedita laudantium fugiat corrupti eum cum repellat a laborum quasi.</p>
-                <div class="position-relative mx-auto">
-                    <input class="form-control border-primary rounded-pill w-100 py-3 ps-4 pe-5" type="text" placeholder="Your email">
-                    <button type="button" class="btn btn-primary rounded-pill position-absolute top-0 end-0 py-2 px-4 mt-2 me-2">Subscribe</button>
+                <h5 class="subscribe-title px-3">Need Help Now?</h5>
+                <h1 class="text-white mb-4">Talk to a MedTravel Coordinator</h1>
+                <p class="text-white mb-5">Questions about providers, travel logistics, or treatment planning? Our team can guide you before you submit your request.</p>
+                <div class="d-flex justify-content-center gap-3 flex-wrap">
+                    <a href="contact.php" class="btn btn-primary rounded-pill py-3 px-5">Contact Us</a>
+                    <a href="https://wa.me/573502431667" target="_blank" rel="noopener noreferrer" class="btn btn-outline-light rounded-pill py-3 px-5">WhatsApp</a>
                 </div>
             </div>
         </div>
