@@ -5,6 +5,23 @@ $publicTermsUrl = mt_public_terms_url();
 $publicPrivacyUrl = mt_public_privacy_url();
 $publicSocialLinks = mt_public_social_links();
 $pendingTermsNotice = mt_pending_terms_notice_payload();
+$loginErrorCode = trim((string)($_GET['error'] ?? ''));
+$loginErrorMessages = [
+    'missing_username' => 'Enter your username.',
+    'missing_password' => 'Enter your password.',
+    'user_not_found' => 'We could not find an account with that username or email.',
+    'password_mismatch' => 'Incorrect password.',
+    'user_inactive' => 'This account is inactive.',
+    'session_expired' => 'Your session expired. Please sign in again.',
+    'session_conflict' => 'An active session was detected for this account. Please try again or contact support.',
+    'provider_scope_required' => 'This account is missing provider access configuration.',
+    'provider_invalid_or_inactive' => 'This provider account is inactive or misconfigured.',
+    'service_provider_scope_required' => 'This account is missing service-provider access configuration.',
+    'service_provider_invalid_or_inactive' => 'This service-provider account is inactive or misconfigured.',
+    'db_connection_error' => 'Login is temporarily unavailable. Please try again shortly.',
+    'auth_schema_invalid' => 'Login configuration error. Please contact support.',
+];
+$loginErrorMessage = $loginErrorMessages[$loginErrorCode] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'login_context') {
     require_once __DIR__ . '/admin/include/conexion.php';
@@ -206,9 +223,9 @@ foreach ($publicSocialLinks as $social) {
             <!-- BEGIN LOGIN FORM -->
             <form class="login-form" action="admin/include/log.php" method="post">
                 <h3 class="form-title">Please sign in to continue</h3>
-                <div class="alert alert-danger display-hide">
+                <div class="alert alert-danger<?php echo $loginErrorMessage === '' ? ' display-hide' : ''; ?>">
                     <button class="close" data-close="alert"></button>
-                    <span> Ingrese su password. </span>
+                    <span><?php echo htmlspecialchars($loginErrorMessage !== '' ? $loginErrorMessage : 'Enter your password.', ENT_QUOTES, 'UTF-8'); ?></span>
                 </div>
                 <div class="auth-terms-notice is-hidden" id="login-terms-notice">
                     <strong id="login-terms-notice-title"><?php echo htmlspecialchars((string)$pendingTermsNotice['title'], ENT_QUOTES, 'UTF-8'); ?></strong>
