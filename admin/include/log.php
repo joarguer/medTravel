@@ -349,6 +349,44 @@ function login_cleanup_stale_legacy_sessions($conexion, $usuario) {
     mysqli_stmt_close($stmt);
 }
 
+function login_replace_legacy_session($conexion, $usuario, $visitante, $ip) {
+    if (
+        !$conexion
+        || trim((string)$usuario) === ''
+        || !login_table_exists($conexion, 'sessiones_activas')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'usuario')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'fecha')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'hora')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'visitante')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'ip')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'latitud')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'longitud')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'cobrador')
+        || !login_table_has_column($conexion, 'sessiones_activas', 'hora2')
+    ) {
+        return false;
+    }
+
+    $delete = mysqli_prepare($conexion, 'DELETE FROM sessiones_activas WHERE usuario = ?');
+    if (!$delete) {
+        return false;
+    }
+    mysqli_stmt_bind_param($delete, 's', $usuario);
+    mysqli_stmt_execute($delete);
+    mysqli_stmt_close($delete);
+
+    $fecha = date("Y-m-d", time() - 18000);
+    $hora = date("H:i:s", time() - 18000);
+    $insert = mysqli_prepare($conexion, "INSERT INTO sessiones_activas(`fecha`, `hora`, `visitante`, `usuario`, `ip`, `latitud`, `longitud`, `cobrador`, `hora2`) VALUES(?, ?, ?, ?, ?, '0', '0', '0', '00:00:00')");
+    if (!$insert) {
+        return false;
+    }
+    mysqli_stmt_bind_param($insert, 'sssss', $fecha, $hora, $visitante, $usuario, $ip);
+    $ok = mysqli_stmt_execute($insert);
+    mysqli_stmt_close($insert);
+    return (bool)$ok;
+}
+
 function login_register_legacy_session($conexion, $visitante, $usuario, $ip) {
     if (
         !$conexion
@@ -390,11 +428,8 @@ function login_register_legacy_session($conexion, $visitante, $usuario, $ip) {
 
     $existingUser = (string)($existing['usuario'] ?? '');
     $existingIp = (string)($existing['ip'] ?? '');
-    if ($existing && $existingUser === $usuario && $existingIp !== '' && $existingIp === $ip) {
-        return true;
-    }
-    if ($existing && $existingUser === $usuario && $existingIp !== '' && $existingIp !== $ip) {
-        return false;
+    if ($existing && $existingUser === $usuario) {
+        return login_replace_legacy_session($conexion, $usuario, $visitante, $ip);
     }
 
     $fecha = date("Y-m-d", time() - 18000);
