@@ -1,6 +1,6 @@
 <?php
-$page_title = 'Medical Travel in Armenia, Colombia | MedTravel';
-$page_description = 'Explore medical travel coordination in Armenia, Colombia with MedTravel support for case review, scheduling, and patient logistics.';
+$page_title = 'Armenia, Colombia Medical Travel Coordination | MedTravel';
+$page_description = 'City-level coordination for patients planning medical travel to Armenia, Quindio, with timeline alignment and travel-readiness guidance.';
 $page_canonical = 'https://medtravel.com.co/medical-travel-armenia-colombia.php';
 $page_schema_jsonld = [[
     '@context' => 'https://schema.org',
@@ -11,6 +11,8 @@ $page_schema_jsonld = [[
     'about' => ['@id' => 'https://medtravel.com.co/#organization'],
 ]];
 include(__DIR__ . '/inc/include.php');
+require_once __DIR__ . '/inc/testimonials.php';
+$armenia_testimonials = mt_testimonials_fetch_approved($conexion, 2);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -31,7 +33,7 @@ include(__DIR__ . '/inc/include.php');
     <div class="container-fluid bg-breadcrumb">
         <div class="container text-center py-5" style="max-width: 900px;">
             <h1 class="text-white display-4 mb-3">Medical Travel in Armenia, Colombia</h1>
-            <p class="text-white mb-0">A practical coordination path for patients exploring care options in the Coffee Region.</p>
+            <p class="text-white mb-0">City-focused coordination for patients traveling to Armenia, Quindio and the Coffee Region.</p>
         </div>
     </div>
 
@@ -39,11 +41,12 @@ include(__DIR__ . '/inc/include.php');
         <div class="row justify-content-center mb-4">
             <div class="col-lg-10">
                 <div class="p-4 bg-light rounded">
-                    <h2 class="h4 mb-3">Local destination, coordinated process</h2>
-                    <p class="mb-2">MedTravel helps structure your planning for providers and services in Armenia, Colombia, with coordination focused on timeline clarity and patient logistics.</p>
+                    <h2 class="h4 mb-3">Armenia destination planning with clear coordination</h2>
+                    <p class="mb-2">MedTravel helps structure planning for services in Armenia, Colombia, with focus on arrival timeline, destination readiness, and communication flow.</p>
                     <p class="mb-3"><strong>Medical boundary:</strong> MedTravel coordinates. Independent providers and specialists deliver treatment and clinical decisions.</p>
                     <div class="d-flex gap-2 flex-wrap">
                         <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
+                        <a href="/contact.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Request assistance</a>
                         <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
                         <a href="/specialists.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View specialists</a>
                     </div>
@@ -65,6 +68,27 @@ include(__DIR__ . '/inc/include.php');
                 </div>
             </div>
         </div>
+
+        <?php if (!empty($armenia_testimonials)) { ?>
+        <div class="row justify-content-center mt-4">
+            <div class="col-lg-10">
+                <div class="p-4 bg-white border rounded">
+                    <h2 class="h5 mb-3">Coordination confidence from patient feedback</h2>
+                    <div class="row g-3">
+                        <?php foreach ($armenia_testimonials as $testimonial) { ?>
+                        <div class="col-md-6">
+                            <div class="p-3 h-100 bg-light rounded border">
+                                <div class="mb-2"><?php echo mt_testimonials_render_stars((int)($testimonial['rating'] ?? 5)); ?></div>
+                                <p class="mb-1 text-muted">"<?php echo mt_testimonials_escape((string)($testimonial['comment'] ?? '')); ?>"</p>
+                                <p class="mb-0 small text-secondary"><?php echo mt_testimonials_escape((string)($testimonial['client_name'] ?? 'Patient')); ?></p>
+                            </div>
+                        </div>
+                        <?php } ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php } ?>
 
         <div class="row justify-content-center mt-5">
             <div class="col-lg-10">

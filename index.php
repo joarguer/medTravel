@@ -88,6 +88,7 @@ if (home_hero_table_exists_public($conexion) && home_hero_column_exists_public($
 $busca_carrucel = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $busca_carrucel_2 = mysqli_query($conexion,"SELECT * FROM carrucel WHERE activo = '0' ORDER BY id ASC");
 $home_specialists = mt_home_specialists_fetch($conexion, 8);
+$home_testimonials = mt_testimonials_fetch_approved($conexion, 2);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -324,7 +325,7 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                         <div class="p-4 bg-light rounded">
                             <p class="mb-2"><strong>MedTravel is a coordination platform.</strong> We are not a hospital or clinic. Medical care is provided by independent specialists and providers.</p>
                             <div class="d-flex gap-2 flex-wrap mt-3">
-                                <a href="/how-medtravel-works.php" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
+                                <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
                                 <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
                                 <a href="/about.php" class="btn btn-outline-primary rounded-pill py-2 px-4">About MedTravel</a>
                             </div>
@@ -356,6 +357,30 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                     <a href="/medical-travel-armenia-colombia.php" class="btn btn-outline-primary rounded-pill py-2 px-4 me-2">Armenia, Colombia</a>
                     <a href="/for-us-patients.php" class="btn btn-outline-primary rounded-pill py-2 px-4">For U.S. patients</a>
                 </div>
+                <?php if (!empty($home_testimonials)) { ?>
+                <div class="row g-3 mt-3">
+                    <div class="col-12">
+                        <div class="p-3 bg-light border rounded text-center">
+                            <h3 class="h6 mb-2">Patient feedback on coordination clarity</h3>
+                            <p class="text-muted mb-0">Real approved testimonials focused on communication, planning, and next steps.</p>
+                        </div>
+                    </div>
+                    <?php foreach ($home_testimonials as $testimonial) { ?>
+                    <div class="col-md-6">
+                        <div class="p-3 h-100 bg-white border rounded">
+                            <div class="mb-2"><?php echo mt_testimonials_render_stars((int)($testimonial['rating'] ?? 5)); ?></div>
+                            <p class="mb-2 text-muted">"<?php echo mt_testimonials_escape((string)($testimonial['comment'] ?? '')); ?>"</p>
+                            <p class="mb-0 small text-secondary">
+                                <?php echo mt_testimonials_escape((string)($testimonial['client_name'] ?? 'Patient')); ?>
+                                <?php if (!empty($testimonial['client_location'])) { ?>
+                                    - <?php echo mt_testimonials_escape((string)$testimonial['client_location']); ?>
+                                <?php } ?>
+                            </p>
+                        </div>
+                    </div>
+                    <?php } ?>
+                </div>
+                <?php } ?>
             </div>
         </div>
         <!-- Cómo Funciona End -->
@@ -801,7 +826,8 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
             <div class="container py-5">
                 <div class="mx-auto text-center mb-5" style="max-width: 900px;">
                     <h5 class="section-title px-3">Testimonials</h5>
-                    <h1 class="mb-0">What Our Clients Say!</h1>
+                    <h1 class="mb-2">What Our Clients Say About Coordination</h1>
+                    <p class="text-muted mb-0">Feedback focused on communication clarity, next-step guidance, and travel-aware support.</p>
                 </div>
                 <div class="testimonial-carousel owl-carousel">
                     <?php
@@ -834,6 +860,10 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                         </div>
                     </div>
                     <?php } ?>
+                </div>
+                <div class="text-center mt-4">
+                    <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4 me-2">Start your case review</a>
+                    <a href="/how-medtravel-works.php" class="btn btn-outline-primary rounded-pill py-2 px-4">See next steps</a>
                 </div>
             </div>
         </div>

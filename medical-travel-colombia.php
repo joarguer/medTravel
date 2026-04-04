@@ -1,6 +1,6 @@
 <?php
-$page_title = 'Medical Travel in Colombia | MedTravel Coordination';
-$page_description = 'Plan your medical travel in Colombia with MedTravel coordination support for case review, scheduling guidance, and travel logistics.';
+$page_title = 'Medical Travel Colombia Planning | MedTravel Coordination';
+$page_description = 'National-level coordination for medical travel in Colombia, including case intake guidance, provider communication flow, and logistics planning.';
 $page_canonical = 'https://medtravel.com.co/medical-travel-colombia.php';
 $page_schema_jsonld = [[
     '@context' => 'https://schema.org',
@@ -11,6 +11,8 @@ $page_schema_jsonld = [[
     'about' => ['@id' => 'https://medtravel.com.co/#organization'],
 ]];
 include(__DIR__ . '/inc/include.php');
+require_once __DIR__ . '/inc/testimonials.php';
+$landing_testimonials = mt_testimonials_fetch_approved($conexion, 2);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -30,8 +32,8 @@ include(__DIR__ . '/inc/include.php');
 
     <div class="container-fluid bg-breadcrumb">
         <div class="container text-center py-5" style="max-width: 900px;">
-            <h1 class="text-white display-4 mb-3">Medical Travel in Colombia</h1>
-            <p class="text-white mb-0">Coordination support for international patients evaluating treatment options in Colombia.</p>
+            <h1 class="text-white display-4 mb-3">Medical Travel Colombia Planning</h1>
+            <p class="text-white mb-0">National coordination support for international patients evaluating independent providers in Colombia.</p>
         </div>
     </div>
 
@@ -39,11 +41,12 @@ include(__DIR__ . '/inc/include.php');
         <div class="row justify-content-center mb-4">
             <div class="col-lg-10">
                 <div class="p-4 bg-light rounded">
-                    <h2 class="h4 mb-3">How MedTravel supports your planning</h2>
+                    <h2 class="h4 mb-3">National coordination path for Colombia</h2>
                     <p class="mb-2">MedTravel coordinates your case review journey, including communication, timeline planning, and logistics guidance.</p>
                     <p class="mb-3"><strong>Important:</strong> MedTravel is not a hospital or clinic. Clinical treatment is provided by independent providers and specialists.</p>
                     <div class="d-flex gap-2 flex-wrap">
                         <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Request care coordination</a>
+                        <a href="/for-us-patients.php" class="btn btn-outline-primary rounded-pill py-2 px-4">For U.S. patients</a>
                         <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
                         <a href="/specialists.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View specialists</a>
                     </div>
@@ -71,6 +74,27 @@ include(__DIR__ . '/inc/include.php');
                 </div>
             </div>
         </div>
+
+        <?php if (!empty($landing_testimonials)) { ?>
+        <div class="row justify-content-center mt-4">
+            <div class="col-lg-10">
+                <div class="p-4 bg-white border rounded">
+                    <h2 class="h5 mb-3">Patient trust signals</h2>
+                    <div class="row g-3">
+                        <?php foreach ($landing_testimonials as $testimonial) { ?>
+                        <div class="col-md-6">
+                            <div class="p-3 h-100 bg-light rounded border">
+                                <div class="mb-2"><?php echo mt_testimonials_render_stars((int)($testimonial['rating'] ?? 5)); ?></div>
+                                <p class="mb-1 text-muted">"<?php echo mt_testimonials_escape((string)($testimonial['comment'] ?? '')); ?>"</p>
+                                <p class="mb-0 small text-secondary"><?php echo mt_testimonials_escape((string)($testimonial['client_name'] ?? 'Patient')); ?></p>
+                            </div>
+                        </div>
+                        <?php } ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php } ?>
 
         <div class="row justify-content-center mt-5">
             <div class="col-lg-10">

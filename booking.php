@@ -6,6 +6,7 @@ $page_description = 'Submit your medical travel request and receive a coordinate
 $page_canonical = 'https://medtravel.com.co/booking.php';
 include('inc/include.php');
 require_once __DIR__ . '/inc/booking_page_header.php';
+require_once __DIR__ . '/inc/testimonials.php';
 // booking_form.php already included by include.php
 
 // --- offer_id preseleccionado desde URL -----------------------------------------
@@ -102,6 +103,7 @@ $bookingPageHeader = mt_booking_page_header_fetch($conexion);
 $bookingHeaderTitle = trim((string)($bookingPageHeader['title'] ?? '')) ?: 'Online Booking';
 $bookingHeaderSubtitle = trim((string)($bookingPageHeader['subtitle'] ?? '')) ?: 'Submit your medical travel request and receive a coordinated plan with trusted providers in Colombia.';
 $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
+$booking_testimonials = mt_testimonials_fetch_approved($conexion, 2);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -172,6 +174,17 @@ $bookingHeaderImage = trim((string)($bookingPageHeader['bg_image'] ?? ''));
                         <a href="faq.php" class="btn btn-outline-light rounded-pill py-3 px-4">Review FAQ</a>
                         <a href="how-medtravel-works.php" class="btn btn-outline-light rounded-pill py-3 px-4">How it works</a>
                     </div>
+                    <?php if (!empty($booking_testimonials)) { ?>
+                    <div class="p-3 rounded mt-3" style="background: rgba(255,255,255,0.12); border-left: 3px solid rgba(37,99,235,0.9);">
+                        <p class="text-white mb-2"><strong>Patient coordination feedback:</strong></p>
+                        <?php foreach ($booking_testimonials as $testimonial) { ?>
+                        <p class="text-white mb-2" style="font-size: 14px;">
+                            "<?php echo mt_testimonials_escape((string)($testimonial['comment'] ?? '')); ?>"
+                        </p>
+                        <?php } ?>
+                        <p class="text-white-50 mb-0" style="font-size: 12px;">Approved comments about communication and coordination experience.</p>
+                    </div>
+                    <?php } ?>
                 </div>
                 <div class="col-lg-6">
                     <h1 class="text-white mb-3"><?php echo htmlspecialchars($booking_texts['form_title']); ?></h1>
