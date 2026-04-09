@@ -456,6 +456,8 @@
         var fee = d.coordination_fee || {};
         var actionsLocked = parseInt(d.coordination_actions_locked || 0, 10) === 1;
         var lockMessage = (d.coordination_pending_message || fee.message || '').toString();
+        var inboxLocked = parseInt((d.coordination_inbox_locked !== undefined ? d.coordination_inbox_locked : d.coordination_actions_locked) || 0, 10) === 1;
+        var inboxLockMessage = (d.coordination_inbox_pending_message || d.coordination_pending_message || fee.message || '').toString();
         var inboxHref = 'app_inbox.php?thread_id=ITEM:' + encodeURIComponent(String(d.item_id || 0));
         var calendarHref = 'app_calendar.php?thread_type=ITEM&item_id=' + encodeURIComponent(String(d.item_id || 0)) + '&thread_id=' + encodeURIComponent('ITEM:' + String(d.item_id || 0));
 
@@ -463,13 +465,15 @@
         html += '<div class="mt-request-detail">';
         html += '<input type="hidden" id="provider-modal-currency" value="' + escapeHtml(d.item_currency || 'USD') + '">';
         html += '<div class="mt-detail-sticky">';
-        html += renderDetailHeader(d, fee, actionsLocked, lockMessage, inboxHref, calendarHref);
+        html += renderDetailHeader(d, fee, inboxLocked, inboxLockMessage, actionsLocked, lockMessage, inboxHref, calendarHref);
         html += '</div>';
         html += renderWorkflowGuide();
         html += renderDetailTabs(d, {
             canShowLegacyActions: canShowLegacyActions,
             actionsLocked: actionsLocked,
             lockMessage: lockMessage,
+            inboxLocked: inboxLocked,
+            inboxLockMessage: inboxLockMessage,
             inboxHref: inboxHref,
             calendarHref: calendarHref
         });
@@ -477,7 +481,7 @@
         return html;
     }
 
-    function renderDetailHeader(d, fee, actionsLocked, lockMessage, inboxHref, calendarHref) {
+    function renderDetailHeader(d, fee, inboxLocked, inboxLockMessage, calendarLocked, calendarLockMessage, inboxHref, calendarHref) {
         var appointmentStatus = d.appointment_status || d.medical_coordination_status || 'pending';
         var appointmentLabel = d.appointment_status_label_es || d.medical_coordination_status_label_es || genericStatusLabelEs(appointmentStatus);
         var nextAppointment = d.next_appointment && d.next_appointment.start_at ? d.next_appointment.start_at : ((d.summary && d.summary.next_appointment) || '');
@@ -506,8 +510,8 @@
         html += '</div>';
         html += '</div>';
         html += '<div class="mt-header-actions">';
-        html += renderCoordinationActionButton('btn-default btn-modal-open-inbox', 'Abrir conversación', inboxHref, actionsLocked, lockMessage);
-        html += renderCoordinationActionButton('btn-primary btn-modal-open-calendar', 'Abrir calendario', calendarHref, actionsLocked, lockMessage);
+        html += renderCoordinationActionButton('btn-default btn-modal-open-inbox', 'Abrir conversación', inboxHref, inboxLocked, inboxLockMessage);
+        html += renderCoordinationActionButton('btn-primary btn-modal-open-calendar', 'Abrir calendario', calendarHref, calendarLocked, calendarLockMessage);
         html += '</div>';
         html += '</div>';
         return html;
@@ -882,8 +886,8 @@
     function renderConversationSection(d, options) {
         options = options || {};
         var canShowLegacyActions = !!options.canShowLegacyActions;
-        var actionsLocked = !!options.actionsLocked;
-        var lockMessage = options.lockMessage || '';
+        var inboxLocked = !!options.inboxLocked;
+        var inboxLockMessage = options.inboxLockMessage || options.lockMessage || '';
         var inboxHref = options.inboxHref || ('app_inbox.php?thread_id=ITEM:' + encodeURIComponent(String(d.item_id || 0)));
         var html = '<section class="mt-section">';
         html += '<div class="mt-section-head"><h5>Conversación</h5></div>';
@@ -892,10 +896,10 @@
         html += '<strong>Gestiona la conversación desde Inbox</strong>';
         html += '<p>Usa Inbox para resolver dudas, pedir documentos y mantener el seguimiento con el paciente fuera de este modal.</p>';
         html += '</div>';
-        html += '<div>' + renderCoordinationActionButton('btn-primary btn-modal-open-inbox', 'Abrir conversación en Inbox', inboxHref, actionsLocked, lockMessage) + '</div>';
+        html += '<div>' + renderCoordinationActionButton('btn-primary btn-modal-open-inbox', 'Abrir conversación en Inbox', inboxHref, inboxLocked, inboxLockMessage) + '</div>';
         html += '</div>';
-        if (actionsLocked && lockMessage) {
-            html += '<div class="alert alert-warning" style="margin-bottom:12px;">' + escapeHtml(lockMessage) + '</div>';
+        if (inboxLocked && inboxLockMessage) {
+            html += '<div class="alert alert-warning" style="margin-bottom:12px;">' + escapeHtml(inboxLockMessage) + '</div>';
         }
         if (canShowLegacyActions) {
             html += '<p class="text-muted" style="margin-top:0;">Aceptar o rechazar el caso no implica atención realizada. La coordinación dependiente de la comisión se bloquea solo cuando aplica.</p>';

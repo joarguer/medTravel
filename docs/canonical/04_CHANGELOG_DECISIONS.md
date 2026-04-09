@@ -1,5 +1,16 @@
 # Changelog Decisions
 
+## 2026-04-09 — Inbox ITEM del staff asignado no hereda automaticamente el gate comercial del provider
+
+**Outcome**
+- Se aclara la diferencia entre gating comercial del provider y acceso operativo del staff asignado en `Inbox` ITEM.
+- El owner/admin del provider conserva su gate comercial actual cuando aplica fee/comision.
+- El staff vinculado asignado puede acceder conversacionalmente al hilo ITEM sin heredar ese gate solo si el item pertenece al mismo `provider_id`, `assigned_staff_id` coincide con la sesion actual y el estado del item es `provider_confirmed`, `client_accepted`, `treatment_completed` o `post_treatment_follow_up`.
+
+**Decision**
+- Este bypass es estrictamente operativo para `Inbox` ITEM dentro de scope valido; no abre acceso lateral a otros providers ni a items no asignados.
+- La decision no cambia por arrastre agenda ni `Calendar`; la semantica canónica sigue siendo `Inbox = conversacion` y `Calendar = agenda`.
+
 ## 2026-04-03 — Cierre cronológico del frente comercial/SEO público (Fase 0 a Fase 4)
 
 **Commits**: `6d4db96`, `71166d4ceaa073318aecb6f6cacdceb3a0d10e69`, `754b29666f01ddf82457157dd5df633044dd4edb`, `eaa5364`, `bbbce46`, `3f38d03`
@@ -367,12 +378,14 @@ G. **Implementado — Traduccion portal del paciente al ingles**
 - Se ratifica que las acciones estructuradas, quick actions y formularios siguen existiendo para registrar decisiones o solicitudes con efecto operativo.
 - Se deja asentado que el mensaje libre no cambia estados por sí solo.
 - Se confirma que los únicos bloqueos conversacionales válidos son comerciales o de alcance: fee gate, commission gate y ownership/scope/asignación.
+- En `Inbox` cliente, fee/comisión no bloquean el composer ni `send_message`; cuando aplican quedan como capa informativa/comercial o de desbloqueo downstream.
 
 **Decision**
 - Inbox se trata canónicamente como comunicación libre y trazable, no como compuerta de estado por etapa.
 - Los cambios de estado deben seguir dependiendo de acciones formales explícitas y no del texto libre del chat.
 - La botonera y las tarjetas estructuradas se mantienen como soporte UX recomendado, no como requisito para poder conversar.
 - El runtime no debe usar `booking_requests.status` para bloquear conversación libre por etapa temprana.
+- Esta aclaración no cambia `Calendar` ni otros módulos fuera de `Inbox` cliente.
 
 **Operational effect**
 - UX, ayudas y mensajes del inbox deben explicar que el chat es libre y que las acciones formales sirven para registrar side effects.

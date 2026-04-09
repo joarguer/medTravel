@@ -55,7 +55,7 @@ if (isset($conexion) && $conexion) {
         $clientCommissionGateActive = !empty($commissionGate['enabled']) && empty($commissionGate['paid']);
         $clientCommissionPaid = !empty($commissionGate['paid']);
         if ($clientCommissionGateActive) {
-            $clientCommissionMessage = 'Provider details and free messaging unlock after the commission payment is completed.';
+            $clientCommissionMessage = 'Messaging remains available in Inbox. The commission payment may still unlock provider details or other downstream steps.';
         }
     }
 }
@@ -483,13 +483,13 @@ if (isset($conexion) && $conexion) {
                             <div class="inbox-header">
                                 <div id="client-inbox-title">Select a MedTravel or Medical Provider thread</div>
                             </div>
-                            <div id="client-inbox-fee-alert" class="note note-warning" style="<?php echo $clientFeeGateActive ? '' : 'display:none;'; ?>">
+                            <div id="client-inbox-fee-alert" class="note note-warning" style="display:none;">
                                 <strong>Coordination Fee required.</strong>
-                                Unlock after Coordination Fee.
+                                Messaging remains available here. The coordination fee may still unlock additional downstream steps.
                             </div>
-                            <div id="client-inbox-commission-alert" class="note note-info" style="<?php echo $clientCommissionGateActive ? '' : 'display:none;'; ?>">
+                            <div id="client-inbox-commission-alert" class="note note-info" style="display:none;">
                                 <strong>Commission payment required.</strong>
-                                <?php echo htmlspecialchars($clientCommissionMessage !== '' ? $clientCommissionMessage : 'Provider details and free messaging unlock after the commission payment is completed.', ENT_QUOTES, 'UTF-8'); ?>
+                                <?php echo htmlspecialchars($clientCommissionMessage !== '' ? $clientCommissionMessage : 'Messaging remains available in Inbox. The commission payment may still unlock provider details or other downstream steps.', ENT_QUOTES, 'UTF-8'); ?>
                             </div>
                             <div id="client-inbox-structured-alert" class="note note-info" style="display:none; margin-bottom:12px;">
                                 <strong>There are formal actions pending in a service thread.</strong>
@@ -497,7 +497,7 @@ if (isset($conexion) && $conexion) {
                             </div>
                             <div id="client-inbox-fee-actions" class="well" style="display:none;margin-bottom:12px;">
                                 <h4 style="margin-top:0;">Formal quick actions</h4>
-                                <p class="text-muted" style="margin-bottom:10px;">While the coordination fee is still pending, free-form chat remains blocked. You can still record formal updates below.</p>
+                                <p class="text-muted" style="margin-bottom:10px;">The coordination fee is still pending. You can keep chatting here and also record formal updates below when you want them reflected in the case workflow.</p>
                                 <div class="btn-group btn-group-sm" id="client-inbox-quick-actions" role="group" style="margin-bottom:12px;">
                                     <button type="button" class="btn btn-default client-quick-action" data-action="REQUEST_AVAILABILITY">Ask about availability</button>
                                     <button type="button" class="btn btn-default client-quick-action" data-action="DATES_FLEXIBLE">My dates are flexible</button>
@@ -556,12 +556,12 @@ if (isset($conexion) && $conexion) {
                                 <form id="client-inbox-send-form" style="margin-top:12px;">
                                     <div class="form-group" style="margin-bottom:8px;">
                                         <label for="client-inbox-message">Write a message</label>
-                                        <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..." <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>></textarea>
+                                        <textarea class="form-control" id="client-inbox-message" rows="3" maxlength="2000" placeholder="Write your message..."></textarea>
                                     </div>
                                     <div id="client-typing-indicator" style="font-size:12px;color:#999;min-height:18px;margin-bottom:4px;">Support is typing…</div>
                                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                                        <button type="button" class="btn btn-default btn-sm" id="client-chat-attach-btn" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paperclip"></i> Attach document</button>
-                                        <button type="submit" class="btn btn-primary btn-sm" id="client-inbox-send-btn" style="margin-left:auto;" <?php echo $clientFeeGateActive ? 'disabled' : ''; ?>><i class="fa fa-paper-plane"></i> Send</button>
+                                        <button type="button" class="btn btn-default btn-sm" id="client-chat-attach-btn"><i class="fa fa-paperclip"></i> Attach document</button>
+                                        <button type="submit" class="btn btn-primary btn-sm" id="client-inbox-send-btn" style="margin-left:auto;"><i class="fa fa-paper-plane"></i> Send</button>
                                     </div>
                                     <div id="client-chat-attach-status" class="text-muted"></div>
                                     <div class="text-muted" style="margin-top:8px;">Chat is open from the start. Use formal actions when you need to register a decision or a request that should affect the case workflow. Free-form messages do not change status by themselves.</div>

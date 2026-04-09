@@ -476,23 +476,12 @@ function client_inbox_fee_gate_state($conexion, $bookingRequestId)
 function client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate = null)
 {
     $bookingRequestId = (int)$bookingRequestId;
-    $feeGate = is_array($feeGate) ? $feeGate : client_inbox_fee_gate_state($conexion, $bookingRequestId);
-    $feeLocked = !empty($feeGate['fee_locked']);
-
-    $canSendFreeMessage = !$feeLocked;
-    $reason = $feeLocked ? 'fee_locked' : '';
-
-    $notice = '';
-    if ($feeLocked) {
-        $notice = 'Free-form chat is blocked until the coordination fee is paid. Formal actions remain available where applicable.';
-    }
-
     return [
         'booking_status' => '',
         'stage_allows_free_message' => true,
-        'can_send_free_message' => $canSendFreeMessage,
-        'blocked_reason' => $reason,
-        'notice' => $notice,
+        'can_send_free_message' => true,
+        'blocked_reason' => '',
+        'notice' => '',
     ];
 }
 
@@ -800,26 +789,6 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
     $commissionLocked = $commissionGateEnabled && !$commissionPaid;
     $freeMessageState = client_inbox_free_message_state($conexion, $bookingRequestId, $feeGate);
     $canSendFreeMessage = !empty($freeMessageState['can_send_free_message']);
-    if (!$feeLocked && !$isCareThread) {
-        if ($commissionGateEnabled) {
-            if (!$commissionPaid) {
-                $canSendFreeMessage = false;
-                $freeMessageState['can_send_free_message'] = false;
-                $freeMessageState['blocked_reason'] = 'commission';
-                $freeMessageState['notice'] = 'Messaging is locked until the commission is paid. Please contact MedTravel if you need help.';
-            } else {
-                $canSendFreeMessage = true;
-                $freeMessageState['can_send_free_message'] = true;
-                $freeMessageState['blocked_reason'] = '';
-                $freeMessageState['notice'] = '';
-            }
-        } else {
-            $canSendFreeMessage = true;
-            $freeMessageState['can_send_free_message'] = true;
-            $freeMessageState['blocked_reason'] = '';
-            $freeMessageState['notice'] = '';
-        }
-    }
     if ($action === 'send_message') {
         $messageInput = trim((string)($_POST['message'] ?? ''));
         $structuredAllowlist = [
@@ -829,12 +798,6 @@ if ($action === 'list_messages' || $action === 'mark_read' || $action === 'send_
             "I don't have the requested documents yet."
         ];
         $isStructured = client_inbox_is_structured_message($messageInput, $structuredAllowlist);
-        if ($commissionLocked && !$isStructured) {
-            client_inbox_compose_locked('commission', $ctx, $clientUserId);
-        }
-        if ($feeLocked && !$isStructured) {
-            client_inbox_compose_locked('fee', $ctx, $clientUserId);
-        }
         if (!$isCareThread && !$canSendFreeMessage && !$isStructured) {
             client_inbox_compose_locked('review', $ctx, $clientUserId);
         }
@@ -1057,11 +1020,13 @@ if ($action === 'list_messages') {
         'fee_required' => $feeRequired,
         'fee_status' => $feeStatus,
         'fee_locked' => !empty($feeLocked),
-        'fee_message' => !empty($feeLocked) ? 'Unlock after Coordination Fee.' : '',
+        'fee_message' => !empty($feeLocked)
+            ? 'Messaging remains available here. The coordination fee may still unlock additional downstream steps.'
+            : '',
         'commission_gate_enabled' => $commissionGateEnabled ? 1 : 0,
         'commission_paid' => $commissionPaid ? 1 : 0,
         'commission_message' => $commissionLocked
-            ? 'Provider details and free messaging unlock after the commission payment is completed.'
+            ? 'Messaging remains available in Inbox. The commission payment may still unlock provider details or other downstream steps.'
             : '',
         'can_send_free_message' => !empty($freeMessageState['can_send_free_message']),
         'free_message_blocked_reason' => (string)($freeMessageState['blocked_reason'] ?? ''),

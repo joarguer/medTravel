@@ -2558,10 +2558,16 @@ if ($action === 'get_detail') {
     $row['assigned_staff_id'] = (int)($row['assigned_staff_id'] ?? 0);
     $row['can_assign_staff'] = (!$isLinkedMedicalStaffSession && ($row['item_type'] ?? '') === 'medical_offer' && (int)$row['provider_id'] > 0 && ((int)$row['offer_id'] > 0 || (int)$row['service_id'] > 0)) ? 1 : 0;
     $row = apply_operational_owner_meta($row, $isLinkedMedicalStaffSession, $currentLinkedStaffId);
+    $linkedStaffOperationalConversationAccess = (!$isAdminSession && $isLinkedMedicalStaffSession)
+        ? mt_provider_staff_can_open_operational_conversation($conexion, $row, $providerId, $currentLinkedStaffId)
+        : false;
 
     $row['coordination_unlocked'] = $coordinationFee['unlocked'] ? 1 : 0;
     $row['coordination_actions_locked'] = (!$coordinationFee['unlocked'] && !$isAdminSession) ? 1 : 0;
     $row['coordination_pending_message'] = $coordinationFee['message'];
+    $row['coordination_inbox_locked'] = (!$coordinationFee['unlocked'] && !$isAdminSession && !$linkedStaffOperationalConversationAccess) ? 1 : 0;
+    $row['coordination_inbox_pending_message'] = $row['coordination_inbox_locked'] ? $coordinationFee['message'] : '';
+    $row['provider_staff_operational_conversation_access'] = $linkedStaffOperationalConversationAccess ? 1 : 0;
     $row['booking_status_label_es'] = generic_status_label_es($row['booking_status'] ?? '');
     $row['item_status_label_es'] = generic_status_label_es($row['item_status'] ?? '');
     $row['provider_status_label_es'] = generic_status_label_es($row['provider_status'] ?? '');

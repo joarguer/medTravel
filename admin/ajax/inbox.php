@@ -444,10 +444,22 @@ function admin_inbox_fetch_scoped_item($conexion, $itemId, $scope)
     $hasItemsSoftDelete = inbox_table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $hasRequestsSoftDelete = inbox_table_has_column($conexion, 'booking_requests', 'is_deleted');
     $hasAdditionalNotes = inbox_table_has_column($conexion, 'booking_requests', 'additional_notes');
+    $providerIdExpr = inbox_table_has_column($conexion, 'booking_request_items', 'provider_id') ? 'bri.provider_id' : 'NULL';
+    $assignedStaffExpr = inbox_table_has_column($conexion, 'booking_request_items', 'assigned_staff_id') ? 'bri.assigned_staff_id' : 'NULL';
+    $currentStatusExpr = inbox_table_has_column($conexion, 'booking_request_items', 'item_status')
+        ? "CASE
+                WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                WHEN bri.item_status = 'completed' THEN 'treatment_completed'
+                ELSE bri.item_status
+           END"
+        : "'pending_provider'";
 
     $sql = "SELECT
                 bri.id AS item_id,
                 bri.booking_request_id AS request_id,
+                {$providerIdExpr} AS provider_id,
+                {$assignedStaffExpr} AS assigned_staff_id,
+                {$currentStatusExpr} AS current_status,
                 br.destination";
     $sql .= $hasAdditionalNotes ? ", br.additional_notes" : ", '' AS additional_notes";
     $sql .= " FROM booking_request_items bri
@@ -573,9 +585,33 @@ function admin_inbox_resolve_context($conexion, $scope, $threadType, $requestId,
         'thread_type' => 'ITEM',
         'request_id' => $requestId,
         'item_id' => $itemId,
+        'provider_id' => (int)($item['provider_id'] ?? 0),
+        'assigned_staff_id' => (int)($item['assigned_staff_id'] ?? 0),
+        'current_status' => (string)($item['current_status'] ?? ''),
         'destination' => (string)($item['destination'] ?? ''),
         'additional_notes' => (string)($item['additional_notes'] ?? ''),
     ];
+}
+
+function admin_inbox_provider_staff_operational_conversation_access($conexion, $scope, $ctx)
+{
+    if (!empty($scope['is_admin'])) {
+        return false;
+    }
+    if (strtoupper((string)($scope['reader_role'] ?? '')) !== 'PROVIDER') {
+        return false;
+    }
+    if (strtoupper((string)($ctx['thread_type'] ?? '')) !== 'ITEM' || (int)($ctx['item_id'] ?? 0) <= 0) {
+        return false;
+    }
+
+    $providerId = (int)($scope['provider_id'] ?? 0);
+    $linkedStaffId = (int)($scope['linked_staff_id'] ?? 0);
+    if ($providerId <= 0 || $linkedStaffId <= 0 || !function_exists('mt_provider_staff_can_open_operational_conversation')) {
+        return false;
+    }
+
+    return mt_provider_staff_can_open_operational_conversation($conexion, $ctx, $providerId, $linkedStaffId);
 }
 
 function admin_inbox_decode_payload($raw)
@@ -785,12 +821,20 @@ if ($action === 'list_messages' || $action === 'send_message' || $action === 'se
 
 if ($action === 'list_messages') {
     $bookingRequestId = (int)($ctx['request_id'] ?? 0);
+    $providerStaffConversationAccess = admin_inbox_provider_staff_operational_conversation_access($conexion, $scope, $ctx);
     $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
         ? is_booking_fee_required($conexion, $bookingRequestId)
         : false;
+    if ($providerStaffConversationAccess) {
+        $feeLocked = false;
+    }
     $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
     $commissionGateEnabled = !empty($commissionGate['enabled']);
     $commissionPaid = !empty($commissionGate['paid']);
+    if ($providerStaffConversationAccess) {
+        $commissionGateEnabled = false;
+        $commissionPaid = true;
+    }
     $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
     $isProviderItemThread = empty($scope['is_admin'])
         && strtoupper((string)($scope['reader_role'] ?? '')) === 'PROVIDER'
@@ -1045,12 +1089,20 @@ if ($action === 'send_message') {
         admin_inbox_err('inbox_messages_not_available', 409);
     }
     $bookingRequestId = (int)($ctx['request_id'] ?? 0);
+    $providerStaffConversationAccess = admin_inbox_provider_staff_operational_conversation_access($conexion, $scope, $ctx);
     $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
         ? is_booking_fee_required($conexion, $bookingRequestId)
         : false;
+    if ($providerStaffConversationAccess) {
+        $feeLocked = false;
+    }
     $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
     $commissionGateEnabled = !empty($commissionGate['enabled']);
     $commissionPaid = !empty($commissionGate['paid']);
+    if ($providerStaffConversationAccess) {
+        $commissionGateEnabled = false;
+        $commissionPaid = true;
+    }
     $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
     $isProviderItemThread = empty($scope['is_admin'])
         && strtoupper((string)($scope['reader_role'] ?? '')) === 'PROVIDER'
@@ -1213,13 +1265,21 @@ if ($action === 'upload_documents') {
     }
 
     $bookingRequestId = (int)($ctx['request_id'] ?? 0);
+    $providerStaffConversationAccess = admin_inbox_provider_staff_operational_conversation_access($conexion, $scope, $ctx);
     $feeLocked = (!empty($bookingRequestId) && empty($scope['is_admin']))
         ? is_booking_fee_required($conexion, $bookingRequestId)
         : false;
+    if ($providerStaffConversationAccess) {
+        $feeLocked = false;
+    }
     $freeMessageState = admin_inbox_free_message_state($conexion, $bookingRequestId, $scope, $feeLocked);
     $commissionGate = commission_gate_status($conexion, $bookingRequestId, (int)($ctx['item_id'] ?? 0));
     $commissionGateEnabled = !empty($commissionGate['enabled']);
     $commissionPaid = !empty($commissionGate['paid']);
+    if ($providerStaffConversationAccess) {
+        $commissionGateEnabled = false;
+        $commissionPaid = true;
+    }
     $isProviderItemThread = empty($scope['is_admin'])
         && strtoupper((string)($scope['reader_role'] ?? '')) === 'PROVIDER'
         && strtoupper((string)($ctx['thread_type'] ?? '')) === 'ITEM'

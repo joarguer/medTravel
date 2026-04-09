@@ -158,6 +158,108 @@ function is_booking_fee_required($conexion, $bookingRequestId)
     return mt_fee_booking_has_provider_confirmed_item($conexion, $bookingRequestId);
 }
 
+if (!function_exists('mt_normalize_operational_item_status')) {
+    function mt_normalize_operational_item_status($status)
+    {
+        $status = strtolower(trim((string)$status));
+        if ($status === '' || $status === 'pending_admin' || $status === 'pending_review') {
+            return 'pending_provider';
+        }
+        if ($status === 'completed') {
+            return 'treatment_completed';
+        }
+        return $status;
+    }
+}
+
+if (!function_exists('mt_provider_staff_operational_conversation_statuses')) {
+    function mt_provider_staff_operational_conversation_statuses()
+    {
+        return [
+            'provider_confirmed',
+            'client_accepted',
+            'treatment_completed',
+            'post_treatment_follow_up',
+        ];
+    }
+}
+
+if (!function_exists('mt_provider_staff_fetch_operational_item_context')) {
+    function mt_provider_staff_fetch_operational_item_context($conexion, $itemId)
+    {
+        $itemId = (int)$itemId;
+        if ($itemId <= 0 || !mt_fee_table_exists($conexion, 'booking_request_items')) {
+            return null;
+        }
+        if (!mt_fee_table_has_column($conexion, 'booking_request_items', 'provider_id')
+            || !mt_fee_table_has_column($conexion, 'booking_request_items', 'assigned_staff_id')
+            || !mt_fee_table_has_column($conexion, 'booking_request_items', 'item_status')) {
+            return null;
+        }
+
+        $hasItemsSoftDelete = mt_fee_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+        $sql = "SELECT
+                    bri.provider_id,
+                    bri.assigned_staff_id,
+                    CASE
+                        WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+                        WHEN bri.item_status = 'completed' THEN 'treatment_completed'
+                        ELSE bri.item_status
+                    END AS current_status
+                FROM booking_request_items bri
+                WHERE bri.id = ?";
+        if ($hasItemsSoftDelete) {
+            $sql .= " AND bri.is_deleted = 0";
+        }
+        $sql .= " LIMIT 1";
+
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return null;
+        }
+        mysqli_stmt_bind_param($stmt, 'i', $itemId);
+        if (!mysqli_stmt_execute($stmt)) {
+            mysqli_stmt_close($stmt);
+            return null;
+        }
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        mysqli_stmt_close($stmt);
+        return is_array($row) ? $row : null;
+    }
+}
+
+if (!function_exists('mt_provider_staff_can_open_operational_conversation')) {
+    function mt_provider_staff_can_open_operational_conversation($conexion, $itemOrRow, $providerId = 0, $linkedStaffId = 0)
+    {
+        $providerId = (int)$providerId;
+        $linkedStaffId = (int)$linkedStaffId;
+        if ($providerId <= 0 || $linkedStaffId <= 0) {
+            return false;
+        }
+
+        $row = is_array($itemOrRow)
+            ? $itemOrRow
+            : mt_provider_staff_fetch_operational_item_context($conexion, (int)$itemOrRow);
+        if (!is_array($row)) {
+            return false;
+        }
+
+        $itemProviderId = (int)($row['provider_id'] ?? 0);
+        $assignedStaffId = (int)($row['assigned_staff_id'] ?? 0);
+        $currentStatus = mt_normalize_operational_item_status($row['current_status'] ?? $row['item_status'] ?? '');
+
+        if ($itemProviderId <= 0 || $itemProviderId !== $providerId) {
+            return false;
+        }
+        if ($assignedStaffId <= 0 || $assignedStaffId !== $linkedStaffId) {
+            return false;
+        }
+
+        return in_array($currentStatus, mt_provider_staff_operational_conversation_statuses(), true);
+    }
+}
+
 function mt_fee_booking_required_for_owner_scope($conexion, $bookingRequestId, $ownerScope)
 {
     $bookingRequestId = (int)$bookingRequestId;

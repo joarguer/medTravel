@@ -352,6 +352,7 @@ El modelo previo de `Stage 2 Commission Unlock` se mantiene como compatibilidad 
 - A coordination or commission payment may unlock additional contact details or downstream operational steps.
 - This stage exists only for providers or agreements where the gate is enabled.
 - All communication and coordination should continue to be representable inside the platform.
+- En `Inbox` cliente, ese gate comercial no debe bloquear el composer ni `send_message`; opera como capa informativa y/o de desbloqueo downstream, no como corte del chat libre dentro de la plataforma.
 
 ### Configuracion por proveedor
 
@@ -496,6 +497,9 @@ El portal del paciente muestra un panel unico de seguimiento del caso que reempl
 - En sesiones de staff vinculado, la navegacion se reduce a operacion asignada: `Mis solicitudes asignadas`, `Inbox asignado` y `Agenda asignada`.
 - En agenda operativa se aplica scope por `assigned_staff_id` para eventos ITEM de solicitudes asignadas al staff.
 - La UI de inbox y agenda muestra contexto explicito de seguimiento asignado para evitar confusion con supervision general del provider.
+- En `Inbox` por hilo ITEM, el gate comercial del provider sigue aplicando al owner/admin del prestador cuando corresponda.
+- El staff vinculado asignado operativamente al item no hereda automaticamente ese gate solo para acceso conversacional a `Inbox` ITEM cuando concurren las tres condiciones: mismo `provider_id`, `assigned_staff_id` igual al staff en sesion y estado del item en `provider_confirmed`, `client_accepted`, `treatment_completed` o `post_treatment_follow_up`.
+- Este bypass es solo operativo/conversacional para `Inbox` ITEM y no arrastra cambios automaticos a `Calendar` o agenda.
 
 ### Regla canónica de asignación inicial del staff (implementada)
 

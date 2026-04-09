@@ -795,6 +795,14 @@ Regla de compatibilidad durante despliegue por fases:
 - La auto-asignacion (`linked_staff_auto_claim`) senala disponibilidad pero no persiste la asignacion automaticamente; eso es frente pendiente.
 - La semantica de ownership visible nacio en `my_booking_requests`; la cobertura y consistencia completa en todas las superficies sigue como frente abierto.
 
+### Aclaracion de gating conversacional operativo en Inbox ITEM (desde 2026-04-09)
+
+- El runtime separa el gate comercial general del provider del acceso conversacional operativo del staff asignado en `Inbox` ITEM.
+- `provider` owner/admin mantiene su gating comercial actual de fee/comision cuando aplique.
+- El staff vinculado asignado puede entrar y operar en `Inbox` ITEM sin heredar automaticamente ese gate solo si el item pertenece al mismo `provider_id`, `assigned_staff_id` coincide con el staff en sesion y el estado del item es `provider_confirmed`, `client_accepted`, `treatment_completed` o `post_treatment_follow_up`.
+- Esta excepcion no cambia por arrastre `app_calendar.php`, `admin/ajax/calendar.php` ni la semantica de agenda: `Inbox` sigue siendo conversacion y `Calendar` sigue siendo agenda.
+- En `client/app_inbox.php`, el gate comercial de fee/comision no bloquea composer ni `send_message` del chat libre; solo puede seguir informando estado comercial y/o condicionar desbloqueos downstream o detalles sensibles fuera del texto libre del hilo.
+
 ## Nuevo esquema de trazabilidad (migracion 2026_04_02_agent_assisted_booking)
 
 ### Columnas nuevas en `booking_requests`

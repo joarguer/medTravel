@@ -64,7 +64,11 @@ $clientName = htmlspecialchars((string)($_SESSION['nombre_usuario'] ?? 'Client')
 $avatarRaw = trim((string)($_SESSION['avatar'] ?? ''));
 $avatarUrl = '/assets/layouts/layout/img/avatar3.jpg';
 if ($avatarRaw !== '') {
-    $avatarUrl = '/admin/' . ltrim($avatarRaw, '/');
+    $avatarCandidate = '/admin/' . ltrim($avatarRaw, '/');
+    $avatarPath = __DIR__ . '/../../admin/' . ltrim($avatarRaw, '/');
+    if (is_file($avatarPath) && !preg_match('#/default\.(png|jpe?g|gif|webp)$#i', $avatarCandidate)) {
+        $avatarUrl = $avatarCandidate;
+    }
 }
 
 $notifPayload = ['count' => 0, 'items' => []];

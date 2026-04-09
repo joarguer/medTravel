@@ -1811,7 +1811,7 @@
     }
 
     function showTypingIndicator(label) {
-        if (feeGateActive || commissionGateActive || !freeMessageAllowed) {
+        if (!freeMessageAllowed) {
             return;
         }
         var $el = $('#client-typing-indicator');
@@ -1882,13 +1882,7 @@
         var $alert = $('#client-inbox-fee-alert');
         var $actions = $('#client-inbox-fee-actions');
         if ($alert.length) {
-            if (feeGateActive) {
-                var text = message || 'Coordination Fee required. Unlock after Coordination Fee.';
-                $alert.html('<strong>Coordination Fee required.</strong> ' + esc(text));
-                $alert.show();
-            } else {
-                $alert.hide();
-            }
+            $alert.hide();
         }
         if ($actions.length) {
             if (feeGateActive) {
@@ -1905,19 +1899,13 @@
         commissionGateMessage = String(message || commissionGateMessage || '');
         var $alert = $('#client-inbox-commission-alert');
         if ($alert.length) {
-            if (commissionGateActive) {
-                var text = commissionGateMessage || 'Provider details and free messaging unlock after the commission payment is completed.';
-                $alert.html('<strong>Commission payment required.</strong> ' + esc(text));
-                $alert.show();
-            } else {
-                $alert.hide();
-            }
+            $alert.hide();
         }
     }
 
     function setComposeGateState(canSendFreeMessage, noticeMessage) {
         freeMessageAllowed = !!canSendFreeMessage;
-        var permissionBlocked = feeGateActive || commissionGateActive || !freeMessageAllowed;
+        var permissionBlocked = !freeMessageAllowed;
         var composeBlocked = permissionBlocked || composeBusy;
         if (typeof noticeMessage === 'string' && noticeMessage !== '') {
             lastComposeNotice = noticeMessage;
@@ -1951,9 +1939,6 @@
         if ($note.length) {
             if (composeBusy) {
                 $note.text(composeBusyMessage || 'Uploading document...');
-                $note.show();
-            } else if (commissionGateActive) {
-                $note.text(commissionGateMessage || 'Free-form chat is blocked until the commission payment is completed. Formal actions remain available where applicable.');
                 $note.show();
             } else if (!freeMessageAllowed) {
                 $note.text(noticeMessage || lastComposeNotice || 'Free-form chat is blocked by a commercial condition. Formal actions remain available where applicable.');
@@ -2602,7 +2587,10 @@
             var computedFeeLocked = (feeRequired && feeStatus !== 'paid');
             var feeLocked = !!res.fee_locked || computedFeeLocked;
             var isCareThread = String(currentThread.thread_type || '').toUpperCase() === 'CARE';
-            setFeeGateState(isCareThread ? false : feeLocked, res.fee_message || 'Unlock after Coordination Fee.');
+            setFeeGateState(
+                isCareThread ? false : feeLocked,
+                res.fee_message || 'Messaging remains available here. The coordination fee may still unlock additional downstream steps.'
+            );
             var commissionGateEnabled = parseInt(res.commission_gate_enabled || 0, 10) === 1;
             var commissionPaidFlag = parseInt(res.commission_paid || 0, 10) === 1;
             setCommissionGateState(commissionGateEnabled, commissionPaidFlag, res.commission_message || '');
@@ -2637,7 +2625,7 @@
             var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
             setStructuredCareAlert(false, 0, 0);
             if (res && res.code === 'FEE_REQUIRED') {
-                setFeeGateState(true, 'Unlock after Coordination Fee.');
+                setFeeGateState(true, 'Messaging remains available here. The coordination fee may still unlock additional downstream steps.');
                 setComposeGateState(true, '');
                 renderInboxHeader(
                     $('#client-inbox-title'),
@@ -2743,8 +2731,11 @@
             return deferred.promise();
         }
         if (feeGateActive && String(currentThread.thread_type || '').toUpperCase() !== 'CARE') {
-            toastr.warning('Unlock after Coordination Fee');
-            deferred.reject({ code: 'FEE_REQUIRED', message: 'Unlock after Coordination Fee' });
+            toastr.warning('Coordination fee required');
+            deferred.reject({
+                code: 'FEE_REQUIRED',
+                message: 'Messaging remains available here. The coordination fee may still unlock additional downstream steps.'
+            });
             return deferred.promise();
         }
 
@@ -2794,14 +2785,14 @@
             var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
             updatePendingStatus(pendingId, 'Failed');
             if (res && res.code === 'FEE_REQUIRED') {
-                setFeeGateState(true, 'Unlock after Coordination Fee.');
+                setFeeGateState(true, 'Messaging remains available here. The coordination fee may still unlock additional downstream steps.');
                 setComposeGateState(true, '');
-                toastr.warning('Unlock after Coordination Fee');
+                toastr.warning('Coordination fee required');
                 deferred.reject(res);
                 return;
             }
             if (res && res.code === 'COMMISSION_REQUIRED') {
-                setCommissionGateState(true, false, res.message || 'Provider details and free messaging unlock after the commission payment is completed.');
+                setCommissionGateState(true, false, res.message || 'Messaging remains available in Inbox. The commission payment may still unlock provider details or other downstream steps.');
                 setComposeGateState(true, '');
                 toastr.warning('Commission payment required');
                 deferred.reject(res);
@@ -3057,9 +3048,9 @@
         }).fail(function (xhr) {
             var res = xhr && xhr.responseJSON ? xhr.responseJSON : null;
             if (res && res.code === 'FEE_REQUIRED') {
-                setFeeGateState(true, 'Unlock after Coordination Fee.');
+                setFeeGateState(true, 'Messaging remains available here. The coordination fee may still unlock additional downstream steps.');
                 setComposeGateState(true, '');
-                toastr.warning('Unlock after Coordination Fee');
+                toastr.warning('Coordination fee required');
                 return;
             }
             if (res && res.code === 'FREE_MESSAGE_BLOCKED') {
@@ -3277,7 +3268,7 @@
 
         setStructuredCareAlert(false, 0, 0);
         if (feeGateActive) {
-            setFeeGateState(true, 'Unlock after Coordination Fee.');
+            setFeeGateState(true, 'Messaging remains available here. The coordination fee may still unlock additional downstream steps.');
         }
         setComposeGateState(true, '');
 

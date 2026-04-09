@@ -151,6 +151,7 @@ Alias al backlog / pasos de ejecución canónico.
   - inbox asignado
   - agenda asignada
   - scope de agenda por `booking_request_items.assigned_staff_id`
+- DONE 2026-04-09: en `Inbox` ITEM, el staff asignado con scope operativo valido no hereda automaticamente el gate comercial del provider; `Calendar` no cambia por arrastre
 - DONE 2026-04-02 (commit `9c05fdb`): asignacion inicial de staff alineada entre booking publico y booking asistido:
   - autoasignacion solo cuando existe un unico staff elegible
   - sin asignacion cuando hay multiples elegibles o ninguno

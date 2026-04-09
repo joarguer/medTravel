@@ -389,7 +389,8 @@ $bookingSql .= " FROM booking_requests br WHERE " . $ownerScope['sql'];
 if ($hasBookingSoftDelete) {
     $bookingSql .= " AND br.is_deleted = 0";
 }
-$bookingSql .= " ORDER BY COALESCE(br.updated_at, br.created_at) DESC, br.id DESC";
+$bookingOrderExpr = $hasBookingUpdatedAt ? 'COALESCE(br.updated_at, br.created_at)' : 'br.created_at';
+$bookingSql .= " ORDER BY {$bookingOrderExpr} DESC, br.id DESC";
 
 $bookings = [];
 $bookingIds = [];

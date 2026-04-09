@@ -76,6 +76,80 @@ function client_bind_params($stmt, $types, &$params)
     return call_user_func_array('mysqli_stmt_bind_param', $bind);
 }
 
+function client_add_unique_email(&$emails, $email)
+{
+    $normalized = strtolower(trim((string)$email));
+    if ($normalized === '' || !filter_var($normalized, FILTER_VALIDATE_EMAIL)) {
+        return;
+    }
+    if (!in_array($normalized, $emails, true)) {
+        $emails[] = $normalized;
+    }
+}
+
+function client_collect_identity_emails($conexion, $clientUserId, $clientEmail)
+{
+    static $cache = [];
+
+    $clientUserId = (int)$clientUserId;
+    $clientEmail = strtolower(trim((string)$clientEmail));
+    $cacheKey = $clientUserId . '|' . $clientEmail;
+    if (isset($cache[$cacheKey])) {
+        return $cache[$cacheKey];
+    }
+
+    $emails = [];
+    client_add_unique_email($emails, $clientEmail);
+
+    if ($clientUserId > 0 && client_table_exists($conexion, 'usuarios')) {
+        $userIdCol = client_table_has_column($conexion, 'usuarios', 'id')
+            ? 'id'
+            : (client_table_has_column($conexion, 'usuarios', 'id_usuario') ? 'id_usuario' : '');
+        if ($userIdCol !== '' && client_table_has_column($conexion, 'usuarios', 'email')) {
+            $stmtUser = mysqli_prepare($conexion, "SELECT email FROM usuarios WHERE {$userIdCol} = ? LIMIT 1");
+            if ($stmtUser) {
+                mysqli_stmt_bind_param($stmtUser, 'i', $clientUserId);
+                if (mysqli_stmt_execute($stmtUser)) {
+                    $resUser = mysqli_stmt_get_result($stmtUser);
+                    $rowUser = $resUser ? mysqli_fetch_assoc($resUser) : null;
+                    client_add_unique_email($emails, $rowUser['email'] ?? '');
+                }
+                mysqli_stmt_close($stmtUser);
+            }
+        }
+    }
+
+    if ($clientUserId > 0 && client_table_exists($conexion, 'clientes') && client_table_has_column($conexion, 'clientes', 'email')) {
+        $clientesMapCol = client_table_has_column($conexion, 'clientes', 'client_user_id')
+            ? 'client_user_id'
+            : (client_table_has_column($conexion, 'clientes', 'user_id') ? 'user_id' : '');
+        if ($clientesMapCol !== '') {
+            $stmtClient = mysqli_prepare(
+                $conexion,
+                "SELECT email
+                 FROM clientes
+                 WHERE {$clientesMapCol} = ?
+                   AND TRIM(COALESCE(email, '')) <> ''
+                 ORDER BY id DESC
+                 LIMIT 10"
+            );
+            if ($stmtClient) {
+                mysqli_stmt_bind_param($stmtClient, 'i', $clientUserId);
+                if (mysqli_stmt_execute($stmtClient)) {
+                    $resClient = mysqli_stmt_get_result($stmtClient);
+                    while ($resClient && ($rowClient = mysqli_fetch_assoc($resClient))) {
+                        client_add_unique_email($emails, $rowClient['email'] ?? '');
+                    }
+                }
+                mysqli_stmt_close($stmtClient);
+            }
+        }
+    }
+
+    $cache[$cacheKey] = $emails;
+    return $emails;
+}
+
 function client_build_booking_owner_scope($conexion, $tableAlias, $clientUserId, $clientEmail)
 {
     $alias = trim((string)$tableAlias);
@@ -86,29 +160,55 @@ function client_build_booking_owner_scope($conexion, $tableAlias, $clientUserId,
     $clientUserId = (int)$clientUserId;
     $clientEmail = strtolower(trim((string)$clientEmail));
     $hasClientUserId = client_table_has_column($conexion, 'booking_requests', 'client_user_id');
+    $hasLegacyUserId = client_table_has_column($conexion, 'booking_requests', 'user_id');
     $hasEmail = client_table_has_column($conexion, 'booking_requests', 'email');
 
-    if ($hasClientUserId && $clientUserId > 0 && $hasEmail && $clientEmail !== '') {
-        return [
-            'sql' => "({$alias}.client_user_id = ? OR ({$alias}.client_user_id IS NULL AND LOWER(TRIM({$alias}.email)) = LOWER(TRIM(?))))",
-            'types' => 'is',
-            'params' => [$clientUserId, $clientEmail],
-        ];
+    $conditions = [];
+    $types = '';
+    $params = [];
+
+    if ($clientUserId > 0 && $hasClientUserId) {
+        $conditions[] = "{$alias}.client_user_id = ?";
+        $types .= 'i';
+        $params[] = $clientUserId;
     }
 
-    if ($hasClientUserId && $clientUserId > 0) {
-        return [
-            'sql' => "{$alias}.client_user_id = ?",
-            'types' => 'i',
-            'params' => [$clientUserId],
-        ];
+    if ($clientUserId > 0 && $hasLegacyUserId) {
+        $conditions[] = "{$alias}.user_id = ?";
+        $types .= 'i';
+        $params[] = $clientUserId;
     }
 
-    if ($hasEmail && $clientEmail !== '') {
+    $identityEmails = $hasEmail ? client_collect_identity_emails($conexion, $clientUserId, $clientEmail) : [];
+    if (!empty($identityEmails)) {
+        $emailConditions = [];
+        foreach ($identityEmails as $email) {
+            $emailConditions[] = "LOWER(TRIM({$alias}.email)) = LOWER(TRIM(?))";
+            $types .= 's';
+            $params[] = $email;
+        }
+
+        $emailSql = '(' . implode(' OR ', $emailConditions) . ')';
+        $unownedConditions = [];
+        if ($hasClientUserId) {
+            $unownedConditions[] = "COALESCE({$alias}.client_user_id, 0) = 0";
+        }
+        if ($hasLegacyUserId) {
+            $unownedConditions[] = "COALESCE({$alias}.user_id, 0) = 0";
+        }
+
+        if (!empty($unownedConditions)) {
+            $conditions[] = '((' . implode(' AND ', $unownedConditions) . ') AND ' . $emailSql . ')';
+        } else {
+            $conditions[] = $emailSql;
+        }
+    }
+
+    if (!empty($conditions)) {
         return [
-            'sql' => "LOWER(TRIM({$alias}.email)) = LOWER(TRIM(?))",
-            'types' => 's',
-            'params' => [$clientEmail],
+            'sql' => '(' . implode(' OR ', $conditions) . ')',
+            'types' => $types,
+            'params' => $params,
         ];
     }
 
