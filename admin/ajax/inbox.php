@@ -319,6 +319,18 @@ function admin_inbox_status_label($status)
     if ($status === 'pending_admin' || $status === 'pending_review') {
         return 'pending_provider';
     }
+    if ($status === 'appointment_confirmed') {
+        return 'provider_confirmed';
+    }
+    if ($status === 'appointment_requested_change') {
+        return 'provider_proposed_change';
+    }
+    if ($status === 'appointment_cancelled') {
+        return 'cancelled';
+    }
+    if ($status === 'appointment_proposed') {
+        return 'awaiting_client';
+    }
     return $status;
 }
 
@@ -1635,7 +1647,15 @@ if ($action === 'send_quick_reply') {
         mysqli_stmt_close($stmtUpdate);
     }
 
+    $messageNote = trim((string)($_POST['message_note'] ?? ''));
+    if (mb_strlen($messageNote) > 2000) {
+        admin_inbox_err('message_too_long', 422);
+    }
+
     $message = '[REPLY] ' . $quickReplies[$key];
+    if ($messageNote !== '') {
+        $message .= "\n" . $messageNote;
+    }
     $threadId = (string)$ctx['thread_id'];
     $threadType = (string)$ctx['thread_type'];
     $requestId = (int)$ctx['request_id'];

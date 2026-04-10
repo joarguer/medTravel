@@ -133,6 +133,18 @@ function normalize_legacy_item_status($status)
     if ($status === 'completed') {
         return 'treatment_completed';
     }
+    if ($status === 'appointment_confirmed') {
+        return 'provider_confirmed';
+    }
+    if ($status === 'appointment_requested_change') {
+        return 'provider_proposed_change';
+    }
+    if ($status === 'appointment_cancelled') {
+        return 'cancelled';
+    }
+    if ($status === 'appointment_proposed') {
+        return 'awaiting_client';
+    }
     return $status;
 }
 
@@ -453,6 +465,10 @@ function generic_status_label_es($status)
         'date_proposed' => 'Cita propuesta',
         'date_confirmed' => 'Cita confirmada',
         'rescheduled' => 'Cita reprogramada',
+        'appointment_proposed' => 'Cita propuesta',
+        'appointment_confirmed' => 'Cita confirmada',
+        'appointment_requested_change' => 'Cambio de cita solicitado',
+        'appointment_cancelled' => 'Cita cancelada',
         'treatment_completed' => 'Tratamiento completado',
         'post_treatment_follow_up' => 'Seguimiento post tratamiento',
         'completed' => 'Atención realizada',
@@ -1707,8 +1723,8 @@ function sync_booking_fee_gate_state($conexion, $bookingRequestId, $hasRequestsS
 
     $statsSql = "SELECT
                     COUNT(*) AS total_count,
-                          SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted', 'treatment_completed', 'post_treatment_follow_up') THEN 1 ELSE 0 END) AS confirmed_count,
-                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
+                      SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'appointment_confirmed', 'client_accepted', 'treatment_completed', 'post_treatment_follow_up') THEN 1 ELSE 0 END) AS confirmed_count,
+                  SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled', 'appointment_cancelled') THEN 1 ELSE 0 END) AS terminal_count
                  FROM booking_request_items bri
                  WHERE bri.booking_request_id = ?";
     if ($hasItemsSoftDelete) {
@@ -1810,8 +1826,8 @@ function rollup_booking_status($conexion, $bookingRequestId, $hasRequestsSoftDel
 
     $statsSql = "SELECT
                     COUNT(*) AS total_count,
-                          SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'client_accepted', 'treatment_completed', 'post_treatment_follow_up') THEN 1 ELSE 0 END) AS confirmed_count,
-                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
+                      SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_confirmed', 'appointment_confirmed', 'client_accepted', 'treatment_completed', 'post_treatment_follow_up') THEN 1 ELSE 0 END) AS confirmed_count,
+                  SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled', 'appointment_cancelled') THEN 1 ELSE 0 END) AS terminal_count
                  FROM booking_request_items bri
                  WHERE bri.booking_request_id = ?";
     if ($hasItemsSoftDelete) {

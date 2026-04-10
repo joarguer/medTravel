@@ -133,7 +133,7 @@ foreach ($bookings as $booking) {
 
     $statusSummary = $booking['status'];
     if (!empty($booking['item_statuses'])) {
-        $statuses = $booking['item_statuses'];
+        $statuses = array_values(array_filter(array_map('client_status_label', (array)$booking['item_statuses'])));
         if (in_array('provider_rejected', $statuses, true)) {
             $statusSummary = 'provider_rejected';
         } elseif (in_array('provider_proposed_change', $statuses, true) || in_array('awaiting_client', $statuses, true)) {

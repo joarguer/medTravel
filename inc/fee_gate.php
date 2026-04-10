@@ -55,6 +55,7 @@ function mt_fee_booking_has_provider_confirmed_item($conexion, $bookingRequestId
     $hasItemsSoftDelete = mt_fee_table_has_column($conexion, 'booking_request_items', 'is_deleted');
     $normalizedStatusExpr = "CASE
         WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+        WHEN bri.item_status = 'appointment_confirmed' THEN 'provider_confirmed'
         ELSE bri.item_status
     END";
 
@@ -168,6 +169,18 @@ if (!function_exists('mt_normalize_operational_item_status')) {
         if ($status === 'completed') {
             return 'treatment_completed';
         }
+        if ($status === 'appointment_confirmed') {
+            return 'provider_confirmed';
+        }
+        if ($status === 'appointment_requested_change') {
+            return 'provider_proposed_change';
+        }
+        if ($status === 'appointment_cancelled') {
+            return 'cancelled';
+        }
+        if ($status === 'appointment_proposed') {
+            return 'awaiting_client';
+        }
         return $status;
     }
 }
@@ -177,7 +190,10 @@ if (!function_exists('mt_provider_staff_operational_conversation_statuses')) {
     {
         return [
             'provider_confirmed',
+            'appointment_confirmed',
             'client_accepted',
+            'provider_proposed_change',
+            'appointment_requested_change',
             'treatment_completed',
             'post_treatment_follow_up',
         ];
@@ -204,6 +220,10 @@ if (!function_exists('mt_provider_staff_fetch_operational_item_context')) {
                     CASE
                         WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
                         WHEN bri.item_status = 'completed' THEN 'treatment_completed'
+                        WHEN bri.item_status = 'appointment_confirmed' THEN 'provider_confirmed'
+                        WHEN bri.item_status = 'appointment_requested_change' THEN 'provider_proposed_change'
+                        WHEN bri.item_status = 'appointment_cancelled' THEN 'cancelled'
+                        WHEN bri.item_status = 'appointment_proposed' THEN 'awaiting_client'
                         ELSE bri.item_status
                     END AS current_status
                 FROM booking_request_items bri
@@ -327,6 +347,7 @@ function mt_fee_any_required_for_owner_scope($conexion, $ownerScope)
 
     $normalizedStatusExpr = "CASE
         WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
+        WHEN bri.item_status = 'appointment_confirmed' THEN 'provider_confirmed'
         ELSE bri.item_status
     END";
 

@@ -36,6 +36,18 @@ function client_status_label($status)
     if ($status === 'pending_admin' || $status === 'pending_review') {
         return 'pending_provider';
     }
+    if ($status === 'appointment_confirmed') {
+        return 'provider_confirmed';
+    }
+    if ($status === 'appointment_requested_change') {
+        return 'provider_proposed_change';
+    }
+    if ($status === 'appointment_cancelled') {
+        return 'cancelled';
+    }
+    if ($status === 'appointment_proposed') {
+        return 'awaiting_client';
+    }
     return $status;
 }
 

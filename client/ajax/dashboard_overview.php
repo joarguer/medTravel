@@ -49,6 +49,18 @@ function client_dashboard_normalize_item_status($status)
     if ($status === 'completed') {
         return 'treatment_completed';
     }
+    if ($status === 'appointment_confirmed') {
+        return 'provider_confirmed';
+    }
+    if ($status === 'appointment_requested_change') {
+        return 'provider_proposed_change';
+    }
+    if ($status === 'appointment_cancelled') {
+        return 'cancelled';
+    }
+    if ($status === 'appointment_proposed') {
+        return 'awaiting_client';
+    }
     return $status;
 }
 
@@ -97,6 +109,11 @@ function client_dashboard_parse_request_info_payload($body, $prefix)
     }
     $decoded = json_decode($json, true);
     return is_array($decoded) ? $decoded : null;
+}
+
+function client_dashboard_parse_proposal_response_payload($body)
+{
+    return client_dashboard_parse_request_info_payload($body, '[PROPOSAL_RESPONSE]');
 }
 
 function client_dashboard_requested_document_label($type)
@@ -639,6 +656,50 @@ if (
     }
 }
 
+$docUnavailableResponses = [];
+if ($inClause !== '' && client_table_exists($conexion, 'inbox_messages')) {
+    $hasMessageCreatedAt = client_table_has_column($conexion, 'inbox_messages', 'created_at');
+    $messageTimeExpr = $hasMessageCreatedAt ? 'im.created_at' : 'NULL';
+    $responsesSql = "SELECT im.id, im.request_id, im.item_id, im.body, {$messageTimeExpr} AS created_at
+                    FROM inbox_messages im
+                    WHERE im.request_id IN ({$inClause})
+                      AND im.thread_type = 'ITEM'
+                      AND im.item_id > 0
+                      AND im.sender_role = 'CLIENT'
+                      AND im.body LIKE '[PROPOSAL_RESPONSE] %'
+                    ORDER BY im.id DESC";
+    $stmtResponses = mysqli_prepare($conexion, $responsesSql);
+    if ($stmtResponses) {
+        $responseTypes = str_repeat('i', count($bookingIds));
+        $responseParams = $bookingIds;
+        if (client_dashboard_bind_stmt_params($stmtResponses, $responseTypes, $responseParams) && mysqli_stmt_execute($stmtResponses)) {
+            $responsesRes = mysqli_stmt_get_result($stmtResponses);
+            while ($responsesRes && ($responseRow = mysqli_fetch_assoc($responsesRes))) {
+                $bookingId = (int)($responseRow['request_id'] ?? 0);
+                $itemId = (int)($responseRow['item_id'] ?? 0);
+                if ($bookingId <= 0 || $itemId <= 0) {
+                    continue;
+                }
+                $payload = client_dashboard_parse_proposal_response_payload((string)($responseRow['body'] ?? ''));
+                $actionType = strtoupper(trim((string)($payload['action_type'] ?? '')));
+                if ($actionType !== 'DOCS_NOT_AVAILABLE') {
+                    continue;
+                }
+                if (!isset($docUnavailableResponses[$bookingId])) {
+                    $docUnavailableResponses[$bookingId] = [];
+                }
+                if (!isset($docUnavailableResponses[$bookingId][$itemId])) {
+                    $docUnavailableResponses[$bookingId][$itemId] = [
+                        'message_id' => (int)($responseRow['id'] ?? 0),
+                        'created_at' => trim((string)($responseRow['created_at'] ?? '')),
+                    ];
+                }
+            }
+        }
+        mysqli_stmt_close($stmtResponses);
+    }
+}
+
 if ($inClause !== '' && client_table_exists($conexion, 'inbox_messages')) {
     $hasMessageCreatedAt = client_table_has_column($conexion, 'inbox_messages', 'created_at');
     $messageTimeExpr = $hasMessageCreatedAt ? 'im.created_at' : 'NULL';
@@ -672,6 +733,18 @@ if ($inClause !== '' && client_table_exists($conexion, 'inbox_messages')) {
                 $latestDocAt = isset($docLatestUploads[$bookingId][$itemId]) ? trim((string)$docLatestUploads[$bookingId][$itemId]) : '';
                 if ($createdAt !== '' && $latestDocAt !== '' && strtotime($latestDocAt) >= strtotime($createdAt)) {
                     continue;
+                }
+                $latestDocUnavailable = isset($docUnavailableResponses[$bookingId][$itemId]) ? $docUnavailableResponses[$bookingId][$itemId] : null;
+                if (is_array($latestDocUnavailable)) {
+                    $responseCreatedAt = trim((string)($latestDocUnavailable['created_at'] ?? ''));
+                    $responseMessageId = (int)($latestDocUnavailable['message_id'] ?? 0);
+                    $requestMessageId = (int)($messageRow['id'] ?? 0);
+                    if (
+                        ($createdAt !== '' && $responseCreatedAt !== '' && strtotime($responseCreatedAt) >= strtotime($createdAt))
+                        || ($responseMessageId > 0 && $requestMessageId > 0 && $responseMessageId > $requestMessageId)
+                    ) {
+                        continue;
+                    }
                 }
 
                 $body = trim((string)($messageRow['body'] ?? ''));
