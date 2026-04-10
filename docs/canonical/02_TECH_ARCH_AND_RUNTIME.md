@@ -100,6 +100,14 @@ Nota de gobernanza:
 - Revisar y normalizar la convivencia entre `usuarios.provider_id` y `provider_users`.
 - Mantener compatibilidad transitoria mientras el runtime deja de depender de inferencias legacy.
 
+### Politica de lookup de identidad en autenticacion (desde 2026-04-10, commit `22a5230`)
+
+- `login.php` resuelve identidad por ranking cuando un email tiene multiples candidatos en `usuarios`.
+- Orden de prioridad: `username` exacto > `usrlogin` exacto > `email` exacto.
+- `LIMIT 1` sin orden explicito esta prohibido en el punto de autenticacion.
+- Esta politica extiende la regla de ownership no-inferido al flujo de login.
+- Mientras convivan tablas legacy y nuevas, el candidato seleccionado debe ser determinista y del mayor rol relevante, no el primero por insercion.
+
 ### Resultado operativo esperado por item medico
 
 Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
@@ -440,6 +448,17 @@ Allow MedTravel to control monetization terms per provider while preserving the 
 **Files responsible for UI rendering**
 - Admin portal: `admin/js/app_inbox.js`, `admin/app_inbox.php`
 - Client portal: `client/js/app_inbox.js`, `client/app_inbox.php`
+
+**Admin quick-reply: preview modal antes de envio (desde 2026-04-10, commit `4c9a142`)**
+- El click en `.admin-quick-reply` abre `#adminQuickReplyPreviewModal` para revision antes de enviar.
+- El envio directo sin preview ya no es la operacion por defecto del admin.
+- `parseReplyTokenAndNote()` extrae token y nota del payload de la respuesta para poblar el modal.
+
+**Confirmacion de reunion desde client inbox (desde 2026-04-10, commit `4c9a142`)**
+- El cliente puede confirmar una reunion propuesta directamente desde `client/app_inbox.php`.
+- Si el evento tiene modo Google, se invoca `google_calendar_create_event()` y `calendar_events` se actualiza con referencias externas (`google_event_id`, `google_meet_url`, `organizer_email`).
+- Si el evento es interno, se confirma sin referencias de Google Calendar.
+- Inbox sigue siendo el punto de entrada; Calendar sigue siendo la persistencia de la cita. Esta confirmacion es coordinacion operativa, no mezcla de dominios.
 
 ### Realtime Notifications Architecture
 

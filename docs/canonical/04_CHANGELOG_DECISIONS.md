@@ -1,5 +1,65 @@
 # Changelog Decisions
 
+## 2026-04-10 — feat(inbox): preview modal admin, confirmacion de reunion desde cliente, rendering estructurado
+
+**Commit**: `4c9a142`
+
+**Outcome**
+- Admin quick-reply ya no se envia directamente desde el listado. El click en `.admin-quick-reply` abre `#adminQuickReplyPreviewModal` para revision antes de enviar.
+- El cliente puede confirmar una reunion propuesta directamente desde `client/app_inbox.php`: el sistema invoca `google_calendar_create_event()` o el flujo de confirmacion interna segun el modo del evento.
+- Cache-busting por `filemtime()` aplicado a los JS del inbox en admin y cliente.
+- Rendering de tokens estructurados (`[REQUEST_INFO]`, `[PROPOSE_QUOTE]`, `[PROPOSAL_RESPONSE]`) mejorado en ambos portales; `parseReplyTokenAndNote()` extrae token y nota por separado.
+
+**Decision**
+- El preview modal es la politica operativa del admin; el envio sin preview ya no ocurre como accion directa.
+- La confirmacion de reunion desde inbox es coordinacion: Inbox es el punto de entrada, Calendar es la persistencia. El canon `Inbox = conversacion / Calendar = agenda` se mantiene; confirmar una reunion desde inbox es una transicion de coordinacion explicitamente permitida.
+- `final_accept_and_pay` y confirmacion de reunion disparan sync de `item_status`; esto responde parcialmente al pendiente de definir que acciones del inbox sincronizan estado.
+
+---
+
+## 2026-04-10 — fix(calendar): sync atomico de item_status en cancelacion restaurado
+
+**Commit**: `fd495be`
+
+**Outcome**
+- `google_calendar_sync_item_status_from_event_status()` no ejecutaba el sync cuando el evento transitaba a `cancelled`; `item_status` del item quedaba sin actualizar aunque `calendar_events` si se persistia.
+- El fix asegura atomicidad en la transicion `cancelled` → `appointment_cancelled`.
+
+**Decision**
+- La canonizacion de 2026-04-02 declaraba esta transicion como implementada; en la practica no lo estaba. Este commit cierra la deuda real.
+- La sincronizacion minima item ↔ cita ahora cubre las cuatro transiciones canónicas sin excepcion: `proposed/scheduled` → `appointment_proposed`, `confirmed` → `appointment_confirmed`, `cancelled` → `appointment_cancelled`, reschedule → `appointment_requested_change`.
+
+---
+
+## 2026-04-10 — fix(login): lookup de identidad por ranking en escenario multi-candidato
+
+**Commit**: `22a5230`
+
+**Outcome**
+- `login.php` resuelve identidad por ranking cuando un email tiene multiples candidatos en `usuarios`. Orden de prioridad: `username` exacto > `usrlogin` exacto > `email` exacto. `LIMIT 1` sin orden explicito ya no se usa.
+- `admin/include/log.php` alineado para consistencia en el registro de sesion.
+
+**Decision**
+- El canon de identidad ya excluia ownership inferido por `LIMIT 1` y heuristicas ambiguas. Este fix extiende esa politica al punto de autenticacion.
+- Mientras convivan tablas legacy y nuevas en `usuarios`, el lookup debe ser determinista y priorizar el candidato de mayor relevancia, no el primero por orden de insercion.
+
+---
+
+## 2026-04-10 — fix(status): normalizacion de appointment_* y pending_admin completada en flujos restantes
+
+**Commit**: `c828d6b`
+
+**Outcome**
+- La normalizacion `pending_admin` / `pending_review` → `pending_provider` declarada en 2026-04-02 no cubria todos los flujos de booking.
+- Los estados `appointment_*` tampoco se normalizaban en algunas rutas del inbox.
+- Este commit aplica la normalizacion en los flujos restantes identificados.
+
+**Decision**
+- El canon de estados del item y su normalizacion queda ahora completo en todas las rutas conocidas del runtime.
+- Los estados legacy `pending_admin` / `pending_review` no deben introducirse en nuevas rutas; deben normalizarse en el punto de lectura si aparecen.
+
+---
+
 ## 2026-04-09 — Inbox ITEM del staff asignado no hereda automaticamente el gate comercial del provider
 
 **Outcome**

@@ -133,7 +133,7 @@ Alias al backlog / pasos de ejecución canónico.
 #### Pendientes de endurecimiento
 
 - [ ] Endurecimiento del admin/inbox donde aun existe mezcla semantica entre acciones de comunicacion y cambios de estado del item
-- [ ] Definir que acciones del inbox pueden disparar sincronizacion de estado del item y cuales son solo comunicacion libre
+- [ ] Definir que acciones del inbox pueden disparar sincronizacion de estado del item y cuales son solo comunicacion libre (avance parcial: commit `4c9a142` — confirmacion de reunion desde inbox y `final_accept_and_pay` disparan sync; politica exhaustiva para otras acciones pendiente)
 
 ### Frente especifico — Ownership operativo por staff asignado
 
