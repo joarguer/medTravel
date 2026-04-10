@@ -59,6 +59,8 @@ if (isset($conexion) && $conexion) {
         }
     }
 }
+$clientInboxJsPath = __DIR__ . '/js/app_inbox.js';
+$clientInboxJsVersion = is_file($clientInboxJsPath) ? (string)filemtime($clientInboxJsPath) : '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -703,6 +705,6 @@ window.ClientInboxConfig = {
 };
 </script>
 <script src="<?php echo htmlspecialchars(rtrim((string)MT_REALTIME_BASE_URL, '/'), ENT_QUOTES, 'UTF-8'); ?>/realtime/socket.io/socket.io.js"></script>
-<script src="/client/js/app_inbox.js" type="text/javascript"></script>
+<script src="/client/js/app_inbox.js?v=<?php echo rawurlencode($clientInboxJsVersion); ?>" type="text/javascript"></script>
 </body>
 </html>

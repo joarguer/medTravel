@@ -44,9 +44,26 @@
         FINAL_APPROVED: 'Aprobación final',
         FINAL_NOT_ELIGIBLE: 'No elegible'
     };
+    var quickReplyPreviewMessages = {
+        DATES_AVAILABLE: 'We have availability to continue with your case. Please confirm whether these dates still work for you.',
+        REQUEST_MEDICAL_HISTORY: 'Please share your medical history so we can continue evaluating your case.',
+        REQUEST_LABS: 'Please share your recent lab results so we can continue evaluating your case.',
+        REQUEST_IMAGING: 'Please share your diagnostic images so we can continue evaluating your case.',
+        REQUEST_PHOTOS: 'Please share clinical photos so we can continue evaluating your case.',
+        FINAL_APPROVED: 'We reviewed your case and it is ready to move to the next step.',
+        FINAL_NOT_ELIGIBLE: 'We reviewed your case and at this time it is not eligible for this service.'
+    };
+    var quickReplySingleFootprintKeys = {
+        REQUEST_MEDICAL_HISTORY: true,
+        REQUEST_LABS: true,
+        REQUEST_IMAGING: true,
+        REQUEST_PHOTOS: true,
+        FINAL_APPROVED: true,
+        FINAL_NOT_ELIGIBLE: true
+    };
 
     function adminVisibleQuickReplyLabel(rawValue) {
-        var normalized = String(rawValue || '').trim().toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
+        var normalized = String(rawValue || '').trim().split(/\r?\n/, 1)[0].toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
         var map = {
             DATES_AVAILABLE: 'FECHAS DISPONIBLES',
             DATES_NOT_AVAILABLE: 'FECHAS NO DISPONIBLES',
@@ -60,6 +77,41 @@
             NOT_ELIGIBLE: 'NO ELEGIBLE'
         };
         return map[normalized] || '';
+    }
+
+    function adminVisibleActionLabel(rawValue) {
+        var normalized = String(rawValue || '').trim().split(/\r?\n/, 1)[0].toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
+        var map = {
+            FINAL_ACCEPT_AND_PAY: 'ACEPTÓ Y CONTINÚA CON EL SIGUIENTE PASO',
+            FINAL_DECLINE: 'DECLINÓ CONTINUAR',
+            PROPOSE_NEW_DATES: 'SOLICITÓ NUEVAS FECHAS'
+        };
+        return map[normalized] || '';
+    }
+
+    function adminProposalResponseMeta(actionType) {
+        var normalized = String(actionType || '').trim().toUpperCase();
+        var map = {
+            ACCEPT_PROPOSAL: { cls: 'success', label: 'Aceptó la propuesta' },
+            REQUEST_CHANGES: { cls: 'warning', label: 'Solicitó cambios' },
+            REJECT_PROPOSAL: { cls: 'danger', label: 'Rechazó la propuesta' },
+            DOCS_NOT_AVAILABLE: { cls: 'default', label: 'Indicó que no tiene los documentos' }
+        };
+        return map[normalized] || { cls: 'default', label: normalized || 'Respuesta' };
+    }
+
+    function parseReplyTokenAndNote(text) {
+        var source = String(text || '').trim();
+        if (!source) {
+            return { token: '', note: '' };
+        }
+        var parts = source.split(/\r?\n+/);
+        var token = String(parts.shift() || '').trim();
+        var note = $.trim(parts.join('\n'));
+        return {
+            token: token,
+            note: note
+        };
     }
 
     function esc(value) {
@@ -1349,13 +1401,7 @@
 
         var action = String(payload.action_type || '').toUpperCase();
         var notes = String(payload.notes || '').trim();
-        var map = {
-            ACCEPT_PROPOSAL: { cls: 'success', label: 'Aceptada' },
-            REQUEST_CHANGES: { cls: 'warning', label: 'Cambios solicitados' },
-            REJECT_PROPOSAL: { cls: 'danger', label: 'Rechazada' },
-            DOCS_NOT_AVAILABLE: { cls: 'default', label: 'Documentos no disponibles' }
-        };
-        var badge = map[action] || { cls: 'default', label: action || 'Respuesta' };
+        var badge = adminProposalResponseMeta(action);
 
         return '<div class="admin-structured-card admin-structured-response">' +
             '<div class="admin-structured-header">' +
@@ -1420,10 +1466,23 @@
             return renderMeetingProposalCard(trimmed);
         }
 
-        var visibleQuickReplyLabel = adminVisibleQuickReplyLabel(trimmed);
-        var visibleBody = visibleQuickReplyLabel || trimmed;
+        var replyMeta = isReply ? parseReplyTokenAndNote(trimmed) : { token: trimmed, note: '' };
+        var replyToken = String(replyMeta.token || '').trim();
+        var replyNote = String(replyMeta.note || '').trim();
+        var actionToken = !isReply ? replyToken : '';
+        var actionNote = !isReply ? replyNote : '';
+        var visibleBody = isReply
+            ? (adminVisibleQuickReplyLabel(replyToken) || replyToken || trimmed)
+            : (adminVisibleActionLabel(actionToken) || actionToken || trimmed);
         var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(visibleBody);
-        var structuredReplyUpper = trimmed.toUpperCase();
+        if (isReply && replyNote) {
+            messageHtml += '<div style="margin-top:8px;white-space:pre-wrap;">' + esc(replyNote) + '</div>';
+        }
+        if (!isReply && actionNote) {
+            messageHtml += '<div style="margin-top:8px;white-space:pre-wrap;">' + esc(actionNote) + '</div>';
+        }
+        var structuredReplyUpper = replyToken.toUpperCase();
+        var structuredActionUpper = actionToken.toUpperCase();
         if (isReply) {
             if (structuredReplyUpper.indexOf('REQUEST LABS') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
@@ -1454,7 +1513,7 @@
                 '</div>';
         }
 
-        if (label === 'Action' && trimmed.toUpperCase().indexOf('FINAL_ACCEPT_AND_PAY') === 0) {
+        if (!isReply && structuredActionUpper.indexOf('FINAL_ACCEPT_AND_PAY') === 0) {
             var bookingId = currentThread && currentThread.booking_id ? currentThread.booking_id : 0;
             var payUrl = '/booking.php';
             if (bookingId) {
@@ -1560,7 +1619,15 @@
             return 'envió respuesta a la propuesta';
         }
 
+        var rawText = String(raw || '').trim();
+        var isReplyPreview = rawText.indexOf('[REPLY]') === 0;
         normalized = normalized.replace(/^\[(ACTION|REPLY)\]\s*/i, '').trim();
+        var previewMeta = parseReplyTokenAndNote(normalized);
+        var previewToken = String(previewMeta.token || '').toUpperCase().replace(/\s+/g, '_');
+        var previewNote = String(previewMeta.note || '').replace(/\s+/g, ' ').trim();
+        if (previewNote) {
+            return previewNote.length > 110 ? previewNote.slice(0, 110).trim() + '…' : previewNote;
+        }
 
         var quickReplyPreviewMap = {
             DATES_AVAILABLE: 'fechas disponibles',
@@ -1572,16 +1639,25 @@
             FINAL_APPROVED: 'provider indicó caso viable',
             FINAL_NOT_ELIGIBLE: 'provider indicó caso no viable'
         };
-        var quickReplyKey = normalized.toUpperCase().replace(/\s+/g, '_');
-        if (quickReplyPreviewMap[quickReplyKey]) {
-            return quickReplyPreviewMap[quickReplyKey];
+        if (isReplyPreview && quickReplyPreviewMap[previewToken]) {
+            return quickReplyPreviewMap[previewToken];
         }
 
-        if (normalized.length > 110) {
-            normalized = normalized.slice(0, 110).trim() + '…';
+        var actionPreviewMap = {
+            FINAL_ACCEPT_AND_PAY: 'confirmó que desea continuar',
+            FINAL_DECLINE: 'declinó continuar',
+            PROPOSE_NEW_DATES: 'solicitó nuevas fechas'
+        };
+        if (!isReplyPreview && actionPreviewMap[previewToken]) {
+            return actionPreviewMap[previewToken];
         }
 
-        return normalized;
+        var previewText = String(raw || '').replace(/\s+/g, ' ').trim();
+        if (previewText.length > 110) {
+            previewText = previewText.slice(0, 110).trim() + '…';
+        }
+
+        return previewText;
     }
 
     function cleanServiceTitle(rawTitle) {
@@ -2478,7 +2554,9 @@
             if (options.clearComposer !== false) {
                 $('#admin-inbox-message').val('');
             }
-            if (options.successToast) {
+            if (options.suppressSuccessToast) {
+                // no-op
+            } else if (options.successToast) {
                 toastr.success(options.successToast);
             } else {
                 toastr.success('Mensaje enviado');
@@ -2569,15 +2647,45 @@
         });
     }
 
-    function sendQuickReply(replyKey) {
+    function openQuickReplyPreview(replyKey) {
         if (!currentThread || !currentThread.thread_id) return;
         var key = (replyKey || '').toString().toUpperCase();
         if (!quickReplies[key]) {
             toastr.error('Acción rápida no válida');
             return;
         }
+        if (key === 'DATES_NOT_AVAILABLE') {
+            toastr.info('Define una nueva propuesta concreta para el paciente.');
+            openMeetingProposalModal('The previous dates are not available. We are proposing a new meeting so we can continue with your case.');
+            return;
+        }
+
+        var singleFootprint = !!quickReplySingleFootprintKeys[key];
+        $('#admin-quick-reply-preview-key').val(key);
+        $('#admin-quick-reply-preview-title').text('Revisar antes de enviar: ' + (quickReplies[key] || key));
+        $('#admin-quick-reply-preview-text').val(String(quickReplyPreviewMessages[key] || ''));
+        $('#admin-quick-reply-preview-text').prop('readonly', singleFootprint);
+        $('#admin-quick-reply-preview-hint').text(
+            singleFootprint
+                ? 'Esta acción formal ya comunica suficiente por sí sola. Se registrará una única huella visible en el chat.'
+                : 'Si confirmas con texto, además de la acción formal se enviará un mensaje adicional de contexto.'
+        );
+        $('#adminQuickReplyPreviewModal').modal('show');
+    }
+
+    function performQuickReply(replyKey, options) {
+        options = options || {};
+        if (!currentThread || !currentThread.thread_id) {
+            return $.Deferred().reject({ message: 'thread_required' }).promise();
+        }
+        var key = (replyKey || '').toString().toUpperCase();
+        if (!quickReplies[key]) {
+            return $.Deferred().reject({ message: 'invalid_quick_reply' }).promise();
+        }
 
         var pendingId = addPendingMessage(quickReplies[key]);
+        var deferred = $.Deferred();
+        var messageNote = $.trim(String(options.messageNote || ''));
 
         $.ajax({
             url: 'ajax/inbox.php',
@@ -2587,24 +2695,45 @@
                 action: 'send_quick_reply',
                 thread_id: currentThread.thread_id,
                 thread_type: currentThread.thread_type,
-                reply_key: key
+                reply_key: key,
+                message_note: messageNote
             }
         }).done(function (res) {
             if (!res || res.ok !== true) {
-                toastr.error((res && res.message) ? res.message : 'No se pudo enviar la acción rápida');
                 updatePendingStatus(pendingId, 'Failed');
+                deferred.reject(res || { message: 'quick_reply_failed' });
                 return;
             }
             markSentFromResponse(res);
             removePendingMessage(pendingId);
             realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
-            toastr.success('Acción rápida enviada');
             loadMessages();
             loadThreads();
+            if (!options.suppressSuccessToast) {
+                toastr.success(options.successToast || 'Acción formal enviada');
+            }
+            deferred.resolve(res);
         }).fail(function () {
             updatePendingStatus(pendingId, 'Failed');
-            toastr.error('No se pudo enviar la acción rápida');
+            deferred.reject({ message: 'quick_reply_failed' });
         });
+
+        return deferred.promise();
+    }
+
+    function openMeetingProposalModal(defaultNote) {
+        if (!currentThread || String(currentThread.thread_type || '').toUpperCase() !== 'ITEM' || parseInt(currentThread.item_id || 0, 10) <= 0) {
+            toastr.warning('Open a service thread first');
+            return false;
+        }
+        $('#admin-meeting-start-at').val('');
+        $('#admin-meeting-end-at').val('');
+        $('#admin-meeting-note').val(String(defaultNote || ''));
+        $('#admin-meeting-enable-calendar').prop('checked', true).prop('disabled', false);
+        $('#admin-meeting-enable-meet').prop('checked', true);
+        updateMeetingIntegrationUi();
+        $('#adminProposeMeetingModal').modal('show');
+        return true;
     }
 
     function sendStructuredAction(actionType, payload) {
@@ -2907,7 +3036,48 @@
 
         $('#admin-inbox-quick-replies').on('click', '.admin-quick-reply', function () {
             var key = $(this).data('reply') || '';
-            sendQuickReply(key);
+            openQuickReplyPreview(key);
+        });
+
+        $('#adminQuickReplyPreviewModal').on('hidden.bs.modal', function () {
+            $('#admin-quick-reply-preview-key').val('');
+            $('#admin-quick-reply-preview-title').text('Revisar antes de enviar');
+            $('#admin-quick-reply-preview-text').val('');
+            $('#admin-quick-reply-preview-text').prop('readonly', false);
+            $('#admin-quick-reply-preview-hint').text('');
+            $('#admin-submit-quick-reply-preview').prop('disabled', false).text('Confirmar y enviar');
+        });
+
+        $('#admin-submit-quick-reply-preview').on('click', function () {
+            var key = String($('#admin-quick-reply-preview-key').val() || '').toUpperCase();
+            var noteText = $.trim($('#admin-quick-reply-preview-text').val() || '');
+            var $btn = $(this);
+            if (!key) {
+                toastr.warning('Selecciona una acción primero');
+                return;
+            }
+            if (noteText.length > 2000) {
+                toastr.warning('El mensaje es demasiado largo');
+                return;
+            }
+            $btn.prop('disabled', true).text('Enviando...');
+            var singleFootprint = !!quickReplySingleFootprintKeys[key];
+            performQuickReply(key, {
+                suppressSuccessToast: true,
+                messageNote: singleFootprint ? noteText : ''
+            }).done(function () {
+                $('#adminQuickReplyPreviewModal').modal('hide');
+                if (!singleFootprint && noteText) {
+                    sendMessageText(noteText, {
+                        successToast: 'Acción formal y mensaje enviados'
+                    });
+                } else {
+                    toastr.success('Acción formal enviada');
+                }
+            }).fail(function (res) {
+                $btn.prop('disabled', false).text('Confirmar y enviar');
+                toastr.error((res && res.message) ? res.message : 'No se pudo enviar la acción formal');
+            });
         });
 
         $('#admin-open-request-info').on('click', function () {
@@ -2916,7 +3086,7 @@
                 return;
             }
             $('#admin-request-info-types input[type="checkbox"]').prop('checked', false);
-            $('#admin-request-info-note').val('');
+            $('#admin-request-info-note').val('Please share the requested information so we can continue evaluating your case.');
             $('#adminRequestInfoModal').modal('show');
         });
 
@@ -2948,7 +3118,7 @@
             }
             $('#admin-propose-amount').val('');
             $('#admin-propose-currency').val('USD');
-            $('#admin-propose-notes').val('');
+            $('#admin-propose-notes').val('We are sharing an updated quote for you to review the next step of your case.');
             $('#adminProposeQuoteModal').modal('show');
         });
 
@@ -2983,17 +3153,12 @@
         });
 
         $('#admin-open-propose-meeting').on('click', function () {
-            if (!currentThread || String(currentThread.thread_type || '').toUpperCase() !== 'ITEM' || parseInt(currentThread.item_id || 0, 10) <= 0) {
-                toastr.warning('Open a service thread first');
-                return;
-            }
-            $('#admin-meeting-start-at').val('');
-            $('#admin-meeting-end-at').val('');
-            $('#admin-meeting-note').val('');
-            $('#admin-meeting-enable-calendar').prop('checked', true).prop('disabled', false);
-            $('#admin-meeting-enable-meet').prop('checked', true);
-            updateMeetingIntegrationUi();
-            $('#adminProposeMeetingModal').modal('show');
+            openMeetingProposalModal('We are proposing this meeting to review the next step of your case.');
+        });
+
+        $('#admin-open-reprogramming-proposal').on('click', function () {
+            toastr.info('Define una nueva propuesta concreta para el paciente.');
+            openMeetingProposalModal('The previous dates are not available. We are proposing a new meeting so we can continue with your case.');
         });
 
         $('#admin-meeting-enable-calendar, #admin-meeting-enable-meet').on('change', function () {

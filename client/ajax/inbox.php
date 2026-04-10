@@ -178,38 +178,93 @@ function client_inbox_cancel_proposed_meeting($conexion, $eventId)
     mysqli_stmt_close($stmt);
 }
 
-function client_inbox_confirm_google_meeting($conexion, array $eventRow, $requestId, $itemId)
+function client_inbox_meeting_has_defined_schedule(array $eventRow)
+{
+    $startAt = trim((string)($eventRow['start_at'] ?? ''));
+    $endAt = trim((string)($eventRow['end_at'] ?? ''));
+    return $startAt !== '' && $endAt !== '';
+}
+
+function client_inbox_confirm_internal_meeting($conexion, array $eventRow, $forceInternalMode = false)
 {
     $eventId = (int)($eventRow['id'] ?? 0);
+    if ($eventId <= 0) {
+        return ['ok' => false, 'error' => 'invalid_calendar_event'];
+    }
+
+    $columns = client_inbox_calendar_event_columns($conexion);
+    $integrationMode = trim((string)($eventRow['integration_mode'] ?? 'calendar_plus_meet'));
+    if (!in_array($integrationMode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
+        $integrationMode = 'calendar_plus_meet';
+    }
+    $resolvedMode = $forceInternalMode ? 'internal_only' : $integrationMode;
+
+    $setParts = ["status = 'confirmed'", 'updated_at = NOW()'];
+    $types = '';
+    $params = [];
+
+    if ($columns['integration_mode']) {
+        $setParts[] = 'integration_mode = ?';
+        $types .= 's';
+        $params[] = $resolvedMode;
+    }
+    if ($resolvedMode === 'internal_only') {
+        if ($columns['organizer_admin_user_id']) {
+            $setParts[] = 'organizer_admin_user_id = NULL';
+        }
+        if ($columns['google_event_id']) {
+            $setParts[] = "google_event_id = ''";
+        }
+        if ($columns['google_html_link']) {
+            $setParts[] = "google_html_link = ''";
+        }
+        if ($columns['google_meet_url']) {
+            $setParts[] = "google_meet_url = ''";
+        }
+        if ($columns['organizer_email']) {
+            $setParts[] = "organizer_email = ''";
+        }
+    }
+
+    $sql = 'UPDATE calendar_events SET ' . implode(', ', $setParts) . ' WHERE id = ? LIMIT 1';
+    $types .= 'i';
+    $params[] = $eventId;
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return ['ok' => false, 'error' => 'calendar_event_update_prepare_failed'];
+    }
+    if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        return ['ok' => false, 'error' => 'calendar_event_update_failed: ' . $err];
+    }
+    mysqli_stmt_close($stmt);
+
+    return [
+        'ok' => true,
+        'calendar_event_id' => $eventId,
+        'event_id' => '',
+        'html_link' => '',
+        'meet_url' => '',
+        'organizer_email' => '',
+        'integration_mode' => $resolvedMode,
+        'start_at' => (string)($eventRow['start_at'] ?? ''),
+        'end_at' => (string)($eventRow['end_at'] ?? ''),
+        'fallback_to_internal' => $forceInternalMode ? 1 : 0,
+    ];
+}
+
+function client_inbox_confirm_google_meeting($conexion, array $eventRow, $requestId, $itemId, array $options = [])
+{
+    $eventId = (int)($eventRow['id'] ?? 0);
+    $allowInternalFallback = !empty($options['allow_internal_fallback']);
     $integrationMode = trim((string)($eventRow['integration_mode'] ?? 'calendar_plus_meet'));
     if (!in_array($integrationMode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
         $integrationMode = 'calendar_plus_meet';
     }
 
     if ($integrationMode === 'internal_only') {
-        $stmtInternal = mysqli_prepare($conexion, "UPDATE calendar_events SET status = 'confirmed', updated_at = NOW() WHERE id = ? LIMIT 1");
-        if (!$stmtInternal) {
-            return ['ok' => false, 'error' => 'calendar_event_update_prepare_failed'];
-        }
-        mysqli_stmt_bind_param($stmtInternal, 'i', $eventId);
-        if (!mysqli_stmt_execute($stmtInternal)) {
-            $err = mysqli_stmt_error($stmtInternal);
-            mysqli_stmt_close($stmtInternal);
-            return ['ok' => false, 'error' => 'calendar_event_update_failed: ' . $err];
-        }
-        mysqli_stmt_close($stmtInternal);
-
-        return [
-            'ok' => true,
-            'calendar_event_id' => $eventId,
-            'event_id' => '',
-            'html_link' => '',
-            'meet_url' => '',
-            'organizer_email' => '',
-            'integration_mode' => $integrationMode,
-            'start_at' => (string)($eventRow['start_at'] ?? ''),
-            'end_at' => (string)($eventRow['end_at'] ?? ''),
-        ];
+        return client_inbox_confirm_internal_meeting($conexion, $eventRow, false);
     }
 
     $organizerAdminUserId = (int)($eventRow['organizer_admin_user_id'] ?? 0);
@@ -217,6 +272,14 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
         $organizerAdminUserId = (int)google_calendar_pick_connected_admin_user_id($conexion, 0);
     }
     if ($organizerAdminUserId <= 0) {
+        if ($allowInternalFallback) {
+            $fallbackResult = client_inbox_confirm_internal_meeting($conexion, $eventRow, true);
+            if (!empty($fallbackResult['ok'])) {
+                $fallbackResult['fallback_to_internal'] = 1;
+                $fallbackResult['fallback_reason'] = 'no_google_admin_connected';
+            }
+            return $fallbackResult;
+        }
         return ['ok' => false, 'error' => 'no_google_admin_connected'];
     }
 
@@ -1237,7 +1300,7 @@ if ($action === 'send_structured_action') {
     }
 
     $actionType = strtoupper(trim((string)($_POST['action_type'] ?? '')));
-    $allowedTypes = ['ACCEPT_PROPOSAL', 'REQUEST_CHANGES', 'REJECT_PROPOSAL'];
+    $allowedTypes = ['ACCEPT_PROPOSAL', 'REQUEST_CHANGES', 'REJECT_PROPOSAL', 'DOCS_NOT_AVAILABLE'];
     if (!in_array($actionType, $allowedTypes, true)) {
         client_inbox_err('invalid_action_type', 422);
     }
@@ -1247,48 +1310,53 @@ if ($action === 'send_structured_action') {
         client_inbox_err('notes_too_long', 422);
     }
 
-    $targetStatus = 'provider_proposed_change';
+    $targetStatus = '';
+    $shouldUpdateStatus = ($actionType !== 'DOCS_NOT_AVAILABLE');
     if ($actionType === 'ACCEPT_PROPOSAL') {
         $targetStatus = 'client_accepted';
+    } elseif ($actionType === 'REQUEST_CHANGES') {
+        $targetStatus = 'provider_proposed_change';
     } elseif ($actionType === 'REJECT_PROPOSAL') {
         $targetStatus = 'client_rejected';
     }
 
-    $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
-    $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
-    $hasItemUpdatedAt = client_table_has_column($conexion, 'booking_request_items', 'updated_at');
+    if ($shouldUpdateStatus) {
+        $hasItemsSoftDelete = client_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+        $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
+        $hasItemUpdatedAt = client_table_has_column($conexion, 'booking_request_items', 'updated_at');
 
-    $sql = "UPDATE booking_request_items bri
-            INNER JOIN booking_requests br ON br.id = bri.booking_request_id
-            SET bri.item_status = ?";
-    if ($hasItemUpdatedAt) {
-        $sql .= ', bri.updated_at = NOW()';
-    }
-    $sql .= " WHERE bri.id = ? AND (" . $ownerScope['sql'] . ")";
-    if ($hasItemsSoftDelete) {
-        $sql .= ' AND bri.is_deleted = 0';
-    }
-    if ($hasBookingSoftDelete) {
-        $sql .= ' AND br.is_deleted = 0';
-    }
-    $sql .= ' LIMIT 1';
+        $sql = "UPDATE booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                SET bri.item_status = ?";
+        if ($hasItemUpdatedAt) {
+            $sql .= ', bri.updated_at = NOW()';
+        }
+        $sql .= " WHERE bri.id = ? AND (" . $ownerScope['sql'] . ")";
+        if ($hasItemsSoftDelete) {
+            $sql .= ' AND bri.is_deleted = 0';
+        }
+        if ($hasBookingSoftDelete) {
+            $sql .= ' AND br.is_deleted = 0';
+        }
+        $sql .= ' LIMIT 1';
 
-    $types = 'si' . $ownerScope['types'];
-    $params = array_merge([$targetStatus, $itemId], $ownerScope['params']);
+        $types = 'si' . $ownerScope['types'];
+        $params = array_merge([$targetStatus, $itemId], $ownerScope['params']);
 
-    $stmt = mysqli_prepare($conexion, $sql);
-    if (!$stmt) {
-        client_inbox_err('prepare_failed', 500);
-    }
-    if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
-        $err = mysqli_stmt_error($stmt);
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            client_inbox_err('prepare_failed', 500);
+        }
+        if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
+            $err = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            client_inbox_err('update_failed: ' . $err, 500);
+        }
+        $affected = mysqli_stmt_affected_rows($stmt);
         mysqli_stmt_close($stmt);
-        client_inbox_err('update_failed: ' . $err, 500);
-    }
-    $affected = mysqli_stmt_affected_rows($stmt);
-    mysqli_stmt_close($stmt);
-    if ($affected <= 0) {
-        client_inbox_err('not_found_or_no_change', 404);
+        if ($affected <= 0) {
+            client_inbox_err('not_found_or_no_change', 404);
+        }
     }
 
     $payload = [
@@ -1345,20 +1413,24 @@ if ($action === 'send_structured_action') {
         notify_new_message_to_provider($conexion, $requestId, $itemId, $threadType, 'CLIENT', $message);
     }
 
-    client_inbox_ok([
+    $responsePayload = [
         'thread_id' => $threadId,
         'thread_type' => $threadType,
         'request_id' => $requestId,
         'booking_id' => $requestId,
         'item_id' => $itemId,
-        'item_status' => $targetStatus,
         'message' => [
             'id' => $messageId,
             'sender' => 'client',
             'body' => $message,
             'time' => $createdAt,
         ],
-    ]);
+    ];
+    if ($shouldUpdateStatus) {
+        $responsePayload['item_status'] = $targetStatus;
+    }
+
+    client_inbox_ok($responsePayload);
 }
 
 if ($action === 'accept_dates' || $action === 'reject_dates') {
@@ -1568,6 +1640,8 @@ if ($action === 'final_accept_and_pay' || $action === 'final_decline') {
     $hasBookingSoftDelete = client_table_has_column($conexion, 'booking_requests', 'is_deleted');
     $hasItemUpdatedAt = client_table_has_column($conexion, 'booking_request_items', 'updated_at');
 
+    mysqli_begin_transaction($conexion);
+
     $sql = "UPDATE booking_request_items bri
             INNER JOIN booking_requests br ON br.id = bri.booking_request_id
             SET bri.item_status = ?";
@@ -1588,17 +1662,49 @@ if ($action === 'final_accept_and_pay' || $action === 'final_decline') {
 
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
+        mysqli_rollback($conexion);
         client_inbox_err('prepare_failed', 500);
     }
     if (!inbox_bind_stmt_params($stmt, $types, $params) || !mysqli_stmt_execute($stmt)) {
         $err = mysqli_stmt_error($stmt);
         mysqli_stmt_close($stmt);
+        mysqli_rollback($conexion);
         client_inbox_err('update_failed: ' . $err, 500);
     }
     $affected = mysqli_stmt_affected_rows($stmt);
     mysqli_stmt_close($stmt);
     if ($affected <= 0) {
+        mysqli_rollback($conexion);
         client_inbox_err('not_found_or_no_change', 404);
+    }
+
+    $meetingPayload = null;
+    if ($action === 'final_accept_and_pay') {
+        $proposedMeeting = client_inbox_fetch_latest_proposed_meeting($conexion, $itemId, $ownerScope);
+        if ($proposedMeeting && client_inbox_meeting_has_defined_schedule($proposedMeeting)) {
+            $meetingPayload = client_inbox_confirm_google_meeting($conexion, $proposedMeeting, (int)$ctx['request_id'], $itemId, [
+                'allow_internal_fallback' => true,
+            ]);
+            if (empty($meetingPayload['ok'])) {
+                mysqli_rollback($conexion);
+                client_inbox_err((string)($meetingPayload['error'] ?? 'meeting_confirm_failed'), 409);
+            }
+        } else {
+            $confirmedMeeting = client_inbox_fetch_latest_confirmed_meeting($conexion, $itemId, $ownerScope);
+            if ($confirmedMeeting && client_inbox_meeting_has_defined_schedule($confirmedMeeting)) {
+                $meetingPayload = [
+                    'ok' => true,
+                    'calendar_event_id' => (int)($confirmedMeeting['id'] ?? 0),
+                    'event_id' => (string)($confirmedMeeting['google_event_id'] ?? ''),
+                    'html_link' => (string)($confirmedMeeting['google_html_link'] ?? ''),
+                    'meet_url' => (string)($confirmedMeeting['google_meet_url'] ?? ''),
+                    'organizer_email' => (string)($confirmedMeeting['organizer_email'] ?? ''),
+                    'integration_mode' => (string)($confirmedMeeting['integration_mode'] ?? 'internal_only'),
+                    'start_at' => (string)($confirmedMeeting['start_at'] ?? ''),
+                    'end_at' => (string)($confirmedMeeting['end_at'] ?? ''),
+                ];
+            }
+        }
     }
 
     $message = ($action === 'final_accept_and_pay')
@@ -1612,6 +1718,7 @@ if ($action === 'final_accept_and_pay' || $action === 'final_decline') {
          VALUES (?, ?, ?, ?, 'CLIENT', ?, ?)"
     );
     if (!$stmtMsg) {
+        mysqli_rollback($conexion);
         client_inbox_err('prepare_failed', 500);
     }
     $threadId = (string)$ctx['thread_id'];
@@ -1621,13 +1728,16 @@ if ($action === 'final_accept_and_pay' || $action === 'final_decline') {
     if (!mysqli_stmt_execute($stmtMsg)) {
         $err = mysqli_stmt_error($stmtMsg);
         mysqli_stmt_close($stmtMsg);
+        mysqli_rollback($conexion);
         client_inbox_err('insert_failed: ' . $err, 500);
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
     $createdAt = date('Y-m-d H:i:s');
 
-    client_inbox_ok([
+    mysqli_commit($conexion);
+
+    $response = [
         'thread_id' => $threadId,
         'thread_type' => $threadType,
         'request_id' => $requestId,
@@ -1640,7 +1750,12 @@ if ($action === 'final_accept_and_pay' || $action === 'final_decline') {
             'body' => $message,
             'time' => $createdAt,
         ],
-    ]);
+    ];
+    if ($meetingPayload && !empty($meetingPayload['ok'])) {
+        $response['meeting'] = $meetingPayload;
+    }
+
+    client_inbox_ok($response);
 }
 
 if ($action === 'mark_read') {

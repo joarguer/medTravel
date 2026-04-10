@@ -23,6 +23,8 @@ $page_intro_body = $is_linked_medical_staff_session
     : ($is_administrative_coordination
         ? 'Este inbox concentra únicamente solicitudes CARE del scope de coordinación MedTravel. Desde aquí puedes acompañar al paciente y dar continuidad operativa sin acceso a la administración global del sistema.'
         : 'Cuando un item ya tiene staff asignado, el seguimiento operativo normal debe llevarlo esa persona. Desde aquí puedes supervisar el caso o intervenir de forma explícita cuando haga falta.');
+$adminInboxJsPath = __DIR__ . '/js/app_inbox.js';
+$adminInboxJsVersion = is_file($adminInboxJsPath) ? (string)filemtime($adminInboxJsPath) : '1';
 if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
     http_response_code(403);
     echo 'Acceso denegado';
@@ -578,7 +580,6 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                     <label>Acciones formales rápidas</label>
                                     <div class="btn-group btn-group-xs" role="group" style="display:flex;flex-wrap:wrap;gap:6px;">
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="DATES_AVAILABLE">FECHAS DISPONIBLES</button>
-                                        <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="DATES_NOT_AVAILABLE">FECHAS NO DISPONIBLES</button>
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_MEDICAL_HISTORY">SOLICITAR HISTORIA CLÍNICA</button>
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_LABS">SOLICITAR LABORATORIOS</button>
                                         <button type="button" class="btn btn-default btn-xs admin-quick-reply" data-reply="REQUEST_IMAGING">SOLICITAR IMÁGENES</button>
@@ -589,6 +590,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                                     <div id="admin-inbox-structured-actions" style="display:none;margin-top:10px;">
                                         <label>Acciones estructuradas</label>
                                         <div class="btn-group btn-group-xs" role="group" style="display:flex;flex-wrap:wrap;gap:6px;">
+                                            <button type="button" class="btn btn-warning btn-xs" id="admin-open-reprogramming-proposal">REPROGRAMAR / NUEVA PROPUESTA</button>
                                             <button type="button" class="btn btn-default btn-xs" id="admin-open-request-info">SOLICITAR INFORMACIÓN ADICIONAL</button>
                                             <button type="button" class="btn btn-default btn-xs" id="admin-open-propose-quote">PROPONER AJUSTE DE COTIZACIÓN</button>
                                             <button type="button" class="btn btn-default btn-xs" id="admin-open-propose-meeting">PROPONER REUNIÓN</button>
@@ -700,6 +702,30 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
     </div>
 </div>
 
+<div class="modal fade" id="adminQuickReplyPreviewModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title" id="admin-quick-reply-preview-title">Revisar antes de enviar</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="admin-quick-reply-preview-key" value="">
+                <p class="help-block" style="margin-top:0;">La intención formal se registrará solo cuando confirmes. Puedes editar o dejar vacío el mensaje sugerido.</p>
+                <p class="help-block" id="admin-quick-reply-preview-hint" style="margin-top:0;"></p>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="admin-quick-reply-preview-text">Mensaje sugerido editable</label>
+                    <textarea class="form-control" id="admin-quick-reply-preview-text" rows="5" maxlength="2000" placeholder="Escribe el mensaje que acompañará esta acción formal"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="admin-submit-quick-reply-preview">Confirmar y enviar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="adminRequestInfoModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -719,8 +745,9 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                     </div>
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
-                    <label for="admin-request-info-note">Nota breve</label>
+                    <label for="admin-request-info-note">Mensaje / nota para el paciente</label>
                     <textarea class="form-control" id="admin-request-info-note" rows="3" maxlength="500" placeholder="¿Qué necesitas del cliente?"></textarea>
+                    <p class="help-block" style="margin-bottom:0;">Esta nota acompaña la acción formal y puede editarse antes de enviar.</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -754,8 +781,9 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                     </div>
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
-                    <label for="admin-propose-notes">Justificación / notas</label>
+                    <label for="admin-propose-notes">Mensaje / justificación para el paciente</label>
                     <textarea class="form-control" id="admin-propose-notes" rows="3" maxlength="500" placeholder="Explica por qué se necesita este ajuste"></textarea>
+                    <p class="help-block" style="margin-bottom:0;">Puedes ajustar el mensaje visible para el paciente antes de enviar la propuesta.</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -790,8 +818,9 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                     </div>
                 </div>
                 <div class="form-group" style="margin-bottom:0;">
-                    <label for="admin-meeting-note">Nota opcional</label>
+                    <label for="admin-meeting-note">Mensaje / nota para el paciente</label>
                     <textarea class="form-control" id="admin-meeting-note" rows="3" maxlength="500" placeholder="Contexto adicional para la propuesta de reunión"></textarea>
+                    <p class="help-block" style="margin-bottom:0;">Usa este texto como preview editable del mensaje que acompañará la propuesta.</p>
                 </div>
                 <div class="form-group" style="margin-top:15px;margin-bottom:0;">
                     <label>Integraciones opcionales al aceptar</label>
@@ -822,6 +851,6 @@ window.AdminInboxHelpConfig = {
 };
 </script>
 <script src="<?php echo htmlspecialchars(rtrim((string)MT_REALTIME_BASE_URL, '/'), ENT_QUOTES, 'UTF-8'); ?>/realtime/socket.io/socket.io.js"></script>
-<script src="js/app_inbox.js" type="text/javascript"></script>
+<script src="js/app_inbox.js?v=<?php echo rawurlencode($adminInboxJsVersion); ?>" type="text/javascript"></script>
 </body>
 </html>

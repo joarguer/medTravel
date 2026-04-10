@@ -45,6 +45,44 @@
         DOCS_NOT_AVAILABLE: "I don't have the requested documents yet."
     };
 
+    function clientVisibleReplyLabel(rawValue) {
+        var normalized = String(rawValue || '').trim().split(/\r?\n/, 1)[0].toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
+        var map = {
+            DATES_AVAILABLE: 'Dates available',
+            DATES_NOT_AVAILABLE: 'Dates not available',
+            REQUEST_MEDICAL_HISTORY: 'Medical history requested',
+            REQUEST_HISTORY: 'Medical history requested',
+            REQUEST_LABS: 'Lab results requested',
+            REQUEST_IMAGING: 'Diagnostic imaging requested',
+            REQUEST_PHOTOS: 'Clinical photos requested',
+            FINAL_APPROVED: 'Final approval',
+            FINAL_NOT_ELIGIBLE: 'Not eligible',
+            NOT_ELIGIBLE: 'Not eligible'
+        };
+        return map[normalized] || '';
+    }
+
+    function clientVisibleActionLabel(rawValue) {
+        var normalized = String(rawValue || '').trim().split(/\r?\n/, 1)[0].toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
+        var map = {
+            FINAL_ACCEPT_AND_PAY: 'Accepted the next step with the provider',
+            FINAL_DECLINE: 'Declined to continue',
+            PROPOSE_NEW_DATES: 'Requested new dates'
+        };
+        return map[normalized] || '';
+    }
+
+    function clientProposalResponseMeta(actionType) {
+        var normalized = String(actionType || '').trim().toUpperCase();
+        var map = {
+            ACCEPT_PROPOSAL: { title: 'Proposal response', label: 'Accepted the proposal' },
+            REQUEST_CHANGES: { title: 'Proposal response', label: 'Requested changes' },
+            REJECT_PROPOSAL: { title: 'Proposal response', label: 'Rejected the proposal' },
+            DOCS_NOT_AVAILABLE: { title: 'Document response', label: "I don't have the requested documents" }
+        };
+        return map[normalized] || { title: 'Proposal response', label: normalized || 'Response' };
+    }
+
     function esc(value) {
         return String(value || '')
             .replace(/&/g, '&amp;')
@@ -1444,6 +1482,37 @@
             return '';
         }
 
+        if (normalized.indexOf('[REQUEST_INFO]') === 0) {
+            return 'Provider requested additional information';
+        }
+        if (normalized.indexOf('[PROPOSE_QUOTE]') === 0) {
+            return 'Provider sent an updated quote';
+        }
+        if (normalized.indexOf('[PROPOSAL_RESPONSE]') === 0) {
+            var proposalPayload = parseStructuredJson('[PROPOSAL_RESPONSE]', normalized);
+            var proposalAction = String(proposalPayload && proposalPayload.action_type || '').toUpperCase();
+            var proposalMeta = clientProposalResponseMeta(proposalAction);
+            return proposalMeta.label;
+        }
+
+        var rawText = String(raw || '').trim();
+        var isReplyPreview = rawText.indexOf('[REPLY]') === 0;
+        normalized = normalized.replace(/^\[(ACTION|REPLY)\]\s*/i, '').trim();
+        var previewMeta = parseReplyTokenAndNote(normalized);
+        var previewToken = String(previewMeta.token || '').trim();
+        var previewNote = String(previewMeta.note || '').replace(/\s+/g, ' ').trim();
+
+        if (previewNote) {
+            return previewNote.length > 110 ? previewNote.slice(0, 110).trim() + '…' : previewNote;
+        }
+
+        var mappedPreview = isReplyPreview
+            ? clientVisibleReplyLabel(previewToken)
+            : clientVisibleActionLabel(previewToken);
+        if (mappedPreview) {
+            return mappedPreview;
+        }
+
         if (normalized.length > 110) {
             normalized = normalized.slice(0, 110).trim() + '…';
         }
@@ -2035,8 +2104,17 @@
             return renderMeetingProposalCard(trimmed, isItemThread);
         }
 
-        var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(trimmed);
-        var structuredReplyUpper = trimmed.toUpperCase();
+        var entryMeta = parseReplyTokenAndNote(trimmed);
+        var replyToken = String(entryMeta.token || '').trim();
+        var replyNote = String(entryMeta.note || '').trim();
+        var visibleBody = isReply
+            ? (clientVisibleReplyLabel(replyToken) || replyToken || trimmed)
+            : (clientVisibleActionLabel(replyToken) || replyToken || trimmed);
+        var messageHtml = '<span class="label label-primary" style="margin-right:6px;">' + esc(label) + '</span>' + esc(visibleBody);
+        if (replyNote) {
+            messageHtml += '<div style="margin-top:8px;white-space:pre-wrap;">' + esc(replyNote) + '</div>';
+        }
+        var structuredReplyUpper = replyToken.toUpperCase();
         if (isReply) {
             if (structuredReplyUpper.indexOf('REQUEST LABS') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
@@ -2069,19 +2147,8 @@
 
         if (isReply && structuredReplyUpper.indexOf('FINAL_APPROVED') !== -1 && feeGateActive) {
             messageHtml += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;">' +
-                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_accept_and_pay">ACCEPT & PAY</button>' +
+                '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_accept_and_pay">ACCEPT NEXT STEP</button>' +
                 '<button type="button" class="btn btn-default btn-xs client-final-action" data-action="final_decline">DECLINE</button>' +
-                '</div>';
-        }
-
-        if (label === 'Action' && trimmed.toUpperCase().indexOf('FINAL_ACCEPT_AND_PAY') === 0) {
-            var bookingId = currentThread && currentThread.booking_id ? currentThread.booking_id : 0;
-            var payUrl = '/booking.php';
-            if (bookingId) {
-                payUrl += '?request_id=' + encodeURIComponent(String(bookingId));
-            }
-            messageHtml += '<div style="margin-top:8px;">' +
-                '<a class="btn btn-xs btn-success" href="' + esc(payUrl) + '">Proceed to pay Coordination Fee</a>' +
                 '</div>';
         }
 
@@ -2094,6 +2161,20 @@
             return null;
         }
         return parseStructuredPayload(jsonText);
+    }
+
+    function parseReplyTokenAndNote(text) {
+        var source = String(text || '').trim();
+        if (!source) {
+            return { token: '', note: '' };
+        }
+        var parts = source.split(/\r?\n+/);
+        var token = String(parts.shift() || '').trim();
+        var note = $.trim(parts.join('\n'));
+        return {
+            token: token,
+            note: note
+        };
     }
 
     function escapeRegExp(text) {
@@ -2381,10 +2462,11 @@
         }
         var actionType = String(payload.action_type || '').toUpperCase();
         var notes = String(payload.notes || '').trim();
+        var meta = clientProposalResponseMeta(actionType);
         return '<div class="panel panel-default" style="margin:0;">' +
-            '<div class="panel-heading" style="padding:8px 10px;"><strong>Proposal response</strong></div>' +
+            '<div class="panel-heading" style="padding:8px 10px;"><strong>' + esc(meta.title) + '</strong></div>' +
             '<div class="panel-body" style="padding:10px;">' +
-                '<div><strong>Action:</strong> ' + esc(actionType || 'UNKNOWN') + '</div>' +
+                '<div><strong>Action:</strong> ' + esc(meta.label) + '</div>' +
                 (notes ? '<div style="margin-top:8px;"><strong>Notes:</strong> ' + esc(notes) + '</div>' : '') +
             '</div>' +
         '</div>';
@@ -2496,6 +2578,10 @@
     $('#client-inbox-messages').on('click', '.client-request-info-response', function () {
         var response = String($(this).data('response') || '').toUpperCase();
         if (!response) {
+            return;
+        }
+        if (response === 'DOCS_NOT_AVAILABLE') {
+            sendProposalResponse(response);
             return;
         }
         sendQuickAction(response);
@@ -2928,12 +3014,18 @@
             toastr.warning('Open a service thread to respond');
             return;
         }
-        var allowed = ['ACCEPT_PROPOSAL', 'REQUEST_CHANGES', 'REJECT_PROPOSAL'];
+        var allowed = ['ACCEPT_PROPOSAL', 'REQUEST_CHANGES', 'REJECT_PROPOSAL', 'DOCS_NOT_AVAILABLE'];
         var normalized = String(actionType || '').toUpperCase();
         if (allowed.indexOf(normalized) === -1) {
             toastr.error('Invalid proposal response');
             return;
         }
+        var successMessage = normalized === 'DOCS_NOT_AVAILABLE'
+            ? 'Document response sent'
+            : 'Response sent';
+        var errorMessage = normalized === 'DOCS_NOT_AVAILABLE'
+            ? 'Could not send document response'
+            : 'Could not send proposal response';
 
         $.ajax({
             url: '/client/ajax/inbox.php',
@@ -2947,16 +3039,16 @@
             }
         }).done(function (res) {
             if (!res || res.ok !== true) {
-                toastr.error((res && res.message) ? res.message : 'Could not send proposal response');
+                toastr.error((res && res.message) ? res.message : errorMessage);
                 return;
             }
             markSentFromResponse(res);
             realtimeEmitCommitted(currentThread.thread_id, res, 'CLIENT');
-            toastr.success('Response sent');
+            toastr.success(successMessage);
             loadMessages();
             loadThreads();
         }).fail(function () {
-            toastr.error('Could not send proposal response');
+            toastr.error(errorMessage);
         });
     }
 

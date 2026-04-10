@@ -352,7 +352,6 @@ El modelo previo de `Stage 2 Commission Unlock` se mantiene como compatibilidad 
 - A coordination or commission payment may unlock additional contact details or downstream operational steps.
 - This stage exists only for providers or agreements where the gate is enabled.
 - All communication and coordination should continue to be representable inside the platform.
-- En `Inbox` cliente, ese gate comercial no debe bloquear el composer ni `send_message`; opera como capa informativa y/o de desbloqueo downstream, no como corte del chat libre dentro de la plataforma.
 
 ### Configuracion por proveedor
 
