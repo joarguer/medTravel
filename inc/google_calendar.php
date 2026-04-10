@@ -27,40 +27,90 @@ function google_calendar_table_has_column($conexion, $table, $column)
     return $cache[$key];
 }
 
-function google_calendar_normalize_item_status_value($status)
-{
-    $status = trim((string)$status);
-    if ($status === '' || $status === 'pending_admin' || $status === 'pending_review') {
-        return 'pending_provider';
-    }
-    return $status;
-}
-
-function google_calendar_sync_booking_request_rollups($conexion, $bookingRequestId)
+function google_calendar_sync_booking_request_rollups($conexion, $bookingRequestId, array $options = [])
 {
     $bookingRequestId = (int)$bookingRequestId;
+    $result = [
+        'ok' => true,
+        'noop' => true,
+        'booking_request_id' => $bookingRequestId,
+        'booking_status' => '',
+        'fee_required' => null,
+        'fee_status' => '',
+        'stats' => [
+            'total_items' => 0,
+            'active_confirmed_items' => 0,
+            'terminal_items' => 0,
+            'non_terminal_items' => 0,
+        ],
+    ];
+
     if ($bookingRequestId <= 0) {
-        return;
-    }
-    if (
-        !google_calendar_table_exists($conexion, 'booking_requests')
-        || !google_calendar_table_exists($conexion, 'booking_request_items')
-        || !google_calendar_table_has_column($conexion, 'booking_request_items', 'item_status')
-    ) {
-        return;
+        return $result;
     }
 
+    if (
+        !google_calendar_table_exists($conexion, 'booking_requests') ||
+        !google_calendar_table_exists($conexion, 'booking_request_items') ||
+        !google_calendar_table_has_column($conexion, 'booking_request_items', 'booking_request_id') ||
+        !google_calendar_table_has_column($conexion, 'booking_request_items', 'item_status')
+    ) {
+        return $result;
+    }
+
+    $hasRequestsStatus = google_calendar_table_has_column($conexion, 'booking_requests', 'status');
+    $hasRequestsFeeRequired = google_calendar_table_has_column($conexion, 'booking_requests', 'fee_required');
+    $hasRequestsFeeStatus = google_calendar_table_has_column($conexion, 'booking_requests', 'fee_status');
+    $hasRequestsUpdatedAt = google_calendar_table_has_column($conexion, 'booking_requests', 'updated_at');
     $hasRequestsSoftDelete = google_calendar_table_has_column($conexion, 'booking_requests', 'is_deleted');
     $hasItemsSoftDelete = google_calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
-    $normalizedStatusExpr = "CASE
-        WHEN bri.item_status IS NULL OR bri.item_status = '' OR bri.item_status IN ('pending_admin', 'pending_review') THEN 'pending_provider'
-        ELSE bri.item_status
-    END";
+
+    $bookingSql = "SELECT * FROM booking_requests WHERE id = ?";
+    if ($hasRequestsSoftDelete) {
+        $bookingSql .= " AND is_deleted = 0";
+    }
+    $bookingSql .= " LIMIT 1";
+
+    $stmtBooking = mysqli_prepare($conexion, $bookingSql);
+    if (!$stmtBooking) {
+        return $result;
+    }
+    mysqli_stmt_bind_param($stmtBooking, 'i', $bookingRequestId);
+    if (!mysqli_stmt_execute($stmtBooking)) {
+        mysqli_stmt_close($stmtBooking);
+        return $result;
+    }
+    $bookingRes = mysqli_stmt_get_result($stmtBooking);
+    $bookingRow = $bookingRes ? mysqli_fetch_assoc($bookingRes) : null;
+    mysqli_stmt_close($stmtBooking);
+    if (!$bookingRow) {
+        return $result;
+    }
+
+    $activeConfirmedStatuses = [
+        'provider_confirmed',
+        'client_accepted',
+        'appointment_proposed',
+        'appointment_confirmed',
+        'appointment_requested_change',
+        'treatment_completed',
+        'post_treatment_follow_up',
+    ];
+    $terminalStatuses = [
+        'provider_rejected',
+        'client_rejected',
+        'cancelled',
+        'appointment_cancelled',
+    ];
+
+    $activeQuoted = "'" . implode("','", array_map('mysqli_real_escape_string', array_fill(0, count($activeConfirmedStatuses), $conexion), $activeConfirmedStatuses)) . "'";
+    $terminalQuoted = "'" . implode("','", array_map('mysqli_real_escape_string', array_fill(0, count($terminalStatuses), $conexion), $terminalStatuses)) . "'";
+    $normalizedStatusExpr = "LOWER(TRIM(COALESCE(bri.item_status, '')))";
 
     $statsSql = "SELECT
-                    COUNT(*) AS total_count,
-                    SUM(CASE WHEN {$normalizedStatusExpr} = 'provider_confirmed' THEN 1 ELSE 0 END) AS confirmed_count,
-                    SUM(CASE WHEN {$normalizedStatusExpr} IN ('provider_rejected', 'cancelled') THEN 1 ELSE 0 END) AS terminal_count
+                    COUNT(*) AS total_items,
+                    SUM(CASE WHEN {$normalizedStatusExpr} IN ({$activeQuoted}) THEN 1 ELSE 0 END) AS active_confirmed_items,
+                    SUM(CASE WHEN {$normalizedStatusExpr} IN ({$terminalQuoted}) THEN 1 ELSE 0 END) AS terminal_items
                  FROM booking_request_items bri
                  WHERE bri.booking_request_id = ?";
     if ($hasItemsSoftDelete) {
@@ -70,286 +120,280 @@ function google_calendar_sync_booking_request_rollups($conexion, $bookingRequest
 
     $stmtStats = mysqli_prepare($conexion, $statsSql);
     if (!$stmtStats) {
-        return;
+        return $result;
     }
     mysqli_stmt_bind_param($stmtStats, 'i', $bookingRequestId);
     if (!mysqli_stmt_execute($stmtStats)) {
         mysqli_stmt_close($stmtStats);
-        return;
+        return $result;
     }
     $statsRes = mysqli_stmt_get_result($stmtStats);
     $statsRow = $statsRes ? mysqli_fetch_assoc($statsRes) : null;
     mysqli_stmt_close($stmtStats);
-    if (!$statsRow) {
-        return;
-    }
 
-    $totalCount = (int)($statsRow['total_count'] ?? 0);
-    $confirmedCount = (int)($statsRow['confirmed_count'] ?? 0);
-    $terminalCount = (int)($statsRow['terminal_count'] ?? 0);
-
-    $hasFeeStatus = google_calendar_table_has_column($conexion, 'booking_requests', 'fee_status');
-    $hasFeeRequired = google_calendar_table_has_column($conexion, 'booking_requests', 'fee_required');
-    if ($hasFeeStatus || $hasFeeRequired) {
-        $targetFeeRequired = 0;
-        $targetFeeStatus = 'pending';
-        if ($confirmedCount > 0) {
-            $targetFeeRequired = 1;
-            $targetFeeStatus = 'pending';
-        } elseif ($totalCount > 0 && $terminalCount >= $totalCount) {
-            $targetFeeRequired = 0;
-            $targetFeeStatus = 'not_required';
-        }
-
-        $setParts = [];
-        $types = '';
-        $params = [];
-        if ($hasFeeRequired) {
-            $setParts[] = 'fee_required = ?';
-            $types .= 'i';
-            $params[] = $targetFeeRequired;
-        }
-        if ($hasFeeStatus) {
-            $setParts[] = "fee_status = CASE
-                WHEN LOWER(TRIM(COALESCE(fee_status, 'pending'))) = 'paid' THEN 'paid'
-                ELSE ?
-            END";
-            $types .= 's';
-            $params[] = $targetFeeStatus;
-        }
-
-        if (!empty($setParts)) {
-            $updateSql = "UPDATE booking_requests
-                          SET " . implode(', ', $setParts) . "
-                          WHERE id = ?";
-            $types .= 'i';
-            $params[] = $bookingRequestId;
-            if ($hasRequestsSoftDelete) {
-                $updateSql .= " AND is_deleted = 0";
-            }
-            $updateSql .= " LIMIT 1";
-
-            $stmtUpdate = mysqli_prepare($conexion, $updateSql);
-            if ($stmtUpdate) {
-                $bind = [$types];
-                foreach ($params as $k => &$v) {
-                    $bind[] = &$v;
-                }
-                call_user_func_array([$stmtUpdate, 'bind_param'], $bind);
-                mysqli_stmt_execute($stmtUpdate);
-                mysqli_stmt_close($stmtUpdate);
-            }
-        }
-    }
-
-    if (!google_calendar_table_has_column($conexion, 'booking_requests', 'status')) {
-        return;
-    }
+    $totalItems = (int)($statsRow['total_items'] ?? 0);
+    $activeItems = (int)($statsRow['active_confirmed_items'] ?? 0);
+    $terminalItems = (int)($statsRow['terminal_items'] ?? 0);
+    $nonTerminalItems = max(0, $totalItems - $terminalItems);
 
     $targetBookingStatus = 'pending';
-    if ($confirmedCount > 0) {
+    $targetFeeRequired = 0;
+    $targetFeeStatus = 'pending';
+
+    if ($activeItems > 0) {
         $targetBookingStatus = 'confirmed';
-    } elseif ($totalCount > 0 && $terminalCount >= $totalCount) {
+        $targetFeeRequired = 1;
+        $targetFeeStatus = 'pending';
+    } elseif ($totalItems > 0 && $terminalItems >= $totalItems) {
         $targetBookingStatus = 'cancelled';
+        $targetFeeRequired = 0;
+        $targetFeeStatus = 'not_required';
     }
 
-    $currentSql = "SELECT status FROM booking_requests WHERE id = ?";
-    if ($hasRequestsSoftDelete) {
-        $currentSql .= " AND is_deleted = 0";
-    }
-    $currentSql .= " LIMIT 1";
-    $stmtCurrent = mysqli_prepare($conexion, $currentSql);
-    if (!$stmtCurrent) {
-        return;
-    }
-    mysqli_stmt_bind_param($stmtCurrent, 'i', $bookingRequestId);
-    if (!mysqli_stmt_execute($stmtCurrent)) {
-        mysqli_stmt_close($stmtCurrent);
-        return;
-    }
-    $currentRes = mysqli_stmt_get_result($stmtCurrent);
-    $currentRow = $currentRes ? mysqli_fetch_assoc($currentRes) : null;
-    mysqli_stmt_close($stmtCurrent);
-    if (!$currentRow) {
-        return;
+    $currentBookingStatus = strtolower(trim((string)($bookingRow['status'] ?? '')));
+    $currentFeeRequired = array_key_exists('fee_required', $bookingRow) ? (int)$bookingRow['fee_required'] : null;
+    $currentFeeStatus = strtolower(trim((string)($bookingRow['fee_status'] ?? '')));
+    $resolvedFeeStatus = $currentFeeStatus === 'paid' ? 'paid' : $targetFeeStatus;
+
+    $setParts = [];
+    $types = '';
+    $params = [];
+
+    if ($hasRequestsStatus && $currentBookingStatus !== $targetBookingStatus) {
+        $setParts[] = 'status = ?';
+        $types .= 's';
+        $params[] = $targetBookingStatus;
     }
 
-    $currentBookingStatus = strtolower(trim((string)($currentRow['status'] ?? '')));
-    if ($targetBookingStatus === 'pending' && $currentBookingStatus !== 'pending') {
-        return;
-    }
-    if ($currentBookingStatus === $targetBookingStatus) {
-        return;
+    if ($hasRequestsFeeRequired && $currentFeeRequired !== $targetFeeRequired) {
+        $setParts[] = 'fee_required = ?';
+        $types .= 'i';
+        $params[] = $targetFeeRequired;
     }
 
-    $setParts = ['status = ?'];
-    $types = 's';
-    $params = [$targetBookingStatus];
-    if (google_calendar_table_has_column($conexion, 'booking_requests', 'updated_at')) {
-        $setParts[] = 'updated_at = NOW()';
+    if ($hasRequestsFeeStatus && $currentFeeStatus !== $resolvedFeeStatus) {
+        $setParts[] = 'fee_status = ?';
+        $types .= 's';
+        $params[] = $resolvedFeeStatus;
     }
 
-    $updateSql = "UPDATE booking_requests
-                  SET " . implode(', ', $setParts) . "
-                  WHERE id = ?";
-    $types .= 'i';
-    $params[] = $bookingRequestId;
-    if ($hasRequestsSoftDelete) {
-        $updateSql .= " AND is_deleted = 0";
-    }
-    $updateSql .= " LIMIT 1";
-
-    $stmtUpdate = mysqli_prepare($conexion, $updateSql);
-    if (!$stmtUpdate) {
-        return;
-    }
-    $bind = [$types];
-    foreach ($params as $k => &$v) {
-        $bind[] = &$v;
-    }
-    call_user_func_array([$stmtUpdate, 'bind_param'], $bind);
-    mysqli_stmt_execute($stmtUpdate);
-    mysqli_stmt_close($stmtUpdate);
-}
-
-function google_calendar_resolve_item_status_target($transition, $currentStatus)
-{
-    $transition = trim((string)$transition);
-    $currentStatus = google_calendar_normalize_item_status_value($currentStatus);
-
-    if (in_array($currentStatus, ['provider_rejected', 'client_rejected', 'cancelled'], true)) {
-        return $currentStatus;
-    }
-
-    if ($transition === 'appointment_confirmed' || $transition === 'appointment_cancelled') {
-        if ($currentStatus === 'client_accepted') {
-            return 'client_accepted';
+    if (!empty($setParts)) {
+        if ($hasRequestsUpdatedAt) {
+            $setParts[] = 'updated_at = NOW()';
         }
-        return 'provider_confirmed';
+
+        $updateSql = "UPDATE booking_requests SET " . implode(', ', $setParts) . " WHERE id = ?";
+        $types .= 'i';
+        $params[] = $bookingRequestId;
+        if ($hasRequestsSoftDelete) {
+            $updateSql .= " AND is_deleted = 0";
+        }
+        $updateSql .= " LIMIT 1";
+
+        $stmtUpdate = mysqli_prepare($conexion, $updateSql);
+        if ($stmtUpdate) {
+            $bind = [$types];
+            foreach ($params as $k => &$v) {
+                $bind[] = &$v;
+            }
+            call_user_func_array([$stmtUpdate, 'bind_param'], $bind);
+            mysqli_stmt_execute($stmtUpdate);
+            mysqli_stmt_close($stmtUpdate);
+            $result['noop'] = false;
+        }
     }
 
-    if ($transition === 'appointment_proposed') {
-        return 'awaiting_client';
-    }
+    $result['booking_status'] = $hasRequestsStatus ? $targetBookingStatus : $currentBookingStatus;
+    $result['fee_required'] = $hasRequestsFeeRequired ? $targetFeeRequired : $currentFeeRequired;
+    $result['fee_status'] = $hasRequestsFeeStatus ? $resolvedFeeStatus : $currentFeeStatus;
+    $result['stats'] = [
+        'total_items' => $totalItems,
+        'active_confirmed_items' => $activeItems,
+        'terminal_items' => $terminalItems,
+        'non_terminal_items' => $nonTerminalItems,
+    ];
 
-    if ($transition === 'appointment_requested_change') {
-        return 'provider_proposed_change';
-    }
-
-    return $currentStatus;
+    return $result;
 }
 
-function google_calendar_sync_item_status_for_transition($conexion, $itemId, $transition, array $options = [])
+function google_calendar_sync_item_status_for_transition($conexion, $itemId, $targetStatus, array $options = [])
 {
     $itemId = (int)$itemId;
+    $targetStatus = strtolower(trim((string)$targetStatus));
+    $allowedTargets = [
+        'appointment_proposed',
+        'appointment_confirmed',
+        'appointment_requested_change',
+        'appointment_cancelled',
+    ];
+
+    $result = [
+        'ok' => true,
+        'noop' => true,
+        'item_id' => $itemId,
+        'booking_request_id' => 0,
+        'previous_item_status' => '',
+        'item_status' => '',
+        'rollups' => [
+            'ok' => true,
+            'noop' => true,
+            'booking_request_id' => 0,
+        ],
+    ];
+
     if ($itemId <= 0) {
         return ['ok' => false, 'error' => 'invalid_item_id'];
     }
+    if (!in_array($targetStatus, $allowedTargets, true)) {
+        return ['ok' => false, 'error' => 'invalid_target_status'];
+    }
+
     if (
-        !google_calendar_table_exists($conexion, 'booking_request_items')
-        || !google_calendar_table_has_column($conexion, 'booking_request_items', 'item_status')
+        !google_calendar_table_exists($conexion, 'booking_request_items') ||
+        !google_calendar_table_has_column($conexion, 'booking_request_items', 'booking_request_id') ||
+        !google_calendar_table_has_column($conexion, 'booking_request_items', 'item_status')
     ) {
-        return ['ok' => true, 'changed' => false, 'item_status' => '', 'booking_request_id' => 0];
+        return $result;
     }
 
+    $hasItemsUpdatedAt = google_calendar_table_has_column($conexion, 'booking_request_items', 'updated_at');
     $hasItemsSoftDelete = google_calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
-    $selectSql = "SELECT id, booking_request_id, item_status
-                  FROM booking_request_items
-                  WHERE id = ?";
-    if ($hasItemsSoftDelete) {
-        $selectSql .= " AND is_deleted = 0";
-    }
-    $selectSql .= " LIMIT 1";
 
-    $stmtSelect = mysqli_prepare($conexion, $selectSql);
-    if (!$stmtSelect) {
-        return ['ok' => false, 'error' => 'item_status_select_prepare_failed'];
+    $itemSql = "SELECT id, booking_request_id, item_status FROM booking_request_items WHERE id = ?";
+    if ($hasItemsSoftDelete) {
+        $itemSql .= " AND is_deleted = 0";
     }
-    mysqli_stmt_bind_param($stmtSelect, 'i', $itemId);
-    if (!mysqli_stmt_execute($stmtSelect)) {
-        $err = mysqli_stmt_error($stmtSelect);
-        mysqli_stmt_close($stmtSelect);
-        return ['ok' => false, 'error' => 'item_status_select_failed: ' . $err];
+    $itemSql .= " LIMIT 1";
+
+    $stmtItem = mysqli_prepare($conexion, $itemSql);
+    if (!$stmtItem) {
+        return ['ok' => false, 'error' => 'item_select_prepare_failed'];
     }
-    $selectRes = mysqli_stmt_get_result($stmtSelect);
-    $itemRow = $selectRes ? mysqli_fetch_assoc($selectRes) : null;
-    mysqli_stmt_close($stmtSelect);
+    mysqli_stmt_bind_param($stmtItem, 'i', $itemId);
+    if (!mysqli_stmt_execute($stmtItem)) {
+        $err = mysqli_stmt_error($stmtItem);
+        mysqli_stmt_close($stmtItem);
+        return ['ok' => false, 'error' => 'item_select_execute_failed: ' . $err];
+    }
+    $itemRes = mysqli_stmt_get_result($stmtItem);
+    $itemRow = $itemRes ? mysqli_fetch_assoc($itemRes) : null;
+    mysqli_stmt_close($stmtItem);
     if (!$itemRow) {
         return ['ok' => false, 'error' => 'item_not_found'];
     }
 
     $bookingRequestId = (int)($itemRow['booking_request_id'] ?? 0);
-    $currentStatus = google_calendar_normalize_item_status_value($itemRow['item_status'] ?? '');
-    $targetStatus = google_calendar_resolve_item_status_target($transition, $currentStatus);
+    $previousItemStatus = strtolower(trim((string)($itemRow['item_status'] ?? '')));
+    $result['booking_request_id'] = $bookingRequestId;
+    $result['previous_item_status'] = $previousItemStatus;
+    $result['item_status'] = $previousItemStatus;
 
-    if ($targetStatus === '' || $targetStatus === $currentStatus) {
-        return [
-            'ok' => true,
-            'changed' => false,
-            'item_status' => $currentStatus,
-            'booking_request_id' => $bookingRequestId,
-        ];
-    }
+    if ($previousItemStatus !== $targetStatus) {
+        $setParts = ['item_status = ?'];
+        if ($hasItemsUpdatedAt) {
+            $setParts[] = 'updated_at = NOW()';
+        }
 
-    $setParts = ['item_status = ?'];
-    $types = 's';
-    $params = [$targetStatus];
-    if (google_calendar_table_has_column($conexion, 'booking_request_items', 'updated_at')) {
-        $setParts[] = 'updated_at = NOW()';
-    }
+        $updateSql = "UPDATE booking_request_items SET " . implode(', ', $setParts) . " WHERE id = ?";
+        if ($hasItemsSoftDelete) {
+            $updateSql .= " AND is_deleted = 0";
+        }
+        $updateSql .= " LIMIT 1";
 
-    $updateSql = "UPDATE booking_request_items
-                  SET " . implode(', ', $setParts) . "
-                  WHERE id = ?";
-    $types .= 'i';
-    $params[] = $itemId;
-    if ($hasItemsSoftDelete) {
-        $updateSql .= " AND is_deleted = 0";
-    }
-    $updateSql .= " LIMIT 1";
-
-    $stmtUpdate = mysqli_prepare($conexion, $updateSql);
-    if (!$stmtUpdate) {
-        return ['ok' => false, 'error' => 'item_status_update_prepare_failed'];
-    }
-    $bind = [$types];
-    foreach ($params as $k => &$v) {
-        $bind[] = &$v;
-    }
-    call_user_func_array([$stmtUpdate, 'bind_param'], $bind);
-    if (!mysqli_stmt_execute($stmtUpdate)) {
-        $err = mysqli_stmt_error($stmtUpdate);
+        $stmtUpdate = mysqli_prepare($conexion, $updateSql);
+        if (!$stmtUpdate) {
+            return ['ok' => false, 'error' => 'item_update_prepare_failed'];
+        }
+        mysqli_stmt_bind_param($stmtUpdate, 'si', $targetStatus, $itemId);
+        if (!mysqli_stmt_execute($stmtUpdate)) {
+            $err = mysqli_stmt_error($stmtUpdate);
+            mysqli_stmt_close($stmtUpdate);
+            return ['ok' => false, 'error' => 'item_update_execute_failed: ' . $err];
+        }
+        $result['noop'] = false;
+        $result['item_status'] = $targetStatus;
         mysqli_stmt_close($stmtUpdate);
-        return ['ok' => false, 'error' => 'item_status_update_failed: ' . $err];
     }
-    mysqli_stmt_close($stmtUpdate);
 
     if ($bookingRequestId > 0) {
-        google_calendar_sync_booking_request_rollups($conexion, $bookingRequestId);
+        $result['rollups'] = google_calendar_sync_booking_request_rollups($conexion, $bookingRequestId, $options);
     }
 
-    return [
-        'ok' => true,
-        'changed' => true,
-        'item_status' => $targetStatus,
-        'booking_request_id' => $bookingRequestId,
-    ];
+    return $result;
 }
 
 function google_calendar_sync_item_status_from_event_status($conexion, $itemId, $eventStatus, array $options = [])
 {
+    $itemId = (int)$itemId;
     $eventStatus = strtolower(trim((string)$eventStatus));
-    if (in_array($eventStatus, ['proposed', 'scheduled'], true)) {
-        return google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_proposed', $options);
-    }
-    if ($eventStatus === 'confirmed') {
-        return google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_confirmed', $options);
-    }
-    if ($eventStatus === 'cancelled') {
-        return google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_cancelled', $options);
+    $allowedEventStatuses = ['proposed', 'scheduled', 'confirmed', 'cancelled'];
+
+    $result = [
+        'ok' => true,
+        'noop' => true,
+        'event_status' => $eventStatus,
+        'resolved_target_status' => '',
+    ];
+
+    if ($itemId <= 0 || !in_array($eventStatus, $allowedEventStatuses, true)) {
+        return $result;
     }
 
-    return ['ok' => true, 'changed' => false, 'item_status' => '', 'booking_request_id' => 0];
+    $resolvedTargetStatus = '';
+    if ($eventStatus === 'confirmed') {
+        $resolvedTargetStatus = 'appointment_confirmed';
+    } elseif ($eventStatus === 'cancelled') {
+        $resolvedTargetStatus = 'appointment_cancelled';
+    } else {
+        $isReschedule = !empty($options['is_reschedule']);
+        if ($isReschedule) {
+            $resolvedTargetStatus = 'appointment_requested_change';
+        } else {
+            $currentStatus = '';
+            if (
+                google_calendar_table_exists($conexion, 'booking_request_items') &&
+                google_calendar_table_has_column($conexion, 'booking_request_items', 'item_status')
+            ) {
+                $hasItemsSoftDelete = google_calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+                $statusSql = "SELECT item_status FROM booking_request_items WHERE id = ?";
+                if ($hasItemsSoftDelete) {
+                    $statusSql .= " AND is_deleted = 0";
+                }
+                $statusSql .= " LIMIT 1";
+                $stmtStatus = mysqli_prepare($conexion, $statusSql);
+                if ($stmtStatus) {
+                    mysqli_stmt_bind_param($stmtStatus, 'i', $itemId);
+                    if (mysqli_stmt_execute($stmtStatus)) {
+                        $statusRes = mysqli_stmt_get_result($stmtStatus);
+                        $statusRow = $statusRes ? mysqli_fetch_assoc($statusRes) : null;
+                        $currentStatus = strtolower(trim((string)($statusRow['item_status'] ?? '')));
+                    }
+                    mysqli_stmt_close($stmtStatus);
+                }
+            }
+
+            $forceRequestedChangeStatuses = [
+                'provider_confirmed',
+                'client_accepted',
+                'appointment_confirmed',
+                'treatment_completed',
+                'post_treatment_follow_up',
+            ];
+            if (in_array($currentStatus, $forceRequestedChangeStatuses, true)) {
+                $resolvedTargetStatus = 'appointment_requested_change';
+            } else {
+                $resolvedTargetStatus = 'appointment_proposed';
+            }
+        }
+    }
+
+    $delegated = google_calendar_sync_item_status_for_transition($conexion, $itemId, $resolvedTargetStatus, $options);
+    $result = array_merge($delegated, [
+        'event_status' => $eventStatus,
+        'resolved_target_status' => $resolvedTargetStatus,
+    ]);
+
+    return $result;
 }
 
 function google_calendar_admin_can_manage()
@@ -1404,11 +1448,14 @@ function google_calendar_cancel_calendar_event($conexion, array $eventRow, array
         return ['ok' => false, 'error' => 'calendar_event_already_cancelled_or_missing'];
     }
 
+    // If this is an ITEM event in a non-confirmed state, attempt to sync
+    // the item status to 'appointment_requested_change' before inserting
+    // the cancelled message. Fail hard if sync fails.
     if ($eventType === 'ITEM' && $itemId > 0 && in_array($status, ['proposed', 'scheduled'], true)) {
         $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_requested_change');
         if (empty($syncResult['ok'])) {
             mysqli_rollback($conexion);
-            return ['ok' => false, 'error' => (string)($syncResult['error'] ?? 'item_status_sync_failed')];
+            return ['ok' => false, 'error' => 'item_status_sync_failed', 'sync' => $syncResult];
         }
     }
 
@@ -1512,11 +1559,12 @@ function google_calendar_cancel_item_meeting($conexion, $itemId, array $actor = 
         mysqli_rollback($conexion);
         return ['ok' => false, 'error' => 'calendar_event_already_cancelled_or_missing'];
     }
-
+    // Attempt to sync item status to 'appointment_cancelled' before
+    // creating inbox messages. Fail hard if sync fails.
     $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_cancelled');
     if (empty($syncResult['ok'])) {
         mysqli_rollback($conexion);
-        return ['ok' => false, 'error' => (string)($syncResult['error'] ?? 'item_status_sync_failed')];
+        return ['ok' => false, 'error' => 'item_status_sync_failed', 'sync' => $syncResult];
     }
 
     $messageId = 0;
