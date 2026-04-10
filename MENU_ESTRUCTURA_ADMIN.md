@@ -99,21 +99,10 @@ rg -n 'jquery\.min\.js|bootstrap\.min\.js' admin/*.php
 - `admin/provider_offers.php`
 - `admin/data_deletion_requests.php`
 
-## Actualizacion 2026-02-18 (Limpieza DEV)
-- Se agrego item de menu `Limpieza (DEV)` en Administracion:
-  - archivo: `admin/include/include.php`
-  - link: `./cleanup.php`
-  - icono: `fa fa-trash`
-- El item usa el mismo helper `menu_li_class('cleanup.php')`, por lo que marca `active/selected` al entrar a `cleanup.php`.
-- Visibilidad:
-  - el bloque Administracion ya esta condicionado por `$es_admin` (`is_role_admin_session()`), por lo tanto `Limpieza (DEV)` hereda el mismo control de acceso de admin global.
-- Seguridad backend asociada:
-  - `admin/cleanup.php` bloquea acceso con `403` si no es admin global.
-  - `admin/ajax/cleanup_users.php` y `admin/ajax/cleanup_companies.php` bloquean con `forbidden` si no es admin global.
-
 ## Nota operativa
 Si vuelve a aparecer el mismo error:
 1. aplicar esta misma regla de carga (script base unico)
 2. no tocar clases `open` en PHP
 3. validar en local
 4. validar despliegue/caches en servidor
+

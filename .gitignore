@@ -24,3 +24,27 @@ admin/img/perfil/*.pdf
 
 # Stripe credentials — never commit real keys
 config/stripe.php
+
+# Media / uploads — housekeeping
+admin/img/providers/
+admin/img/perfil/*.jpg
+admin/img/perfil/*.jpeg
+admin/img/perfil/*.png
+img/offers/
+img/services/
+img/providers/
+img/about_header/
+img/about_us/
+img/blog/
+img/booking/
+img/home_hero/
+img/specialist/
+img/site/blog/
+img/site/booking/
+img/site/contact/
+img/site/offer-detail-header-*
+img/site/services-header-[0-9]*
+img/site/wizard_header_*
+img/carrucel/[0-9]*
+img/carrucel/[A-Z]*
+*.mp4

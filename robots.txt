@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://medtravel.com.co/sitemap.xml
