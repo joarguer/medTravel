@@ -34,6 +34,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         exit;
     }
 
+    $loginNormalizeIdentifier = function ($value) {
+        return strtolower(trim((string)$value));
+    };
+    $loginContextMatchRank = function ($row, $needle) use ($loginNormalizeIdentifier) {
+        $target = $loginNormalizeIdentifier($needle);
+        if ($target === '') {
+            return 99;
+        }
+        $usuario = $loginNormalizeIdentifier($row['usuario'] ?? '');
+        if ($usuario !== '' && $usuario === $target) {
+            return 0;
+        }
+        $usrlogin = $loginNormalizeIdentifier($row['usrlogin'] ?? '');
+        if ($usrlogin !== '' && $usrlogin === $target) {
+            return 1;
+        }
+        $email = $loginNormalizeIdentifier($row['email'] ?? '');
+        if ($email !== '' && $email === $target) {
+            return 2;
+        }
+        return 99;
+    };
+
     $loginHasColumn = function ($table, $column) use ($conexion) {
         static $cache = [];
         $key = $table . '.' . $column;
@@ -49,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
 
     $selectParts = [
         'id',
+        'usuario',
         $loginHasColumn('usuarios', 'rol') ? 'rol' : "'' AS rol",
         $loginHasColumn('usuarios', 'role_id') ? 'role_id' : 'NULL AS role_id',
         $loginHasColumn('usuarios', 'ppal') ? 'ppal' : '0 AS ppal',
@@ -56,6 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         $loginHasColumn('usuarios', 'service_provider_id') ? 'service_provider_id' : 'NULL AS service_provider_id',
         $loginHasColumn('usuarios', 'terms_accepted') ? 'terms_accepted' : '1 AS terms_accepted',
         $loginHasColumn('usuarios', 'activo') ? 'activo' : '1 AS activo',
+        $loginHasColumn('usuarios', 'email') ? 'email' : "'' AS email",
+        $loginHasColumn('usuarios', 'usrlogin') ? 'usrlogin' : "'' AS usrlogin",
     ];
 
     $whereParts = ['usuario = ?'];
@@ -72,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     if ($loginHasColumn('usuarios', 'is_deleted')) {
         $sql .= ' AND is_deleted = 0';
     }
-    $sql .= ' ORDER BY id ASC LIMIT 1';
+    $sql .= ' ORDER BY id ASC';
 
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
@@ -95,8 +121,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
     }
 
     $res = mysqli_stmt_get_result($stmt);
-    $userRow = $res ? mysqli_fetch_assoc($res) : null;
+    $rows = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $rows[] = $row;
+    }
     mysqli_stmt_close($stmt);
+
+    usort($rows, function ($a, $b) use ($identifier, $loginContextMatchRank) {
+        $rankA = $loginContextMatchRank($a, $identifier);
+        $rankB = $loginContextMatchRank($b, $identifier);
+        if ($rankA !== $rankB) {
+            return $rankA - $rankB;
+        }
+        return (int)($a['id'] ?? 0) - (int)($b['id'] ?? 0);
+    });
+    $userRow = !empty($rows) ? $rows[0] : null;
 
     $showNotice = false;
     if (is_array($userRow) && (int)($userRow['activo'] ?? 1) === 1) {

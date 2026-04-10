@@ -172,9 +172,51 @@ function login_stmt_bind_params($stmt, $types, array $values) {
     return call_user_func_array('mysqli_stmt_bind_param', $bind);
 }
 
-function login_fetch_user_row($conexion, $identifier) {
+function login_normalize_identifier($value) {
+    return strtolower(trim((string)$value));
+}
+
+function login_candidate_match_rank($userRow, $identifier) {
+    $needle = login_normalize_identifier($identifier);
+    if ($needle === '') {
+        return 99;
+    }
+
+    $usuario = login_normalize_identifier(v($userRow, 'usuario', ''));
+    if ($usuario !== '' && $usuario === $needle) {
+        return 0;
+    }
+
+    $usrlogin = login_normalize_identifier(v($userRow, 'usrlogin', ''));
+    if ($usrlogin !== '' && $usrlogin === $needle) {
+        return 1;
+    }
+
+    $email = login_normalize_identifier(v($userRow, 'email', ''));
+    if ($email !== '' && $email === $needle) {
+        return 2;
+    }
+
+    return 99;
+}
+
+function login_sort_user_candidates(array $rows, $identifier) {
+    usort($rows, function ($a, $b) use ($identifier) {
+        $rankA = login_candidate_match_rank($a, $identifier);
+        $rankB = login_candidate_match_rank($b, $identifier);
+        if ($rankA !== $rankB) {
+            return $rankA - $rankB;
+        }
+        $idA = (int)v($a, 'id', 0);
+        $idB = (int)v($b, 'id', 0);
+        return $idA - $idB;
+    });
+    return $rows;
+}
+
+function login_fetch_user_candidates($conexion, $identifier) {
     if (!$conexion || !login_table_exists($conexion, 'usuarios')) {
-        return null;
+        return array();
     }
 
     $select = array(
@@ -217,28 +259,31 @@ function login_fetch_user_row($conexion, $identifier) {
     if (login_table_has_column($conexion, 'usuarios', 'is_deleted')) {
         $sql .= ' AND COALESCE(is_deleted, 0) = 0';
     }
-    $sql .= ' ORDER BY id ASC LIMIT 1';
+    $sql .= ' ORDER BY id ASC';
 
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
         error_log('DB prepare error: ' . mysqli_error($conexion));
-        return null;
+        return array();
     }
 
     if (!login_stmt_bind_params($stmt, str_repeat('s', count($bindValues)), $bindValues)) {
         mysqli_stmt_close($stmt);
         error_log('DB bind error: ' . mysqli_error($conexion));
-        return null;
+        return array();
     }
     if (!mysqli_stmt_execute($stmt)) {
         mysqli_stmt_close($stmt);
         error_log('DB execute error: ' . mysqli_error($conexion));
-        return null;
+        return array();
     }
     $res = mysqli_stmt_get_result($stmt);
-    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    $rows = array();
+    while ($res && ($tmp = mysqli_fetch_assoc($res))) {
+        $rows[] = $tmp;
+    }
     mysqli_stmt_close($stmt);
-    return $row ?: null;
+    return login_sort_user_candidates($rows, $identifier);
 }
 
 function login_build_default_context($userRow) {
@@ -521,9 +566,24 @@ if ($password === '') {
     login_redirect_error('missing_password', array('pass' => 'vacio'));
 }
 
-$fil = login_fetch_user_row($conexion, $usrname);
-if (!$fil) {
+$userCandidates = login_fetch_user_candidates($conexion, $usrname);
+if (!$userCandidates) {
     login_redirect_error('user_not_found', array('usuario' => 'nulo'));
+}
+
+$fil = null;
+foreach ($userCandidates as $candidate) {
+    if ((int)v($candidate, 'activo', 1) !== 1) {
+        continue;
+    }
+    if (verify_password_for_user($password, $candidate)) {
+        $fil = $candidate;
+        break;
+    }
+}
+
+if (!$fil) {
+    $fil = $userCandidates[0];
 }
 
 auth_dev_log(
@@ -541,8 +601,7 @@ if ((int)v($fil, 'activo', 1) !== 1) {
     login_redirect_error('user_inactive', array('usuario' => 'nulo'), $fil);
 }
 
-$password_valido = verify_password_for_user($password, $fil);
-if (!$password_valido) {
+if (!verify_password_for_user($password, $fil)) {
     login_redirect_error('password_mismatch', array('usuario' => 'nulo2'), $fil);
 }
 
