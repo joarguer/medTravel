@@ -33,12 +33,77 @@ Estado actual del proyecto. Actualizar al cierre de cada sesión técnica releva
 
 ---
 
-## Frentes abiertos (no P0)
+## Tablero de frentes abiertos
 
-- Integración Google Calendar/Meet: spec en `docs/canonical/14_CALENDAR_MEET_INTEGRATION_MODEL.md`
-- Portal del paciente (`client/`): funcionalidad básica presente, expansión pendiente
-- Panel email settings: documentado en `PANEL_EMAIL_SETTINGS.md`
-- Módulo Mi Empresa: documentado en `MODULO_MI_EMPRESA.md`
+El bloque “ATACAR AHORA” tiene prioridad operativa inmediata. La numeración inferior conserva el inventario global de frentes abiertos.
+
+Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
+
+---
+
+### 🔴 ATACAR AHORA — Google Calendar · Meet · cancelaciones
+
+| Campo | Detalle |
+|-------|---------|
+| **Estado** | bloqueado |
+| **Impacto** | alto |
+| **Evidencia** | Canon Fase 1 cerrado (2026-03-23). Implementación no iniciada. Tres migraciones SQL escritas pero sin ejecutar: `appointment_mode`, `treatment_completed`, `post_treatment_follow_up`. Runtime actual referencia columnas que pueden no existir en BD local. |
+| **Siguiente acción** | Sesión SQL: ejecutar las 3 migraciones en orden → smoke test → implementar Fase 1 Google Calendar API |
+
+---
+
+### 1. Homepage · oferta · confianza · empaque comercial
+
+| Campo | Detalle |
+|-------|---------|
+| **Estado** | en progreso |
+| **Impacto** | alto |
+| **Evidencia** | Fases 0–4 SEO committeadas (2026-04-03, commits `6d4db96` → `e9466ad`). P0.2 abierto: `index.php` y `packages.php` con contenido hardcodeado. Search Console pendiente. |
+| **Siguiente acción** | Enviar `sitemap.xml` a Search Console + ejecutar P0.2 (mover contenido a BD) |
+
+---
+
+### 2. Chat IA RAG MedTravel USA
+
+| Campo | Detalle |
+|-------|---------|
+| **Estado** | abierto |
+| **Impacto** | alto |
+| **Evidencia** | Cero mención en docs, código ni backlog. Sin spec, sin entidad, sin decisión canónica. |
+| **Siguiente acción** | Sesión documental: definir alcance, modelo RAG y canal de entrada antes de tocar código |
+
+---
+
+### 3. Provider · staff · services semantics
+
+| Campo | Detalle |
+|-------|---------|
+| **Estado** | en progreso |
+| **Impacto** | medio |
+| **Evidencia** | Canon cerrado (2026-03-21). Deuda: `provider_catalog_services` no es entidad fuerte; staff y ofertas siguen ligados a `service_catalog.id` directo; copy de Mis Servicios / Mis Ofertas / Staff desalineado. |
+| **Siguiente acción** | Paso 7: declarar `provider_catalog_services` como entidad operativa fuerte y desacoplar staff/ofertas |
+
+---
+
+### 4. SEO · perfiles médicos · E-E-A-T
+
+| Campo | Detalle |
+|-------|---------|
+| **Estado** | en progreso |
+| **Impacto** | medio |
+| **Evidencia** | Fases 0–4 completas. Superficie pública activa. Pendiente: Search Console, monitoreo de indexación, campañas con URLs definidas. |
+| **Siguiente acción** | Enviar sitemap a Search Console → monitorear cobertura → activar campañas |
+
+---
+
+### 5. Mantenimiento documental fino
+
+| Campo | Detalle |
+|-------|---------|
+| **Estado** | en progreso |
+| **Impacto** | bajo |
+| **Evidencia** | Base documental implantada 2026-04-13 (commit `e9495b5`). `CLAUDE.md` aún referencia rutas viejas (`01_PRODUCT_MODEL.md` → ahora `10_PRODUCT_MODEL.md`, etc.). |
+| **Siguiente acción** | Actualizar referencias de rutas en `CLAUDE.md` para que apunten a archivos `10_`–`14_` |
 
 ---
 
