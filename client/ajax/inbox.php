@@ -1464,8 +1464,32 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
         client_inbox_err('invalid_item_id', 422);
     }
 
+    error_log('[MT_DEBUG_ACCEPT] ownerScope sql=' . ($ownerScope['sql'] ?? 'NULL')
+        . ' types=' . ($ownerScope['types'] ?? '')
+        . ' params=' . json_encode($ownerScope['params'] ?? []));
     $meetingRow = client_inbox_fetch_latest_proposed_meeting($conexion, $itemId, $ownerScope);
     if (!$meetingRow) {
+        // [MT_DEBUG_ACCEPT] probe without joins to isolate exact failing condition
+        $probeStmt = mysqli_prepare($conexion,
+            "SELECT id, request_id, status, event_type FROM calendar_events WHERE item_id = ? LIMIT 5");
+        if ($probeStmt) {
+            mysqli_stmt_bind_param($probeStmt, 'i', $itemId);
+            mysqli_stmt_execute($probeStmt);
+            $probeRes = mysqli_stmt_get_result($probeStmt);
+            $probeRows = [];
+            while ($probeRow = mysqli_fetch_assoc($probeRes)) {
+                $probeRows[] = 'id=' . $probeRow['id']
+                    . ' request_id=' . ($probeRow['request_id'] ?? 'NULL')
+                    . ' status=' . $probeRow['status']
+                    . ' event_type=' . $probeRow['event_type'];
+            }
+            mysqli_stmt_close($probeStmt);
+            error_log('[MT_DEBUG_ACCEPT] probe_no_scope item_id=' . $itemId
+                . ' rows_found=' . count($probeRows)
+                . ' data=' . implode(' | ', $probeRows ?: ['NONE']));
+        } else {
+            error_log('[MT_DEBUG_ACCEPT] probe_prepare_failed errno=' . mysqli_errno($conexion));
+        }
         error_log('[MT_DEBUG_ACCEPT] 409 => meeting_proposal_not_found item_id=' . $itemId);
         client_inbox_err('meeting_proposal_not_found', 409);
     }
