@@ -712,6 +712,15 @@ if ($ownerScope['sql'] === '1=0') {
 }
 
 $action = trim((string)($_GET['action'] ?? $_POST['action'] ?? 'list_threads'));
+// [MT_DEBUG_HARDSTOP] TEMPORAL — BORRAR DESPUES
+if ($action === 'accept_dates') {
+    error_log('MT_DEBUG_ACCEPT HARD STOP');
+    http_response_code(418);
+    header('Content-Type: application/json');
+    echo json_encode(['ok' => false, 'message' => 'MT_DEBUG_ACCEPT_STOP']);
+    exit;
+}
+// [MT_DEBUG_HARDSTOP] FIN
 $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : (isset($_POST['limit']) ? (int)$_POST['limit'] : 200);
 if ($limit < 1) {
     $limit = 200;
