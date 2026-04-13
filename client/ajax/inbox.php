@@ -1434,44 +1434,73 @@ if ($action === 'send_structured_action') {
 }
 
 if ($action === 'accept_dates' || $action === 'reject_dates') {
+    // [MT_DEBUG_ACCEPT] START
+    error_log('[MT_DEBUG_ACCEPT] action=' . $action
+        . ' thread_id=' . ($ctx['thread_id'] ?? 'NULL')
+        . ' thread_type=' . ($ctx['thread_type'] ?? 'NULL')
+        . ' item_id=' . ($ctx['item_id'] ?? 'NULL')
+        . ' request_id=' . ($ctx['request_id'] ?? 'NULL'));
+
     if (!inbox_table_exists($conexion, 'booking_request_items')) {
+        error_log('[MT_DEBUG_ACCEPT] 409 => booking_items_not_available');
         client_inbox_err('booking_items_not_available', 409);
     }
     if (!client_table_has_column($conexion, 'booking_request_items', 'item_status')) {
+        error_log('[MT_DEBUG_ACCEPT] 409 => item_status_not_available');
         client_inbox_err('item_status_not_available', 409);
     }
 
     if (strtoupper((string)($ctx['thread_type'] ?? '')) !== 'ITEM') {
+        error_log('[MT_DEBUG_ACCEPT] 422 => invalid_thread_type val=' . ($ctx['thread_type'] ?? 'NULL'));
         client_inbox_err('invalid_thread_type', 422);
     }
 
     $itemId = (int)($ctx['item_id'] ?? 0);
     if ($itemId <= 0) {
+        error_log('[MT_DEBUG_ACCEPT] 422 => invalid_item_id val=' . $itemId);
         client_inbox_err('invalid_item_id', 422);
     }
 
     $meetingRow = client_inbox_fetch_latest_proposed_meeting($conexion, $itemId, $ownerScope);
     if (!$meetingRow) {
+        error_log('[MT_DEBUG_ACCEPT] 409 => meeting_proposal_not_found item_id=' . $itemId);
         client_inbox_err('meeting_proposal_not_found', 409);
     }
+    error_log('[MT_DEBUG_ACCEPT] meetingRow found'
+        . ' id=' . ($meetingRow['id'] ?? 'NULL')
+        . ' status=' . ($meetingRow['status'] ?? 'NULL')
+        . ' integration_mode=' . ($meetingRow['integration_mode'] ?? 'NULL')
+        . ' organizer_admin_user_id=' . ($meetingRow['organizer_admin_user_id'] ?? 'NULL')
+        . ' organizer_email=' . ($meetingRow['organizer_email'] ?? 'NULL')
+        . ' start_at=' . ($meetingRow['start_at'] ?? 'NULL'));
 
     mysqli_begin_transaction($conexion);
 
     $confirmedMeeting = null;
     $syncedItemStatus = '';
     if ($action === 'accept_dates') {
+        error_log('[MT_DEBUG_ACCEPT] calling client_inbox_confirm_google_meeting'
+            . ' organizer_admin_user_id=' . ($meetingRow['organizer_admin_user_id'] ?? 'NULL')
+            . ' integration_mode=' . ($meetingRow['integration_mode'] ?? 'NULL'));
         $confirmedMeeting = client_inbox_confirm_google_meeting($conexion, $meetingRow, (int)$ctx['request_id'], $itemId);
+        error_log('[MT_DEBUG_ACCEPT] confirm_google_meeting result'
+            . ' ok=' . (!empty($confirmedMeeting['ok']) ? '1' : '0')
+            . ' error=' . ($confirmedMeeting['error'] ?? 'none')
+            . ' fallback=' . ($confirmedMeeting['fallback_to_internal'] ?? '0'));
         if (empty($confirmedMeeting['ok'])) {
             mysqli_rollback($conexion);
+            error_log('[MT_DEBUG_ACCEPT] 409 => confirm_failed error=' . ($confirmedMeeting['error'] ?? 'meeting_google_create_failed'));
             client_inbox_err((string)($confirmedMeeting['error'] ?? 'meeting_google_create_failed'), 409);
         }
 
         $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_confirmed');
         if (empty($syncResult['ok'])) {
             mysqli_rollback($conexion);
+            error_log('[MT_DEBUG_ACCEPT] 409 => item_status_sync_failed error=' . ($syncResult['error'] ?? ''));
             client_inbox_err((string)($syncResult['error'] ?? 'item_status_sync_failed'), 409);
         }
         $syncedItemStatus = (string)($syncResult['item_status'] ?? 'provider_confirmed');
+        error_log('[MT_DEBUG_ACCEPT] sync ok item_status=' . $syncedItemStatus);
     } else {
         client_inbox_cancel_proposed_meeting($conexion, (int)($meetingRow['id'] ?? 0));
 
