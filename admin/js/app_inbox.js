@@ -1784,6 +1784,7 @@
                 ' data-thread-type="' + esc(thread.thread_type) + '"' +
                 ' data-booking-id="' + esc(thread.booking_request_id || thread.request_id || 0) + '"' +
                 ' data-item-id="' + esc(thread.item_id || 0) + '"' +
+                ' data-item-status="' + esc(thread.item_status || thread.status_label || '') + '"' +
                 ' data-thread-title="' + esc(thread.title || '') + '">' +
                 '<div class="mt-thread-row">' +
                     '<div class="mt-thread-main">' +
@@ -1820,7 +1821,8 @@
             thread_type: String(selected.thread_type || 'ITEM'),
             booking_request_id: parseInt(selected.booking_request_id || selected.request_id || 0, 10),
             item_id: parseInt(selected.item_id || 0, 10),
-            thread_title: String(selected.title || '')
+            thread_title: String(selected.title || ''),
+            item_status: String(selected.item_status || selected.status_label || '')
         };
         preferredThread = null;
         if (changed) {
@@ -2342,6 +2344,7 @@
         } else {
             $box.hide();
         }
+        syncMeetingActionButtons();
     }
 
     function loadThreads() {
@@ -2726,6 +2729,10 @@
             toastr.warning('Open a service thread first');
             return false;
         }
+        if (!canOpenMeetingProposalForStatus(getCurrentThreadItemStatus())) {
+            toastr.warning('La reunión no admite una nueva propuesta en el estado actual.');
+            return false;
+        }
         $('#admin-meeting-start-at').val('');
         $('#admin-meeting-end-at').val('');
         $('#admin-meeting-note').val(String(defaultNote || ''));
@@ -2819,6 +2826,26 @@
         return 'internal_only';
     }
 
+    function getCurrentThreadItemStatus() {
+        return String((currentThread && currentThread.item_status) || '').trim().toLowerCase();
+    }
+
+    function canOpenMeetingProposalForStatus(status) {
+        var normalized = String(status || '').trim().toLowerCase();
+        return normalized === 'pending_provider'
+            || normalized === 'provider_proposed_change'
+            || normalized === 'awaiting_client';
+    }
+
+    function syncMeetingActionButtons() {
+        var status = getCurrentThreadItemStatus();
+        var isItemThread = currentThread && String(currentThread.thread_type || '').toUpperCase() === 'ITEM' && parseInt(currentThread.item_id || 0, 10) > 0;
+        var canPropose = isItemThread && status === 'pending_provider';
+        var canReprogram = isItemThread && (status === 'provider_proposed_change' || status === 'awaiting_client');
+        $('#admin-open-propose-meeting').toggle(!!canPropose);
+        $('#admin-open-reprogramming-proposal').toggle(!!canReprogram);
+    }
+
     function sendMeetingProposal(startAt, endAt, note, integrationMode) {
         if (!currentThread || !currentThread.thread_id) {
             toastr.warning('Selecciona primero un hilo antes de enviar');
@@ -2826,6 +2853,10 @@
         }
         if (String(currentThread.thread_type || '').toUpperCase() !== 'ITEM' || parseInt(currentThread.item_id || 0, 10) <= 0) {
             toastr.warning('La propuesta de reunión solo aplica a hilos ITEM');
+            return false;
+        }
+        if (!canOpenMeetingProposalForStatus(getCurrentThreadItemStatus())) {
+            toastr.warning('La reunión no admite una nueva propuesta en el estado actual.');
             return false;
         }
 
@@ -2986,7 +3017,8 @@
                 thread_type: String($a.data('thread-type') || 'ITEM'),
                 booking_request_id: parseInt($a.data('booking-id') || 0, 10),
                 item_id: parseInt($a.data('item-id') || 0, 10),
-                thread_title: String($a.data('thread-title') || '')
+                thread_title: String($a.data('thread-title') || ''),
+                item_status: String($a.data('item-status') || '')
             };
             setAttachStatus('');
             $('#admin-inbox-thread-list li').removeClass('active');
