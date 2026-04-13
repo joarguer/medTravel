@@ -1106,11 +1106,29 @@ function google_calendar_create_event($conexion, $adminUserId, array $payload)
     if ($createMeet) {
         $eventUrl .= '&conferenceDataVersion=1';
     }
+    // [MT_DEBUG_GCAL] payload log — BORRAR DESPUES
+    error_log('[MT_DEBUG_GCAL] create_event payload'
+        . ' adminUserId=' . $adminUserId
+        . ' calendarId=' . $calendarId
+        . ' createMeet=' . ($createMeet ? '1' : '0')
+        . ' start_at=' . ($eventBody['start']['dateTime'] ?? 'NULL')
+        . ' end_at=' . ($eventBody['end']['dateTime'] ?? 'NULL')
+        . ' timezone=' . ($eventBody['start']['timeZone'] ?? 'NULL')
+        . ' summary=' . ($eventBody['summary'] ?? 'NULL')
+        . ' attendees=' . json_encode(array_column($eventBody['attendees'] ?? [], 'email'))
+        . ' url=' . $eventUrl
+        . ' body=' . json_encode($eventBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     $response = google_calendar_http_request('POST', $eventUrl, [
         'Authorization: Bearer ' . $tokenState['access_token'],
         'Accept: application/json',
         'Content-Type: application/json',
     ], json_encode($eventBody));
+    // [MT_DEBUG_GCAL] response log — BORRAR DESPUES
+    error_log('[MT_DEBUG_GCAL] create_event response'
+        . ' http_status=' . ($response['status'] ?? 'NULL')
+        . ' ok=' . ($response['ok'] ? '1' : '0')
+        . ' curl_error=' . ($response['error'] ?? '')
+        . ' body=' . substr((string)($response['body'] ?? ''), 0, 800));
 
     if (!$response['ok'] || !is_array($response['json'])) {
         $errorText = 'No fue posible crear el evento de Google Calendar.';
