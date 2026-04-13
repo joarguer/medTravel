@@ -410,7 +410,7 @@ function google_calendar_required_scopes()
         'openid',
         'email',
         'profile',
-        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar',
     ];
 }
 
@@ -637,7 +637,7 @@ function google_calendar_build_authorize_url($config, $state)
         'response_type' => 'code',
         'scope' => implode(' ', $config['scopes']),
         'access_type' => 'offline',
-        'include_granted_scopes' => 'true',
+        'include_granted_scopes' => 'false',
         'prompt' => 'consent',
         'state' => $state,
     ]);
@@ -969,8 +969,19 @@ function google_calendar_ensure_valid_access_token($conexion, $adminUserId)
     $refreshResponse = google_calendar_refresh_access_token($config, (string)$connection['refresh_token']);
     if (!$refreshResponse['ok'] || !is_array($refreshResponse['json'])) {
         $errorText = 'No fue posible refrescar el access token de Google.';
-        if (!empty($refreshResponse['json']['error_description'])) {
-            $errorText = (string)$refreshResponse['json']['error_description'];
+        $googleError = trim((string)($refreshResponse['json']['error'] ?? ''));
+        $googleErrorDescription = trim((string)($refreshResponse['json']['error_description'] ?? ''));
+        if ($googleError === 'invalid_grant') {
+            $errorText = 'La conexión Google venció o fue revocada. Desconecta y reconecta la cuenta Google del admin.';
+        } elseif ($googleError === 'invalid_client') {
+            $errorText = 'La configuración OAuth de Google es inválida. Revisa GOOGLE_OAUTH_CLIENT_ID y GOOGLE_OAUTH_CLIENT_SECRET.';
+        } elseif ($googleErrorDescription !== '') {
+            $errorText = $googleErrorDescription;
+            if ($googleError !== '') {
+                $errorText = $googleError . ': ' . $errorText;
+            }
+        } elseif ($googleError !== '') {
+            $errorText = $googleError;
         } elseif (!empty($refreshResponse['error'])) {
             $errorText = (string)$refreshResponse['error'];
         }
@@ -1106,34 +1117,37 @@ function google_calendar_create_event($conexion, $adminUserId, array $payload)
     if ($createMeet) {
         $eventUrl .= '&conferenceDataVersion=1';
     }
-    // [MT_DEBUG_GCAL] payload log — BORRAR DESPUES
-    error_log('[MT_DEBUG_GCAL] create_event payload'
-        . ' adminUserId=' . $adminUserId
-        . ' calendarId=' . $calendarId
-        . ' createMeet=' . ($createMeet ? '1' : '0')
-        . ' start_at=' . ($eventBody['start']['dateTime'] ?? 'NULL')
-        . ' end_at=' . ($eventBody['end']['dateTime'] ?? 'NULL')
-        . ' timezone=' . ($eventBody['start']['timeZone'] ?? 'NULL')
-        . ' summary=' . ($eventBody['summary'] ?? 'NULL')
-        . ' attendees=' . json_encode(array_column($eventBody['attendees'] ?? [], 'email'))
-        . ' url=' . $eventUrl
-        . ' body=' . json_encode($eventBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    $encodedEventBody = json_encode($eventBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    if ($encodedEventBody === false) {
+        $jsonError = function_exists('json_last_error_msg') ? json_last_error_msg() : 'json_encode_failed';
+        google_calendar_update_last_error($conexion, $adminUserId, 'google_calendar_payload_encode_failed: ' . $jsonError);
+        return ['ok' => false, 'error' => 'google_calendar_payload_encode_failed: ' . $jsonError];
+    }
     $response = google_calendar_http_request('POST', $eventUrl, [
         'Authorization: Bearer ' . $tokenState['access_token'],
         'Accept: application/json',
         'Content-Type: application/json',
-    ], json_encode($eventBody));
-    // [MT_DEBUG_GCAL] response log — BORRAR DESPUES
-    error_log('[MT_DEBUG_GCAL] create_event response'
-        . ' http_status=' . ($response['status'] ?? 'NULL')
-        . ' ok=' . ($response['ok'] ? '1' : '0')
-        . ' curl_error=' . ($response['error'] ?? '')
-        . ' body=' . substr((string)($response['body'] ?? ''), 0, 800));
+    ], $encodedEventBody);
 
     if (!$response['ok'] || !is_array($response['json'])) {
         $errorText = 'No fue posible crear el evento de Google Calendar.';
-        if (!empty($response['json']['error']['message'])) {
-            $errorText = (string)$response['json']['error']['message'];
+        $googleMessage = trim((string)($response['json']['error']['message'] ?? ''));
+        $googleErrors = !empty($response['json']['error']['errors']) && is_array($response['json']['error']['errors'])
+            ? $response['json']['error']['errors']
+            : [];
+        $scopeInsufficient = false;
+        foreach ($googleErrors as $googleError) {
+            $reason = strtoupper(trim((string)($googleError['reason'] ?? '')));
+            $domain = strtolower(trim((string)($googleError['domain'] ?? '')));
+            if ($reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' || ($reason === 'FORBIDDEN' && $domain === 'global')) {
+                $scopeInsufficient = true;
+                break;
+            }
+        }
+        if ($scopeInsufficient || stripos($googleMessage, 'insufficient authentication scopes') !== false) {
+            $errorText = 'La conexión Google no tiene permisos suficientes para crear eventos. Desconecta y reconecta la cuenta Google del admin.';
+        } elseif (!empty($response['json']['error']['message'])) {
+            $errorText = $googleMessage;
         } elseif (!empty($response['error'])) {
             $errorText = (string)$response['error'];
         }
