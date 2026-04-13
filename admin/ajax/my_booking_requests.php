@@ -245,6 +245,7 @@ function my_booking_calendar_event_columns($conexion)
     $cache = [
         'organizer_admin_user_id' => table_has_column($conexion, 'calendar_events', 'organizer_admin_user_id'),
         'integration_mode' => table_has_column($conexion, 'calendar_events', 'integration_mode'),
+        'appointment_mode' => table_has_column($conexion, 'calendar_events', 'appointment_mode'),
         'google_event_id' => table_has_column($conexion, 'calendar_events', 'google_event_id'),
         'google_html_link' => table_has_column($conexion, 'calendar_events', 'google_html_link'),
         'google_meet_url' => table_has_column($conexion, 'calendar_events', 'google_meet_url'),
@@ -300,6 +301,9 @@ function my_booking_create_proposed_meeting_event($conexion, array $itemRow, arr
     $endAt = trim((string)($meetingData['end_at'] ?? ''));
     $timezone = trim((string)($meetingData['timezone'] ?? 'America/Bogota'));
     $integrationMode = trim((string)($meetingData['integration_mode'] ?? 'calendar_plus_meet'));
+    $appointmentMode = function_exists('calendar_normalize_appointment_mode')
+        ? calendar_normalize_appointment_mode($meetingData['appointment_mode'] ?? '')
+        : '';
 
     if (!in_array($integrationMode, ['internal_only', 'calendar_only', 'calendar_plus_meet'], true)) {
         $integrationMode = 'calendar_plus_meet';
@@ -381,6 +385,12 @@ function my_booking_create_proposed_meeting_event($conexion, array $itemRow, arr
         $placeholders[] = '?';
         $types .= 's';
         $params[] = $organizerEmail;
+    }
+    if ($columns['appointment_mode'] && $appointmentMode !== '') {
+        $insertColumns[] = 'appointment_mode';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $appointmentMode;
     }
 
     $sql = 'INSERT INTO calendar_events (' . implode(', ', $insertColumns) . ') VALUES (' . implode(', ', $placeholders) . ')';
@@ -3805,6 +3815,9 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     if ($targetStatus === 'provider_proposed_change') {
         $providerNotes = trim((string)($_POST['provider_notes'] ?? ''));
         $integrationMode = my_booking_normalize_meeting_integration_mode($_POST['integration_mode'] ?? 'calendar_plus_meet');
+        $appointmentModePost = function_exists('calendar_normalize_appointment_mode')
+            ? calendar_normalize_appointment_mode($_POST['appointment_mode'] ?? '')
+            : '';
 
         $meetingStartRaw = trim((string)($_POST['proposed_start_at'] ?? ''));
         $meetingEndRaw = trim((string)($_POST['proposed_end_at'] ?? ''));
@@ -3980,6 +3993,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
             'end_at' => $meetingEnd,
             'timezone' => $meetingTimezone,
             'integration_mode' => $integrationMode,
+            'appointment_mode' => $appointmentModePost,
         ], current_admin_user_id());
 
         if (empty($meetingResult['ok'])) {
