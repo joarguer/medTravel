@@ -2736,6 +2736,7 @@
         $('#admin-meeting-start-at').val('');
         $('#admin-meeting-end-at').val('');
         $('#admin-meeting-note').val(String(defaultNote || ''));
+        $('#admin-meeting-appointment-mode').val('virtual');
         $('#admin-meeting-enable-calendar').prop('checked', true).prop('disabled', false);
         $('#admin-meeting-enable-meet').prop('checked', true);
         updateMeetingIntegrationUi();
@@ -2846,7 +2847,7 @@
         $('#admin-open-reprogramming-proposal').toggle(!!canReprogram);
     }
 
-    function sendMeetingProposal(startAt, endAt, note, integrationMode) {
+    function sendMeetingProposal(startAt, endAt, note, integrationMode, appointmentMode) {
         if (!currentThread || !currentThread.thread_id) {
             toastr.warning('Selecciona primero un hilo antes de enviar');
             return false;
@@ -2894,7 +2895,8 @@
                 proposed_date_from: startValue.substring(0, 10),
                 proposed_date_to: endValue.substring(0, 10),
                 provider_notes: String(note || ''),
-                integration_mode: String(integrationMode || 'calendar_plus_meet')
+                integration_mode: String(integrationMode || 'calendar_plus_meet'),
+                appointment_mode: String(appointmentMode || 'virtual')
             }
         }).done(function (res) {
             setComposeBusy(false, '');
@@ -3202,11 +3204,12 @@
             var endAt = $.trim($('#admin-meeting-end-at').val() || '');
             var note = $.trim($('#admin-meeting-note').val() || '');
             var integrationMode = resolveMeetingIntegrationMode();
+            var appointmentMode = $.trim($('#admin-meeting-appointment-mode').val() || 'virtual');
             if (note.length > 500) {
                 toastr.warning('La nota es demasiado larga');
                 return;
             }
-            if (sendMeetingProposal(startAt, endAt, note, integrationMode)) {
+            if (sendMeetingProposal(startAt, endAt, note, integrationMode, appointmentMode)) {
                 $('#adminProposeMeetingModal').modal('hide');
             }
         });

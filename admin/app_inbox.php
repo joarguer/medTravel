@@ -822,6 +822,14 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
                     <textarea class="form-control" id="admin-meeting-note" rows="3" maxlength="500" placeholder="Contexto adicional para la propuesta de reunión"></textarea>
                     <p class="help-block" style="margin-bottom:0;">Usa este texto como preview editable del mensaje que acompañará la propuesta.</p>
                 </div>
+                <div class="form-group" style="margin-top:15px;">
+                    <label for="admin-meeting-appointment-mode">Modalidad de la cita</label>
+                    <select class="form-control" id="admin-meeting-appointment-mode">
+                        <option value="virtual">Virtual (videollamada)</option>
+                        <option value="in_person">Presencial</option>
+                        <option value="travel">Asociada a viaje</option>
+                    </select>
+                </div>
                 <div class="form-group" style="margin-top:15px;margin-bottom:0;">
                     <label>Integraciones opcionales al aceptar</label>
                     <div class="checkbox-list">
