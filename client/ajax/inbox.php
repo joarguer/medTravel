@@ -712,15 +712,6 @@ if ($ownerScope['sql'] === '1=0') {
 }
 
 $action = trim((string)($_GET['action'] ?? $_POST['action'] ?? 'list_threads'));
-// [MT_DEBUG_HARDSTOP] TEMPORAL — BORRAR DESPUES
-if ($action === 'accept_dates') {
-    error_log('MT_DEBUG_ACCEPT HARD STOP');
-    http_response_code(418);
-    header('Content-Type: application/json');
-    echo json_encode(['ok' => false, 'message' => 'MT_DEBUG_ACCEPT_STOP']);
-    exit;
-}
-// [MT_DEBUG_HARDSTOP] FIN
 $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : (isset($_POST['limit']) ? (int)$_POST['limit'] : 200);
 if ($limit < 1) {
     $limit = 200;
@@ -1445,10 +1436,13 @@ if ($action === 'send_structured_action') {
 if ($action === 'accept_dates' || $action === 'reject_dates') {
     // [MT_DEBUG_ACCEPT] START
     error_log('[MT_DEBUG_ACCEPT] action=' . $action
-        . ' thread_id=' . ($ctx['thread_id'] ?? 'NULL')
-        . ' thread_type=' . ($ctx['thread_type'] ?? 'NULL')
-        . ' item_id=' . ($ctx['item_id'] ?? 'NULL')
-        . ' request_id=' . ($ctx['request_id'] ?? 'NULL'));
+        . ' POST_thread_id=' . ($_POST['thread_id'] ?? $_GET['thread_id'] ?? 'NULL')
+        . ' POST_action=' . ($_POST['action'] ?? $_GET['action'] ?? 'NULL')
+        . ' ctx_thread_id=' . ($ctx['thread_id'] ?? 'NULL')
+        . ' ctx_thread_type=' . ($ctx['thread_type'] ?? 'NULL')
+        . ' ctx_item_id=' . ($ctx['item_id'] ?? 'NULL')
+        . ' ctx_request_id=' . ($ctx['request_id'] ?? 'NULL')
+        . ' ctx_item_status=' . ($ctx['item_status'] ?? 'NULL'));
 
     if (!inbox_table_exists($conexion, 'booking_request_items')) {
         error_log('[MT_DEBUG_ACCEPT] 409 => booking_items_not_available');
@@ -1479,6 +1473,7 @@ if ($action === 'accept_dates' || $action === 'reject_dates') {
         . ' id=' . ($meetingRow['id'] ?? 'NULL')
         . ' status=' . ($meetingRow['status'] ?? 'NULL')
         . ' integration_mode=' . ($meetingRow['integration_mode'] ?? 'NULL')
+        . ' appointment_mode=' . ($meetingRow['appointment_mode'] ?? 'NULL')
         . ' organizer_admin_user_id=' . ($meetingRow['organizer_admin_user_id'] ?? 'NULL')
         . ' organizer_email=' . ($meetingRow['organizer_email'] ?? 'NULL')
         . ' start_at=' . ($meetingRow['start_at'] ?? 'NULL'));
