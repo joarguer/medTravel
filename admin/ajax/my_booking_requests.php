@@ -310,8 +310,13 @@ function my_booking_create_proposed_meeting_event($conexion, array $itemRow, arr
     }
 
     $organizerAdminUserId = 0;
+    $organizerEmail = '';
     if ($integrationMode !== 'internal_only') {
         $organizerAdminUserId = my_booking_pick_operational_admin_user_id($conexion, $preferredAdminUserId);
+        if ($organizerAdminUserId > 0 && function_exists('google_calendar_get_connection')) {
+            $adminConn = google_calendar_get_connection($conexion, $organizerAdminUserId, false);
+            $organizerEmail = trim((string)($adminConn['google_email'] ?? ''));
+        }
     }
     if ($integrationMode !== 'internal_only' && $organizerAdminUserId <= 0) {
         return ['ok' => false, 'error' => 'no_google_admin_connected'];
@@ -370,6 +375,12 @@ function my_booking_create_proposed_meeting_event($conexion, array $itemRow, arr
         $placeholders[] = '?';
         $types .= 's';
         $params[] = $integrationMode;
+    }
+    if ($columns['organizer_email'] && $organizerEmail !== '') {
+        $insertColumns[] = 'organizer_email';
+        $placeholders[] = '?';
+        $types .= 's';
+        $params[] = $organizerEmail;
     }
 
     $sql = 'INSERT INTO calendar_events (' . implode(', ', $insertColumns) . ') VALUES (' . implode(', ', $placeholders) . ')';
@@ -3202,7 +3213,7 @@ if ($action === 'propose_dates') {
     if ($targetStatus === 'provider_confirmed' || $targetStatus === 'provider_rejected') {
         $allowedCurrentStatuses = ['pending_provider'];
     } elseif ($targetStatus === 'provider_proposed_change') {
-        $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change'];
+        $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change', 'awaiting_client'];
     } elseif ($targetStatus === 'treatment_completed') {
         $allowedCurrentStatuses = ['provider_confirmed', 'client_accepted', 'treatment_completed'];
     }
@@ -3710,7 +3721,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     if ($targetStatus === 'provider_confirmed' || $targetStatus === 'provider_rejected') {
         $allowedCurrentStatuses = ['pending_provider'];
     } elseif ($targetStatus === 'provider_proposed_change') {
-        $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change'];
+        $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change', 'awaiting_client'];
     } elseif ($targetStatus === 'treatment_completed') {
         $allowedCurrentStatuses = ['provider_confirmed', 'client_accepted', 'treatment_completed'];
     } elseif ($targetStatus === 'post_treatment_follow_up') {
