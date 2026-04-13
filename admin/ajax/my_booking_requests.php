@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../inc/email_template.php';
 require_once __DIR__ . '/../../inc/inbox_utils.php';
 require_once __DIR__ . '/../../inc/fee_gate.php';
 require_once __DIR__ . '/../../inc/google_calendar.php';
+require_once __DIR__ . '/../../inc/realtime.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -3313,7 +3314,11 @@ if ($action === 'propose_dates') {
         mysqli_stmt_close($stmtMsg);
         json_err('db_error: ' . $err, 500);
     }
+    $newMessageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
+    if (function_exists('mt_realtime_emit_inbox_message')) {
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
+    }
 
     json_ok([
         'booking_request_id' => $bookingRequestId,
@@ -3490,7 +3495,11 @@ if ($action === 'send_final_decision') {
         mysqli_stmt_close($stmtMsg);
         json_err('db_error: ' . $err, 500);
     }
+    $newMessageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
+    if (function_exists('mt_realtime_emit_inbox_message')) {
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
+    }
 
     json_ok([
         'booking_request_id' => $bookingRequestId,
@@ -3579,7 +3588,11 @@ if ($action === 'send_quick_reply') {
         mysqli_stmt_close($stmt);
         json_err('db_error: ' . $err, 500);
     }
+    $newMessageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    if (function_exists('mt_realtime_emit_inbox_message')) {
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
+    }
 
     json_ok([
         'booking_request_id' => $bookingRequestId,
@@ -3982,7 +3995,11 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
             if ($stmtMsg) {
                 mysqli_stmt_bind_param($stmtMsg, 'siisis', $threadId, $bookingRequestId, $itemId, $senderRole, $senderUserId, $proposalMessage);
                 mysqli_stmt_execute($stmtMsg);
+                $newMessageId = (int)mysqli_insert_id($conexion);
                 mysqli_stmt_close($stmtMsg);
+                if (function_exists('mt_realtime_emit_inbox_message')) {
+                    mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
+                }
             }
         }
 

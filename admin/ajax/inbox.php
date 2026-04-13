@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../inc/email_template.php';
 require_once __DIR__ . '/../../inc/interaction_email.php';
 require_once __DIR__ . '/../../inc/fee_gate.php';
 require_once __DIR__ . '/../../inc/commission_gate.php';
+require_once __DIR__ . '/../../inc/realtime.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -1211,6 +1212,9 @@ if ($action === 'send_message') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    if (function_exists('mt_realtime_emit_inbox_message')) {
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId]);
+    }
     $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
@@ -1693,6 +1697,9 @@ if ($action === 'send_quick_reply') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    if (function_exists('mt_realtime_emit_inbox_message')) {
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId]);
+    }
     $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
@@ -1990,6 +1997,9 @@ if ($action === 'send_structured_action') {
     }
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
+    if (function_exists('mt_realtime_emit_inbox_message')) {
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId]);
+    }
     $createdAt = date('Y-m-d H:i:s');
 
     if (function_exists('mt_email_debug_log')) {
