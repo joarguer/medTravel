@@ -15,7 +15,7 @@ Plataforma de turismo médico que conecta pacientes de EE. UU. (principalmente F
 
 - **Backend:** PHP procedural con includes; sin framework
 - **Frontend:** Bootstrap 4/5, jQuery, vanilla JS
-- **Base de datos:** MySQL (`bolsacar_medtravel`), charset `utf8mb4`
+- **Base de datos:** MySQL; local actual del frente `medtravel`, producción `medtravelcom_medtravel`, charset `utf8mb4`
 - **APIs externas:** ConectarBot (WhatsApp), Stripe (pagos), Google Calendar + Meet
 - **Auth:** Sesiones PHP; tokens CSRF en `admin/include/session_security.php`
 

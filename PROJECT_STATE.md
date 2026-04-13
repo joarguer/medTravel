@@ -8,7 +8,7 @@ Estado actual del proyecto. Actualizar al cierre de cada sesión técnica releva
 
 - **Plataforma:** operativa en desarrollo local
 - **Último bundle conocido:** `medtravel_local_backup_20260410.bundle`
-- **Base de datos:** `bolsacar_medtravel` (MySQL, local)
+- **Base de datos:** `medtravel` (MySQL, local de este frente). Producción: `medtravelcom_medtravel`
 - **Fecha última actualización de este archivo:** 2026-04-13
 
 ---
@@ -47,7 +47,7 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 |-------|---------|
 | **Estado** | bloqueado |
 | **Impacto** | alto |
-| **Evidencia** | Canon Fase 1 cerrado (2026-03-23). Implementación no iniciada. Tres migraciones SQL escritas pero sin ejecutar: `appointment_mode`, `treatment_completed`, `post_treatment_follow_up`. Runtime actual referencia columnas que pueden no existir en BD local. |
+| **Evidencia** | Canon Fase 1 cerrado (2026-03-23). Implementación parcial: cliente ya puede confirmar y crear evento Google/Meet en flujo parcial, pero admin normal aún no crea Google Calendar + Meet. Tres migraciones SQL siguen pendientes en local: `appointment_mode`, `treatment_completed`, `post_treatment_follow_up`. Runtime actual referencia columnas que pueden no existir en BD local. |
 | **Siguiente acción** | Sesión SQL: ejecutar las 3 migraciones en orden → smoke test → implementar Fase 1 Google Calendar API |
 
 ---
@@ -113,7 +113,7 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 APP_ENV=dev
 DB_HOST=127.0.0.1 / DB_PORT=8889
 DB_USER=root / DB_PASS=root
-DB_NAME=bolsacar_medtravel
+DB_NAME=medtravel
 CONECTARBOT_API_KEY=mt_cb_live_...
 GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
 GOOGLE_OAUTH_REDIRECT_URI, GOOGLE_OAUTH_ENCRYPTION_KEY
