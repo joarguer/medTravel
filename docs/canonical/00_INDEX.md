@@ -1,110 +1,53 @@
-# Documentación Canónica - Índice
+# 00_INDEX — Documentación Canónica MedTravel
 
-## ¿Qué es canónico vs derivado?
-
-- **Canónico:** elemento que actúa como la *fuente de verdad* para una decisión, dato o diseño. (Ver ejemplos: `BOOKING_CTA_INTEGRATION.md`, `SERVICES_CATALOG.md`.)
-- **Derivado:** documento que resume, comunica o usa decisiones tomadas en los canónicos; no debe redefinirlas.
-
-## Orden de lectura recomendado
-
-1. MODELO DE NEGOCIO — `MODELO_NEGOCIO_ACTUALIZADO.md`
-2. Backlog / Ejecución — `NEXT_STEPS_SERVICES.md`
-3. Contexto técnico y runtime — `DEV_CONTEXT.md`
-
-## Links canónicos (acceso rápido)
-
-- [MODELO DE NEGOCIO actualizado](../../MODELO_NEGOCIO_ACTUALIZADO.md)
-- [NEXT_STEPS_SERVICES (ejecución / backlog)](../../NEXT_STEPS_SERVICES.md)
-- [DEV_CONTEXT (contexto técnico y runtime)](../../DEV_CONTEXT.md)
-- [Modelo canónico de Calendar / Meet](05_CALENDAR_MEET_INTEGRATION_MODEL.md)
-
-## Docs derivados importantes
-
-- [RESUMEN DE IMPLEMENTACIÓN - Mejoras Comerciales](../../RESUMEN_IMPLEMENTACION.md)
-- [MEJORAS_COMERCIALES_README](../../MEJORAS_COMERCIALES_README.md)
-- [PROVIDER_SYSTEM_RESUMEN](../../PROVIDER_SYSTEM_RESUMEN.md)
-
-
-> Nota: Este índice centraliza enlaces. No duplica ni reescribe decisiones.
+Índice de la documentación canónica. No duplica decisiones; apunta a las fuentes.
 
 ---
 
-## 🧠 Protocolo Oficial de Selección de Modelos IA (2026)
+## Qué es canónico vs derivado
 
-Este proyecto utiliza múltiples modelos según el tipo de tarea.
-La selección de modelo no es aleatoria; responde a complejidad, criticidad y tipo de cambio.
+- **Canónico:** fuente de verdad para una decisión, dato o diseño. No se reescribe en otros docs.
+- **Derivado:** resume, comunica o aplica lo decidido en canónicos. No redefine.
 
-🔹 1. Documentación / Organización
+---
 
-Modelo recomendado:
-- GPT-5 mini
+## Archivos de base documental (estructura fija — no variar por proyecto)
 
-Uso:
-- Organización de .md
-- Creación de estructura docs
-- Refactors documentales
-- Commits menores
+| Archivo | Propósito |
+|---------|-----------|
+| `AGENTS.md` (raíz) | Contexto operativo para agentes IA — agnóstico de proveedor |
+| `PROJECT_STATE.md` (raíz) | Estado actual: deuda técnica, frentes abiertos, frentes cerrados |
+| `docs/canonical/00_INDEX.md` | Este archivo — índice y protocolo |
+| `docs/canonical/01_SCOPE_AND_RULES.md` | Alcance del proyecto y reglas operativas |
+| `docs/canonical/02_DOC_MAP.md` | Mapa completo de toda la documentación |
 
-Motivo:
-Rápido, suficiente, bajo costo.
+---
 
-🔹 2. Desarrollo estructural y arquitectura
+## Archivos de contenido canónico (específicos de MedTravel)
 
-Modelo recomendado:
-- GPT-5.2
+| Archivo | Propósito |
+|---------|-----------|
+| `docs/canonical/10_PRODUCT_MODEL.md` | Modelo de producto: caso, ítem, cita, coordinación |
+| `docs/canonical/11_TECH_ARCH_AND_RUNTIME.md` | Arquitectura técnica y separaciones de dominio |
+| `docs/canonical/12_EXECUTION_BACKLOG.md` | Backlog de ejecución y estado de fases |
+| `docs/canonical/13_CHANGELOG_DECISIONS.md` | Decisiones arquitectónicas registradas |
+| `docs/canonical/14_CALENDAR_MEET_INTEGRATION_MODEL.md` | Spec Google Calendar/Meet |
 
-Uso:
-- Diseño de tablas nuevas
-- Arquitectura booking multiproveedor
-- Seguridad y RBAC
-- Cambios que afectan múltiples módulos
-- Refactors importantes
+---
 
-Motivo:
-Mejor equilibrio entre razonamiento profundo y consistencia técnica.
+## Orden de lectura recomendado
 
-🔹 3. Backend crítico / Código multi-tenant / Seguridad
+1. `AGENTS.md` — quién soy, qué no debo hacer
+2. `PROJECT_STATE.md` — qué está pendiente ahora
+3. `01_SCOPE_AND_RULES.md` — reglas del juego
+4. `10_PRODUCT_MODEL.md` → `11_TECH_ARCH_AND_RUNTIME.md` — modelo y stack
+5. `12_EXECUTION_BACKLOG.md` — frentes activos
 
-Modelo recomendado:
-- GPT-5.1-Codex
-- GPT-5.2-Codex
+---
 
-Uso:
-- Middleware
-- Validación JWT
-- Control por empresa
-- Flujos multi-tenant
-- Integraciones sensibles
-- Debug profundo de backend
+## Protocolo de continuidad
 
-Motivo:
-Mayor precisión quirúrgica sobre código real.
-
-🔹 4. Arquitectura estratégica
-
-Modelo recomendado:
-- GPT-5.2
-
-Uso:
-- Decisiones SaaS
-- Diseño de flujos completos
-- Modelo de negocio técnico
-- Cambios estructurales de producto
-
-🔹 5. Combinación recomendada cuando Codex esté externo
-
-Arquitectura y decisiones:
-→ GPT-5.2
-
-Ejecución sobre repo real:
-→ Codex (modelo Codex activo)
-
-⚠️ Modelos NO recomendados para tareas críticas
-- Modelos preview ligeros
-- Versiones “fast” para arquitectura
-- Modelos optimizados solo para velocidad
-
-Regla operativa final:
-
-Las decisiones estratégicas y arquitectónicas deben pasar por GPT-5.2 antes de ejecución en Codex.
-
+- Este repositorio es la fuente de verdad operativa.
+- Ningún contexto externo (chat, email, nota) reemplaza lo documentado aquí.
+- Al cerrar una sesión técnica relevante: actualizar `PROJECT_STATE.md`.
+- Al tomar una decisión arquitectónica: registrar en `13_CHANGELOG_DECISIONS.md`.
