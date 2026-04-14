@@ -1591,12 +1591,81 @@ function google_calendar_cancel_item_meeting($conexion, $itemId, array $actor = 
         mysqli_rollback($conexion);
         return ['ok' => false, 'error' => 'calendar_event_already_cancelled_or_missing'];
     }
-    // Attempt to sync item status to 'appointment_cancelled' before
-    // creating inbox messages. Fail hard if sync fails.
-    $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_cancelled');
+    // A cancelled meeting should reopen the item for rescheduling instead of
+    // closing the case as a business cancellation.
+    $targetItemStatus = 'appointment_requested_change';
+    $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, $targetItemStatus);
     if (empty($syncResult['ok'])) {
         mysqli_rollback($conexion);
         return ['ok' => false, 'error' => 'item_status_sync_failed', 'sync' => $syncResult];
+    }
+
+    $persistedItemStatus = strtolower(trim((string)($syncResult['item_status'] ?? '')));
+    if ($persistedItemStatus !== $targetItemStatus) {
+        $hasItemsUpdatedAt = google_calendar_table_has_column($conexion, 'booking_request_items', 'updated_at');
+        $hasItemsSoftDelete = google_calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+        $setParts = ['item_status = ?'];
+        if ($hasItemsUpdatedAt) {
+            $setParts[] = 'updated_at = NOW()';
+        }
+
+        $forceSql = "UPDATE booking_request_items SET " . implode(', ', $setParts) . " WHERE id = ?";
+        if ($hasItemsSoftDelete) {
+            $forceSql .= " AND is_deleted = 0";
+        }
+        $forceSql .= " LIMIT 1";
+
+        $stmtForce = mysqli_prepare($conexion, $forceSql);
+        if (!$stmtForce) {
+            error_log('google_calendar_cancel_item_meeting force_update_prepare_failed item_id=' . $itemId);
+            mysqli_rollback($conexion);
+            return ['ok' => false, 'error' => 'item_status_force_update_prepare_failed', 'sync' => $syncResult];
+        }
+        mysqli_stmt_bind_param($stmtForce, 'si', $targetItemStatus, $itemId);
+        if (!mysqli_stmt_execute($stmtForce)) {
+            $err = mysqli_stmt_error($stmtForce);
+            mysqli_stmt_close($stmtForce);
+            error_log('google_calendar_cancel_item_meeting force_update_failed item_id=' . $itemId . ' error=' . $err);
+            mysqli_rollback($conexion);
+            return ['ok' => false, 'error' => 'item_status_force_update_failed: ' . $err, 'sync' => $syncResult];
+        }
+        mysqli_stmt_close($stmtForce);
+    }
+
+    $hasItemsSoftDelete = google_calendar_table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $statusSql = "SELECT item_status FROM booking_request_items WHERE id = ?";
+    if ($hasItemsSoftDelete) {
+        $statusSql .= " AND is_deleted = 0";
+    }
+    $statusSql .= " LIMIT 1";
+    $stmtStatus = mysqli_prepare($conexion, $statusSql);
+    if (!$stmtStatus) {
+        error_log('google_calendar_cancel_item_meeting status_recheck_prepare_failed item_id=' . $itemId);
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => 'item_status_recheck_prepare_failed'];
+    }
+    mysqli_stmt_bind_param($stmtStatus, 'i', $itemId);
+    if (!mysqli_stmt_execute($stmtStatus)) {
+        $err = mysqli_stmt_error($stmtStatus);
+        mysqli_stmt_close($stmtStatus);
+        error_log('google_calendar_cancel_item_meeting status_recheck_execute_failed item_id=' . $itemId . ' error=' . $err);
+        mysqli_rollback($conexion);
+        return ['ok' => false, 'error' => 'item_status_recheck_execute_failed: ' . $err];
+    }
+    $statusRes = mysqli_stmt_get_result($stmtStatus);
+    $statusRow = $statusRes ? mysqli_fetch_assoc($statusRes) : null;
+    mysqli_stmt_close($stmtStatus);
+    $persistedItemStatus = strtolower(trim((string)($statusRow['item_status'] ?? '')));
+    if ($persistedItemStatus !== $targetItemStatus) {
+        error_log('google_calendar_cancel_item_meeting item_status_persist_failed item_id=' . $itemId . ' persisted_status=' . $persistedItemStatus . ' expected_status=' . $targetItemStatus);
+        mysqli_rollback($conexion);
+        return [
+            'ok' => false,
+            'error' => 'item_status_not_persisted_after_cancel',
+            'persisted_item_status' => $persistedItemStatus,
+            'expected_item_status' => $targetItemStatus,
+            'sync' => $syncResult,
+        ];
     }
 
     $messageId = 0;
@@ -1655,6 +1724,7 @@ function google_calendar_cancel_item_meeting($conexion, $itemId, array $actor = 
         'google_event_id' => $googleEventId,
         'request_id' => (int)($eventRow['request_id'] ?? 0),
         'item_id' => $itemId,
+        'item_status' => $persistedItemStatus,
         'start_at' => (string)($eventRow['start_at'] ?? ''),
         'end_at' => (string)($eventRow['end_at'] ?? ''),
         'integration_mode' => $integrationMode,

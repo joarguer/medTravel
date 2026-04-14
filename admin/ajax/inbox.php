@@ -327,7 +327,7 @@ function admin_inbox_status_label($status)
         return 'provider_proposed_change';
     }
     if ($status === 'appointment_cancelled') {
-        return 'cancelled';
+        return 'provider_proposed_change';
     }
     if ($status === 'appointment_proposed') {
         return 'awaiting_client';

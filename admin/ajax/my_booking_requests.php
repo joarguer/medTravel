@@ -3657,6 +3657,7 @@ if ($action === 'cancel_meeting') {
     json_ok([
         'item_id' => $itemId,
         'request_id' => (int)($cancelResult['request_id'] ?? 0),
+        'item_status' => normalize_legacy_item_status((string)($cancelResult['item_status'] ?? '')),
         'meeting' => [
             'status' => 'cancelled',
             'calendar_event_id' => (int)($cancelResult['calendar_event_id'] ?? 0),

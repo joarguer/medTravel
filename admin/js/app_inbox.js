@@ -1816,17 +1816,20 @@
         }
 
         var changed = !currentThread || String(currentThread.thread_id || '') !== String(selected.thread_id || '');
+        var nextStatus = String(selected.item_status || selected.status_label || '');
         currentThread = {
             thread_id: String(selected.thread_id || ''),
             thread_type: String(selected.thread_type || 'ITEM'),
             booking_request_id: parseInt(selected.booking_request_id || selected.request_id || 0, 10),
             item_id: parseInt(selected.item_id || 0, 10),
             thread_title: String(selected.title || ''),
-            item_status: String(selected.item_status || selected.status_label || '')
+            item_status: nextStatus
         };
         preferredThread = null;
         if (changed) {
             loadMessages();
+        } else {
+            toggleStructuredActionButtons(String(currentThread.thread_type || '').toUpperCase() === 'ITEM');
         }
     }
 
@@ -2946,6 +2949,10 @@
             if (!res || res.ok !== true) {
                 toastr.error((res && res.message) ? res.message : 'No se pudo cancelar la reunión');
                 return;
+            }
+            if (currentThread && typeof res.item_status === 'string' && res.item_status.trim() !== '') {
+                currentThread.item_status = String(res.item_status || '').trim();
+                toggleStructuredActionButtons(true);
             }
             markSentFromResponse(res);
             realtimeEmitCommitted(currentThread.thread_id, res, 'ADMIN');
