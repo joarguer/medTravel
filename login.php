@@ -253,7 +253,7 @@ foreach ($publicSocialLinks as $social) {
         <!-- BEGIN LOGO -->
         <div class="logo">
 			<a href="index.php">
-				<h1 class="m-0"><i class="fa fa-stethoscope me-3"></i><span class="text-warning">Med</span>Travel</h1>
+				<img src="img/site/logo_login.png" alt="MedTravel" style="max-width: 260px; width: 100%; height: auto;">
 			</a>
         </div>
         <!-- END LOGO -->
