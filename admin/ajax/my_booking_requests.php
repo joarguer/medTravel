@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../inc/inbox_utils.php';
 require_once __DIR__ . '/../../inc/fee_gate.php';
 require_once __DIR__ . '/../../inc/google_calendar.php';
 require_once __DIR__ . '/../../inc/realtime.php';
+require_once __DIR__ . '/../../inc/commission_gate.php';
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -756,6 +757,32 @@ function build_coordination_fee_meta($conexion, $bookingRequestId, $seedRow, $is
         'unlocked' => coordination_fee_is_unlocked($functionalStatus, $isAdminSession),
         'message' => $functionalStatus === 'required_pending' ? 'Comisión pendiente' : '',
     ];
+}
+
+function apply_provider_commission_gate_override($conexion, array &$coordinationFee, array $seedRow)
+{
+    if (!function_exists('commission_gate_fetch_settings')) {
+        return;
+    }
+    $providerIds = [];
+    if (!empty($seedRow['provider_id'])) {
+        $providerIds[] = (int)$seedRow['provider_id'];
+    }
+    if (!empty($seedRow['service_provider_id'])) {
+        $providerIds[] = (int)$seedRow['service_provider_id'];
+    }
+    // If no provider context, nothing to check
+    if (empty($providerIds)) {
+        return;
+    }
+    $settings = commission_gate_fetch_settings($conexion, $providerIds);
+    // If settings were found and the gate is not enabled, treat coordination as not applicable
+    if (!empty($settings['found']) && empty($settings['enabled'])) {
+        $coordinationFee['unlocked'] = true;
+        $coordinationFee['required'] = 0;
+        $coordinationFee['status'] = 'not_applicable';
+        $coordinationFee['message'] = '';
+    }
 }
 
 function detect_message_role($message)
@@ -2428,6 +2455,7 @@ if ($action === 'get_detail') {
 
     $bookingRequestId = (int)$row['booking_request_id'];
     $coordinationFee = build_coordination_fee_meta($conexion, $bookingRequestId, $row, $isAdminSession);
+    apply_provider_commission_gate_override($conexion, $coordinationFee, $row);
     $feeLocked = !$coordinationFee['unlocked'];
     $row['coordination_fee'] = $coordinationFee;
     $row['fee_locked'] = $feeLocked ? 1 : 0;
@@ -2869,6 +2897,12 @@ if ($action === 'list_messages') {
     }
 
     $coordinationFee = build_coordination_fee_meta($conexion, $bookingRequestId, [], $isAdminSession);
+    if (function_exists('commission_gate_resolve_provider_ids') && $itemId > 0) {
+        $provContext = commission_gate_resolve_provider_ids($conexion, $itemId);
+        apply_provider_commission_gate_override($conexion, $coordinationFee, $provContext);
+    } else {
+        apply_provider_commission_gate_override($conexion, $coordinationFee, []);
+    }
     $feeLocked = !$coordinationFee['unlocked'];
 
     $parsedMessages = parse_additional_notes_messages(fetch_booking_additional_notes($conexion, $bookingRequestId, $hasRequestsSoftDelete));
@@ -3103,6 +3137,11 @@ if ($action === 'send_message') {
     }
 
     $coordinationFee = build_coordination_fee_meta($conexion, $bookingRequestId, [], $isAdminSession);
+    if (!empty($itemRow) && is_array($itemRow)) {
+        apply_provider_commission_gate_override($conexion, $coordinationFee, $itemRow);
+    } else {
+        apply_provider_commission_gate_override($conexion, $coordinationFee, []);
+    }
     $feeLocked = !$coordinationFee['unlocked'];
     if ($feeLocked && !$isAdminSession) {
         http_response_code(403);
