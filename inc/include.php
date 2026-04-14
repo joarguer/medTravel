@@ -249,8 +249,7 @@ $head = '<meta charset="utf-8">
     <link href="' . $style_css_url . '" rel="stylesheet">' . $jsonld_scripts;
 
 $logo = '<a href="index.php" class="navbar-brand p-0">
-<h1 class="m-0"><i class="fas fa-stethoscope me-3"></i><span class="text-warning">Med</span>Travel</h1>
-<!-- <img src="img/logo.png" alt="Logo"> -->
+<img src="/img/site/logo-navbar.png" srcset="/img/site/logo-navbar-small.png 239w, /img/site/logo-navbar.png 500w" sizes="(max-width: 991.98px) 239px, 500px" alt="MedTravel" width="500" height="136">
 </a>';
 
 $company_links = [
