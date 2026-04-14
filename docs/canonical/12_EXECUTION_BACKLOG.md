@@ -220,6 +220,9 @@ Documento de referencia:
 - DONE 2026-03-23: queda canonizado que aceptacion funcional en MedTravel no equivale a consentimiento OAuth Google
 - DONE 2026-03-23: queda canonizado que Fase 1 opera aunque solo admin MedTravel tenga conexion Google; paciente y provider / staff pueden asistir como invitados sin conectar Google
 - DONE 2026-03-23: queda canonizado que fases posteriores pueden habilitar conexion Google opcional por actor con aislamiento por usuario y scopes concedidos
+- DONE 2026-04-14: runtime Fase 1 validado con organizer tecnico en la cuenta Google del admin autenticado; paciente y provider / staff siguen como invitados sin OAuth propio en este flujo
+- DONE 2026-04-14: fix OAuth validado para runtime real: scope `https://www.googleapis.com/auth/calendar`, `include_granted_scopes=false` y reconexion limpia del admin cuando aparecen `invalid_grant` o permisos insuficientes
+- DONE 2026-04-14: cancelar reunion deja el item reprogramable; runtime persiste `appointment_requested_change` y el Inbox operativo expone `appointment_cancelled` como `provider_proposed_change`
 
 #### Deuda de modelo
 
@@ -241,8 +244,8 @@ Documento de referencia:
 - [ ] Evolucionar agenda desde foco global por provider hacia foco operativo por medico / staff asignado
 - [ ] Asegurar que una futura cita pueda existir sin asumir unicidad por caso
 - [ ] Asegurar que un caso pueda mantener varias citas activas o historicas sin romper Inbox ni timeline
-- [ ] Implementar Fase 1 con Google Calendar API + Meet al crear evento desde admin MedTravel
-- [ ] Diseñar storage y callbacks OAuth 2.0 Web Server Flow para admins MedTravel
+- [x] Implementar Fase 1 con Google Calendar API + Meet al crear evento desde admin MedTravel (DONE 2026-04-14: runtime validado)
+- [x] Diseñar storage y callbacks OAuth 2.0 Web Server Flow para admins MedTravel (DONE 2026-04-14: runtime validado y canon alineado)
 - [ ] Invitar a paciente y provider / staff como attendees sin convertir a MedTravel en actor clinico
 - [ ] Diseñar el paso adicional de conexion Google cuando un flujo futuro requiera sincronizacion sobre un actor que ya acepto en MedTravel pero no otorgo OAuth
 - [ ] Diseñar Fase 2 para Google Meet API avanzada sin bloquear la salida de Fase 1

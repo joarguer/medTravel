@@ -49,6 +49,16 @@ Este canon también fija una transición explícita por fases:
 - Paciente y provider / médico / staff no están obligados a conectar Google en Fase 1 para que la cita exista y pueda ser coordinada.
 - MedTravel persiste internamente la trazabilidad operativa de la cita y sus referencias externas.
 
+#### Runtime validado de OAuth en Fase 1
+
+- El scope operativo real exigido para crear eventos es `https://www.googleapis.com/auth/calendar`.
+- La autorización se solicita además con `openid`, `email` y `profile` para identidad del admin conectado.
+- El authorize flow debe forzar `include_granted_scopes=false` para no arrastrar una concesión previa incompleta.
+- El criterio de recuperación validado cuando la conexión queda degradada es desconectar y reconectar limpiamente la cuenta Google del admin organizer.
+- Los dos hallazgos reales que disparan esa reconexión limpia son:
+  - `invalid_grant`
+  - permisos insuficientes para crear eventos (`insufficient authentication scopes` / `ACCESS_TOKEN_SCOPE_INSUFFICIENT`)
+
 ### Fase 2 — Meet avanzado y trazabilidad extendida
 
 - La Google Meet API avanzada se incorpora después de estabilizar la Fase 1.
@@ -147,6 +157,7 @@ Este canon también fija una transición explícita por fases:
 - La existencia de la cita no depende de que paciente, provider o staff hayan conectado Google.
 - Si solo el admin de MedTravel tiene conexion Google, el sistema puede crear el evento con ese admin como organizer tecnico e invitar al resto de actores como attendees.
 - En Fase 1, la coordinacion por email / invitacion de calendario es suficiente para materializar la reunion sin exigir OAuth a los demas actores.
+- Paciente y provider / staff no deben ser llevados a un flujo OAuth Google para esta salida base; su participacion ocurre como invitados del evento creado por el admin organizer.
 
 ### Regla operativa de fases posteriores
 
@@ -217,6 +228,13 @@ La estrategia canónica recomendada es progresiva.
 - La trazabilidad operativa debe persistirse dentro de MedTravel aunque el evento viva en Google Calendar.
 - El modelo no convierte a MedTravel en prestador médico ni redefine la frontera del negocio.
 - Google Calendar y Google Meet siguen siendo infraestructura de agenda y coordinacion; no cambian la naturaleza intermediaria de MedTravel ni convierten la reunion en acto medico prestado por la plataforma.
+
+### Regla de cancelación de reunión en integración Calendar / Inbox
+
+- Cancelar una reunión no debe cerrar el caso ni cancelar el item clínico por arrastre.
+- Cuando una reunión se cancela y el caso sigue activo, la integración debe devolver el item al estado interno `appointment_requested_change`.
+- En Inbox operativo admin/provider, ese escenario debe exponerse como `provider_proposed_change` para preservar la capacidad de reprogramar o emitir una nueva propuesta.
+- La cancelación terminal del caso es una decisión de negocio separada y no debe inferirse desde la cancelación de un evento de agenda.
 
 ## 10. Alcance funcional futuro
 

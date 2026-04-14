@@ -99,6 +99,7 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - Google Calendar y Google Meet no constituyen un modulo aparte del producto; se integran como capacidad de la cita dentro del dominio Agenda.
 - La validacion futura de disponibilidad y no solapamiento debe evolucionar desde control global por provider hacia control por medico / staff asignado.
 - Un mismo caso puede involucrar varias citas, varios medicos y, cuando el proceso clinico lo requiera, varios providers.
+- Cancelar una reunion no cancela por si sola el caso ni el item clinico; solo cierra ese evento de agenda y debe dejar abierta la coordinacion para reprogramacion cuando corresponda.
 
 #### Coordinacion / Pago
 
@@ -212,6 +213,15 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - Un item clinico puede requerir cero, una o multiples citas.
 - Una cita pertenece al contexto operativo de un item clinico concreto, aunque el caso completo pueda involucrar varios items y varios responsables.
 - El paciente no debe asumirse ligado a un unico medico ni a un unico provider durante toda la vida del caso.
+
+### Regla canónica de cancelación de reunión vs cancelación del caso
+
+- Cancelar una reunión no equivale a cancelar el caso.
+- Cancelar una reunión no equivale a cancelar el item clínico.
+- La cancelación de una reunión debe devolver el item al flujo operativo de reprogramación cuando el caso siga activo.
+- La cancelación del caso o del item es una decisión distinta, explícita y de negocio; no debe derivarse implícitamente de una cancelación de agenda.
+- En Inbox operativo admin/provider, una reunión cancelada debe seguir permitiendo nueva propuesta o reprogramación.
+- El mapeo operativo visible en Inbox para ese escenario es: `appointment_cancelled` -> `provider_proposed_change`.
 
 ### Estados visibles oficiales del item
 

@@ -9,7 +9,7 @@ Estado actual del proyecto. Actualizar al cierre de cada sesión técnica releva
 - **Plataforma:** operativa en desarrollo local
 - **Último bundle conocido:** `medtravel_local_backup_20260410.bundle`
 - **Base de datos:** `medtravel` (MySQL, local de este frente). Producción: `medtravelcom_medtravel`
-- **Fecha última actualización de este archivo:** 2026-04-13
+- **Fecha última actualización de este archivo:** 2026-04-14
 
 ---
 
@@ -27,6 +27,7 @@ Estado actual del proyecto. Actualizar al cierre de cada sesión técnica releva
 
 ## Frentes completados recientes
 
+- **2026-04-14** — Google Calendar / Meet Fase 1 validado con organizer admin autenticado; OAuth corregido para scope real de Calendar y reconexión limpia; cancelación de reunión vuelve a dejar el item reprogramable para provider
 - **2026-04-03** — Fase 0–4 SEO/credibilidad en superficies públicas (commits `6d4db96` → `e9466ad`)
 - **2026-03-20** — Tabla `provider_medical_staff` operativa; separación proveedor/médico activa
 - **Booking wizard** — CTA integration documentada, provider offers, mejoras de wizard
@@ -45,10 +46,10 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 
 | Campo | Detalle |
 |-------|---------|
-| **Estado** | bloqueado |
+| **Estado** | en progreso |
 | **Impacto** | alto |
-| **Evidencia** | Canon Fase 1 cerrado (2026-03-23). Implementación parcial: cliente ya puede confirmar y crear evento Google/Meet en flujo parcial, pero admin normal aún no crea Google Calendar + Meet. Tres migraciones SQL siguen pendientes en local: `appointment_mode`, `treatment_completed`, `post_treatment_follow_up`. Runtime actual referencia columnas que pueden no existir en BD local. |
-| **Siguiente acción** | Sesión SQL: ejecutar las 3 migraciones en orden → smoke test → implementar Fase 1 Google Calendar API |
+| **Evidencia** | Runtime validado: el organizer técnico de Google Calendar / Meet es la cuenta Google del admin autenticado en MedTravel; paciente y provider/staff participan como invitados y no conectan Google en este flujo. OAuth corregido con scope real `https://www.googleapis.com/auth/calendar`, `include_granted_scopes=false` y criterio de reconexión limpia cuando aparece `invalid_grant` o permisos insuficientes. Cancelar una reunión ya no cierra el caso: el item vuelve a `appointment_requested_change` y en Inbox operativo se expone como `provider_proposed_change` para permitir reprogramación / nueva propuesta. Las 3 migraciones locales (`appointment_mode`, `treatment_completed`, `post_treatment_follow_up`) siguen siendo punto de contraste si faltan en un entorno. |
+| **Siguiente acción** | Mantener canon y smoke alineados en cada entorno; verificar migraciones pendientes donde aún no existan |
 
 ---
 

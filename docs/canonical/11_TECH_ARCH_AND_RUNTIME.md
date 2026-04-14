@@ -136,7 +136,15 @@ Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
 - Los tokens deben separarse por admin y no mezclarse entre sesiones o cuentas administrativas.
 - El organizer inicial del evento es la cuenta Google conectada por ese admin MedTravel.
 - Paciente y provider / medico / staff se agregan como invitados del evento.
+- Paciente y provider / medico / staff no conectan sus cuentas Google en este flujo base; la autorizacion OAuth pertenece solo al admin organizer autenticado.
 - MedTravel persiste internamente la trazabilidad de la cita y sus referencias externas.
+
+### Runtime validado de OAuth Google en Fase 1
+
+- El runtime exige como scope operativo real de Calendar: `https://www.googleapis.com/auth/calendar`.
+- La solicitud OAuth se emite con `include_granted_scopes=false` para evitar reutilizar una concesion previa incompleta.
+- Si la conexion devuelve `invalid_grant` o errores de permisos insuficientes para crear eventos, el criterio operativo correcto es desconectar y reconectar limpiamente la cuenta Google del admin.
+- Este criterio de reconexion aplica al organizer admin de Fase 1; no implica pedir OAuth a paciente ni a provider / staff para que la reunion exista.
 
 ### Seguridad mínima obligatoria
 

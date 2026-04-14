@@ -1,5 +1,35 @@
 # Changelog Decisions
 
+## 2026-04-14 — fix(calendar): OAuth Fase 1 se corrige por scope real y reconexión limpia
+
+**Outcome**
+- El organizer técnico validado para Google Calendar / Meet Fase 1 es la cuenta Google del admin autenticado en MedTravel.
+- Paciente y provider / médico / staff participan como invitados y no conectan sus cuentas Google en este flujo base.
+- El hallazgo real de runtime fue doble: conexiones que caían en `invalid_grant` y conexiones que devolvían permisos insuficientes para crear eventos.
+- El fix operativo validado usa el scope real `https://www.googleapis.com/auth/calendar`, fuerza `include_granted_scopes=false` en el authorize URL y exige reconexión limpia de la cuenta Google del admin cuando la conexión quedó revocada o concedida con permisos incompletos.
+
+**Decision**
+- Fase 1 no usa OAuth de paciente ni de provider / staff.
+- La cuenta Google relevante en Fase 1 es exclusivamente la del admin organizer autenticado.
+- Si aparece `invalid_grant` o un error de permisos insuficientes para crear eventos, la política operativa correcta es desconectar y reconectar limpiamente la cuenta Google del admin; no reutilizar una conexión degradada.
+
+---
+
+## 2026-04-14 — fix(calendar,inbox): cancelar reunión no cancela el caso y debe dejar reprogramación abierta
+
+**Outcome**
+- Se valida el hallazgo real de runtime: cancelar una reunión estaba cerrando de facto la posibilidad de nueva propuesta / reprogramación para provider en Inbox.
+- El fix real deja de tratar la cancelación de reunión como cancelación de negocio del caso.
+- Al cancelar la reunión, el item vuelve a `appointment_requested_change` y queda otra vez disponible para reprogramación.
+- En Inbox operativo admin/provider, el mapeo visible correcto es `appointment_cancelled` -> `provider_proposed_change`.
+
+**Decision**
+- Cancelar una reunión no equivale a cancelar el caso ni el item clínico.
+- La cancelación de agenda debe reabrir la coordinación cuando el caso siga activo.
+- El Inbox operativo debe privilegiar la semántica de reprogramación en este escenario y no una semántica terminal de cancelación de negocio.
+
+---
+
 ## 2026-04-10 — feat(inbox): preview modal admin, confirmacion de reunion desde cliente, rendering estructurado
 
 **Commit**: `4c9a142`
