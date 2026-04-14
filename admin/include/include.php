@@ -459,7 +459,7 @@ $top_header =  '<div class="clearfix navbar-fixed-top">
                 <!-- End Toggle Button -->
                 <!-- BEGIN LOGO -->
                 <a id="index" class="page-logo" href="index.php">
-                    <img src="img/logoWhite.png" alt="Logo" width="150px"> </a>
+                    <img src="/img/site/logo-navbar.png" srcset="/img/site/logo-navbar-small.png 239w, /img/site/logo-navbar.png 500w" sizes="(max-width: 991.98px) 180px, 220px" alt="MedTravel" style="max-width:220px;width:100%;height:auto;"> </a>
                 <!-- END LOGO -->
                 <!-- BEGIN SEARCH
                 <form class="search" action="extra_search.html" method="GET">
