@@ -1,5 +1,8 @@
 # Modelo de Negocio MedTravel - Actualización 2026
 
+Documento derivado / histórico de negocio.
+No es fuente de verdad operativa. Si difiere, prevalecen `AGENTS.md`, `PROJECT_STATE.md` y `docs/canonical/*`.
+
 **Fecha de actualización:** 29 de enero de 2026  
 **Versión:** 2.0
 

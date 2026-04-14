@@ -1,5 +1,20 @@
 # Changelog Decisions
 
+## 2026-04-14 — docs(governance): se endurece la jerarquía operativa y se desactiva drift multi-modelo
+
+**Outcome**
+- `CLAUDE.md` deja de duplicar contexto operativo y queda reducido a shim de compatibilidad.
+- `12_EXECUTION_BACKLOG.md` se reafirma explícitamente como backlog canónico vigente.
+- `NEXT_STEPS_SERVICES.md` y `DEV_CONTEXT.md` quedan marcados como auxiliares para soporte histórico / operativo y no como fuentes principales.
+- `00_INDEX.md` y `02_DOC_MAP.md` explicitan la jerarquía entre contexto IA, estado vivo, canon y auxiliares.
+
+**Decision**
+- La continuidad operativa vive solo en `AGENTS.md`, `PROJECT_STATE.md` y `docs/canonical/*`.
+- Los archivos específicos de proveedor o modelo solo pueden existir como compatibilidad de baja entropía; no deben duplicar canon, estado ni backlog.
+- Los documentos auxiliares pueden conservar detalle histórico o evidencia, pero deben declararse explícitamente no canónicos.
+
+---
+
 ## 2026-04-14 — fix(calendar): OAuth Fase 1 se corrige por scope real y reconexión limpia
 
 **Outcome**

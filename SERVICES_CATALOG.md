@@ -1,5 +1,8 @@
 # SERVICES_CATALOG
 
+Documento derivado / histórico de integración.
+No redefine canon ni estado vivo. Si difiere, prevalecen `AGENTS.md`, `PROJECT_STATE.md` y `docs/canonical/*`.
+
 ## Resumen
 En el repo no existe un único “catálogo de servicios”; hay **tres** estructuras funcionales relacionadas:
 1. **Catálogo médico core** (`service_categories` + `service_catalog` + `provider_service_offers`).

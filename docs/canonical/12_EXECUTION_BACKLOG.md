@@ -1,8 +1,10 @@
-# Execution Backlog (alias)
+# 12_EXECUTION_BACKLOG — Backlog Canónico de Ejecución
 
-Alias al backlog / pasos de ejecución canónico.
+Backlog canónico vigente del proyecto.
 
-- Ver: [NEXT_STEPS_SERVICES.md](../../NEXT_STEPS_SERVICES.md)
+`NEXT_STEPS_SERVICES.md` queda como documento auxiliar / legacy de apoyo operativo e histórico. Si hay cualquier diferencia, prevalece este archivo.
+
+- Detalle auxiliar: [NEXT_STEPS_SERVICES.md](../../NEXT_STEPS_SERVICES.md)
 
 ## Frente específico — Comercial / SEO público (Fase 0-4 + microfixes post-deploy)
 
@@ -203,7 +205,7 @@ Alias al backlog / pasos de ejecución canónico.
 ### Frente especifico — Citas, agenda y capacidades externas
 
 Documento de referencia:
-- Ver [05_CALENDAR_MEET_INTEGRATION_MODEL.md](05_CALENDAR_MEET_INTEGRATION_MODEL.md)
+- Ver [14_CALENDAR_MEET_INTEGRATION_MODEL.md](14_CALENDAR_MEET_INTEGRATION_MODEL.md)
 
 #### Canon cerrado
 

@@ -10,7 +10,7 @@ Mapa completo de toda la documentación. Define qué existe, dónde vive y por q
 app/
 ├── AGENTS.md                        # Contexto IA agnóstico — leer antes de actuar
 ├── PROJECT_STATE.md                 # Estado actual: deuda, frentes, variables
-├── CLAUDE.md                        # Contexto específico para Claude Code CLI
+├── CLAUDE.md                        # Shim opcional de compatibilidad; no fuente principal
 └── docs/
     ├── canonical/                   # Fuente de verdad — no mezclar con historia
     │   ├── 00_INDEX.md              # Índice y protocolo documental
@@ -25,6 +25,14 @@ app/
     ├── data_deletion_workflow.md    # Flujo de eliminación de datos
     └── ops/                         # Scripts operativos (pendiente revisión)
 ```
+
+---
+
+## Jerarquía operativa de entrada
+
+1. **Primario:** `AGENTS.md`, `PROJECT_STATE.md`, `docs/canonical/*`
+2. **Auxiliar de compatibilidad:** archivos por proveedor/modelo como `CLAUDE.md`, solo como puntero estable
+3. **Histórico / auxiliar:** `.md` sueltos de raíz y referencias en `docs/`; no redefinen canon ni estado vivo
 
 ---
 
@@ -43,7 +51,7 @@ Estado actual: pendiente migración a `docs/history/` o archivo.
 | `BOOKING_WIZARD_PROVIDER_OFFERS.md` | Implementación | `docs/history/` |
 | `CAMPO_RAZON_SOCIAL.md` | Implementación | `docs/history/` |
 | `CHECKLIST_RAZON_SOCIAL.md` | Checklist | `docs/history/` |
-| `DEV_CONTEXT.md` | Contexto técnico | `docs/` (referenciado desde canónicos) |
+| `DEV_CONTEXT.md` | Contexto técnico auxiliar | `docs/` (solo soporte; no fuente principal) |
 | `DIAGNOSTICO_LOGIN.md` | Diagnóstico | `docs/history/` |
 | `GUIA_CONFIGURACION_SMTP.md` | Guía operativa | `docs/` |
 | `IMPLEMENTACION_ADMIN_HOME.md` | Implementación | `docs/history/` |
@@ -53,7 +61,7 @@ Estado actual: pendiente migración a `docs/history/` o archivo.
 | `MODELO_NEGOCIO_ACTUALIZADO.md` | Modelo negocio | Referenciado desde `10_PRODUCT_MODEL.md` |
 | `MODULO_CLIENTES_README.md` | Implementación | `docs/history/` |
 | `MODULO_MI_EMPRESA.md` | Implementación | `docs/history/` |
-| `NEXT_STEPS_SERVICES.md` | Backlog | Referenciado desde `12_EXECUTION_BACKLOG.md` |
+| `NEXT_STEPS_SERVICES.md` | Backlog auxiliar / legacy | Soporte histórico de `12_EXECUTION_BACKLOG.md` |
 | `PANEL_EMAIL_SETTINGS.md` | Implementación | `docs/history/` |
 | `PROVIDER_MANAGEMENT_README.md` | Implementación | `docs/history/` |
 | `PROVIDER_SYSTEM_CHECKLIST.md` | Checklist | `docs/history/` |

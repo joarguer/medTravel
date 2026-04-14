@@ -21,6 +21,8 @@
 | `docs/canonical/01_SCOPE_AND_RULES.md` | Alcance del proyecto y reglas operativas |
 | `docs/canonical/02_DOC_MAP.md` | Mapa completo de toda la documentación |
 
+Si existe un archivo específico de proveedor o modelo como `CLAUDE.md`, se considera auxiliar de compatibilidad y no forma parte de la continuidad principal.
+
 ---
 
 ## Archivos de contenido canónico (específicos de MedTravel)
@@ -50,5 +52,6 @@
 - Este repositorio es la fuente de verdad operativa.
 - Workspace operativo actual del repo: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/workspaces/medtravel`.
 - Ningún contexto externo (chat, email, nota) reemplaza lo documentado aquí.
+- Los archivos específicos de proveedor/modelo, si existen, nunca reemplazan `AGENTS.md`, `PROJECT_STATE.md` ni `docs/canonical/*`.
 - Al cerrar una sesión técnica relevante: actualizar `PROJECT_STATE.md`.
 - Al tomar una decisión arquitectónica: registrar en `13_CHANGELOG_DECISIONS.md`.

@@ -1,5 +1,8 @@
 # DEV_CONTEXT
 
+Documento auxiliar de contexto técnico e historial de evidencia.
+No es fuente de verdad operativa. Si difiere, prevalecen `AGENTS.md`, `PROJECT_STATE.md` y `docs/canonical/*`.
+
 ## Nota de ejecución
 - La instrucción original pide descomprimir `/mnt/data/medtravel.zip`, pero en este entorno no existe `/mnt/data`. El análisis se ejecutó sobre el workspace ya montado en `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/htdocs/medtravel`.
 
@@ -398,16 +401,19 @@ Usuario
   - Service providers (`service_providers`)
   - MedTravel services (`medtravel_services_catalog`)
 
-### K) Documentación canónica vigente (operación booking 2026)
-- Canónico 1: `MODELO_NEGOCIO_ACTUALIZADO.md`
-  - Fuente principal de modelo operativo, roles, reglas previas a pago y backlog por fases.
-- Canónico 2: `NEXT_STEPS_SERVICES.md`
-  - Secuencia de ejecución técnica y control de avance por etapas.
-- Canónico 3: `DEV_CONTEXT.md` (este documento)
-  - Contexto técnico y trazabilidad de evidencia del estado real.
+### K) Jerarquía documental vigente (operación booking 2026)
+- Primario 1: `AGENTS.md`
+  - Contexto operativo IA agnóstico y reglas de trabajo.
+- Primario 2: `PROJECT_STATE.md`
+  - Estado vivo del proyecto, deuda activa y frentes abiertos.
+- Primario 3: `docs/canonical/*`
+  - Modelo, arquitectura, backlog canónico, decisiones y specs vigentes.
 
-Documentos operativos alineados:
-- `SERVICES_CATALOG.md` (catálogos y su integración con booking por item).
+Documentos auxiliares alineados:
+- `MODELO_NEGOCIO_ACTUALIZADO.md` como soporte histórico de negocio.
+- `NEXT_STEPS_SERVICES.md` como detalle legacy / auxiliar de ejecución.
+- `DEV_CONTEXT.md` (este documento) como evidencia técnica y contexto de contraste.
+- `SERVICES_CATALOG.md` como soporte histórico de integración por catálogo.
 
 Reglas operativas actualizadas (documentadas):
 - Booking tratado como **caso** con múltiples proveedores.

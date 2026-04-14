@@ -1,5 +1,10 @@
 # NEXT_STEPS_SERVICES
 
+Documento auxiliar / legacy de ejecución.
+
+La fuente de verdad vigente del backlog es `docs/canonical/12_EXECUTION_BACKLOG.md`.
+Este archivo conserva detalle histórico y apoyo operativo; si difiere, prevalece el backlog canónico.
+
 ## Objetivo
 Cerrar el flujo completo de catálogo de servicios con operación consistente:
 1. CRUD admin

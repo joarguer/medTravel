@@ -104,8 +104,8 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 |-------|---------|
 | **Estado** | en progreso |
 | **Impacto** | bajo |
-| **Evidencia** | Base documental implantada 2026-04-13 (commit `e9495b5`). `CLAUDE.md` aún referencia rutas viejas (`01_PRODUCT_MODEL.md` → ahora `10_PRODUCT_MODEL.md`, etc.). |
-| **Siguiente acción** | Actualizar referencias de rutas en `CLAUDE.md` para que apunten a archivos `10_`–`14_` |
+| **Evidencia** | Base documental implantada 2026-04-13 (commit `e9495b5`). Se detectó drift real en `CLAUDE.md` por duplicación de contexto y referencias viejas; además `12_EXECUTION_BACKLOG.md`, `NEXT_STEPS_SERVICES.md` y `DEV_CONTEXT.md` necesitaban jerarquía explícita para no competir silenciosamente con el canon. |
+| **Siguiente acción** | Mantener `CLAUDE.md` como shim de compatibilidad y vigilar que todo contexto vivo nuevo siga entrando solo por `AGENTS.md`, `PROJECT_STATE.md` y `docs/canonical/*` |
 
 ---
 

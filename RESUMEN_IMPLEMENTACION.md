@@ -1,5 +1,8 @@
 # 🎯 RESUMEN DE IMPLEMENTACIÓN - Mejoras Comerciales MedTravel
 
+Documento derivado / release summary.
+No es fuente de verdad operativa. Si difiere, prevalecen `AGENTS.md`, `PROJECT_STATE.md` y `docs/canonical/*`.
+
 **Fecha de Implementación:** 29 de enero de 2026  
 **Estado:** ✅ COMPLETADO (Fase de Código)  
 **Pendiente:** Ejecución de SQL en servidor
