@@ -1,6 +1,7 @@
 # PROJECT_STATE.md — MedTravel
 
 Estado actual del proyecto. Actualizar al cierre de cada sesión técnica relevante.
+Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/workspaces/medtravel`.
 
 ---
 

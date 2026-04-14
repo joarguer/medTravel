@@ -48,6 +48,7 @@
 ## Protocolo de continuidad
 
 - Este repositorio es la fuente de verdad operativa.
+- Workspace operativo actual del repo: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/workspaces/medtravel`.
 - Ningún contexto externo (chat, email, nota) reemplaza lo documentado aquí.
 - Al cerrar una sesión técnica relevante: actualizar `PROJECT_STATE.md`.
 - Al tomar una decisión arquitectónica: registrar en `13_CHANGELOG_DECISIONS.md`.

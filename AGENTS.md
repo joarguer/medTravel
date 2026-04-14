@@ -2,6 +2,7 @@
 
 Contexto operativo para cualquier agente IA que trabaje sobre este repositorio.
 Proveedor IA agnóstico. Leer antes de cualquier acción.
+Workspace operativo actual del repo: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarrollo/workspaces/medtravel`.
 
 ---
 
