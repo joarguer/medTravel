@@ -3378,6 +3378,11 @@ if ($action === 'propose_dates') {
     mysqli_stmt_close($stmtMsg);
     if (function_exists('mt_realtime_emit_inbox_message')) {
         mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
+        // Also emit to the CARE thread for the request so clients viewing CARE see the proposal immediately.
+        $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
+        if ($careThreadId !== $threadId) {
+            mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $newMessageId]);
+        }
     }
 
     json_ok([
@@ -3559,6 +3564,10 @@ if ($action === 'send_final_decision') {
     mysqli_stmt_close($stmtMsg);
     if (function_exists('mt_realtime_emit_inbox_message')) {
         mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
+        $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
+        if ($careThreadId !== $threadId) {
+            mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $newMessageId]);
+        }
     }
 
     json_ok([
@@ -3652,6 +3661,10 @@ if ($action === 'send_quick_reply') {
     mysqli_stmt_close($stmt);
     if (function_exists('mt_realtime_emit_inbox_message')) {
         mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
+        $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
+        if ($careThreadId !== $threadId) {
+            mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $newMessageId]);
+        }
     }
 
     json_ok([
@@ -3790,6 +3803,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     }
 
     $meetingResult = null;
+    $postCommitRealtimeEvents = [];
 
     $setParts = ['bri.item_status = ?'];
     $types = 's';
@@ -4062,13 +4076,35 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
                 mysqli_stmt_execute($stmtMsg);
                 $newMessageId = (int)mysqli_insert_id($conexion);
                 mysqli_stmt_close($stmtMsg);
-                if (function_exists('mt_realtime_emit_inbox_message')) {
-                    mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
+                $postCommitRealtimeEvents[] = ['thread_id' => $threadId, 'message_id' => $newMessageId];
+                // Duplicate into CARE so the patient's default view renders the card immediately.
+                // The CARE copy is non-actionable (renderMeetingProposalCard uses thread_type=ITEM
+                // to show Accept/Reject buttons), so there is no risk of broken accept/reject from CARE.
+                $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
+                if ($careThreadId !== $threadId) {
+                    $stmtCareMsg = mysqli_prepare(
+                        $conexion,
+                        "INSERT INTO inbox_messages
+                            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
+                         VALUES (?, 'CARE', ?, ?, ?, ?, ?)"
+                    );
+                    if ($stmtCareMsg) {
+                        mysqli_stmt_bind_param($stmtCareMsg, 'siisis', $careThreadId, $bookingRequestId, $itemId, $senderRole, $senderUserId, $proposalMessage);
+                        mysqli_stmt_execute($stmtCareMsg);
+                        $careMessageId = (int)mysqli_insert_id($conexion);
+                        mysqli_stmt_close($stmtCareMsg);
+                        $postCommitRealtimeEvents[] = ['thread_id' => $careThreadId, 'message_id' => $careMessageId];
+                    }
                 }
             }
         }
 
         mysqli_commit($conexion);
+        if (function_exists('mt_realtime_emit_inbox_message')) {
+            foreach ($postCommitRealtimeEvents as $eventPayload) {
+                mt_realtime_emit_inbox_message($eventPayload);
+            }
+        }
     }
 
     try {
