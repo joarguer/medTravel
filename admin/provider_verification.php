@@ -17,6 +17,84 @@ $initial_provider_id = isset($_GET['provider_id']) ? (int)$_GET['provider_id'] :
         <?php echo $theme_global_style;?>
         <?php echo $theme_layout_style;?>
         <style>
+            .verification-summary-row {
+                margin: 8px 0 18px;
+            }
+            .verification-summary-row .dashboard-stat2 {
+                min-height: 116px;
+            }
+            .verification-summary-row .dashboard-stat2 .number h3 {
+                margin: 0;
+                font-size: 28px;
+                line-height: 1.1;
+            }
+            .verification-summary-row .dashboard-stat2 .number small {
+                display: block;
+                margin-top: 6px;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: .04em;
+            }
+            .verification-toolbar-note {
+                margin: 0 0 16px;
+                color: #6c8296;
+                font-size: 13px;
+            }
+            .verification-table-wrap {
+                border: 1px solid #e7ecf1;
+                border-radius: 4px;
+                overflow: hidden;
+                background: #fff;
+            }
+            .verification-table {
+                width: 100% !important;
+                margin-bottom: 0 !important;
+            }
+            .verification-table thead th {
+                white-space: nowrap;
+                font-size: 12px;
+            }
+            .verification-provider-cell strong {
+                display: block;
+                margin-bottom: 4px;
+                color: #2f4050;
+            }
+            .verification-provider-meta,
+            .verification-status-meta,
+            .verification-checklist-meta,
+            .verification-date-meta {
+                display: block;
+                font-size: 12px;
+                color: #6c8296;
+                line-height: 1.45;
+            }
+            .verification-provider-meta i,
+            .verification-date-meta i {
+                width: 14px;
+                text-align: center;
+                margin-right: 4px;
+            }
+            .verification-status-cell .label,
+            .verification-checklist-cell .label {
+                margin-bottom: 6px;
+                display: inline-block;
+            }
+            .verification-checklist-cell .progress {
+                margin-bottom: 6px;
+                height: 10px;
+                background: #eef3f8;
+            }
+            .verification-actions-cell {
+                white-space: nowrap;
+            }
+            .verification-actions-cell .btn {
+                min-width: 96px;
+            }
+            @media (max-width: 991px) {
+                .verification-summary-row .col-md-3 {
+                    margin-bottom: 12px;
+                }
+            }
             .checklist-item {
                 padding: 12px 14px;
                 margin-bottom: 10px;
@@ -93,38 +171,85 @@ $initial_provider_id = isset($_GET['provider_id']) ? (int)$_GET['provider_id'] :
                                         <div class="caption">
                                             <i class="fa fa-shield font-dark"></i>
                                             <span class="caption-subject font-dark bold uppercase">Compliance y confianza del prestador médico</span>
-                                            <span class="caption-helper">Consola administrativa posterior al alta del provider</span>
+                                            <span class="caption-helper">Consola administrativa central posterior al alta del prestador</span>
                                         </div>
                                     </div>
                                     <div class="portlet-body">
                                         <div class="alert alert-info" style="margin-bottom:16px;">
                                             <strong>Recurso de administración central:</strong> esta consola gestiona la verificación documental y el nivel de confianza del prestador médico después de su alta en <strong>Prestadores Médicos</strong>.
                                             <br>
-                                            <span class="small">No es el onboarding primario del provider ni una vista operativa del prestador. Aquí se administra compliance, checklist y evidencia documental del dominio médico.</span>
+                                            <span class="small">No es el onboarding primario del prestador ni una vista operativa para el provider. Aquí se administra compliance, checklist y evidencia documental del dominio médico desde administración central.</span>
                                         </div>
                                         <?php if ($initial_provider_id > 0): ?>
                                         <div class="alert alert-success" id="verification-context-alert" style="margin-bottom:16px;">
                                             Se abrió esta consola desde el flujo de <strong>Prestadores Médicos</strong> para revisar un prestador específico.
                                         </div>
                                         <?php endif; ?>
-                                        <table class="table table-striped table-bordered table-hover" id="tabla_verificacion">
-                                            <thead>
-                                                <tr>
-                                                    <th>ID</th>
-                                                    <th>Prestador médico</th>
-                                                    <th>Email</th>
-                                                    <th>Teléfono</th>
-                                                    <th>Estado</th>
-                                                    <th>Trust score</th>
-                                                    <th>Progreso checklist</th>
-                                                    <th>Verificado</th>
-                                                    <th>Acciones</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <!-- Se llena vía AJAX -->
-                                            </tbody>
-                                        </table>
+                                        <div class="row verification-summary-row">
+                                            <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
+                                                <div class="dashboard-stat2 bordered">
+                                                    <div class="display">
+                                                        <div class="number">
+                                                            <h3 class="font-blue-sharp" id="verification-metric-total">0</h3>
+                                                            <small>Prestadores en vista</small>
+                                                        </div>
+                                                        <div class="icon"><i class="fa fa-hospital-o"></i></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
+                                                <div class="dashboard-stat2 bordered">
+                                                    <div class="display">
+                                                        <div class="number">
+                                                            <h3 class="font-green-jungle" id="verification-metric-verified">0</h3>
+                                                            <small>Verificados</small>
+                                                        </div>
+                                                        <div class="icon"><i class="fa fa-check-circle"></i></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
+                                                <div class="dashboard-stat2 bordered">
+                                                    <div class="display">
+                                                        <div class="number">
+                                                            <h3 class="font-yellow-gold" id="verification-metric-pending">0</h3>
+                                                            <small>Pendientes / revisión</small>
+                                                        </div>
+                                                        <div class="icon"><i class="fa fa-clock-o"></i></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
+                                                <div class="dashboard-stat2 bordered">
+                                                    <div class="display">
+                                                        <div class="number">
+                                                            <h3 class="font-purple-soft" id="verification-metric-trust">0%</h3>
+                                                            <small>Trust score promedio</small>
+                                                        </div>
+                                                        <div class="icon"><i class="fa fa-line-chart"></i></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p class="verification-toolbar-note">
+                                            Vista compacta del módulo: el listado resume <strong>prestador + contacto</strong>, <strong>estado y trust</strong>, <strong>progreso documental</strong> y <strong>última verificación</strong> sin forzar scroll horizontal.
+                                        </p>
+                                        <div class="table-responsive verification-table-wrap">
+                                            <table class="table table-striped table-bordered table-hover verification-table" id="tabla_verificacion">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Prestador y contacto</th>
+                                                        <th>Estado y trust</th>
+                                                        <th>Checklist documental</th>
+                                                        <th>Última verificación</th>
+                                                        <th>Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <!-- Se llena vía AJAX -->
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

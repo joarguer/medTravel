@@ -303,6 +303,8 @@ Documento de referencia:
 - DONE 2026-03-21: `crear_usuario.php` deja de ser flujo canónico para onboarding del dominio medico principal
 - DONE 2026-03-21: `usuarios.id = 1` queda protegido como superusuario global fuera de flujos de reciclaje / reutilizacion
 - DONE 2026-03-22: el onboarding owner/admin de `providers.php` queda alineado a patrón email-first + invitación de set-password, sin credenciales manuales en el alta
+- DONE 2026-04-14: la UX admin de `providers.php` se reorganiza en bloques explícitos A–E (prestador, owner/admin inicial, categorías, servicios iniciales, archivos/compliance) sin abrir un segundo circuito documental fuera de `provider_verification.php`
+- DONE 2026-04-14: `provider_verification.php` compacta la grilla operativa en menos columnas semánticas y agrega resumen visual superior; la vista deja de depender de scroll horizontal para mostrar contexto principal
 
 #### Deuda de modelo
 

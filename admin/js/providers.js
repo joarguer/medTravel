@@ -2,8 +2,22 @@ $(document).ready(function(){
     const url = 'ajax/providers.php';
     const urlCats = 'ajax/service_categories.php';
     const urlServices = 'ajax/service_catalog.php';
+    const verificationBaseUrl = 'provider_verification.php';
     var currentOwnerState = 'new';
     var providerMultiSelectNeedsInit = false;
+    const providerDocumentChecklist = [
+        { key: 'business_registration', label: 'Registro empresarial', description: 'Cámara de comercio o registro de empresa vigente.', category: 'Legal', required: true },
+        { key: 'tax_id', label: 'RUT o Tax ID', description: 'Identificación tributaria vigente del prestador.', category: 'Legal', required: true },
+        { key: 'medical_license', label: 'Licencia médica', description: 'Licencia profesional vigente cuando aplique al dominio clínico.', category: 'Médico', required: true },
+        { key: 'professional_certifications', label: 'Certificaciones profesionales', description: 'Soportes de especialización o entrenamiento clínico.', category: 'Médico', required: false },
+        { key: 'clinic_accreditation', label: 'Acreditación de clínica', description: 'Habilitación o acreditación institucional de la sede clínica.', category: 'Médico', required: true },
+        { key: 'facility_photos', label: 'Fotos de instalaciones', description: 'Consultorios, quirófanos, recuperación y áreas visibles del prestador.', category: 'Instalaciones', required: true },
+        { key: 'equipment_certification', label: 'Certificación de equipos', description: 'Documentos de calibración o certificación de equipos médicos.', category: 'Instalaciones', required: false },
+        { key: 'owner_identity', label: 'Identidad del responsable', description: 'Documento del owner/admin o responsable principal del prestador.', category: 'Identidad', required: true },
+        { key: 'staff_credentials', label: 'Credenciales del personal', description: 'Listado o soportes del personal médico y sus licencias.', category: 'Identidad', required: false },
+        { key: 'liability_insurance', label: 'Seguro de responsabilidad', description: 'Póliza vigente de responsabilidad civil o equivalente.', category: 'Seguros', required: true },
+        { key: 'malpractice_insurance', label: 'Seguro de mala praxis', description: 'Póliza profesional adicional cuando aplique.', category: 'Seguros', required: false }
+    ];
 
     function providerToast(type, message, title){
         if(!window.toastr){
@@ -30,6 +44,59 @@ $(document).ready(function(){
 
     function isValidEmail(email){
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
+    }
+
+    function verificationUrlForProvider(providerId){
+        if(!providerId){
+            return verificationBaseUrl;
+        }
+        return verificationBaseUrl + '?provider_id=' + encodeURIComponent(providerId);
+    }
+
+    function renderProviderDocumentChecklist(providerType){
+        const isMedicalPerson = (providerType || '').toLowerCase() === 'medico';
+        const html = providerDocumentChecklist.map(function(item){
+            let description = item.description;
+            if(item.key === 'medical_license' && !isMedicalPerson){
+                description = 'Licencia profesional del médico responsable o del personal clínico principal.';
+            }
+            if(item.key === 'clinic_accreditation' && isMedicalPerson){
+                description = 'Si atiende desde sede propia o aliada, soporta habilitación o acreditación de la clínica/consultorio.';
+            }
+            return ''
+                + '<div class="provider-doc-item">'
+                + '  <div class="provider-doc-card">'
+                + '    <div class="provider-doc-meta">'
+                + '      <span class="label label-default">' + escapeHtml(item.category) + '</span>'
+                +        (item.required ? '<span class="label label-danger">Obligatorio</span>' : '<span class="label label-info">Opcional</span>')
+                + '    </div>'
+                + '    <strong>' + escapeHtml(item.label) + '</strong>'
+                + '    <p>' + escapeHtml(description) + '</p>'
+                + '  </div>'
+                + '</div>';
+        }).join('');
+        $('#provider-doc-checklist').html(html);
+    }
+
+    function updateProviderDocumentsSection(providerId, providerName, providerType){
+        renderProviderDocumentChecklist(providerType || $('#prov-type').val());
+
+        const hasProvider = !!providerId;
+        const buttonText = hasProvider ? 'Ir a Verificación de Prestadores' : 'Guardar para habilitar verificación';
+        const helpText = hasProvider
+            ? 'La consola documental permite inicializar el checklist, subir evidencias y validar documentos del prestador.'
+            : 'Guarda primero el prestador para habilitar la carga y validación de documentos.';
+        const summaryText = hasProvider
+            ? 'Checklist documental estándar: gestiona la evidencia del prestador y su trust score desde la consola de verificación.'
+            : 'Checklist documental estándar: después del alta, completa y evidencia estos documentos desde la consola de verificación.';
+
+        $('#provider-documents-summary').html('<strong>Checklist documental estándar:</strong> ' + summaryText);
+        $('#prov-docs-manage')
+            .prop('disabled', !hasProvider)
+            .data('provider-id', providerId || '')
+            .data('provider-name', providerName || '')
+            .text(buttonText);
+        $('#prov-docs-help').text(helpText);
     }
 
     function providerMultiSelectContainerSelector(fieldSelector){
@@ -192,8 +259,10 @@ $(document).ready(function(){
         $('#prov-kind-help').text('Este onboarding canonico crea y administra exclusivamente prestadores medicos.');
     }
 
-    function setOwnerEmailRequirement(required, helpText){
+    function setOwnerRequirements(required, helpText){
+        $('#prov-owner-name').prop('required', required);
         $('#prov-owner-email').val($('#prov-owner-email').val() || '').prop('required', required);
+        $('#owner-name-required').toggle(required);
         if(required){
             $('#owner-email-required').show();
         } else {
@@ -215,7 +284,11 @@ $(document).ready(function(){
     function openCreateModal(){
         $('#form-provider')[0].reset();
         $('#prov-id').val('');
+        $('#prov-owner-name').val('');
         $('#prov-owner-email').val('');
+        $('#prov-owner-role').val('');
+        $('#prov-owner-phone').val('');
+        $('#prov-owner-city').val('');
         destroyProviderMultiSelect('#prov-categories');
         destroyProviderMultiSelect('#prov-services');
         $('#prov-categories option').prop('selected', false);
@@ -223,7 +296,7 @@ $(document).ready(function(){
         $('#provider-modal-title').text('Alta de prestador medico');
         $('#provider-modal-intro').html('Este flujo crea el <strong>prestador medico</strong> y su <strong>cuenta owner/admin inicial</strong>.');
         $('#prov-save').text('Crear prestador medico');
-        setOwnerEmailRequirement(true, 'Este email sera la identidad de acceso del owner/admin y recibira la invitacion segura para crear su password. No reemplaza el email general del prestador.');
+        setOwnerRequirements(true, 'Este email sera la identidad de acceso del owner/admin y recibira la invitacion segura para crear su password. No reemplaza el email general del prestador.');
         setKindPresentation();
         setOwnerSummary(
             'new',
@@ -231,6 +304,7 @@ $(document).ready(function(){
             'Al guardar este alta se creara tambien la cuenta owner/admin inicial del prestador medico y se enviara una invitacion de acceso por email.',
             'alert-info'
         );
+        updateProviderDocumentsSection('', '', $('#prov-type').val());
         $('#providerModal').modal('show');
     }
 
@@ -256,7 +330,11 @@ $(document).ready(function(){
         $('#prov-desc').val(p.description || '');
         $('#prov-verified').prop('checked', p.is_verified == 1);
         $('#prov-active').prop('checked', p.is_active == 1);
+        $('#prov-owner-name').val(user && user.nombre ? user.nombre : '');
         $('#prov-owner-email').val(user && (user.email || user.usuario) ? (user.email || user.usuario) : '');
+        $('#prov-owner-role').val(user && user.cargo ? user.cargo : '');
+        $('#prov-owner-phone').val(user && (user.telefono || user.celular) ? (user.telefono || user.celular) : '');
+        $('#prov-owner-city').val(user && user.ciudad ? user.ciudad : '');
 
         destroyProviderMultiSelect('#prov-categories');
         destroyProviderMultiSelect('#prov-services');
@@ -271,7 +349,7 @@ $(document).ready(function(){
         $('#provider-modal-title').text('Editar prestador medico');
         $('#provider-modal-intro').html('Aqui editas el <strong>prestador medico</strong> y su <strong>cuenta owner/admin inicial</strong>.');
         $('#prov-save').text('Guardar cambios');
-        setOwnerEmailRequirement(false, 'Este email queda asociado como identidad de acceso del owner/admin inicial. Si lo dejas en blanco, se conserva el email actual cuando exista.');
+        setOwnerRequirements(false, 'Este email queda asociado como identidad de acceso del owner/admin inicial. Si lo dejas en blanco, se conserva el email actual cuando exista.');
         setKindPresentation();
 
         if(ux.owner_state === 'missing'){
@@ -298,6 +376,7 @@ $(document).ready(function(){
             );
         }
 
+        updateProviderDocumentsSection(p.id, p.name, p.type);
         $('#providerModal').modal('show');
     }
 
@@ -320,15 +399,37 @@ $(document).ready(function(){
         providerMultiSelectNeedsInit = false;
     });
 
+    $('#prov-type').on('change', function(){
+        updateProviderDocumentsSection($('#prov-id').val(), $('#prov-name').val().trim(), $(this).val());
+    });
+
+    $('#prov-name').on('input', function(){
+        updateProviderDocumentsSection($('#prov-id').val(), $(this).val().trim(), $('#prov-type').val());
+    });
+
+    $('#prov-docs-manage').click(function(){
+        const providerId = $(this).data('provider-id');
+        if(!providerId){
+            providerToast('warning', 'Guarda primero el prestador para habilitar la verificacion documental.', 'Providers');
+            return;
+        }
+        window.open(verificationUrlForProvider(providerId), '_blank');
+    });
+
     $('#prov-save').click(function(){
         let id = $('#prov-id').val();
         let type = $('#prov-type').val();
         let name = $('#prov-name').val().trim();
+        let ownerName = $('#prov-owner-name').val().trim();
         let ownerEmail = $('#prov-owner-email').val().trim();
         let selectedKind = 'medical';
 
         if(!type || !name){
             providerToast('warning', 'Tipo y nombre del prestador medico son requeridos', 'Validacion');
+            return;
+        }
+        if(!id && !ownerName){
+            providerToast('warning', 'El nombre del owner/admin inicial es requerido al crear un nuevo prestador medico', 'Validacion');
             return;
         }
         if(!id && !ownerEmail){
@@ -337,6 +438,10 @@ $(document).ready(function(){
         }
         if(ownerEmail && !isValidEmail(ownerEmail)){
             providerToast('warning', 'El email del owner/admin inicial no es valido', 'Validacion');
+            return;
+        }
+        if(id && currentOwnerState === 'missing' && !ownerName){
+            providerToast('warning', 'Este prestador no tiene owner/admin inicial visible. Debes definir el nombre del responsable para crear esa cuenta al guardar.', 'Validacion');
             return;
         }
         if(id && currentOwnerState === 'missing' && !ownerEmail){
@@ -348,7 +453,11 @@ $(document).ready(function(){
             kind: selectedKind,
             name: name,
             legal_name: $('#prov-legal-name').val().trim(),
+            owner_name: ownerName,
             owner_email: ownerEmail,
+            owner_role: $('#prov-owner-role').val().trim(),
+            owner_phone: $('#prov-owner-phone').val().trim(),
+            owner_city: $('#prov-owner-city').val().trim(),
             description: $('#prov-desc').val().trim(),
             city: $('#prov-city').val().trim(),
             address: $('#prov-address').val().trim(),

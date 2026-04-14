@@ -28,6 +28,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 
 ## Frentes completados recientes
 
+- **2026-04-14** — Onboarding médico admin refinado: `providers.php` se reorganiza en bloques A–E (prestador, owner/admin inicial, categorías, servicios, compliance documental) y `provider_verification.php` compacta su grilla con resumen visual sin depender de scroll horizontal
 - **2026-04-14** — Google Calendar / Meet Fase 1 validado con organizer admin autenticado; OAuth corregido para scope real de Calendar y reconexión limpia; cancelación de reunión vuelve a dejar el item reprogramable para provider
 - **2026-04-03** — Fase 0–4 SEO/credibilidad en superficies públicas (commits `6d4db96` → `e9466ad`)
 - **2026-03-20** — Tabla `provider_medical_staff` operativa; separación proveedor/médico activa
@@ -82,7 +83,7 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 |-------|---------|
 | **Estado** | en progreso |
 | **Impacto** | medio |
-| **Evidencia** | Canon cerrado (2026-03-21). Deuda: `provider_catalog_services` no es entidad fuerte; staff y ofertas siguen ligados a `service_catalog.id` directo; copy de Mis Servicios / Mis Ofertas / Staff desalineado. |
+| **Evidencia** | Canon cerrado (2026-03-21). El alta admin en `providers.php` ya quedó reordenada como onboarding entendible en bloques A–E y `provider_verification.php` ya resume compliance/trust en una grilla compacta sin exigir scroll horizontal. Sigue abierta la deuda de modelo: `provider_catalog_services` no es entidad fuerte; staff y ofertas siguen ligados a `service_catalog.id` directo; copy de Mis Servicios / Mis Ofertas / Staff aún requiere convergencia semántica. |
 | **Siguiente acción** | Paso 7: declarar `provider_catalog_services` como entidad operativa fuerte y desacoplar staff/ofertas |
 
 ---

@@ -114,6 +114,10 @@ function fetch_provider_owner_user_from_mapping($conexion, $provider_id){
         table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
         table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
         table_has_column($conexion, 'usuarios', 'email') ? 'u.email' : "'' AS email",
+        table_has_column($conexion, 'usuarios', 'cargo') ? 'u.cargo' : "'' AS cargo",
+        table_has_column($conexion, 'usuarios', 'ciudad') ? 'u.ciudad' : "'' AS ciudad",
+        table_has_column($conexion, 'usuarios', 'telefono') ? 'u.telefono' : "'' AS telefono",
+        table_has_column($conexion, 'usuarios', 'celular') ? 'u.celular' : "'' AS celular",
         table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
         table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
         table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
@@ -160,6 +164,10 @@ function fetch_provider_owner_user_legacy($conexion, $provider_id){
         table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
         table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
         table_has_column($conexion, 'usuarios', 'email') ? 'u.email' : "'' AS email",
+        table_has_column($conexion, 'usuarios', 'cargo') ? 'u.cargo' : "'' AS cargo",
+        table_has_column($conexion, 'usuarios', 'ciudad') ? 'u.ciudad' : "'' AS ciudad",
+        table_has_column($conexion, 'usuarios', 'telefono') ? 'u.telefono' : "'' AS telefono",
+        table_has_column($conexion, 'usuarios', 'celular') ? 'u.celular' : "'' AS celular",
         table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
         table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
         table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
@@ -282,6 +290,15 @@ function generate_provider_owner_temp_password(){
         }
     }
     return hash('sha256', uniqid((string)mt_rand(), true) . microtime(true));
+}
+
+function normalize_owner_admin_profile($request){
+    return [
+        'name' => isset($request['owner_name']) ? trim((string)$request['owner_name']) : '',
+        'role' => isset($request['owner_role']) ? trim((string)$request['owner_role']) : '',
+        'phone' => isset($request['owner_phone']) ? trim((string)$request['owner_phone']) : '',
+        'city' => isset($request['owner_city']) ? trim((string)$request['owner_city']) : ''
+    ];
 }
 
 function owner_admin_login_exists($conexion, $login, $exclude_user_id = 0){
@@ -485,7 +502,7 @@ function send_provider_owner_welcome_email($conexion, $to_email, $payload){
     }
 }
 
-function create_provider_owner_user($conexion, $provider_id, $owner_email, $display_name){
+function create_provider_owner_user($conexion, $provider_id, $owner_email, $display_name, $owner_profile = array()){
     $login = provider_owner_admin_login_from_email($owner_email);
     $password_hash = password_hash(generate_provider_owner_temp_password(), PASSWORD_DEFAULT);
     $fields = array('usuario', 'password', 'nombre', 'rol', 'provider_id');
@@ -499,6 +516,18 @@ function create_provider_owner_user($conexion, $provider_id, $owner_email, $disp
     if (table_has_column($conexion, 'usuarios', 'role_id')) {
         $fields[] = 'role_id';
         $values[] = (int)ROLE_PROVIDER_ADMIN;
+    }
+    if (table_has_column($conexion, 'usuarios', 'cargo')) {
+        $fields[] = 'cargo';
+        $values[] = !empty($owner_profile['role']) ? (string)$owner_profile['role'] : null;
+    }
+    if (table_has_column($conexion, 'usuarios', 'telefono')) {
+        $fields[] = 'telefono';
+        $values[] = !empty($owner_profile['phone']) ? (string)$owner_profile['phone'] : null;
+    }
+    if (table_has_column($conexion, 'usuarios', 'ciudad')) {
+        $fields[] = 'ciudad';
+        $values[] = !empty($owner_profile['city']) ? (string)$owner_profile['city'] : null;
     }
     if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
         $fields[] = 'service_provider_id';
@@ -525,7 +554,7 @@ function create_provider_owner_user($conexion, $provider_id, $owner_email, $disp
     return $user_id;
 }
 
-function update_provider_owner_user($conexion, $user_id, $provider_id, $owner_email, $display_name){
+function update_provider_owner_user($conexion, $user_id, $provider_id, $owner_email, $display_name, $owner_profile = array()){
     $login = provider_owner_admin_login_from_email($owner_email);
     $fields = array(
         'usuario = ?',
@@ -544,6 +573,18 @@ function update_provider_owner_user($conexion, $user_id, $provider_id, $owner_em
     if (table_has_column($conexion, 'usuarios', 'role_id')) {
         $fields[] = 'role_id = ?';
         $values[] = (int)ROLE_PROVIDER_ADMIN;
+    }
+    if (table_has_column($conexion, 'usuarios', 'cargo')) {
+        $fields[] = 'cargo = ?';
+        $values[] = !empty($owner_profile['role']) ? (string)$owner_profile['role'] : null;
+    }
+    if (table_has_column($conexion, 'usuarios', 'telefono')) {
+        $fields[] = 'telefono = ?';
+        $values[] = !empty($owner_profile['phone']) ? (string)$owner_profile['phone'] : null;
+    }
+    if (table_has_column($conexion, 'usuarios', 'ciudad')) {
+        $fields[] = 'ciudad = ?';
+        $values[] = !empty($owner_profile['city']) ? (string)$owner_profile['city'] : null;
     }
     if (table_has_column($conexion, 'usuarios', 'provider_id')) {
         $fields[] = 'provider_id = ?';
@@ -894,6 +935,7 @@ try{
     if($tipo == 'create'){
         $type = isset($_REQUEST['type']) ? trim($_REQUEST['type']) : '';
         $name = isset($_REQUEST['name']) ? trim($_REQUEST['name']) : '';
+        $owner_profile = normalize_owner_admin_profile($_REQUEST);
         $owner_email = normalize_owner_admin_email($_REQUEST['owner_email'] ?? '');
         $owner_login = provider_owner_admin_login_from_email($owner_email);
         $kind = 'medical';
@@ -915,6 +957,9 @@ try{
         }
         if($owner_email === '' || $owner_email === false){
             echo json_encode(['ok'=>false,'error'=>'invalid_owner_email','message'=>'El email del owner/admin inicial es requerido']); exit;
+        }
+        if($owner_profile['name'] === ''){
+            echo json_encode(['ok'=>false,'error'=>'invalid_owner_name','message'=>'El nombre del owner/admin inicial es requerido']); exit;
         }
 
         if(owner_admin_login_exists($conexion, $owner_login, 0)){
@@ -986,7 +1031,8 @@ try{
             if($vs){ mysqli_stmt_bind_param($vs, 'is', $provider_id, $ver_status); mysqli_stmt_execute($vs); mysqli_stmt_close($vs); }
             
             // 2. Crear usuario owner/admin inicial
-            $owner_user_id = create_provider_owner_user($conexion, $provider_id, $owner_email, $name);
+            $owner_display_name = $owner_profile['name'] !== '' ? $owner_profile['name'] : $name;
+            $owner_user_id = create_provider_owner_user($conexion, $provider_id, $owner_email, $owner_display_name, $owner_profile);
 
             // 3. Persistir ownership explícito del provider
             ensure_provider_owner_mapping($conexion, $provider_id, $owner_user_id);
@@ -1017,7 +1063,7 @@ try{
                 $mail_error = $token_result['error'] ?? 'token_issue_failed';
             } else {
                 $welcome_payload = build_provider_owner_welcome_email_payload(
-                    $owner_email,
+                    $owner_display_name,
                     $name,
                     $owner_email,
                     $token_result['set_password_url'],
@@ -1057,6 +1103,7 @@ try{
         $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
         if($id<=0){ echo json_encode(['ok'=>false,'error'=>'invalid_id','message'=>'ID inválido']); exit; }
         $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
+        $owner_profile = normalize_owner_admin_profile($_REQUEST);
         
         $owner_email = normalize_owner_admin_email($_REQUEST['owner_email'] ?? '');
         // obtener kind actual si no viene en request
@@ -1177,6 +1224,11 @@ try{
             $provider_name = isset($_REQUEST['name'])
                 ? trim($_REQUEST['name'])
                 : (($owner_user && isset($owner_user['nombre'])) ? trim((string)$owner_user['nombre']) : '');
+            $owner_display_name = $owner_profile['name'] !== ''
+                ? $owner_profile['name']
+                : ($provider_name !== ''
+                    ? $provider_name
+                    : (($owner_user && isset($owner_user['nombre'])) ? trim((string)$owner_user['nombre']) : ''));
             $owner_email_to_persist = $owner_email !== ''
                 ? $owner_email
                 : (($owner_user && !empty($owner_user['email']))
@@ -1185,13 +1237,16 @@ try{
             
             if($owner_user_id > 0){
                 if($owner_email_to_persist !== null && $owner_email_to_persist !== ''){
-                    update_provider_owner_user($conexion, $owner_user_id, $id, $owner_email_to_persist, $provider_name);
+                    update_provider_owner_user($conexion, $owner_user_id, $id, $owner_email_to_persist, $owner_display_name, $owner_profile);
                 }
             } else {
                 if($owner_email_to_persist === null || $owner_email_to_persist === ''){
                     throw new Exception('Se requiere email para crear el owner/admin inicial');
                 }
-                $owner_user_id = create_provider_owner_user($conexion, $id, $owner_email_to_persist, $provider_name);
+                if($owner_display_name === ''){
+                    throw new Exception('Se requiere nombre para crear el owner/admin inicial');
+                }
+                $owner_user_id = create_provider_owner_user($conexion, $id, $owner_email_to_persist, $owner_display_name, $owner_profile);
             }
 
             ensure_provider_owner_mapping($conexion, $id, $owner_user_id);

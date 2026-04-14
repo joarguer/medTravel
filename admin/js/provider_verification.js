@@ -9,6 +9,104 @@ $(document).ready(function() {
     initToastr();
 });
 
+function escapeHtml(text) {
+    return $('<div>').text(text == null ? '' : String(text)).html();
+}
+
+function renderSummaryMetrics(rows) {
+    var safeRows = Array.isArray(rows) ? rows : [];
+    var verified = 0;
+    var pending = 0;
+    var trustAccum = 0;
+
+    safeRows.forEach(function(row) {
+        var status = String(row.verification_status || 'pending');
+        var trust = parseInt(row.trust_score || 0, 10);
+        trustAccum += isNaN(trust) ? 0 : trust;
+
+        if (status === 'verified') {
+            verified += 1;
+        } else if (status === 'pending' || status === 'in_review') {
+            pending += 1;
+        }
+    });
+
+    var averageTrust = safeRows.length ? Math.round(trustAccum / safeRows.length) : 0;
+
+    $('#verification-metric-total').text(safeRows.length);
+    $('#verification-metric-verified').text(verified);
+    $('#verification-metric-pending').text(pending);
+    $('#verification-metric-trust').text(averageTrust + '%');
+}
+
+function renderProviderContactCell(row) {
+    var email = row.email ? escapeHtml(row.email) : '<span class="text-muted">Sin email</span>';
+    var phone = row.telefono ? escapeHtml(row.telefono) : '<span class="text-muted">Sin teléfono</span>';
+    return ''
+        + '<div class="verification-provider-cell">'
+        + '  <strong>' + escapeHtml(row.provider_name || 'Prestador sin nombre') + '</strong>'
+        + '  <span class="verification-provider-meta"><i class="fa fa-hashtag"></i>ID ' + escapeHtml(row.id || '') + '</span>'
+        + '  <span class="verification-provider-meta"><i class="fa fa-envelope"></i>' + email + '</span>'
+        + '  <span class="verification-provider-meta"><i class="fa fa-phone"></i>' + phone + '</span>'
+        + '</div>';
+}
+
+function renderStatusTrustCell(row) {
+    var trust = parseInt(row.trust_score || 0, 10);
+    if (isNaN(trust)) trust = 0;
+    var level = row.verification_level ? escapeHtml(row.verification_level) : 'basic';
+    return ''
+        + '<div class="verification-status-cell">'
+        + getStatusBadge(row.verification_status)
+        + '<span class="verification-status-meta">Nivel: <strong>' + level + '</strong></span>'
+        + '<span class="label label-' + getTrustColor(trust) + '">Trust ' + trust + '%</span>'
+        + '</div>';
+}
+
+function renderChecklistCell(row) {
+    var checked = parseInt(row.checked_items || 0, 10);
+    var total = parseInt(row.total_items || 0, 10);
+    var percent = parseInt(row.completion_percent || 0, 10);
+    if (isNaN(checked)) checked = 0;
+    if (isNaN(total)) total = 0;
+    if (isNaN(percent)) percent = 0;
+
+    return ''
+        + '<div class="verification-checklist-cell">'
+        + '  <div class="progress">'
+        + '    <div class="progress-bar progress-bar-' + getProgressColor(percent) + '" role="progressbar" style="width: ' + percent + '%"></div>'
+        + '  </div>'
+        + '  <span class="label label-default">' + percent + '% completado</span>'
+        + '  <span class="verification-checklist-meta">' + checked + '/' + total + ' ítems documentales</span>'
+        + '</div>';
+}
+
+function renderVerificationDateCell(row) {
+    var dateLabel = row.verified_at ? formatDate(row.verified_at) : 'Sin verificación final';
+    var expiresLabel = row.expires_at ? formatDate(row.expires_at) : 'Sin expiración registrada';
+    return ''
+        + '<div class="verification-date-cell">'
+        + '  <span class="verification-date-meta"><i class="fa fa-calendar-check-o"></i>' + escapeHtml(dateLabel) + '</span>'
+        + '  <span class="verification-date-meta"><i class="fa fa-hourglass-half"></i>' + escapeHtml(expiresLabel) + '</span>'
+        + '</div>';
+}
+
+function providerContactSortValue(row) {
+    return [row.provider_name || '', row.email || '', row.telefono || '', row.id || 0].join(' ');
+}
+
+function statusTrustSortValue(row) {
+    return [row.verification_status || '', row.verification_level || '', row.trust_score || 0].join(' ');
+}
+
+function checklistSortValue(row) {
+    return [row.completion_percent || 0, row.checked_items || 0, row.total_items || 0].join(' ');
+}
+
+function verificationDateSortValue(row) {
+    return [row.verified_at || '', row.expires_at || ''].join(' ');
+}
+
 // Inicializar toastr
 function initToastr() {
     toastr.options = {
@@ -33,6 +131,7 @@ function initDataTable() {
             },
             "dataSrc": function(json) {
                 if (json.success) {
+                    renderSummaryMetrics(json.data || []);
                     if (verificationCtx.providerId && !initialProviderOpened && json.data && json.data.length > 0) {
                         initialProviderOpened = true;
                         setTimeout(function() {
@@ -40,74 +139,77 @@ function initDataTable() {
                         }, 0);
                     }
                     return json.data;
-                } else {
-                    toastr.error(json.message || 'Error al cargar datos');
-                    return [];
                 }
+
+                toastr.error(json.message || 'Error al cargar datos');
+                renderSummaryMetrics([]);
+                return [];
             }
         },
         "columns": [
-            { "data": "id" },
-            { "data": "provider_name" },
-            { "data": "email" },
-            { 
-                "data": "telefono",
-                "render": function(data) {
-                    return data || '<span class="text-muted">N/A</span>';
-                }
-            },
-            { 
-                "data": "verification_status",
-                "render": function(data) {
-                    return getStatusBadge(data);
-                }
-            },
-            { 
-                "data": "trust_score",
-                "render": function(data) {
-                    return '<span class="label label-' + getTrustColor(data) + '">' + data + '%</span>';
-                }
-            },
-            { 
+            {
                 "data": null,
                 "render": function(data, type, row) {
-                    var percent = row.completion_percent || 0;
-                    return `
-                        <div class="progress" style="margin-bottom: 0;">
-                            <div class="progress-bar progress-bar-${getProgressColor(percent)}" 
-                                 role="progressbar" 
-                                 style="width: ${percent}%">
-                                ${percent}%
-                            </div>
-                        </div>
-                        <small>${row.checked_items || 0}/${row.total_items || 0} items</small>
-                    `;
+                    if (type !== 'display') {
+                        return providerContactSortValue(row);
+                    }
+                    return renderProviderContactCell(row);
                 }
             },
-            { 
-                "data": "verified_at",
-                "render": function(data) {
-                    return data ? formatDate(data) : '<span class="text-muted">No verificado</span>';
+            {
+                "data": null,
+                "render": function(data, type, row) {
+                    if (type !== 'display') {
+                        return statusTrustSortValue(row);
+                    }
+                    return renderStatusTrustCell(row);
                 }
             },
-            { 
+            {
+                "data": null,
+                "render": function(data, type, row) {
+                    if (type !== 'display') {
+                        return checklistSortValue(row);
+                    }
+                    return renderChecklistCell(row);
+                }
+            },
+            {
+                "data": null,
+                "render": function(data, type, row) {
+                    if (type !== 'display') {
+                        return verificationDateSortValue(row);
+                    }
+                    return renderVerificationDateCell(row);
+                }
+            },
+            {
                 "data": null,
                 "orderable": false,
                 "render": function(data, type, row) {
                     var providerName = JSON.stringify(String(row.provider_name || ''));
-                    return `
-                        <button class="btn btn-xs btn-primary" onclick='openVerificationModal(${row.id}, ${providerName})' title="Gestionar compliance">
-                            <i class="fa fa-shield"></i> Gestionar
-                        </button>
-                    `;
+                    return ''
+                        + '<div class="verification-actions-cell">'
+                        + '  <button class="btn btn-xs btn-primary" onclick=\'openVerificationModal(' + row.id + ', ' + providerName + ')\' title="Gestionar compliance">'
+                        + '    <i class="fa fa-shield"></i> Gestionar'
+                        + '  </button>'
+                        + '</div>';
                 }
             }
         ],
+        "autoWidth": false,
         "language": {
             "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Spanish.json"
         },
-        "order": [[5, "desc"]],
-        "pageLength": 25
+        "order": [[0, "asc"]],
+        "pageLength": 25,
+        "columnDefs": [
+            { "targets": 0, "width": "34%" },
+            { "targets": 1, "width": "18%" },
+            { "targets": 2, "width": "22%" },
+            { "targets": 3, "width": "16%" },
+            { "targets": 4, "width": "10%", "className": "text-center" }
+        ]
     });
 }
 
@@ -189,6 +291,8 @@ function openVerificationModal(providerId, providerName) {
                 $('#verification_status_badge').removeClass().addClass('label verification-badge ' + getStatusClass(verification.status));
                 $('#verification_status_badge').text(getStatusText(verification.status));
                 $('#trust_score_display').text(verification.trust_score || 0);
+                $('#progress_bar').css('width', '0%');
+                $('#progress_text').text('0%');
                 
                 // Actualizar barra de progreso
                 if (items.length > 0) {

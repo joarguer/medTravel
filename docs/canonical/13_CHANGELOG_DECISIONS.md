@@ -1,5 +1,20 @@
 # Changelog Decisions
 
+## 2026-04-14 — feat(provider-ui): onboarding admin y verificación médica se compactan sin duplicar dominio documental
+
+**Outcome**
+- `providers.php` deja de presentar un modal plano y se reordena como onboarding administrativo entendible por bloques A–E: prestador, owner/admin inicial, categorías, servicios iniciales y compliance documental.
+- El bloque de archivos no abre un circuito paralelo; explicita que la evidencia documental vive canónicamente en `provider_verification.php` y enlaza a esa consola.
+- `provider_verification.php` deja de depender de una tabla ancha con demasiadas columnas planas y pasa a una grilla compacta con resumen visual superior de prestadores, verificados, pendientes/revisión y trust promedio.
+- La tabla resume el contenido en columnas semánticas (`prestador y contacto`, `estado y trust`, `checklist documental`, `última verificación`, `acciones`) para evitar pérdida de contexto en anchos medios del panel admin.
+
+**Decision**
+- El onboarding médico administrativo debe ser claro para operación interna de MedTravel, pero no debe duplicar la consola de compliance documental del dominio médico.
+- `provider_verification.php` es la única superficie canónica para checklist, evidencia documental y trust score del prestador médico.
+- Cuando una tabla administrativa del panel pierda legibilidad por ancho, la corrección preferida es compactar semánticamente la información y usar componentes del template antes que delegar la experiencia a scroll horizontal como solución principal.
+
+---
+
 ## 2026-04-14 — docs(governance): se endurece la jerarquía operativa y se desactiva drift multi-modelo
 
 **Outcome**
