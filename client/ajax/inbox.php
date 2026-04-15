@@ -254,6 +254,96 @@ function client_inbox_confirm_internal_meeting($conexion, array $eventRow, $forc
     ];
 }
 
+function client_inbox_fetch_proposal_sender_user_id($conexion, $requestId, $itemId)
+{
+    $requestId = (int)$requestId;
+    $itemId = (int)$itemId;
+    if ($requestId <= 0 || $itemId <= 0 || !inbox_table_exists($conexion, 'inbox_messages')) {
+        return 0;
+    }
+
+    $threadId = inbox_thread_id('ITEM', $requestId, $itemId);
+    $sql = "SELECT sender_user_id
+            FROM inbox_messages
+            WHERE thread_id = ?
+              AND (body LIKE '[REPLY] PROPOSED_DATES%' OR body LIKE '[MEETING_PROPOSAL] %')
+              AND COALESCE(sender_user_id, 0) > 0
+            ORDER BY id DESC
+            LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return 0;
+    }
+
+    mysqli_stmt_bind_param($stmt, 's', $threadId);
+    $userId = 0;
+    if (mysqli_stmt_execute($stmt)) {
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        $userId = (int)($row['sender_user_id'] ?? 0);
+    }
+    mysqli_stmt_close($stmt);
+    return $userId;
+}
+
+function client_inbox_fetch_assigned_staff_linked_user_id($conexion, $itemId)
+{
+    $itemId = (int)$itemId;
+    if ($itemId <= 0
+        || !client_table_has_column($conexion, 'booking_request_items', 'assigned_staff_id')
+        || !inbox_table_exists($conexion, 'provider_medical_staff')
+        || !client_table_has_column($conexion, 'provider_medical_staff', 'linked_user_id')) {
+        return 0;
+    }
+
+    $sql = "SELECT COALESCE(pms.linked_user_id, 0) AS linked_user_id
+            FROM booking_request_items bri
+            INNER JOIN provider_medical_staff pms ON pms.id = bri.assigned_staff_id
+            WHERE bri.id = ?
+            LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return 0;
+    }
+
+    mysqli_stmt_bind_param($stmt, 'i', $itemId);
+    $linkedUserId = 0;
+    if (mysqli_stmt_execute($stmt)) {
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        $linkedUserId = (int)($row['linked_user_id'] ?? 0);
+    }
+    mysqli_stmt_close($stmt);
+    return $linkedUserId;
+}
+
+function client_inbox_fetch_user_email($conexion, $userId)
+{
+    $userId = (int)$userId;
+    if ($userId <= 0 || !inbox_table_exists($conexion, 'usuarios')) {
+        return '';
+    }
+
+    $sql = "SELECT email FROM usuarios WHERE id = ? LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return '';
+    }
+
+    mysqli_stmt_bind_param($stmt, 'i', $userId);
+    $email = '';
+    if (mysqli_stmt_execute($stmt)) {
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        $candidate = strtolower(trim((string)($row['email'] ?? '')));
+        if (filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+            $email = $candidate;
+        }
+    }
+    mysqli_stmt_close($stmt);
+    return $email;
+}
+
 function client_inbox_confirm_google_meeting($conexion, array $eventRow, $requestId, $itemId, array $options = [])
 {
     $eventId = (int)($eventRow['id'] ?? 0);
@@ -267,7 +357,28 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
         return client_inbox_confirm_internal_meeting($conexion, $eventRow, false);
     }
 
+    $proposalSenderUserId = client_inbox_fetch_proposal_sender_user_id($conexion, $requestId, $itemId);
+    $assignedStaffLinkedUserId = client_inbox_fetch_assigned_staff_linked_user_id($conexion, $itemId);
+
     $organizerAdminUserId = (int)($eventRow['organizer_admin_user_id'] ?? 0);
+    if ($organizerAdminUserId > 0 && function_exists('google_calendar_get_connection')) {
+        $persistedConnection = google_calendar_get_connection($conexion, $organizerAdminUserId, false);
+        if (empty($persistedConnection['is_connected'])) {
+            $organizerAdminUserId = 0;
+        }
+    }
+    if ($organizerAdminUserId <= 0 && $proposalSenderUserId > 0) {
+        $picked = (int)google_calendar_pick_connected_admin_user_id($conexion, $proposalSenderUserId);
+        if ($picked === $proposalSenderUserId) {
+            $organizerAdminUserId = $picked;
+        }
+    }
+    if ($organizerAdminUserId <= 0 && $assignedStaffLinkedUserId > 0) {
+        $picked = (int)google_calendar_pick_connected_admin_user_id($conexion, $assignedStaffLinkedUserId);
+        if ($picked === $assignedStaffLinkedUserId) {
+            $organizerAdminUserId = $picked;
+        }
+    }
     if ($organizerAdminUserId <= 0) {
         $organizerAdminUserId = (int)google_calendar_pick_connected_admin_user_id($conexion, 0);
     }
@@ -286,6 +397,13 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
     $timezone = 'America/Bogota';
     $attendees = [];
     $clientEmail = trim((string)($eventRow['client_email'] ?? ''));
+    $organizerConnectionEmail = '';
+    if (function_exists('google_calendar_get_connection') && $organizerAdminUserId > 0) {
+        $organizerConnection = google_calendar_get_connection($conexion, $organizerAdminUserId, false);
+        $organizerConnectionEmail = strtolower(trim((string)($organizerConnection['google_email'] ?? '')));
+    }
+    $proposalSenderEmail = client_inbox_fetch_user_email($conexion, $proposalSenderUserId);
+    $assignedStaffEmail = client_inbox_fetch_user_email($conexion, $assignedStaffLinkedUserId);
     $providerEmailSource = '';
     $providerEmail = function_exists('interaction_email_fetch_provider_email')
         ? trim((string)interaction_email_fetch_provider_email($conexion, $itemId, $providerEmailSource))
@@ -293,8 +411,29 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
     if (filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
         $attendees[] = ['email' => $clientEmail];
     }
-    if (filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
-        $attendees[] = ['email' => $providerEmail];
+
+    $clinicalAttendeeEmails = [];
+    foreach ([$proposalSenderEmail, $assignedStaffEmail] as $candidateEmail) {
+        $candidateEmail = strtolower(trim((string)$candidateEmail));
+        if (!filter_var($candidateEmail, FILTER_VALIDATE_EMAIL)) {
+            continue;
+        }
+        if ($organizerConnectionEmail !== '' && strcasecmp($candidateEmail, $organizerConnectionEmail) === 0) {
+            continue;
+        }
+        if (in_array($candidateEmail, $clinicalAttendeeEmails, true)) {
+            continue;
+        }
+        $clinicalAttendeeEmails[] = $candidateEmail;
+    }
+    foreach ($clinicalAttendeeEmails as $clinicalEmail) {
+        $attendees[] = ['email' => $clinicalEmail];
+    }
+    if (empty($clinicalAttendeeEmails) && filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
+        $providerEmail = strtolower(trim((string)$providerEmail));
+        if ($organizerConnectionEmail === '' || strcasecmp($providerEmail, $organizerConnectionEmail) !== 0) {
+            $attendees[] = ['email' => $providerEmail];
+        }
     }
 
     if (function_exists('mt_email_debug_log')) {
@@ -304,7 +443,12 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
             . ' item_id=' . (int)$itemId
             . ' organizer_admin_user_id=' . (int)$organizerAdminUserId
             . ' organizer_email_existing=' . (string)($eventRow['organizer_email'] ?? '')
+            . ' organizer_connection_email=' . $organizerConnectionEmail
             . ' client_email=' . $clientEmail
+            . ' proposal_sender_user_id=' . (int)$proposalSenderUserId
+            . ' proposal_sender_email=' . $proposalSenderEmail
+            . ' assigned_staff_linked_user_id=' . (int)$assignedStaffLinkedUserId
+            . ' assigned_staff_email=' . $assignedStaffEmail
             . ' provider_email=' . $providerEmail
             . ' provider_email_source=' . ($providerEmailSource !== '' ? $providerEmailSource : 'unresolved')
             . ' attendees=' . json_encode($attendees, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)

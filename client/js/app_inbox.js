@@ -1813,6 +1813,18 @@
             if (!res || res.ok !== true) {
                 return;
             }
+            var isCurrentCareThread = !!(
+                currentThread &&
+                String(currentThread.thread_id || '') === thread &&
+                String(currentThread.thread_type || '').toUpperCase() === 'CARE'
+            );
+            if (isCurrentCareThread) {
+                setStructuredCareAlert(
+                    !!res.has_structured_item_actions,
+                    res.request_id || currentThread.booking_id || 0,
+                    res.structured_item_id || 0
+                );
+            }
             var newMessages = $.isArray(res.messages) ? res.messages : [];
             if (!newMessages.length) {
                 return;
