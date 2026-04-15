@@ -39,7 +39,15 @@ $isLocal = (
     str_contains($httpHost, '127.0.0.1')
 );
 
-define('APP_ENV', getenv('APP_ENV') ?: ($isLocal ? 'dev' : 'prod'));
+// Hardening: un host público nunca puede quedarse en APP_ENV=dev por un .env mal
+// desplegado. Solo se permite dev en host público si ALLOW_REMOTE_DEV=1 está
+// definido explícitamente en el entorno del servidor (no en .env).
+$_rawEnv = getenv('APP_ENV') ?: ($isLocal ? 'dev' : 'prod');
+if (!$isLocal && $_rawEnv === 'dev' && getenv('ALLOW_REMOTE_DEV') !== '1') {
+    $_rawEnv = 'prod';
+}
+define('APP_ENV', $_rawEnv);
+unset($_rawEnv);
 
 /**
  * Cargar config local si existe (opcional)
