@@ -133,12 +133,33 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- Tabla: booking_requests
--- Columna para actualización formal de ventana de fechas post-valoración
+-- Parte 1: garantizar timeline_from / timeline_to (canónicas de producción,
+--           sin migración previa en el repo — deuda documental conocida)
+-- Parte 2: columnas de auditoría de ventana de fechas post-valoración
 -- ──────────────────────────────────────────────────────────────────────────────
 
 SET @t := 'booking_requests';
 
+-- timeline_from: fecha de inicio del viaje del paciente (DATE)
+SET @col := 'timeline_from';
+SET @sql := IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=@t AND COLUMN_NAME=@col) = 0,
+  CONCAT('ALTER TABLE `', @t, '` ADD COLUMN `timeline_from` DATE NULL'),
+  CONCAT('SELECT ''', @t, '.', @col, ' ya existe'' AS msg')
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- timeline_to: fecha de fin del viaje del paciente (DATE)
+SET @col := 'timeline_to';
+SET @sql := IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=@t AND COLUMN_NAME=@col) = 0,
+  CONCAT('ALTER TABLE `', @t, '` ADD COLUMN `timeline_to` DATE NULL AFTER `timeline_from`'),
+  CONCAT('SELECT ''', @t, '.', @col, ' ya existe'' AS msg')
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- timeline_updated_at: cuando se actualiza formalmente la ventana de fechas
+-- AFTER timeline_to es seguro: la columna existe ya (creada arriba o preexistente)
 SET @col := 'timeline_updated_at';
 SET @sql := IF(
   (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME=@t AND COLUMN_NAME=@col) = 0,
