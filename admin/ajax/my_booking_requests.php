@@ -4128,12 +4128,21 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
                     'insert_id_ok' => $newMessageId > 0,
                 ]);
                 $postCommitRealtimeEvents[] = ['thread_id' => $threadId, 'message_id' => $newMessageId];
+            } else {
+                my_booking_requests_trace('provider_propose_change_item_prepare_failed', [
+                    'db_error' => mysqli_error($conexion),
+                    'request_id' => $bookingRequestId,
+                    'item_id' => $itemId,
+                    'thread_id' => $threadId,
+                ]);
             }
         }
 
         mysqli_commit($conexion);
         my_booking_requests_trace('provider_propose_change_commit', [
             'item_id' => $itemId,
+            'booking_request_id' => $bookingRequestId,
+            'care_thread_id' => inbox_thread_id('CARE', $bookingRequestId, 0),
             'event_count' => count($postCommitRealtimeEvents),
             'function_exists_emit' => function_exists('mt_realtime_emit_inbox_message'),
             'events' => $postCommitRealtimeEvents,
