@@ -16,7 +16,7 @@ Plataforma de turismo médico que conecta pacientes de EE. UU. (principalmente F
 
 - **Backend:** PHP procedural con includes; sin framework
 - **Frontend:** Bootstrap 4/5, jQuery, vanilla JS
-- **Base de datos:** MySQL; local actual del frente `medtravel`, producción `medtravelcom_medtravel`, charset `utf8mb4`
+- **Base de datos:** MySQL; baseline local moderno válido `medtravel_rebuild_20260415`, producción `medtravelcom_medtravel`, charset `utf8mb4`. La BD local `medtravel` queda solo como referencia/backup legacy y no debe usarse para validar el dominio moderno de providers/staff/services.
 - **APIs externas:** ConectarBot (WhatsApp), Stripe (pagos), Google Calendar + Meet
 - **Auth:** Sesiones PHP; tokens CSRF en `admin/include/session_security.php`
 
@@ -121,6 +121,8 @@ Pipeline de estado por ítem:
 - No asumir que el estado del caso es global — el pipeline vive en cada ítem
 - No mezclar lógica de servicios médicos con complementarios sin verificar el campo `type`
 - No cambiar `service_catalog` sin actualizar también los scripts en `sql/`
+- No usar la BD local legacy `medtravel` como sustituto del dominio moderno provider; para validaciones locales del dominio moderno usar `medtravel_rebuild_20260415`
+- No versionar `.env`; es override local del workspace
 - No tocar código en una sesión documental
 
 ---

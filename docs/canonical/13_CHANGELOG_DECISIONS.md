@@ -1,5 +1,21 @@
 # Changelog Decisions
 
+## 2026-04-15 — ops(local-db): se canoniza la realineación del entorno local al dump real del servidor
+
+**Outcome**
+- Se confirma que la BD local histórica `medtravel` estaba estructuralmente desalineada para el dominio moderno de `providers`, `provider_users`, `provider_medical_staff`, `provider_service_offers` y tablas relacionadas.
+- Se reconstruye una nueva BD local `medtravel_rebuild_20260415` a partir de un dump real exportado del servidor `medtravelcom_medtravel`.
+- El import local en MySQL 5.7 requirió una copia temporal compatible del dump para eliminar únicamente cláusulas `DEFAULT` incompatibles en columnas `TINYTEXT` / `TEXT` / `MEDIUMTEXT` / `LONGTEXT` / `BLOB` / `JSON` / `GEOMETRY`.
+- El dump original del servidor no se modificó.
+- El runtime local queda apuntando a la nueva BD reconstruida mediante `.env` local no versionado.
+
+**Decision**
+- La referencia local válida para desarrollo y validación del dominio moderno provider/staff/services deja de ser `medtravel`.
+- La base local válida pasa a ser la reconstruida desde dump real: `medtravel_rebuild_20260415`.
+- Las validaciones locales futuras del dominio provider deben ejecutarse contra la BD reconstruida.
+- `.env` es override local del workspace y no debe versionarse.
+- La BD `medtravel` se conserva solo como backup/referencia legacy y no debe usarse como sustituto del dominio moderno.
+
 ## 2026-04-14 — feat(provider-ui): onboarding admin y verificación médica se compactan sin duplicar dominio documental
 
 **Outcome**

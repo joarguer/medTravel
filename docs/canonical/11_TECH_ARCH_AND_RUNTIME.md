@@ -165,6 +165,15 @@ Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
 - Cuando falten campos dedicados, el sistema debe soportar derivacion segura o alias logicos sin inventar una tabla definitiva que aun no exista.
 - La separacion operativa canonica ya es obligatoria a nivel de documentacion, aunque la persistencia siga madurando por fases.
 
+## Higiene de entorno local validada (2026-04-15)
+
+- Se confirmó que la BD local historica `medtravel` estaba estructuralmente desalineada respecto del modelo moderno del dominio provider/staff/services.
+- La referencia local valida para el dominio moderno pasa a ser `medtravel_rebuild_20260415`, reconstruida desde dump real del servidor `medtravelcom_medtravel`.
+- El import local sobre MySQL 5.7 requirió una copia temporal compatible del dump para eliminar solo `DEFAULT` incompatibles en columnas `TINYTEXT` / `TEXT` / `MEDIUMTEXT` / `LONGTEXT` / `BLOB` / `JSON` / `GEOMETRY`.
+- El dump original del servidor no se altera; cualquier ajuste de compatibilidad local debe hacerse sobre copia temporal/local.
+- El runtime local resuelve esta BD via `.env` local no versionado o `conexion.local.php` si existiera; `.env` no debe commitearse.
+- La BD local legacy `medtravel` se conserva solo como backup/referencia y no debe usarse para validar el dominio moderno de providers.
+
 ### Publicación técnica SEO del runtime web público
 
 - Para robustez operativa de publicación en entorno real:

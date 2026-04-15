@@ -8,6 +8,20 @@ Backlog canónico vigente del proyecto.
 
 ## Frente específico — Comercial / SEO público (Fase 0-4 + microfixes post-deploy)
 
+## Frente transversal — Higiene del entorno local
+
+### Canon cerrado
+
+- DONE 2026-04-15: se confirma drift estructural de la BD local legacy `medtravel` frente al dominio moderno provider/staff/services
+- DONE 2026-04-15: se reconstruye una nueva BD local `medtravel_rebuild_20260415` desde dump real del servidor como baseline valido para desarrollo del dominio moderno
+- DONE 2026-04-15: el import local se resuelve con copia temporal compatible para MySQL 5.7 eliminando solo `DEFAULT` incompatibles en tipos de texto/binarios/JSON/geometry; el dump original no se altera
+- DONE 2026-04-15: `.env` queda declarado como override local no versionado para apuntar el runtime local a la BD reconstruida
+
+### Regla operativa vigente
+
+- Las futuras validaciones locales del dominio provider/staff/services deben ejecutarse sobre `medtravel_rebuild_20260415`
+- La BD local `medtravel` queda preservada solo como referencia/backup legacy y no debe reutilizarse como baseline del dominio moderno
+
 ### Estado consolidado actual
 
 - DONE 2026-04-03 (commit `6d4db96`): Fase 0 SEO/credibilidad baseline en superficies públicas.

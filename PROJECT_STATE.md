@@ -9,8 +9,8 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 
 - **Plataforma:** operativa en desarrollo local
 - **Último bundle conocido:** `medtravel_local_backup_20260410.bundle`
-- **Base de datos:** `medtravel` (MySQL, local de este frente). Producción: `medtravelcom_medtravel`
-- **Fecha última actualización de este archivo:** 2026-04-14
+- **Base de datos:** entorno local moderno validado en `medtravel_rebuild_20260415` (MySQL, reconstruida desde dump real del servidor). `medtravel` queda preservada solo como referencia/backup local legacy y no debe usarse para validar el dominio moderno de providers/staff/services. Producción: `medtravelcom_medtravel`
+- **Fecha última actualización de este archivo:** 2026-04-15
 
 ---
 
@@ -28,6 +28,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 
 ## Frentes completados recientes
 
+- **2026-04-15** — Entorno local realineado al modelo moderno: la BD local previa `medtravel` se confirmó estructuralmente desalineada para el dominio provider; se reconstruyó una nueva BD local `medtravel_rebuild_20260415` a partir de dump real del servidor. El import requirió una copia temporal compatible para MySQL 5.7 eliminando `DEFAULT` incompatibles en tipos `TINYTEXT`/`TEXT`/`MEDIUMTEXT`/`LONGTEXT`/`BLOB`/`JSON`/`GEOMETRY`; el dump original no se alteró. El runtime local ya apunta a la BD nueva vía `.env` local no versionado.
 - **2026-04-14** — Onboarding médico admin refinado: `providers.php` se reorganiza en bloques A–E (prestador, owner/admin inicial, categorías, servicios, compliance documental) y `provider_verification.php` compacta su grilla con resumen visual sin depender de scroll horizontal
 - **2026-04-14** — Google Calendar / Meet Fase 1 validado con organizer admin autenticado; OAuth corregido para scope real de Calendar y reconexión limpia; cancelación de reunión vuelve a dejar el item reprogramable para provider
 - **2026-04-03** — Fase 0–4 SEO/credibilidad en superficies públicas (commits `6d4db96` → `e9466ad`)
@@ -116,11 +117,16 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 APP_ENV=dev
 DB_HOST=127.0.0.1 / DB_PORT=8889
 DB_USER=root / DB_PASS=root
-DB_NAME=medtravel
+DB_NAME=medtravel_rebuild_20260415
 CONECTARBOT_API_KEY=mt_cb_live_...
 GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
 GOOGLE_OAUTH_REDIRECT_URI, GOOGLE_OAUTH_ENCRYPTION_KEY
 ```
+
+Regla operativa local:
+- `.env` es override local del workspace y no se versiona.
+- `medtravel` se conserva solo como backup/referencia local legacy.
+- La base válida para desarrollo y validaciones locales del dominio moderno provider/staff/services es `medtravel_rebuild_20260415`.
 
 ---
 
