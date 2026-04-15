@@ -4,6 +4,7 @@ $(document).ready(function(){
     const urlServices = 'ajax/service_catalog.php';
     const verificationBaseUrl = 'provider_verification.php';
     var currentOwnerState = 'new';
+    var currentListFilter = 'active';
     var providerMultiSelectNeedsInit = false;
     const providerDocumentChecklist = [
         { key: 'business_registration', label: 'Registro empresarial', description: 'Cámara de comercio o registro de empresa vigente.', category: 'Legal', required: true },
@@ -44,6 +45,36 @@ $(document).ready(function(){
 
     function isValidEmail(email){
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
+    }
+
+    function normalizeListFilter(filter){
+        return ['active', 'archived', 'all'].indexOf(filter) >= 0 ? filter : 'active';
+    }
+
+    function updateProvidersViewNote(){
+        const copy = {
+            active: {
+                caption: 'Vista actual: prestadores activos.',
+                noteClass: 'alert-warning',
+                html: '<strong>Prestadores activos:</strong> aquí ves la operación vigente. Archivar saca al prestador de esta vista sin borrar su historial, documentos, bookings ni relaciones.'
+            },
+            archived: {
+                caption: 'Vista actual: prestadores archivados.',
+                noteClass: 'alert-danger',
+                html: '<strong>Prestadores archivados:</strong> estos registros ya no participan en la operación activa. Puedes restaurarlos desde esta misma pantalla sin perder historial, documentos ni bookings.'
+            },
+            all: {
+                caption: 'Vista actual: todos los prestadores.',
+                noteClass: 'alert-info',
+                html: '<strong>Todos los prestadores:</strong> esta vista mezcla activos, inactivos y archivados para revisión operativa. Archivar sigue siendo reversible y no elimina físicamente el registro.'
+            }
+        };
+        const selected = copy[normalizeListFilter(currentListFilter)] || copy.active;
+        $('#providers-filter-caption').text(selected.caption);
+        $('#providers-view-note')
+            .removeClass('alert-warning alert-danger alert-info')
+            .addClass(selected.noteClass)
+            .html(selected.html);
     }
 
     function verificationUrlForProvider(providerId){
@@ -205,23 +236,116 @@ $(document).ready(function(){
     }
 
     function buildOwnerSummaryCell(provider){
+        let meta = '';
         if(provider.owner_admin_username){
-            let meta = '<div class="small text-muted" style="margin-top:4px;">Owner/admin: <strong>' + escapeHtml(provider.owner_admin_username) + '</strong>';
+            meta = '<div class="small text-muted" style="margin-top:4px;">Owner/admin: <strong>' + escapeHtml(provider.owner_admin_username) + '</strong>';
             if(provider.owner_source === 'legacy_fallback'){
                 meta += ' <span class="label label-warning">Compatibilidad</span>';
             } else if(provider.owner_source === 'provider_users'){
                 meta += ' <span class="label label-success">Explicito</span>';
             }
             meta += '</div>';
-            return meta;
+        } else {
+            meta = '<div class="small text-warning" style="margin-top:4px;">Sin owner/admin inicial visible</div>';
         }
 
-        return '<div class="small text-warning" style="margin-top:4px;">Sin owner/admin inicial visible</div>';
+        if(provider.is_deleted == 1){
+            meta += '<div class="small text-warning" style="margin-top:4px;">Prestador archivado';
+            if(provider.deleted_at){
+                meta += ' desde <strong>' + escapeHtml(provider.deleted_at) + '</strong>';
+            }
+            meta += '</div>';
+            if(provider.archive_reason){
+                meta += '<div class="small text-muted" style="margin-top:2px;">Motivo: ' + escapeHtml(provider.archive_reason) + '</div>';
+            }
+        }
+
+        return meta;
     }
 
-    function loadProviders(){
-        $.post(url, { tipo: 'list', kind: 'medical' }, function(res){
-            if(!res || !res.ok) return;
+    function buildProviderStatusCell(provider){
+        if(parseInt(provider.is_deleted || 0, 10) === 1){
+            return '<span class="label label-warning">Archivado</span>';
+        }
+        return provider.is_active == 1
+            ? '<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>'
+            : '<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>';
+    }
+
+    function buildProviderActions(provider){
+        if(parseInt(provider.is_deleted || 0, 10) === 1){
+            return '<button class="btn btn-sm btn-default restore-provider"><i class="fa fa-undo"></i> Restaurar</button>';
+        }
+
+        return ''
+            + '<button class="btn btn-sm btn-primary edit">Editar</button> '
+            + '<a href="providers_edit.php?id=' + provider.id + '" class="btn btn-sm btn-default" title="Commission Settings"><i class="fa fa-usd"></i></a> '
+            + '<button class="btn btn-sm btn-warning archive-provider" title="Archivar prestador"><i class="fa fa-archive"></i> Archivar</button>';
+    }
+
+    function archiveImpactValue(value, available){
+        if(available === false){
+            return 'No disponible';
+        }
+        return String(value || 0);
+    }
+
+    function renderArchiveImpactGrid(preview){
+        const impact = preview && preview.impact ? preview.impact : {};
+        const cards = [
+            { label: 'Usuarios owner/admin', value: archiveImpactValue(impact.owner_admin_users), help: 'Cuentas administrativas principales ligadas al prestador.' },
+            { label: 'Usuarios asociados', value: archiveImpactValue(impact.provider_users), help: 'Registros en provider_users o cuentas asociadas al prestador.' },
+            { label: 'Staff médico', value: archiveImpactValue(impact.medical_staff), help: 'Personal médico interno asociado al prestador.' },
+            { label: 'Servicios habilitados', value: archiveImpactValue(impact.enabled_services), help: 'Servicios del catálogo habilitados para este prestador.' },
+            { label: 'Ofertas activas', value: archiveImpactValue(impact.active_offers), help: 'Ofertas activas que dejarán de operar en la vista activa.' },
+            { label: 'Ofertas totales', value: archiveImpactValue(impact.total_offers), help: 'Todas las ofertas históricas ligadas al prestador.' },
+            { label: 'Documentos', value: archiveImpactValue(impact.documents), help: 'Documentos de verificación o compliance conservados.' },
+            { label: 'Bookings históricos', value: archiveImpactValue(impact.historical_booking_items), help: 'Items históricos en booking_request_items vinculados al prestador.' },
+            { label: 'Bookings activos o pendientes', value: archiveImpactValue(impact.active_or_pending_booking_items, impact.active_or_pending_booking_items_available), help: 'Items abiertos o no terminales si el estado es distinguible en la base.' }
+        ];
+
+        const html = cards.map(function(card){
+            return ''
+                + '<div class="archive-impact-item">'
+                + '  <div class="archive-impact-card">'
+                + '    <strong>' + escapeHtml(card.label) + '</strong>'
+                + '    <div class="archive-impact-value">' + escapeHtml(card.value) + '</div>'
+                + '    <div class="archive-impact-help">' + escapeHtml(card.help) + '</div>'
+                + '  </div>'
+                + '</div>';
+        }).join('');
+
+        $('#archive-impact-grid').html(html);
+    }
+
+    function resetArchiveModal(){
+        $('#archive-provider-id').val('');
+        $('#archive-provider-name').val('');
+        $('#archive-reason').val('');
+        $('#archive-confirm-text').val('');
+        $('#archive-provider-label').text('Este prestador dejara de aparecer en la operacion activa.');
+        $('#archive-impact-grid').html('');
+    }
+
+    function openArchiveModal(preview){
+        const provider = preview && preview.provider ? preview.provider : {};
+        resetArchiveModal();
+        $('#archive-provider-id').val(provider.id || '');
+        $('#archive-provider-name').val(provider.name || '');
+        $('#archive-provider-label').text((provider.name || 'Este prestador') + ' dejara de aparecer en la operacion activa.');
+        renderArchiveImpactGrid(preview);
+        $('#providerArchiveModal').modal('show');
+    }
+
+    function loadProviders(filterOverride){
+        currentListFilter = normalizeListFilter(filterOverride || currentListFilter);
+        updateProvidersViewNote();
+
+        $.post(url, { tipo: 'list', kind: 'medical', state: currentListFilter }, function(res){
+            if(!res || !res.ok){
+                providerToast('error', 'No fue posible cargar el listado de prestadores.', 'Providers');
+                return;
+            }
 
             let tbody = '';
             res.data.forEach(function(p){
@@ -234,24 +358,27 @@ $(document).ready(function(){
                 const st = statusMap[p.verification_status] || statusMap.pending;
                 const completion = p.completion_percent ? ' (' + p.completion_percent + '%)' : '';
                 const providerCell = '<strong>' + escapeHtml(p.name) + '</strong>' + buildOwnerSummaryCell(p);
+                const rowClass = parseInt(p.is_deleted || 0, 10) === 1 ? ' class="provider-archived-row"' : '';
 
-                tbody += '<tr data-id="' + p.id + '">';
+                tbody += '<tr data-id="' + p.id + '" data-name="' + escapeHtml(p.name) + '"' + rowClass + '>';
                 tbody += '<td>' + providerCell + '</td>';
                 tbody += '<td>' + escapeHtml(p.type) + '</td>';
                 tbody += '<td>' + escapeHtml(humanizeKind(p.kind || 'medical')) + '</td>';
                 tbody += '<td>' + escapeHtml(p.city || '') + '</td>';
                 tbody += '<td><span class="' + st.cls + '">' + st.text + '</span>' + completion + ' <a href="provider_verification.php?provider_id=' + p.id + '" class="ml10">Gestionar</a></td>';
-                tbody += '<td>' + (p.is_active == 1 ? '<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>' : '<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>') + '</td>';
-                tbody += '<td>'
-                    + '<button class="btn btn-sm btn-primary edit">Editar</button> '
-                    + '<a href="providers_edit.php?id=' + p.id + '" class="btn btn-sm btn-default" title="Commission Settings"><i class="fa fa-usd"></i></a> '
-                    + '<button class="btn btn-sm btn-danger soft-delete" title="Eliminar (Soft)"><i class="fa fa-trash"></i></button>'
-                    + '</td>';
+                tbody += '<td>' + buildProviderStatusCell(p) + '</td>';
+                tbody += '<td>' + buildProviderActions(p) + '</td>';
                 tbody += '</tr>';
             });
 
+            if(!tbody){
+                tbody = '<tr><td colspan="7" class="text-center text-muted">No hay prestadores para esta vista.</td></tr>';
+            }
+
             $('#tbl-providers tbody').html(tbody);
-        }, 'json');
+        }, 'json').fail(function(){
+            providerToast('error', 'Error de conexion al cargar el listado de prestadores.', 'Providers');
+        });
     }
 
     function setKindPresentation(){
@@ -381,10 +508,14 @@ $(document).ready(function(){
     }
 
     loadLists();
-    loadProviders();
+    loadProviders(currentListFilter);
 
     $('#btn-new-provider').click(function(){
         openCreateModal();
+    });
+
+    $('input[name="provider-view-filter"]').on('change', function(){
+        loadProviders($(this).val());
     });
 
     $('#providerModal').on('shown.bs.modal', function(){
@@ -397,6 +528,10 @@ $(document).ready(function(){
         destroyProviderMultiSelect('#prov-categories');
         destroyProviderMultiSelect('#prov-services');
         providerMultiSelectNeedsInit = false;
+    });
+
+    $('#providerArchiveModal').on('hidden.bs.modal', function(){
+        resetArchiveModal();
     });
 
     $('#prov-type').on('change', function(){
@@ -519,18 +654,74 @@ $(document).ready(function(){
         });
     });
 
-    $('#tbl-providers').on('click', '.soft-delete', function(){
-        if(!confirm('¿Deseas eliminar (soft)?')) return;
-        let id = $(this).closest('tr').data('id');
-        $.post(url, { tipo: 'soft_delete', id: id }, function(res){
+    $('#tbl-providers').on('click', '.archive-provider', function(){
+        let tr = $(this).closest('tr');
+        let id = tr.data('id');
+        $.post(url, { tipo: 'archive_preview', id: id }, function(res){
             if(res && res.ok){
-                loadProviders();
-                providerToast('success', res.message || 'Prestador eliminado', 'Providers');
+                openArchiveModal(res.data || {});
             } else {
                 providerToast('error', res && res.message ? res.message : 'Error', 'Providers');
             }
         }, 'json').fail(function(){
-            providerToast('error', 'Error de conexion al eliminar el provider', 'Providers');
+            providerToast('error', 'Error de conexion al cargar el impacto del archivado', 'Providers');
+        });
+    });
+
+    $('#confirm-provider-archive').on('click', function(){
+        let providerId = $('#archive-provider-id').val();
+        let archiveReason = $('#archive-reason').val().trim();
+        let confirmText = $('#archive-confirm-text').val().trim();
+
+        if(!providerId){
+            providerToast('error', 'No hay un prestador seleccionado para archivar.', 'Providers');
+            return;
+        }
+        if(!archiveReason){
+            providerToast('warning', 'Debes registrar el motivo de archivado.', 'Validacion');
+            return;
+        }
+        if(!confirmText){
+            providerToast('warning', 'Debes escribir ARCHIVAR o el nombre del prestador para confirmar.', 'Validacion');
+            return;
+        }
+
+        $.post(url, {
+            tipo: 'archive',
+            id: providerId,
+            archive_reason: archiveReason,
+            confirm_text: confirmText
+        }, function(res){
+            if(res && res.ok){
+                $('#providerArchiveModal').modal('hide');
+                loadProviders();
+                providerToast('success', res.message || 'Prestador archivado', 'Providers');
+            } else {
+                providerToast('error', res && res.message ? res.message : 'No fue posible archivar el prestador.', 'Providers');
+            }
+        }, 'json').fail(function(xhr){
+            let message = 'Error de conexion al archivar el prestador';
+            if(xhr && xhr.responseJSON && xhr.responseJSON.message){
+                message = xhr.responseJSON.message;
+            }
+            providerToast('error', message, 'Providers');
+        });
+    });
+
+    $('#tbl-providers').on('click', '.restore-provider', function(){
+        let tr = $(this).closest('tr');
+        let id = tr.data('id');
+        let name = tr.data('name') || 'este prestador';
+        if(!confirm('¿Restaurar a ' + name + ' y devolverlo a la operación activa? Esta acción no borra historial.')) return;
+        $.post(url, { tipo: 'restore', id: id }, function(res){
+            if(res && res.ok){
+                loadProviders();
+                providerToast('success', res.message || 'Prestador restaurado', 'Providers');
+            } else {
+                providerToast('error', res && res.message ? res.message : 'No fue posible restaurar el prestador.', 'Providers');
+            }
+        }, 'json').fail(function(){
+            providerToast('error', 'Error de conexion al restaurar el prestador', 'Providers');
         });
     });
 

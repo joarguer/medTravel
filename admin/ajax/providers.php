@@ -86,6 +86,415 @@ function provider_table_columns($conexion){
     return $cache;
 }
 
+function provider_archive_schema($conexion){
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    $cache = array(
+        'is_deleted' => table_has_column($conexion, 'providers', 'is_deleted'),
+        'deleted_at' => table_has_column($conexion, 'providers', 'deleted_at'),
+        'deleted_by' => table_has_column($conexion, 'providers', 'deleted_by'),
+        'archive_reason' => table_has_column($conexion, 'providers', 'archive_reason'),
+        'restored_at' => table_has_column($conexion, 'providers', 'restored_at'),
+        'restored_by' => table_has_column($conexion, 'providers', 'restored_by'),
+        'kind' => table_has_column($conexion, 'providers', 'kind'),
+        'name' => table_has_column($conexion, 'providers', 'name'),
+        'is_active' => table_has_column($conexion, 'providers', 'is_active')
+    );
+    return $cache;
+}
+
+function provider_normalize_compare_text($value){
+    $value = trim((string)$value);
+    if ($value === '') {
+        return '';
+    }
+    if (function_exists('mb_strtolower')) {
+        return mb_strtolower($value, 'UTF-8');
+    }
+    return strtolower($value);
+}
+
+function provider_fetch_state_row($conexion, $provider_id){
+    $provider_id = (int)$provider_id;
+    if ($provider_id <= 0) {
+        return null;
+    }
+
+    $schema = provider_archive_schema($conexion);
+    $select = array(
+        'id',
+        $schema['name'] ? 'name' : "'' AS name",
+        $schema['kind'] ? 'kind' : "'medical' AS kind",
+        $schema['is_active'] ? 'is_active' : '1 AS is_active',
+        $schema['is_deleted'] ? 'is_deleted' : '0 AS is_deleted',
+        $schema['deleted_at'] ? 'deleted_at' : 'NULL AS deleted_at',
+        $schema['archive_reason'] ? 'archive_reason' : 'NULL AS archive_reason',
+        $schema['restored_at'] ? 'restored_at' : 'NULL AS restored_at'
+    );
+
+    $sql = 'SELECT ' . implode(', ', $select) . ' FROM providers WHERE id = ? LIMIT 1';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = ($res && ($tmp = mysqli_fetch_assoc($res))) ? $tmp : null;
+    mysqli_stmt_close($stmt);
+    return $row;
+}
+
+function provider_can_edit_kind($kind){
+    $kind = trim((string)$kind);
+    if ($kind === 'partner') {
+        return user_can('providers.partner.edit') || user_can('providers.edit');
+    }
+    return user_can('providers.medical.edit') || user_can('providers.edit');
+}
+
+function provider_count_single_value($conexion, $sql, $provider_id){
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return 0;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_row($res) : null;
+    mysqli_stmt_close($stmt);
+    return $row ? (int)$row[0] : 0;
+}
+
+function provider_count_owner_admin_users($conexion, $provider_id){
+    $provider_id = (int)$provider_id;
+    if ($provider_id <= 0) {
+        return 0;
+    }
+
+    if (provider_users_schema_ready($conexion) && table_exists($conexion, 'usuarios')) {
+        $sql = "SELECT COUNT(DISTINCT pu.user_id)
+                FROM provider_users pu
+                INNER JOIN usuarios u ON u.id = pu.user_id
+                WHERE pu.provider_id = ?
+                  AND LOWER(COALESCE(NULLIF(TRIM(pu.role_in_provider), ''), 'owner')) IN ('owner', 'admin', 'administrator', 'primary', 'principal')
+                  AND u.id <> 1";
+        if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+            $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
+        }
+        if (table_has_column($conexion, 'usuarios', 'is_deleted')) {
+            $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
+        }
+        return provider_count_single_value($conexion, $sql, $provider_id);
+    }
+
+    if (!table_exists($conexion, 'usuarios') || !table_has_column($conexion, 'usuarios', 'provider_id')) {
+        return 0;
+    }
+
+    $sql = 'SELECT COUNT(*) FROM usuarios u WHERE u.provider_id = ? AND u.id <> 1';
+    if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
+    }
+    if (table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
+    }
+    if (table_has_column($conexion, 'usuarios', 'role_id')) {
+        $sql .= ' AND u.role_id = ' . (int)ROLE_PROVIDER_ADMIN;
+    } elseif (table_has_column($conexion, 'usuarios', 'rol')) {
+        $sql .= " AND LOWER(TRIM(COALESCE(u.rol, ''))) IN ('" . mysqli_real_escape_string($conexion, (string)ROLE_PROVIDER_ADMIN) . "', 'provider_admin', 'prestador_admin', 'admin prestador')";
+    }
+    return provider_count_single_value($conexion, $sql, $provider_id);
+}
+
+function provider_count_provider_users_total($conexion, $provider_id){
+    $provider_id = (int)$provider_id;
+    if ($provider_id <= 0) {
+        return 0;
+    }
+
+    if (provider_users_schema_ready($conexion)) {
+        return provider_count_single_value($conexion, 'SELECT COUNT(*) FROM provider_users WHERE provider_id = ?', $provider_id);
+    }
+
+    if (!table_exists($conexion, 'usuarios') || !table_has_column($conexion, 'usuarios', 'provider_id')) {
+        return 0;
+    }
+
+    $sql = 'SELECT COUNT(*) FROM usuarios u WHERE u.provider_id = ? AND u.id <> 1';
+    if (table_has_column($conexion, 'usuarios', 'service_provider_id')) {
+        $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
+    }
+    if (table_has_column($conexion, 'usuarios', 'is_deleted')) {
+        $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
+    }
+    return provider_count_single_value($conexion, $sql, $provider_id);
+}
+
+function provider_count_medical_staff($conexion, $provider_id){
+    if (!table_exists($conexion, 'provider_medical_staff') || !table_has_column($conexion, 'provider_medical_staff', 'provider_id')) {
+        return 0;
+    }
+    return provider_count_single_value($conexion, 'SELECT COUNT(*) FROM provider_medical_staff WHERE provider_id = ?', $provider_id);
+}
+
+function provider_count_enabled_services($conexion, $provider_id){
+    if (!table_exists($conexion, 'provider_catalog_services') || !table_has_column($conexion, 'provider_catalog_services', 'provider_id')) {
+        return 0;
+    }
+    return provider_count_single_value($conexion, 'SELECT COUNT(*) FROM provider_catalog_services WHERE provider_id = ?', $provider_id);
+}
+
+function provider_count_offer_metrics($conexion, $provider_id){
+    $metrics = array('total' => 0, 'active' => 0);
+    if (!table_exists($conexion, 'provider_service_offers') || !table_has_column($conexion, 'provider_service_offers', 'provider_id')) {
+        return $metrics;
+    }
+
+    $hasIsActive = table_has_column($conexion, 'provider_service_offers', 'is_active');
+    $sql = 'SELECT COUNT(*) AS total, '
+        . ($hasIsActive ? 'SUM(CASE WHEN COALESCE(is_active, 0) = 1 THEN 1 ELSE 0 END)' : '0')
+        . ' AS active FROM provider_service_offers WHERE provider_id = ?';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return $metrics;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    if ($row) {
+        $metrics['total'] = (int)($row['total'] ?? 0);
+        $metrics['active'] = (int)($row['active'] ?? 0);
+    }
+    return $metrics;
+}
+
+function provider_count_documents($conexion, $provider_id){
+    if (!table_exists($conexion, 'provider_documents') || !table_has_column($conexion, 'provider_documents', 'provider_id')) {
+        return 0;
+    }
+    return provider_count_single_value($conexion, 'SELECT COUNT(*) FROM provider_documents WHERE provider_id = ?', $provider_id);
+}
+
+function provider_count_booking_item_metrics($conexion, $provider_id){
+    $metrics = array(
+        'historical_items' => 0,
+        'active_or_pending_items' => null,
+        'active_or_pending_items_available' => false
+    );
+
+    if (!table_exists($conexion, 'booking_request_items') || !table_has_column($conexion, 'booking_request_items', 'provider_id')) {
+        return $metrics;
+    }
+
+    $hasIsDeleted = table_has_column($conexion, 'booking_request_items', 'is_deleted');
+    $hasItemStatus = table_has_column($conexion, 'booking_request_items', 'item_status');
+    $where = ' WHERE provider_id = ?';
+    if ($hasIsDeleted) {
+        $where .= ' AND COALESCE(is_deleted, 0) = 0';
+    }
+
+    $terminalStatuses = "'paid','pay_on_arrival','cancelled','appointment_cancelled','completed','treatment_completed'";
+    $sql = 'SELECT COUNT(*) AS historical_items';
+    if ($hasItemStatus) {
+        $sql .= ", SUM(CASE WHEN LOWER(TRIM(COALESCE(item_status, ''))) IN (" . $terminalStatuses . ") THEN 0 ELSE 1 END) AS active_or_pending_items";
+    }
+    $sql .= ' FROM booking_request_items' . $where;
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return $metrics;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+    if ($row) {
+        $metrics['historical_items'] = (int)($row['historical_items'] ?? 0);
+        if ($hasItemStatus) {
+            $metrics['active_or_pending_items'] = (int)($row['active_or_pending_items'] ?? 0);
+            $metrics['active_or_pending_items_available'] = true;
+        }
+    }
+
+    return $metrics;
+}
+
+function build_provider_archive_preview($conexion, $provider_id){
+    $provider = provider_fetch_state_row($conexion, $provider_id);
+    if (!$provider) {
+        return null;
+    }
+
+    $offerMetrics = provider_count_offer_metrics($conexion, $provider_id);
+    $bookingMetrics = provider_count_booking_item_metrics($conexion, $provider_id);
+
+    return array(
+        'provider' => array(
+            'id' => (int)$provider['id'],
+            'name' => (string)($provider['name'] ?? ''),
+            'kind' => (string)($provider['kind'] ?? 'medical'),
+            'is_active' => (int)($provider['is_active'] ?? 0),
+            'is_deleted' => (int)($provider['is_deleted'] ?? 0),
+            'archive_reason' => isset($provider['archive_reason']) ? (string)$provider['archive_reason'] : '',
+            'deleted_at' => isset($provider['deleted_at']) ? (string)$provider['deleted_at'] : ''
+        ),
+        'impact' => array(
+            'owner_admin_users' => provider_count_owner_admin_users($conexion, $provider_id),
+            'provider_users' => provider_count_provider_users_total($conexion, $provider_id),
+            'medical_staff' => provider_count_medical_staff($conexion, $provider_id),
+            'enabled_services' => provider_count_enabled_services($conexion, $provider_id),
+            'active_offers' => $offerMetrics['active'],
+            'total_offers' => $offerMetrics['total'],
+            'documents' => provider_count_documents($conexion, $provider_id),
+            'historical_booking_items' => $bookingMetrics['historical_items'],
+            'active_or_pending_booking_items' => $bookingMetrics['active_or_pending_items'],
+            'active_or_pending_booking_items_available' => !empty($bookingMetrics['active_or_pending_items_available'])
+        )
+    );
+}
+
+function execute_provider_archive($conexion, $provider_id, $archive_reason, $confirm_text, $allowLegacyAlias = false){
+    $provider_id = (int)$provider_id;
+    $archive_reason = trim((string)$archive_reason);
+    $confirm_text = trim((string)$confirm_text);
+    if ($provider_id <= 0) {
+        return array('ok' => false, 'error' => 'invalid_id');
+    }
+    if ($archive_reason === '') {
+        return array('ok' => false, 'error' => 'archive_reason_required', 'message' => 'El motivo de archivado es obligatorio.');
+    }
+
+    $schema = provider_archive_schema($conexion);
+    if (!$schema['is_deleted'] || !$schema['deleted_at'] || !$schema['deleted_by']) {
+        return array('ok' => false, 'error' => 'soft_delete_columns_missing');
+    }
+    if (!$schema['archive_reason']) {
+        return array('ok' => false, 'error' => 'archive_reason_column_missing', 'message' => 'Falta la columna archive_reason en providers. Ejecuta la migracion del MVP de archivado.');
+    }
+
+    $provider = provider_fetch_state_row($conexion, $provider_id);
+    if (!$provider) {
+        return array('ok' => false, 'error' => 'not_found');
+    }
+    if ((int)($provider['is_deleted'] ?? 0) === 1) {
+        return array('ok' => false, 'error' => 'already_archived', 'message' => 'El prestador ya esta archivado.');
+    }
+
+    $kind = (string)($provider['kind'] ?? 'medical');
+    if (!provider_can_edit_kind($kind)) {
+        return array('ok' => false, 'error' => 'forbidden');
+    }
+
+    $providerName = trim((string)($provider['name'] ?? ''));
+    $normalizedConfirm = provider_normalize_compare_text($confirm_text);
+    $validConfirm = ($normalizedConfirm === provider_normalize_compare_text('ARCHIVAR'));
+    if (!$validConfirm && $providerName !== '') {
+        $validConfirm = ($normalizedConfirm === provider_normalize_compare_text($providerName));
+    }
+    if (!$allowLegacyAlias && !$validConfirm) {
+        return array('ok' => false, 'error' => 'invalid_confirmation_text', 'message' => 'La confirmacion no coincide. Escribe ARCHIVAR o el nombre exacto del prestador.');
+    }
+
+    $sessionUserId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+    $sql = 'UPDATE providers
+            SET is_deleted = 1,
+                deleted_at = NOW(),
+                deleted_by = ?,
+                archive_reason = ?,
+                is_active = 0';
+    if ($schema['restored_at']) {
+        $sql .= ', restored_at = NULL';
+    }
+    if ($schema['restored_by']) {
+        $sql .= ', restored_by = NULL';
+    }
+    $sql .= ' WHERE id = ? AND is_deleted = 0 LIMIT 1';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return array('ok' => false, 'error' => 'db_prepare');
+    }
+    mysqli_stmt_bind_param($stmt, 'isi', $sessionUserId, $archive_reason, $provider_id);
+    $exec = mysqli_stmt_execute($stmt);
+    if (!$exec) {
+        error_log('providers archive error: ' . mysqli_stmt_error($stmt));
+        mysqli_stmt_close($stmt);
+        return array('ok' => false, 'error' => 'db_archive');
+    }
+    if (mysqli_stmt_affected_rows($stmt) < 1) {
+        mysqli_stmt_close($stmt);
+        return array('ok' => false, 'error' => 'record_deleted', 'message' => 'No fue posible archivar el prestador.');
+    }
+    mysqli_stmt_close($stmt);
+
+    return array('ok' => true, 'message' => 'Prestador archivado correctamente.');
+}
+
+function execute_provider_restore($conexion, $provider_id){
+    $provider_id = (int)$provider_id;
+    if ($provider_id <= 0) {
+        return array('ok' => false, 'error' => 'invalid_id');
+    }
+
+    $schema = provider_archive_schema($conexion);
+    if (!$schema['is_deleted']) {
+        return array('ok' => false, 'error' => 'soft_delete_columns_missing');
+    }
+
+    $provider = provider_fetch_state_row($conexion, $provider_id);
+    if (!$provider) {
+        return array('ok' => false, 'error' => 'not_found');
+    }
+    if ((int)($provider['is_deleted'] ?? 0) !== 1) {
+        return array('ok' => false, 'error' => 'not_archived', 'message' => 'El prestador no esta archivado.');
+    }
+
+    $kind = (string)($provider['kind'] ?? 'medical');
+    if (!provider_can_edit_kind($kind)) {
+        return array('ok' => false, 'error' => 'forbidden');
+    }
+
+    $sessionUserId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+    $sql = 'UPDATE providers SET is_deleted = 0';
+    if ($schema['is_active']) {
+        $sql .= ', is_active = 1';
+    }
+    if ($schema['restored_at']) {
+        $sql .= ', restored_at = NOW()';
+    }
+    if ($schema['restored_by']) {
+        $sql .= ', restored_by = ?';
+    }
+    $sql .= ' WHERE id = ? AND is_deleted = 1 LIMIT 1';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return array('ok' => false, 'error' => 'db_prepare');
+    }
+    if ($schema['restored_by']) {
+        mysqli_stmt_bind_param($stmt, 'ii', $sessionUserId, $provider_id);
+    } else {
+        mysqli_stmt_bind_param($stmt, 'i', $provider_id);
+    }
+    $exec = mysqli_stmt_execute($stmt);
+    if (!$exec) {
+        error_log('providers restore error: ' . mysqli_stmt_error($stmt));
+        mysqli_stmt_close($stmt);
+        return array('ok' => false, 'error' => 'db_restore');
+    }
+    if (mysqli_stmt_affected_rows($stmt) < 1) {
+        mysqli_stmt_close($stmt);
+        return array('ok' => false, 'error' => 'restore_noop', 'message' => 'No fue posible restaurar el prestador.');
+    }
+    mysqli_stmt_close($stmt);
+
+    return array('ok' => true, 'message' => 'Prestador restaurado correctamente.');
+}
+
 function provider_users_schema_ready($conexion){
     return table_exists($conexion, 'provider_users')
         && table_has_column($conexion, 'provider_users', 'provider_id')
@@ -821,8 +1230,11 @@ function ensure_provider_owner_staff_mirror($conexion, $provider_id, $owner_user
 try{
     if($tipo == 'list'){
         $kind_filter = isset($_REQUEST['kind']) ? $_REQUEST['kind'] : '';
+        $state_filter = isset($_REQUEST['state']) ? trim((string)$_REQUEST['state']) : 'active';
         $kinds = array('medical','partner');
+        $states = array('active', 'archived', 'all');
         if($kind_filter && !in_array($kind_filter, $kinds)) $kind_filter = '';
+        if(!in_array($state_filter, $states, true)) $state_filter = 'active';
         if($kind_filter === ''){
             $kind_filter = 'medical';
         }
@@ -832,9 +1244,17 @@ try{
         $can_view_partner = user_can('providers.partner.view');
         if(!$can_view_any && !$can_view_med && !$can_view_partner){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
         $rows = [];
-        $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
+        $archiveSchema = provider_archive_schema($conexion);
+        $hasSoftDelete = $archiveSchema['is_deleted'];
+        if($state_filter === 'archived' && !$hasSoftDelete){
+            echo json_encode(['ok'=>true,'data'=>[],'meta'=>['state'=>$state_filter]]); exit;
+        }
         $sql = "SELECT 
                     p.id, p.type, p.kind, p.name, p.slug, p.city, p.is_verified, p.is_active, p.created_at,
+                    " . ($hasSoftDelete ? 'p.is_deleted' : '0 AS is_deleted') . ",
+                    " . ($archiveSchema['deleted_at'] ? 'p.deleted_at' : 'NULL AS deleted_at') . ",
+                    " . ($archiveSchema['archive_reason'] ? 'p.archive_reason' : 'NULL AS archive_reason') . ",
+                    " . ($archiveSchema['restored_at'] ? 'p.restored_at' : 'NULL AS restored_at') . ",
                     COALESCE(pv.status,'pending') AS verification_status,
                     COALESCE(pv.verification_level,'basic') AS verification_level,
                     COALESCE(pv.trust_score,0) AS trust_score,
@@ -852,7 +1272,13 @@ try{
                     GROUP BY provider_id
                 ) items ON items.provider_id = p.id
                 WHERE 1=1";
-        if($hasSoftDelete){ $sql .= " AND p.is_deleted = 0"; }
+        if($hasSoftDelete){
+            if($state_filter === 'active'){
+                $sql .= " AND p.is_deleted = 0";
+            } elseif($state_filter === 'archived'){
+                $sql .= " AND p.is_deleted = 1";
+            }
+        }
         if($kind_filter){ $sql .= " AND p.kind = '".mysqli_real_escape_string($conexion,$kind_filter)."'"; }
         $sql .= " ORDER BY p.created_at DESC";
         $res = mysqli_query($conexion, $sql);
@@ -874,7 +1300,7 @@ try{
             });
             $rows = array_values($rows);
         }
-        echo json_encode(['ok'=>true,'data'=>$rows]); exit;
+        echo json_encode(['ok'=>true,'data'=>$rows,'meta'=>['state'=>$state_filter]]); exit;
     }
 
     if($tipo == 'get'){
@@ -930,6 +1356,23 @@ try{
                 ]
             ]); exit;
         } else { error_log('providers get prepare error: '.mysqli_error($conexion)); echo json_encode(['ok'=>false,'error'=>'db_prepare']); exit; }
+    }
+
+    if($tipo == 'archive_preview'){
+        $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
+        if($id <= 0){ echo json_encode(['ok'=>false,'error'=>'invalid_id']); exit; }
+
+        $preview = build_provider_archive_preview($conexion, $id);
+        if(!$preview){ echo json_encode(['ok'=>false,'error'=>'not_found']); exit; }
+
+        if((int)($preview['provider']['is_deleted'] ?? 0) === 1){
+            echo json_encode(['ok'=>false,'error'=>'already_archived','message'=>'El prestador ya esta archivado.']); exit;
+        }
+
+        $kind = isset($preview['provider']['kind']) ? (string)$preview['provider']['kind'] : 'medical';
+        if(!provider_can_edit_kind($kind)){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
+
+        echo json_encode(['ok'=>true,'data'=>$preview]); exit;
     }
 
     if($tipo == 'create'){
@@ -1324,40 +1767,31 @@ try{
         $st = mysqli_prepare($conexion, $toggleSql); mysqli_stmt_bind_param($st,'ii',$val,$id); $exec = mysqli_stmt_execute($st); if(!$exec){ error_log('providers toggle error: '.mysqli_stmt_error($st)); echo json_encode(['ok'=>false,'error'=>'db_toggle']); mysqli_stmt_close($st); exit; } mysqli_stmt_close($st); echo json_encode(['ok'=>true]); exit;
     }
 
+    if($tipo == 'archive'){
+        $result = execute_provider_archive(
+            $conexion,
+            isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0,
+            $_REQUEST['archive_reason'] ?? '',
+            $_REQUEST['confirm_text'] ?? '',
+            false
+        );
+        echo json_encode($result); exit;
+    }
+
+    if($tipo == 'restore'){
+        $result = execute_provider_restore($conexion, isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0);
+        echo json_encode($result); exit;
+    }
+
     if($tipo == 'soft_delete'){
-        $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
-        if($id<=0){ echo json_encode(['ok'=>false,'error'=>'invalid_id']); exit; }
-        $hasSoftDelete = table_has_column($conexion, 'providers', 'is_deleted');
-        $hasDeletedAt = table_has_column($conexion, 'providers', 'deleted_at');
-        $hasDeletedBy = table_has_column($conexion, 'providers', 'deleted_by');
-        if(!$hasSoftDelete || !$hasDeletedAt || !$hasDeletedBy){ echo json_encode(['ok'=>false,'error'=>'soft_delete_columns_missing']); exit; }
-
-        $kind = 'medical';
-        $kindSql = "SELECT kind FROM providers WHERE id = ? AND is_deleted = 0 LIMIT 1";
-        $kq = mysqli_prepare($conexion, $kindSql);
-        mysqli_stmt_bind_param($kq,'i',$id);
-        mysqli_stmt_execute($kq);
-        $kr = mysqli_stmt_get_result($kq);
-        if($kr && $rowk = mysqli_fetch_assoc($kr)) $kind = $rowk['kind'] ?: 'medical';
-        mysqli_stmt_close($kq);
-        if(!$kr || mysqli_num_rows($kr) === 0){ echo json_encode(['ok'=>false,'error'=>'record_deleted','message'=>'registro eliminado']); exit; }
-
-        if($kind === 'partner'){
-            if(!user_can('providers.partner.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
-        } else {
-            if(!user_can('providers.medical.edit') && !user_can('providers.edit')){ echo json_encode(['ok'=>false,'error'=>'forbidden']); exit; }
-        }
-
-        $sessionUserId = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
-        $sql = "UPDATE providers SET is_deleted = 1, deleted_at = NOW(), deleted_by = ?, is_active = 0 WHERE id = ? AND is_deleted = 0 LIMIT 1";
-        $st = mysqli_prepare($conexion, $sql);
-        if(!$st){ echo json_encode(['ok'=>false,'error'=>'db_prepare']); exit; }
-        mysqli_stmt_bind_param($st, 'ii', $sessionUserId, $id);
-        $exec = mysqli_stmt_execute($st);
-        if(!$exec){ error_log('providers soft delete error: '.mysqli_stmt_error($st)); echo json_encode(['ok'=>false,'error'=>'db_soft_delete']); mysqli_stmt_close($st); exit; }
-        if(mysqli_stmt_affected_rows($st) < 1){ echo json_encode(['ok'=>false,'error'=>'record_deleted','message'=>'registro eliminado']); mysqli_stmt_close($st); exit; }
-        mysqli_stmt_close($st);
-        echo json_encode(['ok'=>true]); exit;
+        $result = execute_provider_archive(
+            $conexion,
+            isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0,
+            $_REQUEST['archive_reason'] ?? 'Archivado por compatibilidad legacy',
+            $_REQUEST['confirm_text'] ?? 'ARCHIVAR',
+            true
+        );
+        echo json_encode($result); exit;
     }
 
     echo json_encode(['ok'=>false,'error'=>'unknown_tipo']); exit;

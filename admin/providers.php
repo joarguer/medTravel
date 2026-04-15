@@ -109,8 +109,77 @@ if (!function_exists('is_role_admin_session') || !is_role_admin_session()) {
             flex-wrap: wrap;
         }
 
+        .providers-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .providers-filter-group .btn {
+            min-width: 110px;
+        }
+
+        .providers-view-note {
+            margin-bottom: 16px;
+        }
+
+        .provider-archived-row {
+            background: #fcf8e3;
+        }
+
+        .archive-impact-grid {
+            display: flex;
+            flex-wrap: wrap;
+            margin: 0 -8px;
+        }
+
+        .archive-impact-item {
+            width: 50%;
+            padding: 0 8px 12px;
+        }
+
+        .archive-impact-card {
+            min-height: 88px;
+            padding: 12px 14px;
+            border: 1px solid #e7ecf1;
+            border-radius: 5px;
+            background: #fff;
+        }
+
+        .archive-impact-card strong {
+            display: block;
+            margin-bottom: 4px;
+            color: #2f4050;
+        }
+
+        .archive-impact-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #d35400;
+            line-height: 1.1;
+        }
+
+        .archive-impact-help {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #6c8296;
+        }
+
+        .archive-confirm-help {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #6c8296;
+        }
+
         @media (max-width: 991px) {
             .provider-doc-item {
+                width: 100%;
+            }
+
+            .archive-impact-item {
                 width: 100%;
             }
         }
@@ -164,6 +233,23 @@ if (!function_exists('is_role_admin_session') || !is_role_admin_session()) {
                                         <span class="small">Los prestadores complementarios se administran en <strong>Proveedores Complementarios</strong>; esta pantalla queda reservada al dominio médico.</span>
                                         <br>
                                         <span class="small">Si el provider es de tipo médico/persona, el espejo técnico owner/admin → provider_medical_staff se materializa internamente como efecto del onboarding administrativo central. No sustituye la gestión operativa de staff.</span>
+                                    </div>
+                                    <div class="providers-toolbar">
+                                        <div class="btn-group providers-filter-group" data-toggle="buttons">
+                                            <label class="btn btn-default active">
+                                                <input type="radio" name="provider-view-filter" value="active" autocomplete="off" checked> Activos
+                                            </label>
+                                            <label class="btn btn-default">
+                                                <input type="radio" name="provider-view-filter" value="archived" autocomplete="off"> Archivados
+                                            </label>
+                                            <label class="btn btn-default">
+                                                <input type="radio" name="provider-view-filter" value="all" autocomplete="off"> Todos
+                                            </label>
+                                        </div>
+                                        <div class="text-muted small" id="providers-filter-caption">Vista actual: prestadores activos.</div>
+                                    </div>
+                                    <div class="alert alert-warning providers-view-note" id="providers-view-note">
+                                        <strong>Prestadores activos:</strong> aquí ves la operación vigente. Archivar saca al prestador de esta vista sin borrar su historial, documentos, bookings ni relaciones.
                                     </div>
                                     <table class="table table-striped table-bordered" id="tbl-providers">
                                         <thead>
@@ -381,6 +467,52 @@ if (!function_exists('is_role_admin_session') || !is_role_admin_session()) {
                     <div class="modal-footer">
                         <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
                         <button type="button" id="prov-save" class="btn btn-primary">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="providerArchiveModal" class="modal fade" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header" style="background:#fff6e5; border-bottom:1px solid #f0d8a8;">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><i class="fa fa-times"></i></button>
+                        <h4 class="modal-title"><strong>Archivar prestador médico</strong></h4>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="archive-provider-id" />
+                        <input type="hidden" id="archive-provider-name" />
+
+                        <div class="alert alert-danger">
+                            <strong id="archive-provider-label">Este prestador dejará de aparecer en la operación activa.</strong>
+                            <ul style="margin-top:10px; padding-left:18px;">
+                                <li>Su acceso al panel puede quedar inhabilitado por quedar fuera de la operación activa.</li>
+                                <li>Sus datos históricos, documentos, bookings y relaciones NO se borran.</li>
+                                <li>La acción se puede revertir desde la vista <strong>Archivados</strong>.</li>
+                                <li>Esta acción no elimina físicamente el prestador ni sus archivos.</li>
+                            </ul>
+                        </div>
+
+                        <div class="provider-section" style="margin-bottom:18px;">
+                            <h4 class="provider-section-title"><i class="fa fa-exclamation-triangle"></i> Impacto detectado</h4>
+                            <p class="provider-section-help">Resumen real de relaciones encontradas antes de archivar.</p>
+                            <div id="archive-impact-grid" class="archive-impact-grid"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="archive-reason">Motivo de archivado <span class="required">*</span></label>
+                            <textarea id="archive-reason" class="form-control" rows="4" placeholder="Explica por qué este prestador sale de operación activa" required></textarea>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="archive-confirm-text">Confirmación fuerte <span class="required">*</span></label>
+                            <input type="text" id="archive-confirm-text" class="form-control" placeholder="Escribe ARCHIVAR o el nombre exacto del prestador" />
+                            <div class="archive-confirm-help">Debes escribir <strong>ARCHIVAR</strong> o el nombre exacto del prestador para confirmar.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-warning" id="confirm-provider-archive">Archivar prestador</button>
                     </div>
                 </div>
             </div>
