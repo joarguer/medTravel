@@ -33,6 +33,46 @@ function my_booking_requests_debug_log($label, $context = [])
     @file_put_contents($path, json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND | LOCK_EX);
 }
 
+function my_booking_requests_trace($label, $context = [])
+{
+    $payload = is_array($context) ? $context : ['value' => $context];
+    my_booking_requests_debug_log($label, $payload);
+    error_log(
+        'MT_PROPOSAL_TRACE ' . json_encode([
+            'label' => (string)$label,
+            'action' => (string)($GLOBALS['my_booking_requests_debug_action'] ?? ''),
+            'branch' => (string)($GLOBALS['my_booking_requests_debug_branch'] ?? ''),
+            'context' => $payload,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+    );
+}
+
+function my_booking_emit_realtime_inbox_message($payload, $sourceLabel = '')
+{
+    $threadId = is_array($payload) ? (string)($payload['thread_id'] ?? '') : '';
+    $messageId = is_array($payload) ? (int)($payload['message_id'] ?? 0) : 0;
+    $traceContext = [
+        'source' => (string)$sourceLabel,
+        'thread_id' => $threadId,
+        'message_id' => $messageId,
+        'payload_keys' => is_array($payload) ? array_keys($payload) : [],
+        'realtime_fn_available' => function_exists('mt_realtime_emit_inbox_message') ? 1 : 0,
+    ];
+
+    my_booking_requests_trace('realtime_emit_attempt', $traceContext);
+
+    if (!function_exists('mt_realtime_emit_inbox_message')) {
+        my_booking_requests_trace('realtime_emit_unavailable', $traceContext);
+        return false;
+    }
+
+    $emitOk = mt_realtime_emit_inbox_message($payload);
+    $traceContext['emit_ok'] = $emitOk ? 1 : 0;
+    my_booking_requests_trace($emitOk ? 'realtime_emit_ok' : 'realtime_emit_failed', $traceContext);
+
+    return $emitOk;
+}
+
 function my_booking_requests_set_debug_branch($branch)
 {
     $GLOBALS['my_booking_requests_debug_branch'] = (string)$branch;
@@ -3376,14 +3416,7 @@ if ($action === 'propose_dates') {
     }
     $newMessageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
-    if (function_exists('mt_realtime_emit_inbox_message')) {
-        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
-        // Also emit to the CARE thread for the request so clients viewing CARE see the proposal immediately.
-        $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
-        if ($careThreadId !== $threadId) {
-            mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $newMessageId]);
-        }
-    }
+    my_booking_emit_realtime_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId], 'propose_dates_item');
 
     json_ok([
         'booking_request_id' => $bookingRequestId,
@@ -3562,13 +3595,7 @@ if ($action === 'send_final_decision') {
     }
     $newMessageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmtMsg);
-    if (function_exists('mt_realtime_emit_inbox_message')) {
-        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
-        $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
-        if ($careThreadId !== $threadId) {
-            mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $newMessageId]);
-        }
-    }
+    my_booking_emit_realtime_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId], 'send_final_decision_item');
 
     json_ok([
         'booking_request_id' => $bookingRequestId,
@@ -3659,13 +3686,7 @@ if ($action === 'send_quick_reply') {
     }
     $newMessageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
-    if (function_exists('mt_realtime_emit_inbox_message')) {
-        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId]);
-        $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
-        if ($careThreadId !== $threadId) {
-            mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $newMessageId]);
-        }
-    }
+    my_booking_emit_realtime_inbox_message(['thread_id' => $threadId, 'message_id' => $newMessageId], 'send_quick_reply_item');
 
     json_ok([
         'booking_request_id' => $bookingRequestId,
@@ -3730,6 +3751,12 @@ if ($action === 'cancel_meeting') {
 
 if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_change', 'update_item_status'], true)) {
     my_booking_requests_set_debug_branch('provider_action_' . $action);
+    my_booking_requests_trace('provider_action_enter', [
+        'action' => $action,
+        'post_item_id' => isset($_POST['item_id']) ? (int)$_POST['item_id'] : 0,
+        'referer' => (string)($_SERVER['HTTP_REFERER'] ?? ''),
+        'request_uri' => (string)($_SERVER['REQUEST_URI'] ?? ''),
+    ]);
     $itemId = intval($_POST['item_id'] ?? 0);
     if ($itemId <= 0) {
         json_err('invalid_id');
@@ -3867,6 +3894,13 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     }
 
     if ($targetStatus === 'provider_proposed_change') {
+        my_booking_requests_trace('provider_propose_change_enter', [
+            'item_id' => $itemId,
+            'current_status' => $currentStatus,
+            'session_user_id' => current_admin_user_id(),
+            'session_provider_id' => isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0,
+            'linked_staff_id' => function_exists('current_provider_medical_staff_id') ? (int)current_provider_medical_staff_id($conexion) : 0,
+        ]);
         $providerNotes = trim((string)($_POST['provider_notes'] ?? ''));
         $integrationMode = my_booking_normalize_meeting_integration_mode($_POST['integration_mode'] ?? 'calendar_plus_meet');
         $appointmentModePost = function_exists('calendar_normalize_appointment_mode')
@@ -4051,9 +4085,18 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         ], current_admin_user_id());
 
         if (empty($meetingResult['ok'])) {
+            my_booking_requests_trace('provider_propose_change_meeting_failed', [
+                'item_id' => $itemId,
+                'meeting_result' => $meetingResult,
+            ]);
             mysqli_rollback($conexion);
             json_err((string)($meetingResult['error'] ?? 'meeting_schedule_create_failed'), 409);
         }
+
+        my_booking_requests_trace('provider_propose_change_meeting_ok', [
+            'item_id' => $itemId,
+            'meeting_result' => $meetingResult,
+        ]);
 
         if (inbox_table_exists($conexion, 'inbox_messages')) {
             $threadId = inbox_thread_id('ITEM', $bookingRequestId, $itemId);
@@ -4076,34 +4119,46 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
                 mysqli_stmt_execute($stmtMsg);
                 $newMessageId = (int)mysqli_insert_id($conexion);
                 mysqli_stmt_close($stmtMsg);
+                my_booking_requests_trace('provider_propose_change_item_insert', [
+                    'item_id' => $itemId,
+                    'thread_id' => $threadId,
+                    'message_id' => $newMessageId,
+                    'sender_role' => $senderRole,
+                    'sender_user_id' => $senderUserId,
+                    'insert_id_ok' => $newMessageId > 0,
+                ]);
                 $postCommitRealtimeEvents[] = ['thread_id' => $threadId, 'message_id' => $newMessageId];
-                // Duplicate into CARE so the patient's default view renders the card immediately.
-                // The CARE copy is non-actionable (renderMeetingProposalCard uses thread_type=ITEM
-                // to show Accept/Reject buttons), so there is no risk of broken accept/reject from CARE.
-                $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
-                if ($careThreadId !== $threadId) {
-                    $stmtCareMsg = mysqli_prepare(
-                        $conexion,
-                        "INSERT INTO inbox_messages
-                            (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body)
-                         VALUES (?, 'CARE', ?, ?, ?, ?, ?)"
-                    );
-                    if ($stmtCareMsg) {
-                        mysqli_stmt_bind_param($stmtCareMsg, 'siisis', $careThreadId, $bookingRequestId, $itemId, $senderRole, $senderUserId, $proposalMessage);
-                        mysqli_stmt_execute($stmtCareMsg);
-                        $careMessageId = (int)mysqli_insert_id($conexion);
-                        mysqli_stmt_close($stmtCareMsg);
-                        $postCommitRealtimeEvents[] = ['thread_id' => $careThreadId, 'message_id' => $careMessageId];
-                    }
-                }
             }
         }
 
         mysqli_commit($conexion);
-        if (function_exists('mt_realtime_emit_inbox_message')) {
+        my_booking_requests_trace('provider_propose_change_commit', [
+            'item_id' => $itemId,
+            'event_count' => count($postCommitRealtimeEvents),
+            'function_exists_emit' => function_exists('mt_realtime_emit_inbox_message'),
+            'events' => $postCommitRealtimeEvents,
+        ]);
+        if (!empty($postCommitRealtimeEvents)) {
             foreach ($postCommitRealtimeEvents as $eventPayload) {
-                mt_realtime_emit_inbox_message($eventPayload);
+                my_booking_emit_realtime_inbox_message($eventPayload, 'provider_propose_change_item');
+                // El paciente normalmente está en el hilo CARE. Emitir también al CARE
+                // (sin insertar nada) para que su fetchNewMessages dispare has_structured_item_actions
+                // y el widget de propuesta se muestre en vivo. Patrón idéntico a inbox.php L1217-1224.
+                if ($bookingRequestId > 0) {
+                    $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
+                    if ($careThreadId !== (string)($eventPayload['thread_id'] ?? '')) {
+                        my_booking_emit_realtime_inbox_message(
+                            ['thread_id' => $careThreadId, 'message_id' => (int)($eventPayload['message_id'] ?? 0)],
+                            'provider_propose_change_care_alert'
+                        );
+                    }
+                }
             }
+        } else {
+            my_booking_requests_trace('provider_propose_change_emit_skipped', [
+                'item_id' => $itemId,
+                'reason' => 'no_events_to_emit',
+            ]);
         }
     }
 
