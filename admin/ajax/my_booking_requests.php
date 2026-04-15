@@ -4127,7 +4127,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
                     'sender_user_id' => $senderUserId,
                     'insert_id_ok' => $newMessageId > 0,
                 ]);
-                $postCommitRealtimeEvents[] = ['thread_id' => $threadId, 'message_id' => $newMessageId];
+                $postCommitRealtimeEvents[] = ['thread_id' => $threadId, 'message_id' => $newMessageId, 'sender_role' => $senderRole, 'created_at' => date('c')];
             } else {
                 my_booking_requests_trace('provider_propose_change_item_prepare_failed', [
                     'db_error' => mysqli_error($conexion),
@@ -4157,7 +4157,7 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
                     $careThreadId = inbox_thread_id('CARE', $bookingRequestId, 0);
                     if ($careThreadId !== (string)($eventPayload['thread_id'] ?? '')) {
                         my_booking_emit_realtime_inbox_message(
-                            ['thread_id' => $careThreadId, 'message_id' => (int)($eventPayload['message_id'] ?? 0)],
+                            ['thread_id' => $careThreadId, 'message_id' => (int)($eventPayload['message_id'] ?? 0), 'sender_role' => (string)($eventPayload['sender_role'] ?? ''), 'created_at' => (string)($eventPayload['created_at'] ?? date('c'))],
                             'provider_propose_change_care_alert'
                         );
                     }

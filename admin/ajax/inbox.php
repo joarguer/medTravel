@@ -1213,7 +1213,13 @@ if ($action === 'send_message') {
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
     if (function_exists('mt_realtime_emit_inbox_message')) {
-        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId]);
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId, 'sender_role' => $senderRole, 'created_at' => date('c')]);
+        if ($threadType === 'ITEM' && $requestId > 0) {
+            $careThreadId = inbox_thread_id('CARE', $requestId, 0);
+            if ($careThreadId !== $threadId) {
+                mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $messageId, 'sender_role' => $senderRole, 'created_at' => date('c')]);
+            }
+        }
     }
     $createdAt = date('Y-m-d H:i:s');
 
@@ -1698,7 +1704,13 @@ if ($action === 'send_quick_reply') {
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
     if (function_exists('mt_realtime_emit_inbox_message')) {
-        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId]);
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId, 'sender_role' => $senderRole, 'created_at' => date('c')]);
+        if ($threadType === 'ITEM' && $requestId > 0) {
+            $careThreadId = inbox_thread_id('CARE', $requestId, 0);
+            if ($careThreadId !== $threadId) {
+                mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $messageId, 'sender_role' => $senderRole, 'created_at' => date('c')]);
+            }
+        }
     }
     $createdAt = date('Y-m-d H:i:s');
 
@@ -1998,7 +2010,13 @@ if ($action === 'send_structured_action') {
     $messageId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
     if (function_exists('mt_realtime_emit_inbox_message')) {
-        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId]);
+        mt_realtime_emit_inbox_message(['thread_id' => $threadId, 'message_id' => $messageId, 'sender_role' => $senderRole, 'created_at' => date('c')]);
+        if ($threadType === 'ITEM' && $requestId > 0) {
+            $careThreadId = inbox_thread_id('CARE', $requestId, 0);
+            if ($careThreadId !== $threadId) {
+                mt_realtime_emit_inbox_message(['thread_id' => $careThreadId, 'message_id' => $messageId, 'sender_role' => $senderRole, 'created_at' => date('c')]);
+            }
+        }
     }
     $createdAt = date('Y-m-d H:i:s');
 
