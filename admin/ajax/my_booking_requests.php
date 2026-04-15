@@ -495,11 +495,16 @@ function resolve_patientcare_admin_email($conexion)
 function provider_status_label($status)
 {
     $map = [
-        'provider_confirmed' => 'Caso aceptado',
-        'provider_rejected' => 'Caso rechazado',
-        'provider_proposed_change' => 'Cita propuesta',
-        'treatment_completed' => 'Tratamiento completado',
-        'post_treatment_follow_up' => 'Seguimiento post tratamiento',
+        'provider_confirmed'          => 'Caso aceptado',
+        'provider_rejected'           => 'Caso rechazado',
+        'provider_proposed_change'    => 'Cita propuesta',
+        'virtual_assessment_pending'  => 'Valoración virtual pendiente',
+        'virtual_assessment_done'     => 'Valoración realizada',
+        'treatment_plan_agreed'       => 'Plan clínico acordado',
+        'procedure_scheduled'         => 'Procedimiento presencial agendado',
+        'treatment_completed'         => 'Tratamiento completado',
+        'post_treatment_follow_up'    => 'Seguimiento post tratamiento',
+        'case_closed'                 => 'Caso cerrado',
     ];
     $key = trim((string)$status);
     return isset($map[$key]) ? $map[$key] : $key;
@@ -532,12 +537,18 @@ function generic_status_label_es($status)
         'appointment_confirmed' => 'Cita confirmada',
         'appointment_requested_change' => 'Cambio de cita solicitado',
         'appointment_cancelled' => 'Cita cancelada',
-        'treatment_completed' => 'Tratamiento completado',
-        'post_treatment_follow_up' => 'Seguimiento post tratamiento',
-        'completed' => 'Atención realizada',
-        'cancelled' => 'Caso cerrado',
-        'confirmed' => 'Confirmado',
-        'new' => 'Nuevo caso',
+        'treatment_completed'         => 'Tratamiento completado',
+        'post_treatment_follow_up'    => 'Seguimiento post tratamiento',
+        'completed'                   => 'Atención realizada',
+        'cancelled'                   => 'Caso cerrado',
+        // Nuevos estados 2026-04-15
+        'virtual_assessment_pending'  => 'Valoración virtual pendiente',
+        'virtual_assessment_done'     => 'Valoración virtual realizada',
+        'treatment_plan_agreed'       => 'Plan clínico acordado',
+        'procedure_scheduled'         => 'Procedimiento presencial agendado',
+        'case_closed'                 => 'Caso cerrado (exitoso)',
+        'confirmed'                   => 'Confirmado',
+        'new'                         => 'Nuevo caso',
     ];
     return isset($map[$status]) ? $map[$status] : ($status !== '' ? $status : 'Sin definir');
 }
@@ -2049,8 +2060,14 @@ $canonicalItemStatuses = [
     'provider_proposed_change',
     'awaiting_client',
     'client_accepted',
+    // Nuevos estados ciclo de vida médico 2026-04-15
+    'virtual_assessment_pending',
+    'virtual_assessment_done',
+    'treatment_plan_agreed',
+    'procedure_scheduled',
     'treatment_completed',
     'post_treatment_follow_up',
+    'case_closed',
     'client_rejected',
     'cancelled',
 ];
@@ -2058,8 +2075,18 @@ $providerAllowedTargets = [
     'provider_confirmed',
     'provider_rejected',
     'provider_proposed_change',
+    // Nuevos targets 2026-04-15
+    'virtual_assessment_pending',
+    'virtual_assessment_done',
+    'treatment_plan_agreed',
+    'procedure_scheduled',
     'treatment_completed',
     'post_treatment_follow_up',
+    'case_closed',
+    // Reversas controladas (requieren motivo)
+    'pending_provider',
+    'provider_confirmed',
+    'virtual_assessment_pending',
 ];
 
 $hasItemsSoftDelete = table_has_column($conexion, 'booking_request_items', 'is_deleted');
@@ -2088,6 +2115,21 @@ $hasTreatmentCompletedAt = table_has_column($conexion, 'booking_request_items', 
 $hasTreatmentCompletedByUserId = table_has_column($conexion, 'booking_request_items', 'treatment_completed_by_user_id');
 $hasFollowUpStartedAt = table_has_column($conexion, 'booking_request_items', 'follow_up_started_at');
 $hasFollowUpStartedByUserId = table_has_column($conexion, 'booking_request_items', 'follow_up_started_by_user_id');
+// Nuevos guards ciclo de vida médico 2026-04-15
+$hasAssessmentDoneAt = table_has_column($conexion, 'booking_request_items', 'assessment_done_at');
+$hasAssessmentDoneByUserId = table_has_column($conexion, 'booking_request_items', 'assessment_done_by_user_id');
+$hasAssessmentNotes = table_has_column($conexion, 'booking_request_items', 'assessment_notes');
+$hasPlanAgreedAt = table_has_column($conexion, 'booking_request_items', 'plan_agreed_at');
+$hasPlanAgreedByUserId = table_has_column($conexion, 'booking_request_items', 'plan_agreed_by_user_id');
+$hasPlanDescription = table_has_column($conexion, 'booking_request_items', 'plan_description');
+$hasProcedureScheduledAt = table_has_column($conexion, 'booking_request_items', 'procedure_scheduled_at');
+$hasProcedureScheduledByUserId = table_has_column($conexion, 'booking_request_items', 'procedure_scheduled_by_user_id');
+$hasCaseClosedAt = table_has_column($conexion, 'booking_request_items', 'case_closed_at');
+$hasCaseClosedByUserId = table_has_column($conexion, 'booking_request_items', 'case_closed_by_user_id');
+$hasCaseCloseReason = table_has_column($conexion, 'booking_request_items', 'case_close_reason');
+$hasReversalReason = table_has_column($conexion, 'booking_request_items', 'reversal_reason');
+$hasReversalByUserId = table_has_column($conexion, 'booking_request_items', 'reversal_by_user_id');
+$hasReversalAt = table_has_column($conexion, 'booking_request_items', 'reversal_at');
 
 $hasTimelineFrom = table_has_column($conexion, 'booking_requests', 'timeline_from');
 $hasTimelineTo = table_has_column($conexion, 'booking_requests', 'timeline_to');
@@ -2110,6 +2152,9 @@ $hasBookingDatetime = table_has_column($conexion, 'booking_requests', 'booking_d
 $hasBookingSelectedOffers = table_has_column($conexion, 'booking_requests', 'selected_offers');
 $hasBookingCreatedAt = table_has_column($conexion, 'booking_requests', 'created_at');
 $hasBookingUpdatedAt = table_has_column($conexion, 'booking_requests', 'updated_at');
+$hasTimelineUpdatedAt = table_has_column($conexion, 'booking_requests', 'timeline_updated_at');
+$hasTimelineUpdatedByUserId = table_has_column($conexion, 'booking_requests', 'timeline_updated_by_user_id');
+$hasTimelineUpdateReason = table_has_column($conexion, 'booking_requests', 'timeline_update_reason');
 
 // TODO: when richer coordination columns land in DB, these optional aliases will start populating automatically.
 $itemProviderStatusCol = first_existing_column($conexion, 'booking_request_items', ['provider_status']);
@@ -3807,21 +3852,64 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     if (!in_array($currentStatus, $canonicalItemStatuses, true)) {
         json_err('invalid_current_status', 409);
     }
+    // Reversas controladas: requieren motivo
+    $reversalTargets = ['pending_provider', 'provider_confirmed', 'virtual_assessment_pending'];
+    $isReversal = in_array($targetStatus, $reversalTargets, true);
+
     $allowedCurrentStatuses = [];
-    if ($targetStatus === 'provider_confirmed' || $targetStatus === 'provider_rejected') {
+    // ── Avances ──────────────────────────────────────────────────────────────
+    if ($targetStatus === 'provider_confirmed') {
+        $allowedCurrentStatuses = ['pending_provider', 'virtual_assessment_pending']; // reversa desde assessment
+    } elseif ($targetStatus === 'provider_rejected') {
         $allowedCurrentStatuses = ['pending_provider'];
     } elseif ($targetStatus === 'provider_proposed_change') {
         $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change', 'awaiting_client'];
+    } elseif ($targetStatus === 'virtual_assessment_pending') {
+        // Avance: desde provider_confirmed/client_accepted/awaiting_client
+        // Reversa: desde virtual_assessment_done (volver a pendiente de valoración)
+        $allowedCurrentStatuses = [
+            'provider_confirmed', 'client_accepted', 'awaiting_client',
+            'virtual_assessment_done', // reversa
+        ];
+    } elseif ($targetStatus === 'virtual_assessment_done') {
+        $allowedCurrentStatuses = ['virtual_assessment_pending'];
+    } elseif ($targetStatus === 'treatment_plan_agreed') {
+        $allowedCurrentStatuses = ['virtual_assessment_done', 'provider_confirmed', 'client_accepted'];
+    } elseif ($targetStatus === 'procedure_scheduled') {
+        $allowedCurrentStatuses = ['treatment_plan_agreed', 'provider_confirmed', 'client_accepted'];
     } elseif ($targetStatus === 'treatment_completed') {
-        $allowedCurrentStatuses = ['provider_confirmed', 'client_accepted', 'treatment_completed'];
+        $allowedCurrentStatuses = ['procedure_scheduled', 'provider_confirmed', 'client_accepted', 'treatment_completed'];
     } elseif ($targetStatus === 'post_treatment_follow_up') {
         $allowedCurrentStatuses = ['treatment_completed', 'post_treatment_follow_up'];
+    } elseif ($targetStatus === 'case_closed') {
+        $allowedCurrentStatuses = ['treatment_completed', 'post_treatment_follow_up'];
     }
+    // ── Reversas desde estados avanzados ──────────────────────────────────────
+    if ($isReversal && $targetStatus === 'pending_provider') {
+        // Solo admin puede reabrir hasta triage
+        if (!$isAdminSession) {
+            json_err('reversal_requires_admin', 403);
+        }
+        $allowedCurrentStatuses = [
+            'provider_confirmed', 'provider_rejected', 'awaiting_client',
+            'virtual_assessment_pending', 'virtual_assessment_done',
+            'treatment_plan_agreed', 'procedure_scheduled',
+        ];
+    }
+
     if (empty($allowedCurrentStatuses)) {
         json_err('transition_not_allowed', 403);
     }
     if (!in_array($currentStatus, $allowedCurrentStatuses, true)) {
         json_err('transition_not_allowed_from_' . $currentStatus, 409);
+    }
+
+    // Reversas deben incluir motivo
+    if ($isReversal) {
+        $reversalReasonRaw = trim((string)($_POST['reversal_reason'] ?? ''));
+        if ($reversalReasonRaw === '') {
+            json_err('reversal_reason_required', 422);
+        }
     }
 
     $providerResponseBy = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : (isset($_SESSION['id']) ? intval($_SESSION['id']) : 0);
@@ -3869,6 +3957,96 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
             $params[] = $providerResponseBy;
         }
     }
+
+    // ── Nuevos estados ciclo de vida médico 2026-04-15 ────────────────────────
+    if ($targetStatus === 'virtual_assessment_done') {
+        $assessmentNotes = substr(trim((string)($_POST['assessment_notes'] ?? '')), 0, 2000);
+        if ($hasAssessmentDoneAt) { $setParts[] = 'bri.assessment_done_at = NOW()'; }
+        if ($hasAssessmentDoneByUserId && $providerResponseBy !== null) {
+            $setParts[] = 'bri.assessment_done_by_user_id = ?';
+            $types .= 'i'; $params[] = $providerResponseBy;
+        }
+        if ($hasAssessmentNotes && $assessmentNotes !== '') {
+            $setParts[] = 'bri.assessment_notes = ?';
+            $types .= 's'; $params[] = $assessmentNotes;
+        }
+    }
+
+    if ($targetStatus === 'treatment_plan_agreed') {
+        $planDescription = substr(trim((string)($_POST['plan_description'] ?? '')), 0, 5000);
+        if ($planDescription === '') { json_err('plan_description_required', 422); }
+        if ($hasPlanAgreedAt) { $setParts[] = 'bri.plan_agreed_at = NOW()'; }
+        if ($hasPlanAgreedByUserId && $providerResponseBy !== null) {
+            $setParts[] = 'bri.plan_agreed_by_user_id = ?';
+            $types .= 'i'; $params[] = $providerResponseBy;
+        }
+        if ($hasPlanDescription) {
+            $setParts[] = 'bri.plan_description = ?';
+            $types .= 's'; $params[] = $planDescription;
+        }
+    }
+
+    if ($targetStatus === 'procedure_scheduled') {
+        // Validar que la fecha de procedimiento quede dentro de la ventana vigente del booking
+        $procedureDate = trim((string)($_POST['procedure_date'] ?? ''));
+        $procedureNotes = substr(trim((string)($_POST['procedure_notes'] ?? '')), 0, 2000);
+        if ($procedureDate === '') { json_err('procedure_date_required', 422); }
+        $procedureMysql = normalize_datetime_local_to_mysql($procedureDate);
+        if ($procedureMysql === '') { json_err('procedure_date_invalid_format', 422); }
+        $procedureDateOnly = substr($procedureMysql, 0, 10);
+
+        // Cargar ventana vigente del booking
+        $timelineFrom = trim((string)($itemRow['timeline_from'] ?? ''));
+        $timelineTo = trim((string)($itemRow['timeline_to'] ?? ''));
+        if ($timelineFrom !== '' && $procedureDateOnly < $timelineFrom) {
+            json_err('procedure_date_before_timeline_from', 422);
+        }
+        if ($timelineTo !== '' && $procedureDateOnly > $timelineTo) {
+            json_err('procedure_date_after_timeline_to', 422);
+        }
+
+        if ($hasProcedureScheduledAt) {
+            $setParts[] = 'bri.procedure_scheduled_at = ?';
+            $types .= 's'; $params[] = $procedureMysql;
+        }
+        if ($hasProcedureScheduledByUserId && $providerResponseBy !== null) {
+            $setParts[] = 'bri.procedure_scheduled_by_user_id = ?';
+            $types .= 'i'; $params[] = $providerResponseBy;
+        }
+        if ($hasProviderNotes && $procedureNotes !== '') {
+            $setParts[] = 'bri.provider_notes = ?';
+            $types .= 's'; $params[] = $procedureNotes;
+        }
+    }
+
+    if ($targetStatus === 'case_closed') {
+        $caseCloseReason = substr(trim((string)($_POST['case_close_reason'] ?? '')), 0, 2000);
+        if ($caseCloseReason === '') { json_err('case_close_reason_required', 422); }
+        if ($hasCaseClosedAt) { $setParts[] = 'bri.case_closed_at = NOW()'; }
+        if ($hasCaseClosedByUserId && $providerResponseBy !== null) {
+            $setParts[] = 'bri.case_closed_by_user_id = ?';
+            $types .= 'i'; $params[] = $providerResponseBy;
+        }
+        if ($hasCaseCloseReason) {
+            $setParts[] = 'bri.case_close_reason = ?';
+            $types .= 's'; $params[] = $caseCloseReason;
+        }
+    }
+
+    // ── Reversas: guardar motivo ───────────────────────────────────────────────
+    if ($isReversal) {
+        $reversalReasonSafe = substr($reversalReasonRaw, 0, 2000);
+        if ($hasReversalReason) {
+            $setParts[] = 'bri.reversal_reason = ?';
+            $types .= 's'; $params[] = $reversalReasonSafe;
+        }
+        if ($hasReversalByUserId && $providerResponseBy !== null) {
+            $setParts[] = 'bri.reversal_by_user_id = ?';
+            $types .= 'i'; $params[] = $providerResponseBy;
+        }
+        if ($hasReversalAt) { $setParts[] = 'bri.reversal_at = NOW()'; }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     if ($targetStatus === 'provider_rejected') {
         $reason = trim((string)($_POST['reason'] ?? ''));
@@ -4341,6 +4519,84 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         'message' => 'Respuesta guardada',
         'status' => $targetStatus,
         'meeting' => $meetingResult,
+    ]);
+}
+
+// ── Actualización formal de ventana de fechas del booking (post-valoración) ──
+if ($action === 'update_timeline_window') {
+    my_booking_requests_set_debug_branch('update_timeline_window');
+    if (!$isAdminSession && !$isMedicalProviderSession) {
+        json_err('forbidden', 403);
+    }
+    $itemId = intval($_POST['item_id'] ?? 0);
+    if ($itemId <= 0) { json_err('invalid_id'); }
+
+    $itemRow = fetch_scoped_item($conexion, $itemId, $scopeWhere, $scopeTypes, $scopeParams, $hasItemsSoftDelete, $hasRequestsSoftDelete);
+    if (!$itemRow) { json_err('not_found', 404); }
+
+    $bookingRequestId = (int)($itemRow['booking_request_id'] ?? 0);
+    if ($bookingRequestId <= 0) { json_err('invalid_booking_request', 409); }
+
+    $newFrom = trim((string)($_POST['timeline_from'] ?? ''));
+    $newTo   = trim((string)($_POST['timeline_to'] ?? ''));
+    $reason  = substr(trim((string)($_POST['reason'] ?? '')), 0, 2000);
+
+    if (!is_valid_date_ymd($newFrom) || !is_valid_date_ymd($newTo)) {
+        json_err('invalid_dates', 422);
+    }
+    if ($newFrom === '' || $newTo === '') { json_err('dates_required', 422); }
+    if ($newFrom > $newTo) { json_err('invalid_date_range', 422); }
+    if ($reason === '') { json_err('reason_required', 422); }
+
+    $setParts = [];
+    $types = '';
+    $params = [];
+
+    if ($hasTimelineFrom) {
+        $setParts[] = 'timeline_from = ?'; $types .= 's'; $params[] = $newFrom;
+    }
+    if ($hasTimelineTo) {
+        $setParts[] = 'timeline_to = ?'; $types .= 's'; $params[] = $newTo;
+    }
+    if ($hasTimelineUpdatedAt) {
+        $setParts[] = 'timeline_updated_at = NOW()';
+    }
+    $actorUserId = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : (isset($_SESSION['id']) ? intval($_SESSION['id']) : 0);
+    if ($hasTimelineUpdatedByUserId && $actorUserId > 0) {
+        $setParts[] = 'timeline_updated_by_user_id = ?'; $types .= 'i'; $params[] = $actorUserId;
+    }
+    if ($hasTimelineUpdateReason) {
+        $setParts[] = 'timeline_update_reason = ?'; $types .= 's'; $params[] = $reason;
+    }
+    if ($hasBookingUpdatedAt) {
+        $setParts[] = 'updated_at = NOW()';
+    }
+
+    if (empty($setParts)) { json_err('timeline_columns_missing', 409); }
+
+    $sql = 'UPDATE booking_requests SET ' . implode(', ', $setParts) . ' WHERE id = ?';
+    $types .= 'i'; $params[] = $bookingRequestId;
+    if ($hasRequestsSoftDelete) { $sql .= ' AND is_deleted = 0'; }
+    $sql .= ' LIMIT 1';
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) { json_err('db_prepare_error', 500); }
+    bind_stmt_params($stmt, $types, $params);
+    if (!mysqli_stmt_execute($stmt)) {
+        $err = mysqli_stmt_error($stmt);
+        mysqli_stmt_close($stmt);
+        json_err('db_error: ' . $err, 500);
+    }
+    $affected = mysqli_stmt_affected_rows($stmt);
+    mysqli_stmt_close($stmt);
+
+    if ($affected <= 0) { json_err('not_found_or_no_change', 404); }
+
+    json_ok([
+        'ok' => true,
+        'timeline_from' => $newFrom,
+        'timeline_to'   => $newTo,
+        'message'       => 'Ventana de fechas actualizada correctamente.',
     ]);
 }
 

@@ -10,6 +10,7 @@ if (!user_can(PERM_BOOKING_VIEW) && !user_can(PERM_BOOKING_MANAGE)) {
 $provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provider_id'] : 0;
 $service_provider_id = isset($_SESSION['service_provider_id']) ? (int)$_SESSION['service_provider_id'] : 0;
 $is_linked_medical_staff_session = is_provider_linked_medical_staff_session($conexion ?? null);
+$is_admin_session = is_role_admin_session();
 
 $page_heading = $is_linked_medical_staff_session ? 'Mis solicitudes asignadas' : 'Mis Solicitudes';
 $page_breadcrumb = $page_heading;
@@ -505,6 +506,184 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     </div>
 </div>
 
+<!-- Modal: Marcar valoración virtual realizada -->
+<div class="modal fade" id="modal-assessment-done" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Marcar valoración virtual realizada</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assessment_done_item_id" value="">
+                <div class="form-group">
+                    <label for="assessment_notes">Notas de la valoración (opcional)</label>
+                    <textarea class="form-control" id="assessment_notes" rows="4" placeholder="Observaciones clínicas, hallazgos relevantes de la valoración virtual..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-assessment-done-save">Confirmar valoración realizada</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Registrar plan clínico acordado -->
+<div class="modal fade" id="modal-plan-agreed" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Registrar plan clínico acordado</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="plan_agreed_item_id" value="">
+                <div class="form-group">
+                    <label for="plan_description">Descripción del plan acordado <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="plan_description" rows="4" placeholder="Describe el plan terapéutico acordado con el paciente: procedimientos, etapas, condiciones..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-plan-agreed-save">Registrar plan acordado</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Agendar procedimiento presencial -->
+<div class="modal fade" id="modal-procedure-schedule" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Agendar procedimiento presencial</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="procedure_schedule_item_id" value="">
+                <div id="procedure_timeline_hint" class="alert alert-info" style="display:none;"></div>
+                <div class="form-group">
+                    <label for="procedure_date">Fecha del procedimiento <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="procedure_date" placeholder="YYYY-MM-DD">
+                    <p class="help-block">La fecha debe estar dentro de la ventana de viaje del paciente.</p>
+                </div>
+                <div class="form-group">
+                    <label for="procedure_notes">Notas del procedimiento (opcional)</label>
+                    <textarea class="form-control" id="procedure_notes" rows="3" placeholder="Indicaciones preoperatorias, instrucciones para el paciente, información logística..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-procedure-schedule-save">Confirmar agenda</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Cerrar caso -->
+<div class="modal fade" id="modal-case-close" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Cerrar caso clínico</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="case_close_item_id" value="">
+                <div class="alert alert-warning">Esta acción cierra el caso clínico de forma definitiva. Confirma que el tratamiento fue completado y el paciente está dado de alta.</div>
+                <div class="form-group">
+                    <label for="case_close_reason">Resumen de cierre <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="case_close_reason" rows="3" placeholder="Alta clínica satisfactoria, procedimiento completado el..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btn-case-close-save">Cerrar caso</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Reversión de estado (admin) -->
+<div class="modal fade" id="modal-reversal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Revertir estado del caso</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="reversal_item_id" value="">
+                <input type="hidden" id="reversal_target_status" value="">
+                <div class="alert alert-danger">Estás a punto de revertir el estado del caso. Esta acción quedará registrada en el historial.</div>
+                <div class="form-group">
+                    <label>Revertir a</label>
+                    <p class="form-control-static" id="reversal_target_label"></p>
+                </div>
+                <div class="form-group">
+                    <label for="reversal_reason">Motivo de la reversión <span class="text-danger">*</span></label>
+                    <textarea class="form-control" id="reversal_reason" rows="3" placeholder="Explica por qué se revierte este estado..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-reversal-save">Confirmar reversión</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Actualizar ventana de fechas del paciente -->
+<div class="modal fade" id="modal-update-timeline" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">Actualizar ventana de viaje del paciente</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="update_timeline_booking_id" value="">
+                <p class="text-muted">Actualiza las fechas de viaje del paciente según lo acordado post valoración. Esto permite agendar procedimientos en la ventana correcta.</p>
+                <div class="row">
+                    <div class="col-sm-6">
+                        <div class="form-group">
+                            <label for="update_timeline_from">Fecha de llegada <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="update_timeline_from">
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="form-group">
+                            <label for="update_timeline_to">Fecha de salida <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="update_timeline_to">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="update_timeline_reason">Motivo del cambio <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="update_timeline_reason" maxlength="255" placeholder="Ej: Paciente confirmó disponibilidad en nueva ventana acordada post valoración">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-update-timeline-save">Actualizar fechas</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="assign_staff_modal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -538,7 +717,8 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
 <?php echo $theme_layout_script;?>
 <script>
 window.MY_BOOKING_REQUESTS_CONTEXT = {
-    isLinkedMedicalStaffSession: <?php echo $is_linked_medical_staff_session ? 'true' : 'false'; ?>
+    isLinkedMedicalStaffSession: <?php echo $is_linked_medical_staff_session ? 'true' : 'false'; ?>,
+    isAdminSession: <?php echo $is_admin_session ? 'true' : 'false'; ?>
 };
 </script>
 <script src="../../assets/global/scripts/datatable.js" type="text/javascript"></script>

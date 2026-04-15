@@ -234,6 +234,188 @@
                 return false;
             }
         });
+
+        // ─── Iniciar valoración virtual ───────────────────────────────────────
+        $('#my_booking_detail_modal').on('click', '#btn-modal-start-virtual-assessment', function () {
+            if (!activeDetailItemId) return;
+            if (!confirmOperationalAction('iniciar la valoración virtual')) return;
+            if (!confirm('¿Proponer este caso para valoración virtual? El estado cambiará a "Valoración virtual pendiente".')) return;
+            sendProviderAction('update_item_status', {
+                item_id: activeDetailItemId,
+                status: 'virtual_assessment_pending'
+            }, reloadActiveDetail, 'Valoración virtual iniciada');
+        });
+
+        // ─── Marcar valoración virtual realizada ──────────────────────────────
+        $('#my_booking_detail_modal').on('click', '#btn-modal-assessment-done', function () {
+            if (!activeDetailItemId) return;
+            $('#assessment_done_item_id').val(activeDetailItemId);
+            $('#assessment_notes').val('');
+            $('#modal-assessment-done').modal('show');
+        });
+
+        $('#btn-assessment-done-save').on('click', function () {
+            var itemId = parseInt($('#assessment_done_item_id').val(), 10) || 0;
+            if (itemId <= 0) return;
+            if (!confirmOperationalAction('registrar la valoración como realizada')) return;
+            sendProviderAction('update_item_status', {
+                item_id: itemId,
+                status: 'virtual_assessment_done',
+                assessment_notes: ($('#assessment_notes').val() || '').trim()
+            }, function () {
+                $('#modal-assessment-done').modal('hide');
+                reloadActiveDetail();
+            }, 'Valoración virtual registrada');
+        });
+
+        // ─── Registrar plan clínico acordado ──────────────────────────────────
+        $('#my_booking_detail_modal').on('click', '#btn-modal-plan-agreed', function () {
+            if (!activeDetailItemId) return;
+            $('#plan_agreed_item_id').val(activeDetailItemId);
+            $('#plan_description').val('');
+            $('#modal-plan-agreed').modal('show');
+        });
+
+        $('#btn-plan-agreed-save').on('click', function () {
+            var itemId = parseInt($('#plan_agreed_item_id').val(), 10) || 0;
+            var plan = ($('#plan_description').val() || '').trim();
+            if (itemId <= 0) return;
+            if (!plan) { toastr.error('Debes describir el plan acordado'); return; }
+            if (!confirmOperationalAction('registrar el plan clínico acordado')) return;
+            sendProviderAction('update_item_status', {
+                item_id: itemId,
+                status: 'treatment_plan_agreed',
+                plan_description: plan
+            }, function () {
+                $('#modal-plan-agreed').modal('hide');
+                reloadActiveDetail();
+            }, 'Plan clínico registrado');
+        });
+
+        // ─── Agendar procedimiento presencial ─────────────────────────────────
+        $('#my_booking_detail_modal').on('click', '#btn-modal-procedure-schedule', function () {
+            if (!activeDetailItemId) return;
+            var d = activeDetailData || {};
+            var timelineFrom = (d.timeline_from || '').toString().trim();
+            var timelineTo   = (d.timeline_to   || '').toString().trim();
+            var hint = '';
+            if (timelineFrom || timelineTo) {
+                hint = 'Ventana del paciente: <strong>' + escapeHtml(timelineFrom || '?') + '</strong> — <strong>' + escapeHtml(timelineTo || '?') + '</strong>';
+                $('#procedure_timeline_hint').html(hint).show();
+            } else {
+                $('#procedure_timeline_hint').hide();
+            }
+            $('#procedure_schedule_item_id').val(activeDetailItemId);
+            $('#procedure_date').val('');
+            $('#procedure_notes').val('');
+            $('#modal-procedure-schedule').modal('show');
+        });
+
+        $('#btn-procedure-schedule-save').on('click', function () {
+            var itemId = parseInt($('#procedure_schedule_item_id').val(), 10) || 0;
+            var date   = ($('#procedure_date').val() || '').trim();
+            var notes  = ($('#procedure_notes').val() || '').trim();
+            if (itemId <= 0) return;
+            if (!date) { toastr.error('Debes seleccionar la fecha del procedimiento'); return; }
+            if (!confirmOperationalAction('agendar el procedimiento presencial')) return;
+            sendProviderAction('update_item_status', {
+                item_id: itemId,
+                status: 'procedure_scheduled',
+                procedure_date: date,
+                procedure_notes: notes
+            }, function () {
+                $('#modal-procedure-schedule').modal('hide');
+                reloadActiveDetail();
+            }, 'Procedimiento agendado');
+        });
+
+        // ─── Cerrar caso ──────────────────────────────────────────────────────
+        $('#my_booking_detail_modal').on('click', '#btn-modal-case-close', function () {
+            if (!activeDetailItemId) return;
+            $('#case_close_item_id').val(activeDetailItemId);
+            $('#case_close_reason').val('');
+            $('#modal-case-close').modal('show');
+        });
+
+        $('#btn-case-close-save').on('click', function () {
+            var itemId = parseInt($('#case_close_item_id').val(), 10) || 0;
+            var reason = ($('#case_close_reason').val() || '').trim();
+            if (itemId <= 0) return;
+            if (!reason) { toastr.error('Debes ingresar un resumen de cierre'); return; }
+            if (!confirmOperationalAction('cerrar este caso clínico')) return;
+            sendProviderAction('update_item_status', {
+                item_id: itemId,
+                status: 'case_closed',
+                case_close_reason: reason
+            }, function () {
+                $('#modal-case-close').modal('hide');
+                reloadActiveDetail();
+            }, 'Caso cerrado');
+        });
+
+        // ─── Reversión de estado (admin) ──────────────────────────────────────
+        $('#my_booking_detail_modal').on('click', '#btn-modal-reversal', function () {
+            if (!activeDetailItemId) return;
+            var targetStatus = ($(this).data('reversalTarget') || 'pending_provider').toString();
+            var labelMap = {
+                'pending_provider': 'Pendiente de proveedor (inicio del pipeline)',
+                'provider_confirmed': 'Confirmado por proveedor',
+                'virtual_assessment_pending': 'Valoración virtual pendiente'
+            };
+            $('#reversal_item_id').val(activeDetailItemId);
+            $('#reversal_target_status').val(targetStatus);
+            $('#reversal_target_label').text(labelMap[targetStatus] || targetStatus);
+            $('#reversal_reason').val('');
+            $('#modal-reversal').modal('show');
+        });
+
+        $('#btn-reversal-save').on('click', function () {
+            var itemId = parseInt($('#reversal_item_id').val(), 10) || 0;
+            var targetStatus = ($('#reversal_target_status').val() || '').trim();
+            var reason = ($('#reversal_reason').val() || '').trim();
+            if (itemId <= 0 || !targetStatus) return;
+            if (!reason) { toastr.error('Debes ingresar el motivo de la reversión'); return; }
+            if (!confirmOperationalAction('revertir el estado del caso')) return;
+            sendProviderAction('update_item_status', {
+                item_id: itemId,
+                status: targetStatus,
+                reversal_reason: reason
+            }, function () {
+                $('#modal-reversal').modal('hide');
+                reloadActiveDetail();
+            }, 'Estado revertido');
+        });
+
+        // ─── Actualizar ventana de fechas ─────────────────────────────────────
+        $('#my_booking_detail_modal').on('click', '#btn-modal-update-timeline', function () {
+            if (!activeDetailItemId) return;
+            var d = activeDetailData || {};
+            $('#update_timeline_booking_id').val(d.booking_request_id || 0);
+            $('#update_timeline_from').val(d.timeline_from || '');
+            $('#update_timeline_to').val(d.timeline_to || '');
+            $('#update_timeline_reason').val('');
+            $('#modal-update-timeline').modal('show');
+        });
+
+        $('#btn-update-timeline-save').on('click', function () {
+            var bookingId = parseInt($('#update_timeline_booking_id').val(), 10) || 0;
+            var from   = ($('#update_timeline_from').val() || '').trim();
+            var to     = ($('#update_timeline_to').val() || '').trim();
+            var reason = ($('#update_timeline_reason').val() || '').trim();
+            if (bookingId <= 0) return;
+            if (!from || !to) { toastr.error('Debes definir ambas fechas'); return; }
+            if (!reason) { toastr.error('Debes ingresar el motivo del cambio'); return; }
+            if (!confirmOperationalAction('actualizar la ventana de fechas del paciente')) return;
+            sendProviderAction('update_timeline_window', {
+                booking_id: bookingId,
+                timeline_from: from,
+                timeline_to: to,
+                reason: reason
+            }, function () {
+                $('#modal-update-timeline').modal('hide');
+                reloadActiveDetail();
+            }, 'Fechas actualizadas');
+        });
     }
 
     function loadRows() {
@@ -452,7 +634,7 @@
     }
 
     function renderDetail(d) {
-        var canShowLegacyActions = String(d.item_status || '') === 'pending_provider';
+        var canShowLegacyActions = normalizeItemStatus(d.item_status || d.provider_status || '') === 'pending_provider';
         var fee = d.coordination_fee || {};
         var actionsLocked = parseInt(d.coordination_actions_locked || 0, 10) === 1;
         var lockMessage = (d.coordination_pending_message || fee.message || '').toString();
@@ -539,7 +721,7 @@
         html += '<div class="tab-content">';
         html += '<div role="tabpanel" class="tab-pane active mt-tab-pane" id="mt-detail-tab-summary">' + renderSummaryTab(d, options) + '</div>';
         html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-patient">' + renderPatientTab(d) + '</div>';
-        html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-clinical">' + renderClinicalTab(d) + '</div>';
+        html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-clinical">' + renderClinicalTab(d, options) + '</div>';
         html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-conversation">' + renderConversationTab(d, options) + '</div>';
         html += '<div role="tabpanel" class="tab-pane mt-tab-pane" id="mt-detail-tab-history">' + renderHistoryTab(d) + '</div>';
         html += '</div>';
@@ -570,7 +752,6 @@
         html += '</div>';
         html += '<p style="margin:12px 0 0;"><strong>Mensaje del paciente:</strong><br>' + nl2brSafe(d.special_request || 'Sin mensaje adicional') + '</p>';
         html += '</div>';
-        html += renderQuickActionsPanel(d, options);
         return html;
     }
 
@@ -652,12 +833,239 @@
         return html;
     }
 
-    function renderClinicalTab(d) {
+    function renderClinicalTab(d, options) {
+        options = options || {};
+        var normalizedStatus = normalizeItemStatus(d.item_status || d.provider_status || '');
         var html = '';
+        html += renderClinicalStepper(normalizedStatus);
+        html += renderClinicalStatusBlock(d, normalizedStatus);
         html += renderProviderSection(d);
         html += renderMedicalStaffSection(d);
-        html += renderAppointmentSection(d);
+        html += renderClinicalActionsPanel(d, options, normalizedStatus);
+        html += renderMiniAppointmentBlock(d);
         html += renderCoordinationFeeSection(d);
+        return html;
+    }
+
+    function getClinicalPhase(status) {
+        if (['case_closed', 'cancelled', 'provider_rejected', 'client_rejected'].indexOf(status) !== -1) { return 6; }
+        if (['post_treatment_follow_up'].indexOf(status) !== -1) { return 5; }
+        if (['treatment_completed', 'procedure_scheduled'].indexOf(status) !== -1) { return 4; }
+        if (['treatment_plan_agreed', 'virtual_assessment_done'].indexOf(status) !== -1) { return 3; }
+        if (['provider_confirmed', 'awaiting_client', 'provider_proposed_change', 'client_accepted', 'virtual_assessment_pending'].indexOf(status) !== -1) { return 2; }
+        return 1;
+    }
+
+    function renderClinicalStepper(normalizedStatus) {
+        var phase = getClinicalPhase(normalizedStatus);
+        var isTerminal = ['cancelled', 'provider_rejected', 'client_rejected'].indexOf(normalizedStatus) !== -1;
+        var isClosed = normalizedStatus === 'case_closed';
+        var phases = [
+            { label: 'Triage', phase: 1 },
+            { label: 'Valoraci\u00f3n', phase: 2 },
+            { label: 'Plan', phase: 3 },
+            { label: 'Procedimiento', phase: 4 },
+            { label: 'Seguimiento', phase: 5 },
+            { label: isTerminal ? 'Cancelado' : (isClosed ? 'Cerrado' : 'Cierre'), phase: 6 }
+        ];
+        var html = '<div class="mt-panel" style="padding-bottom:12px;">';
+        html += '<div class="mt-section-head"><h5>Fase del caso</h5></div>';
+        html += '<div style="display:table;width:100%;table-layout:fixed;">';
+        phases.forEach(function (p) {
+            var isDone = p.phase < phase;
+            var isActive = p.phase === phase;
+            var color, bg, border;
+            if ((isTerminal || isClosed) && isActive) {
+                color = isTerminal ? '#a94442' : '#3c763d';
+                bg    = isTerminal ? '#f2dede' : '#dff0d8';
+                border = isTerminal ? '#d9534f' : '#5cb85c';
+            } else if (isDone) {
+                color = '#3c763d'; bg = '#dff0d8'; border = '#5cb85c';
+            } else if (isActive) {
+                color = '#31708f'; bg = '#d9edf7'; border = '#31b0d5';
+            } else {
+                color = '#999'; bg = '#f5f5f5'; border = '#ccc';
+            }
+            html += '<div style="display:table-cell;text-align:center;padding:0 4px;">';
+            html += '<div style="display:inline-block;width:28px;height:28px;line-height:26px;border-radius:50%;background:' + bg + ';border:2px solid ' + border + ';font-size:12px;font-weight:bold;color:' + color + ';">';
+            html += isDone ? '&#10003;' : p.phase;
+            html += '</div>';
+            html += '<div style="font-size:11px;margin-top:4px;color:' + color + ';font-weight:' + (isActive ? '600' : '400') + ';">' + escapeHtml(p.label) + '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderClinicalStatusBlock(d, normalizedStatus) {
+        var statusLabel = d.provider_status_label_es || d.item_status_label_es || genericStatusLabelEs(normalizedStatus || 'pending_provider');
+        var updatedAt = d.provider_response_at || d.updated_at || '';
+        var html = '<div class="mt-panel" style="padding:10px 16px;">';
+        html += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
+        html += '<strong style="white-space:nowrap;">Estado clínico:</strong>';
+        html += renderStatusBadge(normalizedStatus || 'pending_provider', { label: statusLabel });
+        if (updatedAt) {
+            html += '<span class="text-muted" style="font-size:12px;">Actualizado: ' + escapeHtml(formatDateTime(updatedAt)) + '</span>';
+        }
+        html += '</div>';
+        html += '</div>';
+        return html;
+    }
+
+    function renderClinicalActionsPanel(d, options, normalizedStatus) {
+        options = options || {};
+        normalizedStatus = normalizedStatus || normalizeItemStatus(d.item_status || d.provider_status || '');
+        var isAdmin = !!(pageContext.isAdminSession);
+        var isSupervisor = parseInt(d.supervisor_override_required, 10) === 1;
+        var isTerminalStatus = ['cancelled', 'provider_rejected', 'client_rejected', 'case_closed'].indexOf(normalizedStatus) !== -1;
+
+        // ─── Acciones triage (pending_provider) ───────────────────────────────
+        var canReproposeAppointment = ['awaiting_client', 'provider_proposed_change'].indexOf(normalizedStatus) !== -1;
+
+        // ─── Acciones valoración virtual ──────────────────────────────────────
+        var canStartVirtualAssessment = ['provider_confirmed', 'client_accepted', 'awaiting_client'].indexOf(normalizedStatus) !== -1;
+        var canMarkAssessmentDone = normalizedStatus === 'virtual_assessment_pending';
+
+        // ─── Acciones plan clínico ────────────────────────────────────────────
+        var canRegisterPlan = normalizedStatus === 'virtual_assessment_done';
+
+        // ─── Acciones procedimiento ───────────────────────────────────────────
+        var canScheduleProcedure = ['treatment_plan_agreed', 'provider_confirmed', 'client_accepted'].indexOf(normalizedStatus) !== -1;
+
+        // ─── Acciones tratamiento ─────────────────────────────────────────────
+        var canMarkTreatmentCompleted = ['procedure_scheduled', 'provider_confirmed', 'client_accepted', 'treatment_completed'].indexOf(normalizedStatus) !== -1;
+        var alreadyCompleted = normalizedStatus === 'treatment_completed';
+
+        // ─── Seguimiento ──────────────────────────────────────────────────────
+        var canStartPostFollowUp = ['treatment_completed', 'post_treatment_follow_up'].indexOf(normalizedStatus) !== -1;
+        var alreadyInPostFollowUp = normalizedStatus === 'post_treatment_follow_up';
+
+        // ─── Cierre ───────────────────────────────────────────────────────────
+        var canCloseCase = ['treatment_completed', 'post_treatment_follow_up'].indexOf(normalizedStatus) !== -1;
+
+        // ─── Reversión (solo admin) ───────────────────────────────────────────
+        var canReverseCase = isAdmin && !isTerminalStatus && normalizedStatus !== 'pending_provider';
+
+        // ─── Actualizar ventana de fechas ─────────────────────────────────────
+        var canUpdateTimeline = !isTerminalStatus && (isAdmin || !pageContext.isLinkedMedicalStaffSession);
+
+        // ─── Staff ────────────────────────────────────────────────────────────
+        var canAssignStaff = parseInt(d.can_assign_staff, 10) === 1;
+
+        var hasActions = options.canShowLegacyActions || canReproposeAppointment || canAssignStaff
+            || canMarkTreatmentCompleted || canStartPostFollowUp
+            || canStartVirtualAssessment || canMarkAssessmentDone || canRegisterPlan
+            || canScheduleProcedure || canCloseCase || canReverseCase || canUpdateTimeline;
+
+        var html = '<div class="mt-panel">';
+        html += '<h5 class="mt-panel-title">Acciones del caso</h5>';
+        html += '<p class="mt-actions-note" style="margin-top:0;">Gestiona aqu\u00ed la decisi\u00f3n formal del caso. La conversaci\u00f3n y la agenda est\u00e1n en sus m\u00f3dulos dedicados.</p>';
+
+        if (isSupervisor) {
+            html += '<div class="alert alert-warning" style="margin-top:8px;"><strong>Modo supervisi\u00f3n.</strong> ' + escapeHtml(d.supervisor_override_message || 'Este item ya tiene responsable operativo asignado.') + '</div>';
+        } else if (parseInt(d.linked_staff_auto_claim_available, 10) === 1) {
+            html += '<div class="alert alert-info" style="margin-top:8px;"><strong>Asignaci\u00f3n pendiente.</strong> ' + escapeHtml(d.linked_staff_auto_claim_message || 'Si contin\u00faas, asumir\u00e1s este item como responsable operativo.') + '</div>';
+        } else if (d.operational_owner_note_es) {
+            html += '<div class="alert alert-info" style="margin-top:8px;"><strong>Responsabilidad operativa.</strong> ' + escapeHtml(d.operational_owner_note_es) + '</div>';
+        }
+
+        if (hasActions) {
+            html += '<div class="mt-quick-actions">';
+
+            // Triage
+            if (options.canShowLegacyActions) {
+                html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-provider-confirm">' + escapeHtml(isSupervisor ? 'Aceptar como supervisi\u00f3n' : 'Aceptar caso') + '</button>';
+                html += '<button type="button" class="btn btn-danger btn-sm" id="btn-modal-provider-reject">' + escapeHtml(isSupervisor ? 'Rechazar como supervisi\u00f3n' : 'Rechazar caso') + '</button>';
+                html += '<button type="button" class="btn btn-warning btn-sm" id="btn-modal-provider-propose">' + escapeHtml(isSupervisor ? 'Proponer cita como supervisi\u00f3n' : 'Proponer cita') + '</button>';
+            }
+            if (canReproposeAppointment) {
+                html += '<button type="button" class="btn btn-warning btn-sm" id="btn-modal-provider-propose"><i class="fa fa-calendar"></i> Cambiar propuesta de cita</button>';
+            }
+
+            // Valoración virtual
+            if (canStartVirtualAssessment) {
+                html += '<button type="button" class="btn btn-primary btn-sm" id="btn-modal-start-virtual-assessment"><i class="fa fa-video-camera"></i> Iniciar valoraci\u00f3n virtual</button>';
+            }
+            if (canMarkAssessmentDone) {
+                html += '<button type="button" class="btn btn-primary btn-sm" id="btn-modal-assessment-done"><i class="fa fa-check-circle"></i> Marcar valoraci\u00f3n realizada</button>';
+            }
+
+            // Plan clínico
+            if (canRegisterPlan) {
+                html += '<button type="button" class="btn btn-primary btn-sm" id="btn-modal-plan-agreed"><i class="fa fa-file-text"></i> Registrar plan acordado</button>';
+            }
+
+            // Procedimiento presencial
+            if (canScheduleProcedure) {
+                html += '<button type="button" class="btn btn-primary btn-sm" id="btn-modal-procedure-schedule"><i class="fa fa-hospital-o"></i> Agendar procedimiento presencial</button>';
+            }
+
+            // Tratamiento completado
+            if (canMarkTreatmentCompleted) {
+                html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-mark-treatment-completed"' + (alreadyCompleted ? ' disabled="disabled"' : '') + '><i class="fa fa-check"></i> ' + escapeHtml(alreadyCompleted ? 'Tratamiento completado' : 'Marcar tratamiento completado') + '</button>';
+            }
+
+            // Seguimiento
+            if (canStartPostFollowUp) {
+                html += '<button type="button" class="btn btn-info btn-sm" id="btn-modal-start-post-follow-up"' + (alreadyInPostFollowUp ? ' disabled="disabled"' : '') + '><i class="fa fa-stethoscope"></i> ' + escapeHtml(alreadyInPostFollowUp ? 'Seguimiento activo' : 'Iniciar seguimiento') + '</button>';
+            }
+
+            // Cierre
+            if (canCloseCase) {
+                html += '<button type="button" class="btn btn-success btn-sm" id="btn-modal-case-close"><i class="fa fa-lock"></i> Cerrar caso</button>';
+            }
+
+            // Staff
+            if (canAssignStaff) {
+                html += '<button type="button" class="btn btn-info btn-sm" id="btn-modal-assign-staff"><i class="fa fa-user-md"></i> ' + escapeHtml(parseInt(d.assigned_staff_id, 10) > 0 ? 'Reasignar m\u00e9dico' : 'Asignar m\u00e9dico') + '</button>';
+            }
+
+            // Reversión (admin)
+            if (canReverseCase) {
+                html += '<button type="button" class="btn btn-danger btn-sm" id="btn-modal-reversal" data-reversal-target="pending_provider"><i class="fa fa-undo"></i> Reabrir caso</button>';
+            }
+
+            // Actualizar ventana de fechas
+            if (canUpdateTimeline) {
+                html += '<button type="button" class="btn btn-default btn-sm" id="btn-modal-update-timeline"><i class="fa fa-calendar-o"></i> Actualizar fechas del paciente</button>';
+            }
+
+            html += '</div>';
+        } else {
+            html += '<p class="text-muted" style="margin:0;">No hay acciones disponibles para este estado y rol.</p>';
+        }
+        html += '</div>';
+        return html;
+    }
+
+    function renderMiniAppointmentBlock(d) {
+        var appt = d.next_appointment || null;
+        var html = '<div class="mt-panel" style="padding-bottom:12px;">';
+        html += '<div class="mt-section-head"><h5>Cita relacionada</h5></div>';
+        if (!appt || !appt.start_at) {
+            html += '<p class="text-muted" style="margin:0;">Sin cita próxima registrada.</p>';
+        } else {
+            var meetUrl = appt.google_meet_url || '';
+            var calendarUrl = appt.google_html_link || '';
+            var mode = String(appt.appointment_mode || '').toLowerCase();
+            var modeLabel = mode === 'virtual' ? 'Virtual (Google Meet)' : (mode === 'in_person' ? 'Presencial' : (mode === 'travel' ? 'Viaje' : ''));
+            html += '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;">';
+            html += '<div>';
+            html += '<strong>' + escapeHtml(formatDateTime(appt.start_at)) + '</strong>';
+            if (appt.end_at) { html += '<span class="text-muted"> — ' + escapeHtml(formatDateTime(appt.end_at)) + '</span>'; }
+            if (modeLabel) { html += '<br><span class="label label-default" style="margin-top:4px;display:inline-block;">' + escapeHtml(modeLabel) + '</span>'; }
+            if (appt.status) { html += ' ' + renderStatusBadge(appt.status, { label: appt.status_label_es || genericStatusLabelEs(appt.status) }); }
+            html += '</div>';
+            if (meetUrl || calendarUrl) {
+                html += '<div style="display:flex;gap:6px;align-items:center;">';
+                if (meetUrl) { html += '<a class="btn btn-success btn-xs" href="' + escapeHtml(meetUrl) + '" target="_blank" rel="noopener"><i class="fa fa-video-camera"></i> Abrir Meet</a>'; }
+                if (calendarUrl) { html += '<a class="btn btn-default btn-xs" href="' + escapeHtml(calendarUrl) + '" target="_blank" rel="noopener"><i class="fa fa-calendar"></i> Evento</a>'; }
+                html += '</div>';
+            }
+            html += '</div>';
+        }
+        html += '</div>';
         return html;
     }
 
@@ -1160,9 +1568,12 @@
 
     function normalizeItemStatus(status) {
         status = String(status || '').toLowerCase().trim();
-        if (status === 'completed') {
-            return 'treatment_completed';
-        }
+        if (status === '' || status === 'pending_admin' || status === 'pending_review') { return 'pending_provider'; }
+        if (status === 'completed')                        { return 'treatment_completed'; }
+        if (status === 'appointment_confirmed')            { return 'provider_confirmed'; }
+        if (status === 'appointment_requested_change')     { return 'provider_proposed_change'; }
+        if (status === 'appointment_proposed')             { return 'awaiting_client'; }
+        if (status === 'appointment_cancelled')            { return 'cancelled'; }
         return status;
     }
 
