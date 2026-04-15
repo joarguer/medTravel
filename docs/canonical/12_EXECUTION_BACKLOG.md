@@ -12,6 +12,11 @@ Backlog canónico vigente del proyecto.
 
 ### Canon cerrado
 
+- DONE 2026-04-15: providers archive/restore reversible implementado (`admin/ajax/providers.php`, `admin/providers.php`, `admin/js/providers.js`); migración SQL idempotente (`sql/2026_04_15_providers_archive_restore_columns.sql`)
+- DONE 2026-04-15: fix realtime emit payload — se agrega `sender_role` y `created_at` en todos los callers de `mt_realtime_emit_inbox_message()`; servidor exigía esos campos para aceptar emission
+- DONE 2026-04-15: fix realtime care alert — emit socket al hilo CARE post-propuesta sin duplicar registro DB; paciente ve widget propuesta en vivo
+- DONE 2026-04-15: hardening `admin/include/conexion.php` contra `APP_ENV=dev` accidental en host remoto
+- DONE 2026-04-15: organizer fallback Google Meet resuelto en `client/ajax/inbox.php` (prioridad: sender-propuesta → staff-asignado → admin-conectado)
 - DONE 2026-04-15: se confirma drift estructural de la BD local legacy `medtravel` frente al dominio moderno provider/staff/services
 - DONE 2026-04-15: se reconstruye una nueva BD local `medtravel_rebuild_20260415` desde dump real del servidor como baseline valido para desarrollo del dominio moderno
 - DONE 2026-04-15: el import local se resuelve con copia temporal compatible para MySQL 5.7 eliminando solo `DEFAULT` incompatibles en tipos de texto/binarios/JSON/geometry; el dump original no se altera

@@ -1,5 +1,44 @@
 # Changelog Decisions
 
+## 2026-04-15 — feat(providers): archive/restore reversible de proveedores
+
+**Outcome**
+- `admin/ajax/providers.php` implementa `provider_archive` / `provider_restore` con schema guards runtime para columnas `is_deleted`, `deleted_at`, `deleted_by`, `archive_reason`, `restored_at`, `restored_by`.
+- `admin/providers.php` y `admin/js/providers.js` exponen el flujo en UI.
+- Migración `sql/2026_04_15_providers_archive_restore_columns.sql` agrega columnas de forma idempotente.
+
+**Decision**
+- Proveedores nunca eliminados físicamente. Ciclo: `activo → archivado → restaurado`.
+- Schema guards permiten despliegue antes de correr migración sin romper runtime.
+- Migración debe ejecutarse en producción antes de activar acciones de archivado.
+
+---
+
+## 2026-04-15 — fix(realtime): payload incompleto causaba 400 bad_request en /realtime/internal/inbox-message
+
+**Outcome**
+- Servidor Node.js en `medtravel.com.co` rechazaba payload `{thread_id, message_id}` con `{"ok":false,"error":"bad_request"}` (HTTP 400).
+- Contrato real del endpoint: `{thread_id, message_id, sender_role, created_at}` (ISO 8601).
+- Fix en `inc/realtime.php` (logs diagnóstico enriquecidos con `thread_id`, `message_id`, `url`, `body[:200]`, `curl_errno`) y todos los callers: `admin/ajax/inbox.php` (3 bloques), `admin/ajax/my_booking_requests.php`.
+- Emit al hilo `CARE:{request_id}` añadido en `my_booking_requests.php` post-propuesta, sin INSERT duplicado, para notificación live al paciente.
+
+**Decision**
+- Todo caller de `mt_realtime_emit_inbox_message()` debe incluir `sender_role` y `created_at`. Sin ellos el servidor rechaza.
+- El emit CARE es solo señalización socket; el browser hace fetch incremental desde `client/ajax/inbox.php`.
+
+---
+
+## 2026-04-15 — fix(config): blindar conexion.php contra APP_ENV=dev en hosts remotos
+
+**Outcome**
+- `admin/include/conexion.php` fuerza `APP_ENV=prod` si el host no es local y `APP_ENV` resolvía a `dev` sin `ALLOW_REMOTE_DEV=1` en el entorno.
+- Elimina riesgo de exposición de errores o configuraciones de desarrollo en producción por variable residual.
+
+**Decision**
+- `APP_ENV=dev` en remoto solo válido con `ALLOW_REMOTE_DEV=1` explícito. No setear en producción.
+
+---
+
 ## 2026-04-15 — ops(local-db): se canoniza la realineación del entorno local al dump real del servidor
 
 **Outcome**

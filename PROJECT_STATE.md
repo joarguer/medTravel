@@ -28,6 +28,10 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 
 ## Frentes completados recientes
 
+- **2026-04-15** — Providers archive/restore reversible: `admin/ajax/providers.php` + `admin/js/providers.js` + `admin/providers.php` con schema guards. Migración: `sql/2026_04_15_providers_archive_restore_columns.sql` (idempotente, MySQL 5.7 compat).
+- **2026-04-15** — Fix realtime proposal chat: servidor `POST /realtime/internal/inbox-message` exige `{thread_id, message_id, sender_role, created_at}`; PHP enviaba solo los 2 primeros campos → `400 bad_request`. Fix en `inc/realtime.php` y todos los callers (`admin/ajax/inbox.php` ×3, `admin/ajax/my_booking_requests.php`). Emit CARE post-propuesta añadido sin INSERT duplicado.
+- **2026-04-15** — Hardening `admin/include/conexion.php`: guard impide que `APP_ENV=dev` se active en host remoto sin `ALLOW_REMOTE_DEV=1` explícito.
+- **2026-04-15** — Organizer fallback Google Meet: `client/ajax/inbox.php` resuelve organizer con prioridad sender-propuesta → staff-asignado → cualquier admin OAuth conectado.
 - **2026-04-15** — Entorno local realineado al modelo moderno: la BD local previa `medtravel` se confirmó estructuralmente desalineada para el dominio provider; se reconstruyó una nueva BD local `medtravel_rebuild_20260415` a partir de dump real del servidor. El import requirió una copia temporal compatible para MySQL 5.7 eliminando `DEFAULT` incompatibles en tipos `TINYTEXT`/`TEXT`/`MEDIUMTEXT`/`LONGTEXT`/`BLOB`/`JSON`/`GEOMETRY`; el dump original no se alteró. El runtime local ya apunta a la BD nueva vía `.env` local no versionado.
 - **2026-04-14** — Onboarding médico admin refinado: `providers.php` se reorganiza en bloques A–E (prestador, owner/admin inicial, categorías, servicios, compliance documental) y `provider_verification.php` compacta su grilla con resumen visual sin depender de scroll horizontal
 - **2026-04-14** — Google Calendar / Meet Fase 1 validado con organizer admin autenticado; OAuth corregido para scope real de Calendar y reconexión limpia; cancelación de reunión vuelve a dejar el item reprogramable para provider
@@ -52,7 +56,7 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 | **Estado** | en progreso |
 | **Impacto** | alto |
 | **Evidencia** | Runtime validado: el organizer técnico de Google Calendar / Meet es la cuenta Google del admin autenticado en MedTravel; paciente y provider/staff participan como invitados y no conectan Google en este flujo. OAuth corregido con scope real `https://www.googleapis.com/auth/calendar`, `include_granted_scopes=false` y criterio de reconexión limpia cuando aparece `invalid_grant` o permisos insuficientes. Cancelar una reunión ya no cierra el caso: el item vuelve a `appointment_requested_change` y en Inbox operativo se expone como `provider_proposed_change` para permitir reprogramación / nueva propuesta. Las 3 migraciones locales (`appointment_mode`, `treatment_completed`, `post_treatment_follow_up`) siguen siendo punto de contraste si faltan en un entorno. |
-| **Siguiente acción** | Mantener canon y smoke alineados en cada entorno; verificar migraciones pendientes donde aún no existan |
+| **Siguiente acción** | Validar E2E en producción: sesión staff + paciente simultáneas confirman widget propuesta en CARE sin refresh. Verificar migraciones pendientes por entorno. |
 
 ---
 
