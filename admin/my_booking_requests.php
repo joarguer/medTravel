@@ -36,6 +36,7 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     <link href="../../assets/global/plugins/datatables/datatables.min.css" rel="stylesheet" type="text/css" />
     <link href="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.css" rel="stylesheet" type="text/css" />
     <link href="../../assets/global/plugins/bootstrap-toastr/toastr.min.css" rel="stylesheet" type="text/css" />
+    <link href="../../assets/global/plugins/bootstrap-summernote/summernote.css" rel="stylesheet" type="text/css" />
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
     <style>
@@ -338,6 +339,25 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
                 flex-direction: column;
             }
         }
+    /* ── Doc Viewer Modal ── */
+    #adminDocViewerModal .mt-dv-type-badge { font-size: 12px; vertical-align: middle; margin-left: 6px; }
+    #adminDocViewerModal .mt-dv-filename { word-break: break-all; font-weight: 600; color: #2f353b; }
+    #adminDocViewerModal .mt-dv-meta { font-size: 11px; color: #7f8c9d; margin-top: 3px; }
+    #adminDocViewerModal .mt-dv-preview-wrap {
+        background: #f4f6f7; border: 1px solid #dfe6ee; border-radius: 4px;
+        min-height: 200px; display: flex; align-items: center; justify-content: center;
+        overflow: hidden; padding: 0;
+    }
+    #adminDocViewerModal .mt-dv-preview-wrap iframe { width: 100%; height: 80vh; max-height: 80vh; border: none; display: block; }
+    #adminDocViewerModal .mt-dv-preview-wrap img { max-width: 100%; max-height: 80vh; display: block; margin: auto; }
+    #adminDocViewerModal .mt-dv-no-preview { text-align: center; padding: 40px 20px; color: #7f8c9d; }
+    #adminDocViewerModal .mt-dv-no-preview .fa { font-size: 48px; display: block; margin-bottom: 10px; color: #bdc3c7; }
+    @media (max-width: 767px) {
+        #adminDocViewerModal .modal-dialog { margin: 0; width: 100%; }
+        #adminDocViewerModal .modal-content { border-radius: 0; min-height: 100vh; }
+        #adminDocViewerModal .mt-dv-preview-wrap iframe { height: 60vh; max-height: 60vh; }
+        #adminDocViewerModal .mt-dv-preview-wrap img { max-height: 60vh; }
+    }
     </style>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -533,24 +553,27 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
 
 <!-- Modal: Registrar plan clínico acordado -->
 <div class="modal fade" id="modal-plan-agreed" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar">
                     <span aria-hidden="true">&times;</span>
                 </button>
-                <h4 class="modal-title">Registrar plan clínico acordado</h4>
+                <h4 class="modal-title"><i class="fa fa-file-text-o"></i> Registrar plan clínico acordado</h4>
             </div>
             <div class="modal-body">
                 <input type="hidden" id="plan_agreed_item_id" value="">
+                <div class="alert alert-info" style="margin-bottom:14px;">
+                    <strong>Incluir en el plan:</strong> resumen terapéutico &mdash; procedimiento propuesto &mdash; etapas &mdash; condiciones médicas relevantes &mdash; notas importantes para coordinación futura.
+                </div>
                 <div class="form-group">
                     <label for="plan_description">Descripción del plan acordado <span class="text-danger">*</span></label>
-                    <textarea class="form-control" id="plan_description" rows="4" placeholder="Describe el plan terapéutico acordado con el paciente: procedimientos, etapas, condiciones..."></textarea>
+                    <textarea id="plan_description" class="form-control summernote-plan"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btn-plan-agreed-save">Registrar plan acordado</button>
+                <button type="button" class="btn btn-primary" id="btn-plan-agreed-save"><i class="fa fa-check"></i> Registrar plan acordado</button>
             </div>
         </div>
     </div>
@@ -714,6 +737,33 @@ if ($provider_id <= 0 && $service_provider_id <= 0) {
     </div>
 </div>
 
+<div class="modal fade" id="adminDocViewerModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">
+                    <span id="adminDocViewerName" class="mt-dv-filename">Documento</span>
+                    <span id="adminDocViewerType" class="label label-info mt-dv-type-badge"></span>
+                </h4>
+                <p id="adminDocViewerMeta" class="mt-dv-meta" style="margin:0;"></p>
+            </div>
+            <div class="modal-body" style="padding:12px;">
+                <div class="mt-dv-preview-wrap" id="adminDocViewerPreview">
+                    <div class="mt-dv-no-preview">
+                        <i class="fa fa-file-o" aria-hidden="true"></i>
+                        <span>Vista previa no disponible.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal"><i class="fa fa-times" aria-hidden="true"></i> Cerrar</button>
+                <a id="adminDocViewerDownload" href="#" target="_blank" rel="noopener" class="btn btn-primary"><i class="fa fa-download" aria-hidden="true"></i> Descargar</a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php echo $theme_layout_script;?>
 <script>
 window.MY_BOOKING_REQUESTS_CONTEXT = {
@@ -725,6 +775,7 @@ window.MY_BOOKING_REQUESTS_CONTEXT = {
 <script src="../../assets/global/plugins/datatables/datatables.min.js" type="text/javascript"></script>
 <script src="../../assets/global/plugins/datatables/plugins/bootstrap/datatables.bootstrap.js" type="text/javascript"></script>
 <script src="../../assets/global/plugins/bootstrap-toastr/toastr.min.js" type="text/javascript"></script>
+<script src="../../assets/global/plugins/bootstrap-summernote/summernote.min.js" type="text/javascript"></script>
 <script src="js/my_booking_requests.js" type="text/javascript"></script>
 </body>
 </html>

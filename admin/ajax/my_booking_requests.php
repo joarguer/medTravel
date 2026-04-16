@@ -2146,6 +2146,7 @@ $hasBookingPersons = table_has_column($conexion, 'booking_requests', 'persons');
 $hasBookingCategory = table_has_column($conexion, 'booking_requests', 'category');
 $hasBookingServiceCategories = table_has_column($conexion, 'booking_requests', 'service_categories');
 $hasBookingMedicalServices = table_has_column($conexion, 'booking_requests', 'medical_services');
+$hasSvcCatTable = table_exists($conexion, 'service_categories');
 $hasBookingBudget = table_has_column($conexion, 'booking_requests', 'budget');
 $hasBookingStatus = table_has_column($conexion, 'booking_requests', 'status');
 $hasBookingDatetime = table_has_column($conexion, 'booking_requests', 'booking_datetime');
@@ -2436,6 +2437,13 @@ if ($action === 'get_detail') {
     $bookingCategoryExpr = $hasBookingCategory ? 'br.category' : "''";
     $bookingServiceCategoriesExpr = $hasBookingServiceCategories ? 'br.service_categories' : "''";
     $bookingMedicalServicesExpr = $hasBookingMedicalServices ? 'br.medical_services' : "''";
+    // Resolve category label via service_categories if table exists
+    $svcCatJoin = ($hasSvcCatTable && $hasBookingCategory)
+        ? "LEFT JOIN service_categories scat ON CAST(br.category AS UNSIGNED) = scat.id"
+        : '';
+    $categoryResolvedExpr = ($hasSvcCatTable && $hasBookingCategory)
+        ? "COALESCE(NULLIF(scat.name, ''), NULLIF(br.category, ''), '')"
+        : $bookingCategoryExpr;
     $bookingBudgetExpr = $hasBookingBudget ? 'br.budget' : "NULL";
     $bookingStatusExpr = $hasBookingStatus ? 'br.status' : "'pending'";
     $bookingDatetimeExpr = $hasBookingDatetime ? 'br.booking_datetime' : "''";
@@ -2476,7 +2484,7 @@ if ($action === 'get_detail') {
                 {$bookingOriginExpr} AS origin,
                 br.destination,
                 {$bookingPersonsExpr} AS persons,
-                {$bookingCategoryExpr} AS category,
+                {$categoryResolvedExpr} AS category,
                 {$bookingServiceCategoriesExpr} AS service_categories,
                 {$bookingMedicalServicesExpr} AS medical_services,
                 {$bookingBudgetExpr} AS budget,
@@ -2504,6 +2512,7 @@ if ($action === 'get_detail') {
             LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
             LEFT JOIN service_catalog sc ON sc.id = o.service_id
             LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+            {$svcCatJoin}
             WHERE bri.id = ?";
 
     if ($hasItemsSoftDelete) {
@@ -2582,7 +2591,7 @@ if ($action === 'get_detail') {
         }
     }
 
-    if ($clientId > 0 && table_exists($conexion, 'client_documents')) {
+    if ($bookingRequestId > 0 && table_exists($conexion, 'client_documents')) {
         $docHasShared = table_has_column($conexion, 'client_documents', 'shared_with_provider');
         $docHasRequestId = table_has_column($conexion, 'client_documents', 'booking_request_id');
         $docHasItemId = table_has_column($conexion, 'client_documents', 'item_id');
@@ -2590,11 +2599,13 @@ if ($action === 'get_detail') {
         if (!$docHasRequestId || !$docHasItemId) {
             $documentsError = 'client_documents_scope_missing';
         } else {
+            // Scope by booking_request_id only — same pattern as inbox.
+            // client_documents.client_id = clientes.id; booking_requests.client_user_id = usuarios.id.
+            // These are different ID spaces; using client_user_id as client_id filter is incorrect.
             $docSql = "SELECT id, document_type, file_path, filename, original_filename, file_size, mime_type, title, uploaded_at, booking_request_id, item_id
-                       FROM client_documents WHERE client_id = ?";
-
-            $docTypes = 'i';
-            $docParams = [$clientId];
+                       FROM client_documents WHERE 1=1";
+            $docTypes = '';
+            $docParams = [];
             if ($docHasShared) {
                 $docSql .= " AND shared_with_provider = 1";
             }
@@ -2692,6 +2703,49 @@ if ($action === 'get_detail') {
             }
         }
         mysqli_stmt_close($stmtHistory);
+    }
+
+    // Derive medical_services from item names (already in $history)
+    $derivedSvcs = [];
+    foreach ($history as $hRow) {
+        $iname = trim((string)($hRow['item_name'] ?? ''));
+        if ($iname !== '' && strpos($iname, 'Item #') !== 0) {
+            $derivedSvcs[] = $iname;
+        }
+    }
+    if (!empty($derivedSvcs)) {
+        $row['medical_services'] = implode(', ', array_unique($derivedSvcs));
+    }
+
+    // Derive service_categories from items via service_catalog → service_categories
+    if ($bookingRequestId > 0 && $hasSvcCatTable && table_exists($conexion, 'service_catalog')
+        && table_has_column($conexion, 'service_catalog', 'category_id')) {
+        $catDeriveSql = "SELECT DISTINCT COALESCE(NULLIF(scat.name, ''), 'General Medical') AS cat_name
+            FROM booking_request_items bri
+            LEFT JOIN provider_service_offers o ON o.id = bri.offer_id
+            LEFT JOIN service_catalog sc ON sc.id = o.service_id
+            LEFT JOIN service_categories scat ON scat.id = sc.category_id
+            WHERE bri.booking_request_id = ?";
+        if ($hasItemsSoftDelete) {
+            $catDeriveSql .= ' AND bri.is_deleted = 0';
+        }
+        $stmtCatDerive = mysqli_prepare($conexion, $catDeriveSql);
+        if ($stmtCatDerive) {
+            mysqli_stmt_bind_param($stmtCatDerive, 'i', $bookingRequestId);
+            if (mysqli_stmt_execute($stmtCatDerive)) {
+                $catDeriveRes = mysqli_stmt_get_result($stmtCatDerive);
+                $derivedCats = [];
+                while ($catDeriveRes && ($cdr = mysqli_fetch_assoc($catDeriveRes))) {
+                    if (!empty($cdr['cat_name'])) {
+                        $derivedCats[] = $cdr['cat_name'];
+                    }
+                }
+                if (!empty($derivedCats)) {
+                    $row['service_categories'] = implode(', ', array_unique($derivedCats));
+                }
+            }
+            mysqli_stmt_close($stmtCatDerive);
+        }
     }
 
     $calendarTraceMap = fetch_calendar_event_trace_map($conexion, array_merge([$itemId], array_column($history, 'item_id')));
@@ -3904,8 +3958,15 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         json_err('transition_not_allowed_from_' . $currentStatus, 409);
     }
 
-    // Reversas deben incluir motivo
-    if ($isReversal) {
+    // Reversas deben incluir motivo.
+    // virtual_assessment_pending es reversa solo si viene de virtual_assessment_done;
+    // desde provider_confirmed/client_accepted/awaiting_client es avance normal.
+    $advanceSourcesForVirtualPending = ['provider_confirmed', 'client_accepted', 'awaiting_client'];
+    $isActualReversal = $isReversal && !(
+        $targetStatus === 'virtual_assessment_pending'
+        && in_array($currentStatus, $advanceSourcesForVirtualPending, true)
+    );
+    if ($isActualReversal) {
         $reversalReasonRaw = trim((string)($_POST['reversal_reason'] ?? ''));
         if ($reversalReasonRaw === '') {
             json_err('reversal_reason_required', 422);

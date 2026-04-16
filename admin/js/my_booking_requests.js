@@ -3,6 +3,7 @@
     var activeDetailItemId = 0;
     var activeDetailData = null;
     var cancelledMeetingKeys = {};
+    var currentModalDocuments = [];
     var pageContext = window.MY_BOOKING_REQUESTS_CONTEXT || {};
 
     $(document).ready(function () {
@@ -272,15 +273,48 @@
         $('#my_booking_detail_modal').on('click', '#btn-modal-plan-agreed', function () {
             if (!activeDetailItemId) return;
             $('#plan_agreed_item_id').val(activeDetailItemId);
-            $('#plan_description').val('');
-            $('#modal-plan-agreed').modal('show');
+            var $modal = $('#modal-plan-agreed');
+            $modal.modal('show');
+        });
+
+        $('#modal-plan-agreed').on('shown.bs.modal', function () {
+            var $el = $('#plan_description');
+            if ($.fn.summernote && !$el.data('summernote')) {
+                $el.summernote({
+                    height: 260,
+                    minHeight: 180,
+                    focus: true,
+                    toolbar: [
+                        ['style', ['bold', 'italic', 'underline', 'clear']],
+                        ['para', ['ul', 'ol', 'paragraph']],
+                        ['insert', ['hr']],
+                        ['view', ['fullscreen', 'codeview']]
+                    ],
+                    placeholder: 'Describe el plan terapéutico acordado con el paciente: procedimientos, etapas, condiciones...'
+                });
+            } else if ($.fn.summernote) {
+                $el.summernote('code', '');
+                $el.summernote('focus');
+            }
+        });
+
+        $('#modal-plan-agreed').on('hidden.bs.modal', function () {
+            var $el = $('#plan_description');
+            if ($.fn.summernote && $el.data('summernote')) {
+                $el.summernote('destroy');
+            }
         });
 
         $('#btn-plan-agreed-save').on('click', function () {
             var itemId = parseInt($('#plan_agreed_item_id').val(), 10) || 0;
-            var plan = ($('#plan_description').val() || '').trim();
+            var plan;
+            if ($.fn.summernote && $('#plan_description').data('summernote')) {
+                plan = ($('#plan_description').summernote('code') || '').trim();
+            } else {
+                plan = ($('#plan_description').val() || '').trim();
+            }
             if (itemId <= 0) return;
-            if (!plan) { toastr.error('Debes describir el plan acordado'); return; }
+            if (!plan || plan === '<p><br></p>' || plan === '<br>') { toastr.error('Debes describir el plan acordado'); return; }
             if (!confirmOperationalAction('registrar el plan clínico acordado')) return;
             sendProviderAction('update_item_status', {
                 item_id: itemId,
@@ -415,6 +449,27 @@
                 $('#modal-update-timeline').modal('hide');
                 reloadActiveDetail();
             }, 'Fechas actualizadas');
+        });
+
+        $(document).on('click', '.mt-doc-preview-btn', function () {
+            var docId = String($(this).data('doc-id') || '').trim();
+            var doc = null;
+            for (var i = 0; i < currentModalDocuments.length; i++) {
+                if (String(currentModalDocuments[i].id || '') === docId) {
+                    doc = currentModalDocuments[i];
+                    break;
+                }
+            }
+            if (doc) { openDocViewer(doc); }
+        });
+
+        $('#adminDocViewerModal').on('hidden.bs.modal', function () {
+            $('#adminDocViewerPreview').html(
+                '<div class="mt-dv-no-preview">' +
+                    '<i class="fa fa-file-o" aria-hidden="true"></i>' +
+                    '<span>Vista previa no disponible.</span>' +
+                '</div>'
+            );
         });
     }
 
@@ -820,7 +875,7 @@
         html += '<div class="row">';
         html += '<div class="col-md-6">';
         html += renderKeyValue('Origen', d.origin || 'Sin definir');
-        html += renderKeyValue('Personas', d.persons || '-');
+        html += renderKeyValue('Personas', d.persons || 'Not provided');
         html += renderKeyValue('Categoría', d.category || '-');
         html += '</div>';
         html += '<div class="col-md-6">';
@@ -833,10 +888,45 @@
         return html;
     }
 
+    function renderClinicalGuide() {
+        var guideId = 'mt-clinical-guide-body';
+        var html = '<div class="mt-panel" style="margin-bottom:12px;">';
+        html += '<h5 class="mt-panel-title" style="cursor:pointer;margin-bottom:0;" data-toggle="collapse" data-target="#' + guideId + '" aria-expanded="false" aria-controls="' + guideId + '">';
+        html += '<i class="fa fa-info-circle font-blue" style="margin-right:6px;"></i>';
+        html += 'Gu\u00eda de atenci\u00f3n del caso';
+        html += ' <i class="fa fa-chevron-down pull-right" style="font-size:11px;margin-top:3px;color:#aaa;"></i>';
+        html += '</h5>';
+        html += '<div id="' + guideId + '" class="collapse" style="margin-top:10px;">';
+        html += '<ol style="padding-left:18px;margin:0 0 12px 0;line-height:1.8;">';
+        html += '<li><strong>Valoraci\u00f3n inicial</strong> &mdash; Realiza la videollamada de valoraci\u00f3n con el paciente y registra observaciones.</li>';
+        html += '<li><strong>Plan acordado</strong> &mdash; Documenta el plan cl\u00ednico confirmado con el paciente tras la valoraci\u00f3n.</li>';
+        html += '<li><strong>Procedimiento presencial</strong> &mdash; Agenda el procedimiento. La fecha debe quedar dentro de la ventana de viaje vigente del paciente.</li>';
+        html += '<li><strong>Procedimiento realizado</strong> &mdash; Marca el tratamiento como completado una vez ejecutado.</li>';
+        html += '<li><strong>Seguimiento</strong> &mdash; Inicia el seguimiento post-tratamiento si aplica.</li>';
+        html += '<li><strong>Cierre</strong> &mdash; Cierra el caso cuando el seguimiento haya concluido.</li>';
+        html += '</ol>';
+        html += '<div class="alert alert-info" style="margin-bottom:6px;padding:8px 12px;font-size:13px;">';
+        html += '<i class="fa fa-video-camera" style="margin-right:5px;"></i>';
+        html += 'La videollamada de valoraci\u00f3n virtual <strong>no es</strong> el procedimiento presencial. Son fases distintas.';
+        html += '</div>';
+        html += '<div class="alert alert-warning" style="margin-bottom:6px;padding:8px 12px;font-size:13px;">';
+        html += '<i class="fa fa-calendar" style="margin-right:5px;"></i>';
+        html += 'La fecha del procedimiento presencial debe quedar <strong>dentro de la ventana de viaje vigente</strong>. Si la ventana cambia por necesidad m\u00e9dica, debe actualizarse formalmente en el sistema.';
+        html += '</div>';
+        html += '<div class="alert alert-warning" style="margin-bottom:0;padding:8px 12px;font-size:13px;">';
+        html += '<i class="fa fa-comments" style="margin-right:5px;"></i>';
+        html += 'El <strong>chat es para conversaci\u00f3n</strong>. Los cambios formales de estado se hacen desde los botones del panel cl\u00ednico.';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        return html;
+    }
+
     function renderClinicalTab(d, options) {
         options = options || {};
         var normalizedStatus = normalizeItemStatus(d.item_status || d.provider_status || '');
         var html = '';
+        html += renderClinicalGuide();
         html += renderClinicalStepper(normalizedStatus);
         html += renderClinicalStatusBlock(d, normalizedStatus);
         html += renderProviderSection(d);
@@ -920,21 +1010,21 @@
         var isSupervisor = parseInt(d.supervisor_override_required, 10) === 1;
         var isTerminalStatus = ['cancelled', 'provider_rejected', 'client_rejected', 'case_closed'].indexOf(normalizedStatus) !== -1;
 
-        // ─── Acciones triage (pending_provider) ───────────────────────────────
-        var canReproposeAppointment = ['awaiting_client', 'provider_proposed_change'].indexOf(normalizedStatus) !== -1;
+        // ─── Acciones triage / repropuesta ───────────────────────────────────
+        var canReproposeAppointment = ['awaiting_client', 'provider_proposed_change', 'virtual_assessment_pending', 'procedure_scheduled'].indexOf(normalizedStatus) !== -1;
 
         // ─── Acciones valoración virtual ──────────────────────────────────────
-        var canStartVirtualAssessment = ['provider_confirmed', 'client_accepted', 'awaiting_client'].indexOf(normalizedStatus) !== -1;
+        var canStartVirtualAssessment = ['provider_confirmed', 'client_accepted'].indexOf(normalizedStatus) !== -1;
         var canMarkAssessmentDone = normalizedStatus === 'virtual_assessment_pending';
 
         // ─── Acciones plan clínico ────────────────────────────────────────────
-        var canRegisterPlan = normalizedStatus === 'virtual_assessment_done';
+        var canRegisterPlan = ['virtual_assessment_done', 'provider_confirmed', 'client_accepted'].indexOf(normalizedStatus) !== -1;
 
         // ─── Acciones procedimiento ───────────────────────────────────────────
-        var canScheduleProcedure = ['treatment_plan_agreed', 'provider_confirmed', 'client_accepted'].indexOf(normalizedStatus) !== -1;
+        var canScheduleProcedure = ['treatment_plan_agreed', 'virtual_assessment_done'].indexOf(normalizedStatus) !== -1;
 
         // ─── Acciones tratamiento ─────────────────────────────────────────────
-        var canMarkTreatmentCompleted = ['procedure_scheduled', 'provider_confirmed', 'client_accepted', 'treatment_completed'].indexOf(normalizedStatus) !== -1;
+        var canMarkTreatmentCompleted = normalizedStatus === 'procedure_scheduled';
         var alreadyCompleted = normalizedStatus === 'treatment_completed';
 
         // ─── Seguimiento ──────────────────────────────────────────────────────
@@ -1132,7 +1222,7 @@
         html += renderKeyValue('Origen', d.origin || 'Sin definir');
         html += renderKeyValue('Destino / ciudad', d.destination || 'Sin definir');
         html += renderKeyValue('Fechas solicitadas', buildTimeline(d));
-        html += renderKeyValue('Personas', d.persons || '-');
+        html += renderKeyValue('Personas', d.persons || 'Not provided');
         html += renderKeyValue('Estado general', d.booking_status_label_es || genericStatusLabelEs(d.booking_status || 'pending'));
         html += '</div>';
         html += '<div class="col-md-6">';
@@ -1250,9 +1340,114 @@
         return html;
     }
 
+    // ── Doc Viewer helpers (same pattern as app_inbox) ──────────────────────
+    function dvCleanTitleFallback(filename) {
+        var raw = String(filename || '').trim();
+        if (!raw) return 'Documento';
+        var base = raw.replace(/\.[a-z0-9]{2,8}$/i, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+        return base || raw;
+    }
+    function dvNormalizeTypeKey(type) {
+        var key = String(type || 'other').toLowerCase().trim();
+        var map = {
+            history: 'medical_history', medical_history: 'medical_history',
+            labs: 'lab_results', lab_results: 'lab_results',
+            imaging: 'diagnostic_imaging', diagnostic_imaging: 'diagnostic_imaging',
+            photos: 'photos', quote: 'quote', consent_form: 'consent_form',
+            medical_order: 'medical_order', prescription: 'prescription',
+            administrative_document: 'administrative_document',
+            invoice: 'administrative_document', contract: 'administrative_document',
+            insurance: 'administrative_document', passport: 'administrative_document',
+            id_card: 'administrative_document', other: 'other'
+        };
+        return map[key] || 'other';
+    }
+    function dvTypeLabel(type) {
+        var labels = {
+            medical_history: 'Historia clínica', lab_results: 'Examen / laboratorio',
+            diagnostic_imaging: 'Imagen diagnóstica', photos: 'Imagen clínica',
+            quote: 'Cotización', consent_form: 'Consentimiento',
+            medical_order: 'Orden médica', prescription: 'Fórmula / indicación',
+            administrative_document: 'Documento administrativo', other: 'Otro'
+        };
+        return labels[dvNormalizeTypeKey(type)] || 'Otro';
+    }
+    function dvExtractExt(value) {
+        var clean = String(value || '').trim().split('?')[0].split('#')[0];
+        var dot = clean.lastIndexOf('.');
+        return dot === -1 ? '' : clean.slice(dot + 1).toLowerCase();
+    }
+    function dvResolvePreviewType(mime, name, url) {
+        var m = String(mime || '').toLowerCase();
+        if (m === 'application/pdf' || m === 'application/x-pdf') return 'pdf';
+        if (m === 'image/jpeg' || m === 'image/jpg' || m === 'image/png' || m === 'image/webp') return 'image';
+        var ext = dvExtractExt(name) || dvExtractExt(url);
+        if (ext === 'pdf') return 'pdf';
+        if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'webp') return 'image';
+        return '';
+    }
+    function openDocViewer(doc) {
+        var safeDoc = doc || {};
+        var originalName = String(safeDoc.original_filename || safeDoc.filename || 'Documento');
+        var displayTitle = String(safeDoc.title || dvCleanTitleFallback(originalName));
+        var typeKey = dvNormalizeTypeKey(safeDoc.document_type || 'other');
+        var typeLabel = dvTypeLabel(typeKey);
+        var mimeType = String(safeDoc.mime_type || '').toLowerCase().trim();
+        var href = String(safeDoc.download_url || '').trim();
+        if (!href && safeDoc.id) {
+            href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(safeDoc.id));
+        }
+        var previewUrl = safeDoc.id
+            ? '/admin/ajax/preview_medical_document.php?doc_id=' + encodeURIComponent(String(safeDoc.id))
+            : href;
+        var previewType = dvResolvePreviewType(mimeType, originalName, href);
+        var typeCls = {
+            lab_results: 'label-info', diagnostic_imaging: 'label-primary', photos: 'label-success',
+            medical_history: 'label-warning', quote: 'label-primary', consent_form: 'label-warning',
+            medical_order: 'label-info', prescription: 'label-success',
+            administrative_document: 'label-default', other: 'label-default'
+        };
+        $('#adminDocViewerName').text(displayTitle);
+        $('#adminDocViewerType').text(typeLabel).attr('class', 'label ' + (typeCls[typeKey] || 'label-default') + ' mt-dv-type-badge');
+        var metaParts = ['Archivo: ' + originalName];
+        var uploadedRaw = String(safeDoc.uploaded_at || safeDoc.created_at || '').trim();
+        if (uploadedRaw) {
+            var d = new Date(uploadedRaw.replace(' ', 'T'));
+            if (!isNaN(d.getTime())) {
+                var dd = (d.getDate() < 10 ? '0' : '') + d.getDate();
+                var mo = ((d.getMonth() + 1) < 10 ? '0' : '') + (d.getMonth() + 1);
+                metaParts.push('Cargado: ' + dd + '/' + mo + '/' + d.getFullYear());
+            }
+        }
+        if (safeDoc.file_size > 0) { metaParts.push((safeDoc.file_size / 1024).toFixed(1) + ' KB'); }
+        if (mimeType) { metaParts.push(mimeType); }
+        $('#adminDocViewerMeta').text(metaParts.join(' · '));
+        $('#adminDocViewerDownload').attr('href', href || '#');
+        var $preview = $('#adminDocViewerPreview');
+        if (previewType === 'image' && previewUrl) {
+            $preview.html('<img src="' + escapeHtml(previewUrl) + '" alt="' + escapeHtml(originalName) + '">');
+        } else if (previewType === 'pdf' && previewUrl) {
+            $preview.html('<iframe src="' + escapeHtml(previewUrl) + '" title="' + escapeHtml(originalName) + '"></iframe>');
+        } else {
+            $preview.html(
+                '<div class="mt-dv-no-preview">' +
+                    '<i class="fa fa-file-o" aria-hidden="true"></i>' +
+                    '<div>Vista previa no disponible para este tipo de archivo.</div>' +
+                    '<div style="margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+                        '<a href="' + escapeHtml(href || '#') + '" target="_blank" rel="noopener" class="btn btn-default btn-sm"><i class="fa fa-external-link" aria-hidden="true"></i> Abrir en otra pestaña</a>' +
+                        '<a href="' + escapeHtml(href || '#') + '" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fa fa-download" aria-hidden="true"></i> Descargar</a>' +
+                    '</div>' +
+                '</div>'
+            );
+        }
+        $('#adminDocViewerModal').modal('show');
+    }
+    // ── End Doc Viewer helpers ───────────────────────────────────────────────
+
     function renderDocumentsSection(d) {
         var docsAccess = d.documents_access || {};
         var documents = d.documents || [];
+        currentModalDocuments = documents;
         var html = '<section class="mt-section">';
         html += '<div class="mt-section-head"><h5>Documentos médicos</h5></div>';
 
@@ -1263,7 +1458,7 @@
         }
 
         if (d.documents_error) {
-            html += '<p class="text-muted" style="margin:0;">TODO: faltan campos de alcance documental en base de datos (' + escapeHtml(d.documents_error) + ').</p>';
+            html += '<p class="text-muted" style="margin:0;">Faltan campos de alcance documental en base de datos (' + escapeHtml(d.documents_error) + ').</p>';
             html += '</section>';
             return html;
         }
@@ -1275,15 +1470,17 @@
         }
 
         html += '<div class="table-responsive"><table class="table table-striped table-bordered">';
-        html += '<thead><tr><th>Documento</th><th>Tipo</th><th>Cargado</th><th>Tamaño</th></tr></thead><tbody>';
+        html += '<thead><tr><th>Documento</th><th>Tipo</th><th>Cargado</th><th>Tamaño</th><th></th></tr></thead><tbody>';
         documents.forEach(function (doc) {
             var name = doc.title || doc.original_filename || doc.filename || 'Documento';
             var url = doc.download_url || '#';
+            var docId = String(doc.id || '');
             html += '<tr>' +
-                '<td><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + escapeHtml(name) + '</a></td>' +
-                '<td>' + escapeHtml(doc.document_type || '-') + '</td>' +
+                '<td><button type="button" class="btn btn-link mt-doc-preview-btn" style="padding:0;text-align:left;" data-doc-id="' + escapeHtml(docId) + '">' + escapeHtml(name) + '</button></td>' +
+                '<td>' + escapeHtml(dvTypeLabel(doc.document_type || 'other')) + '</td>' +
                 '<td>' + escapeHtml(formatDateTime(doc.uploaded_at || '')) + '</td>' +
                 '<td>' + escapeHtml(formatFileSize(doc.file_size)) + '</td>' +
+                '<td><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" class="btn btn-xs btn-default"><i class="fa fa-download" aria-hidden="true"></i></a></td>' +
                 '</tr>';
         });
         html += '</tbody></table></div>';
@@ -1467,10 +1664,10 @@
         options = options || {};
         status = normalizeItemStatus(status);
         var css = 'label-default';
-        if (['pending_provider', 'required_pending', 'pending'].indexOf(status) !== -1) css = 'label-warning';
-        else if (['provider_confirmed', 'client_accepted', 'paid', 'waived', 'not_applicable', 'disabled_manually', 'date_confirmed', 'doctor_assigned', 'completed', 'treatment_completed'].indexOf(status) !== -1) css = 'label-success';
+        if (['pending_provider', 'required_pending', 'pending', 'virtual_assessment_pending'].indexOf(status) !== -1) css = 'label-warning';
+        else if (['provider_confirmed', 'client_accepted', 'paid', 'waived', 'not_applicable', 'disabled_manually', 'date_confirmed', 'doctor_assigned', 'completed', 'treatment_completed', 'virtual_assessment_done', 'treatment_plan_agreed', 'case_closed'].indexOf(status) !== -1) css = 'label-success';
         else if (['provider_rejected', 'client_rejected', 'cancelled'].indexOf(status) !== -1) css = 'label-danger';
-        else if (['provider_proposed_change', 'awaiting_client', 'provider_reviewing', 'needs_more_info', 'date_proposed', 'rescheduled', 'post_treatment_follow_up'].indexOf(status) !== -1) css = 'label-info';
+        else if (['provider_proposed_change', 'awaiting_client', 'provider_reviewing', 'needs_more_info', 'date_proposed', 'rescheduled', 'post_treatment_follow_up', 'procedure_scheduled'].indexOf(status) !== -1) css = 'label-info';
         var label = options.label || genericStatusLabelEs(status);
         return '<span class="label ' + css + '">' + escapeHtml(label || '-') + '</span>';
     }
@@ -1555,12 +1752,23 @@
             date_proposed: 'Cita propuesta',
             date_confirmed: 'Cita confirmada',
             rescheduled: 'Cita reprogramada',
+            appointment_proposed: 'Cita propuesta',
+            appointment_confirmed: 'Cita confirmada',
+            appointment_requested_change: 'Cambio de cita solicitado',
+            appointment_cancelled: 'Cita cancelada',
             treatment_completed: 'Tratamiento completado',
             post_treatment_follow_up: 'Seguimiento post tratamiento',
             completed: 'Atención realizada',
             cancelled: 'Caso cerrado',
             confirmed: 'Confirmado',
-            scheduled: 'Programado'
+            scheduled: 'Programado',
+            // Estados clínicos (2026-04-15)
+            virtual_assessment_pending: 'Valoración virtual pendiente',
+            virtual_assessment_done: 'Valoración virtual realizada',
+            treatment_plan_agreed: 'Plan clínico acordado',
+            procedure_scheduled: 'Procedimiento presencial agendado',
+            case_closed: 'Caso cerrado (exitoso)',
+            new: 'Nuevo caso'
         };
         status = normalizeItemStatus(status);
         return map[status] || (status ? status : 'Sin definir');
