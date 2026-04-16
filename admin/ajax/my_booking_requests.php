@@ -450,19 +450,78 @@ function my_booking_create_proposed_meeting_event($conexion, array $itemRow, arr
     $calendarEventId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($stmt);
 
+    // Llamar a la API de Google Calendar si el integration_mode lo requiere
+    $googleEventId  = '';
+    $googleHtmlLink = '';
+    $googleMeetUrl  = '';
+    if ($integrationMode !== 'internal_only' && $organizerAdminUserId > 0) {
+        $createMeet  = ($integrationMode === 'calendar_plus_meet');
+        $googleResult = google_calendar_create_event($conexion, $organizerAdminUserId, [
+            'summary'     => $title,
+            'description' => $description,
+            'start_at'    => $startAt,
+            'end_at'      => $endAt,
+            'timezone'    => $timezone,
+            'create_meet' => $createMeet,
+        ]);
+        if (empty($googleResult['ok'])) {
+            return ['ok' => false, 'error' => (string)($googleResult['error'] ?? 'google_calendar_api_error')];
+        }
+        $googleEventId  = (string)($googleResult['event_id'] ?? '');
+        $googleHtmlLink = (string)($googleResult['html_link'] ?? '');
+        $googleMeetUrl  = $createMeet ? (string)($googleResult['meet_url'] ?? '') : '';
+
+        if ($googleEventId !== '') {
+            $setParts = [];
+            $upTypes  = '';
+            $upParams = [];
+            if ($columns['google_event_id']) {
+                $setParts[] = 'google_event_id = ?';
+                $upTypes   .= 's';
+                $upParams[] = $googleEventId;
+            }
+            if ($columns['google_html_link']) {
+                $setParts[] = 'google_html_link = ?';
+                $upTypes   .= 's';
+                $upParams[] = $googleHtmlLink;
+            }
+            if ($columns['google_meet_url']) {
+                $setParts[] = 'google_meet_url = ?';
+                $upTypes   .= 's';
+                $upParams[] = $googleMeetUrl;
+            }
+            if (!empty($setParts)) {
+                $setParts[] = 'updated_at = NOW()';
+                $upTypes   .= 'i';
+                $upParams[] = $calendarEventId;
+                $stmtUp = mysqli_prepare(
+                    $conexion,
+                    'UPDATE calendar_events SET ' . implode(', ', $setParts) . ' WHERE id = ? LIMIT 1'
+                );
+                if ($stmtUp) {
+                    bind_stmt_params($stmtUp, $upTypes, $upParams);
+                    mysqli_stmt_execute($stmtUp);
+                    mysqli_stmt_close($stmtUp);
+                }
+            }
+        }
+    }
+
     $syncResult = google_calendar_sync_item_status_for_transition($conexion, $itemId, 'appointment_proposed');
     if (empty($syncResult['ok'])) {
         return ['ok' => false, 'error' => (string)($syncResult['error'] ?? 'item_status_sync_failed')];
     }
 
     return [
-        'ok' => true,
-        'calendar_event_id' => $calendarEventId,
+        'ok'                      => true,
+        'calendar_event_id'       => $calendarEventId,
         'organizer_admin_user_id' => $organizerAdminUserId,
-        'title' => $title,
-        'start_at' => $startAt,
-        'end_at' => $endAt,
-        'timezone' => $timezone,
+        'title'                   => $title,
+        'start_at'                => $startAt,
+        'end_at'                  => $endAt,
+        'timezone'                => $timezone,
+        'google_event_id'         => $googleEventId,
+        'google_meet_url'         => $googleMeetUrl,
     ];
 }
 
