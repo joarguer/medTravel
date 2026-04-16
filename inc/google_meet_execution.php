@@ -63,6 +63,97 @@ function google_meet_execution_extract_space_code_from_google_event(array $rawEv
     return google_meet_execution_extract_space_code_from_url($meetUrl);
 }
 
+function google_meet_execution_connection_has_space_read_scope(array $connection)
+{
+    $scopeText = trim((string)($connection['scope_text'] ?? ''));
+    if ($scopeText === '') {
+        return false;
+    }
+
+    $grantedScopes = preg_split('/\s+/', $scopeText) ?: [];
+    $grantedScopes = array_values(array_filter(array_map('trim', $grantedScopes)));
+
+    return in_array('https://www.googleapis.com/auth/meetings.space.readonly', $grantedScopes, true)
+        || in_array('https://www.googleapis.com/auth/meetings.space.created', $grantedScopes, true)
+        || in_array('https://www.googleapis.com/auth/meetings.space.settings', $grantedScopes, true);
+}
+
+function google_meet_execution_fetch_space_name($conexion, $adminUserId, $spaceCode)
+{
+    $adminUserId = (int)$adminUserId;
+    $spaceCode = strtolower(trim((string)$spaceCode));
+    if ($adminUserId <= 0 || $spaceCode === '') {
+        return ['ok' => true, 'space_name' => '', 'reason' => 'missing_input'];
+    }
+
+    $connection = google_calendar_get_connection($conexion, $adminUserId, false);
+    if (!$connection || empty($connection['is_connected'])) {
+        return ['ok' => true, 'space_name' => '', 'reason' => 'no_google_connection'];
+    }
+
+    if (!google_meet_execution_connection_has_space_read_scope((array)$connection)) {
+        return ['ok' => true, 'space_name' => '', 'reason' => 'scope_not_granted'];
+    }
+
+    $tokenState = google_calendar_ensure_valid_access_token($conexion, $adminUserId);
+    if (empty($tokenState['ok'])) {
+        return ['ok' => true, 'space_name' => '', 'reason' => 'access_token_unavailable'];
+    }
+
+    $response = google_calendar_http_request(
+        'GET',
+        'https://meet.googleapis.com/v2/spaces/' . rawurlencode($spaceCode),
+        [
+            'Authorization: Bearer ' . (string)$tokenState['access_token'],
+            'Accept: application/json',
+        ]
+    );
+
+    if (empty($response['ok']) || !is_array($response['json'])) {
+        return ['ok' => true, 'space_name' => '', 'reason' => 'spaces_get_failed'];
+    }
+
+    $spaceName = trim((string)($response['json']['name'] ?? ''));
+    if ($spaceName === '') {
+        return ['ok' => true, 'space_name' => '', 'reason' => 'space_name_missing'];
+    }
+
+    return [
+        'ok' => true,
+        'space_name' => google_meet_execution_normalize_meet_space_name($spaceName),
+        'meeting_code' => strtolower(trim((string)($response['json']['meetingCode'] ?? $spaceCode))),
+        'reason' => 'resolved',
+    ];
+}
+
+function google_meet_execution_update_calendar_space_name($conexion, $calendarEventId, $spaceName)
+{
+    $calendarEventId = (int)$calendarEventId;
+    $spaceName = trim((string)$spaceName);
+    if ($calendarEventId <= 0 || $spaceName === '') {
+        return ['ok' => false, 'error' => 'missing_input'];
+    }
+
+    if (
+        !google_calendar_table_exists($conexion, 'calendar_events')
+        || !google_calendar_table_has_column($conexion, 'calendar_events', 'google_meet_space_name')
+    ) {
+        return ['ok' => false, 'error' => 'calendar_events_space_name_missing'];
+    }
+
+    $sql = 'UPDATE calendar_events SET google_meet_space_name = ?, updated_at = NOW() WHERE id = ? LIMIT 1';
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        return ['ok' => false, 'error' => 'update_prepare_failed'];
+    }
+
+    mysqli_stmt_bind_param($stmt, 'si', $spaceName, $calendarEventId);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+
+    return $ok ? ['ok' => true] : ['ok' => false, 'error' => 'update_execute_failed'];
+}
+
 function google_meet_execution_base64url_encode($data)
 {
     return rtrim(strtr(base64_encode((string)$data), '+/', '-_'), '=');

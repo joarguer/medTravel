@@ -45,6 +45,7 @@ function client_inbox_calendar_event_columns($conexion)
         'google_html_link' => client_table_has_column($conexion, 'calendar_events', 'google_html_link'),
         'google_meet_url' => client_table_has_column($conexion, 'calendar_events', 'google_meet_url'),
         'google_meet_space_code' => client_table_has_column($conexion, 'calendar_events', 'google_meet_space_code'),
+        'google_meet_space_name' => client_table_has_column($conexion, 'calendar_events', 'google_meet_space_name'),
         'meeting_execution_status' => client_table_has_column($conexion, 'calendar_events', 'meeting_execution_status'),
         'organizer_email' => client_table_has_column($conexion, 'calendar_events', 'organizer_email'),
     ];
@@ -496,6 +497,11 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
         (array)($result['raw_event'] ?? []),
         $meetUrl
     );
+    $meetSpaceName = '';
+    if ($columns['google_meet_space_name'] && $meetSpaceCode !== '') {
+        $spaceResolution = google_meet_execution_fetch_space_name($conexion, $organizerAdminUserId, $meetSpaceCode);
+        $meetSpaceName = trim((string)($spaceResolution['space_name'] ?? ''));
+    }
     if ($columns['organizer_admin_user_id']) {
         $setParts[] = 'organizer_admin_user_id = ?';
         $types .= 'i';
@@ -525,6 +531,11 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
         $setParts[] = 'google_meet_space_code = ?';
         $types .= 's';
         $params[] = $meetSpaceCode;
+    }
+    if ($columns['google_meet_space_name'] && $meetSpaceName !== '') {
+        $setParts[] = 'google_meet_space_name = ?';
+        $types .= 's';
+        $params[] = $meetSpaceName;
     }
     if ($columns['meeting_execution_status'] && ($meetUrl !== '' || $meetSpaceCode !== '')) {
         $setParts[] = 'meeting_execution_status = ?';

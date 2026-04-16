@@ -411,6 +411,7 @@ function google_calendar_required_scopes()
         'email',
         'profile',
         'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/meetings.space.readonly',
     ];
 }
 
