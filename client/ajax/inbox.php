@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../inc/interaction_email.php';
 require_once __DIR__ . '/../../inc/fee_gate.php';
 require_once __DIR__ . '/../../inc/commission_gate.php';
 require_once __DIR__ . '/../../inc/google_calendar.php';
+require_once __DIR__ . '/../../inc/google_meet_execution.php';
 
 function client_inbox_err($message, $code = 400, $errorCode = '')
 {
@@ -43,6 +44,8 @@ function client_inbox_calendar_event_columns($conexion)
         'google_event_id' => client_table_has_column($conexion, 'calendar_events', 'google_event_id'),
         'google_html_link' => client_table_has_column($conexion, 'calendar_events', 'google_html_link'),
         'google_meet_url' => client_table_has_column($conexion, 'calendar_events', 'google_meet_url'),
+        'google_meet_space_code' => client_table_has_column($conexion, 'calendar_events', 'google_meet_space_code'),
+        'meeting_execution_status' => client_table_has_column($conexion, 'calendar_events', 'meeting_execution_status'),
         'organizer_email' => client_table_has_column($conexion, 'calendar_events', 'organizer_email'),
     ];
 
@@ -488,6 +491,11 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
     $setParts = ["status = 'confirmed'", 'updated_at = NOW()'];
     $types = '';
     $params = [];
+    $meetUrl = (string)($result['meet_url'] ?? '');
+    $meetSpaceCode = google_meet_execution_extract_space_code_from_google_event(
+        (array)($result['raw_event'] ?? []),
+        $meetUrl
+    );
     if ($columns['organizer_admin_user_id']) {
         $setParts[] = 'organizer_admin_user_id = ?';
         $types .= 'i';
@@ -511,7 +519,17 @@ function client_inbox_confirm_google_meeting($conexion, array $eventRow, $reques
     if ($columns['google_meet_url']) {
         $setParts[] = 'google_meet_url = ?';
         $types .= 's';
-        $params[] = (string)($result['meet_url'] ?? '');
+        $params[] = $meetUrl;
+    }
+    if ($columns['google_meet_space_code']) {
+        $setParts[] = 'google_meet_space_code = ?';
+        $types .= 's';
+        $params[] = $meetSpaceCode;
+    }
+    if ($columns['meeting_execution_status'] && ($meetUrl !== '' || $meetSpaceCode !== '')) {
+        $setParts[] = 'meeting_execution_status = ?';
+        $types .= 's';
+        $params[] = 'not_detected';
     }
     if ($columns['organizer_email']) {
         $setParts[] = 'organizer_email = ?';
