@@ -214,6 +214,38 @@ La estrategia canónica recomendada es progresiva.
 - La conexión Google se gestiona solo desde backend/admin autenticado.
 - En fases posteriores, la misma regla de aislamiento debe extenderse por actor conectado; una aceptacion funcional interna no puede crear ni ampliar scopes OAuth por inferencia.
 
+## Nota operativa — comportamiento validado en smoke E2E local (2026-04-16)
+
+El smoke Google Calendar / Meet fue ejecutado de punta a punta el 2026-04-16 en entorno local sobre `medtravel_rebuild_20260415`. Los comportamientos siguientes quedaron validados en código y API real:
+
+### Cuándo se crea el evento real en Google Calendar
+
+| Momento | Comportamiento correcto |
+|---------|------------------------|
+| `provider_propose_change` | Solo crea registro local en `calendar_events` con `google_event_id=NULL`. **No se llama a la Google Calendar API.** |
+| `accept_dates` (paciente) | Aquí se invoca `client_inbox_confirm_google_meeting()` y se crea el evento real en Google Calendar con Meet link. `google_event_id` se persiste en `calendar_events`. |
+
+Cualquier cambio que mueva la creación del evento al momento de la propuesta es una regresión de producto. La causa de esa regresión (commit `e00a316`) fue detectada, auditada y revertida (`b25e42b`).
+
+### Resolución de attendees validada
+
+| Attendee | Fuente | Resultado en smoke |
+|----------|--------|--------------------|
+| Paciente | `booking_requests.email` | ✅ siempre incluido |
+| Proposal sender | `inbox_messages` → `sender_user_id` → `usuarios.email` | Excluido si coincide con `organizerConnectionEmail` (caso del smoke: `medtravelusa@gmail.com` == organizer) |
+| Staff asignado | `bri.assigned_staff_id` → `pms.linked_user_id` → `usuarios.email` | ✅ `colfecarga@gmail.com` incluido cuando `assigned_staff_id=1` poblado |
+| Organizer | Cuenta Google OAuth del admin conectado | Organizer nativo Google; no se añade como attendee explícito |
+
+**Nota de backlog menor (no crítico):** si un `provider_medical_staff` tiene `pms.email` directo pero `linked_user_id=NULL`, ese staff nunca entra como attendee. El código resuelve únicamente por `linked_user_id → usuarios.email`. Evaluar ampliar fallback a `pms.email` cuando `linked_user_id=0` si hay casos reales en producción con esa configuración.
+
+### Cancelación validada
+
+- `cancel_meeting` (paciente) → `calendar_events.status=cancelled`, `item_status=appointment_requested_change`.
+- Google Calendar API confirma `status=cancelled` en el evento real (`GET /calendars/primary/events/{id}` → HTTP 200, `"status":"cancelled"`).
+- La cancelación no cierra el caso; el provider puede reproponer desde `appointment_requested_change`.
+
+---
+
 ## Nota operativa — dos paths de propuesta de cita (2026-04-16)
 
 En el runtime actual existen **dos paths** distintos para que un provider / staff proponga una cita. Su comportamiento en `organizer_admin_user_id` es diferente.

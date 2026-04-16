@@ -240,7 +240,7 @@ El smoke E2E del ciclo clínico debe ejecutarse con los actores correctos. El ad
 | Sesión 2 — Provider admin | `ROLE_PROVIDER_ADMIN` | Aceptar caso o proponer cita (según path). Avanzar ciclo clínico. |
 | Sesión 3 — Paciente | `ROLE_CLIENT` | Confirmar cita, ver journey en portal. |
 
-**Recorrido smoke — Path A (Appointment-first, validado 2026-04-16):**
+**Recorrido smoke — Path A (Appointment-first, validado local completo 2026-04-16 — propuesta, aceptación, cancelación con Google Calendar real):**
 
 ```
 [Sesión admin] Alta de provider + asignación de staff
@@ -341,6 +341,7 @@ Documento de referencia:
 - DONE 2026-04-14: runtime Fase 1 validado con organizer tecnico en la cuenta Google del admin autenticado; paciente y provider / staff siguen como invitados sin OAuth propio en este flujo
 - DONE 2026-04-14: fix OAuth validado para runtime real: scope `https://www.googleapis.com/auth/calendar`, `include_granted_scopes=false` y reconexion limpia del admin cuando aparecen `invalid_grant` o permisos insuficientes
 - DONE 2026-04-14: cancelar reunion deja el item reprogramable; runtime persiste `appointment_requested_change` y el Inbox operativo expone `appointment_cancelled` como `provider_proposed_change`
+- DONE 2026-04-16: smoke Google Calendar / Meet E2E completo validado en local (commits `6a29500`, `8d8e3d0`, `b25e42b`, `d05d451`, `0d5eab4`). Flujo completo Path A ejecutado de punta a punta: `provider_propose_change` (registro local, `google_event_id=NULL`) → `accept_dates` (evento real Google Calendar + Meet real, attendees correctos) → `cancel_meeting` (DB `cancelled`, `appointment_requested_change`, Google API confirma `status=cancelled`). Ver `13_CHANGELOG_DECISIONS.md` (2026-04-16 smoke).
 
 #### Deuda de modelo
 

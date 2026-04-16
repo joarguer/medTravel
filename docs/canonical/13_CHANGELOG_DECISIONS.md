@@ -1,5 +1,45 @@
 # Changelog Decisions
 
+## 2026-04-16 — smoke(google-calendar): smoke E2E completo validado; create-on-accept correcto; regresión revertida; attendees ok
+
+**Outcome**
+- Smoke Google Calendar / Meet ejecutado en local de punta a punta sobre `item_id=2`, BD `medtravel_rebuild_20260415`.
+- Commits relevantes del frente: `6a29500`, `8d8e3d0`, `b25e42b`, `d05d451`, `0d5eab4`.
+
+**Flujo validado (Path A):**
+
+| Paso | Actor | Resultado |
+|------|-------|-----------|
+| `provider_propose_change` | Provider admin (user 16) | `ok: true`, `calendar_event_id=22`, `item_status=provider_proposed_change`, `google_event_id=NULL` (correcto — solo registro local) |
+| `accept_dates` | Paciente (user 18) | Evento real creado en Google Calendar (`google_event_id=6fp1cbakt9heskkia2mucl2pk4`), Google Meet real (`https://meet.google.com/cue-kdyv-tvg`), `item_status=appointment_confirmed` |
+| `cancel_meeting` | Paciente (user 18) | `calendar_events.status=cancelled`, `item_status=appointment_requested_change`, Google API confirma `status=cancelled` |
+
+**Comportamiento validado del producto:**
+- El evento real en Google Calendar se crea al **aceptar el paciente** (`accept_dates`), no al proponer (`provider_propose_change`).
+- La propuesta solo crea el registro local en `calendar_events` con `google_event_id=NULL`. Ese es el comportamiento correcto.
+- La cancelación deja el ítem en `appointment_requested_change`; el provider puede reproponer sin cerrar el caso.
+
+**Regresión detectada, auditada y revertida:**
+- `e00a316`: creaba el evento real en Google Calendar al proponer (en `my_booking_create_proposed_meeting_event()`). Esto era incorrecto (doble evento al aceptar, attendees faltantes en la propuesta).
+- Revertido con `b25e42b` (`git revert e00a316`).
+- El RFC3339 fix (`str_replace(' ', 'T', ...)`) fue incluido en ese mismo commit y también quedó revertido. Pendiente reaplicar de forma atómica si se decide necesario (ver backlog menor, punto 4 abajo).
+
+**Attendees validados:**
+- Con `assigned_staff_id=1` (`linked_user_id=17`, `colfecarga@gmail.com`): el staff asignado entra correctamente como attendee clínico en el evento Google.
+- Attendees enviados a la API: `[bolsacarga@gmail.com, colfecarga@gmail.com]`.
+- `medtravelusa@gmail.com` (provider / proposal sender) excluido por dedup: coincide con `organizerConnectionEmail` de la cuenta Google OAuth del admin.
+
+**Hallazgo cerrado como artefacto local:**
+- En la sesión anterior, el staff no recibió invitación porque `bri.assigned_staff_id=NULL` en los datos del smoke. No era bug de código sino dato de prueba incompleto.
+- Con `assigned_staff_id` correctamente poblado, la lógica de resolución `linked_user_id → usuarios.email` funciona según diseño.
+
+**Decision**
+- El flujo correcto de creación del evento Google Calendar es: propuesta → registro local únicamente; aceptación del paciente → creación del evento real.
+- Cualquier cambio futuro que mueva la creación del evento al momento de la propuesta es una regresión de producto y debe registrarse en este changelog antes de implementarse.
+- Backlog menor (no crítico, sin frente técnico activo): si un `provider_medical_staff` tiene `pms.email` directo pero `linked_user_id=NULL`, ese staff nunca entra como attendee porque el código resuelve por `usuarios.email` vía `linked_user_id`. Evaluar ampliar fallback a `pms.email` cuando `linked_user_id=0` si hay casos reales en producción con esa configuración.
+
+---
+
 ## 2026-04-16 — smoke(state-machine): dos paths separados confirmados; puente provider_confirmed→appointment_proposed no implementado
 
 **Outcome**
