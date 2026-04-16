@@ -305,6 +305,64 @@ En el runtime actual existen **dos paths** distintos para que un provider / staf
 
 ---
 
+---
+
+## Nota operativa — Plan de activación Meet execution evidence (2026-04-16)
+
+Estado: código completo, **flag OFF**, pendiente de activación operacional.
+
+### Qué quedó listo
+
+| Componente | Estado |
+|---|---|
+| `sql/2026_04_16_google_meet_execution_phase1.sql` | Escrito. 10 cols en `calendar_events` + tablas `google_meet_event_log` + `google_meet_subscriptions`. |
+| `inc/google_meet_execution.php` | Completo (824 líneas). Consumer, backfill helpers, correlación 3-path, Pub/Sub pull/ack, schema guard. |
+| `scripts/google_meet_consumer.php` | Completo. Gate `MT_GOOGLE_MEET_EXECUTION_ENABLED`. Noop limpio si flag=0. |
+| `scripts/google_meet_backfill_space_names.php` | Completo. `--dry-run`, `--limit`, JSON output, idempotente. |
+| Correlación 3-path (commit `2e418e58`) | Activo en lógica. Path 3 por `google_meet_space_name`. |
+| Feature flag `MT_GOOGLE_MEET_EXECUTION_ENABLED` | En producción. OFF. |
+
+### Cadena de activación (orden estricto)
+
+```
+1. Aplicar migración donde falte (local + confirmar producción)
+2. SQL backfill google_meet_space_code desde google_meet_url (eventos existentes)
+3. Reconectar OAuth organizer con scope meetings.space.readonly  ← BLOQUEANTE GORDO
+4. Dry-run backfill: php scripts/google_meet_backfill_space_names.php --dry-run --limit=50
+5. Backfill real: php scripts/google_meet_backfill_space_names.php --limit=50
+6. Configurar env vars Pub/Sub (GOOGLE_CLOUD_PROJECT_ID, GOOGLE_PUBSUB_SUBSCRIPTION, GOOGLE_PUBSUB_SERVICE_ACCOUNT_JSON_PATH)
+7. Consumer smoke: MT_GOOGLE_MEET_EXECUTION_ENABLED=1 php scripts/google_meet_consumer.php --limit=1
+8. MT_GOOGLE_MEET_EXECUTION_ENABLED=1 en producción
+```
+
+### Bloqueante principal
+
+El OAuth de `medtravelusa@gmail.com` fue autorizado solo con `https://www.googleapis.com/auth/calendar` (Fase 1). No incluye `meetings.space.readonly`. Sin ese scope `google_meet_execution_connection_has_space_read_scope()` devuelve `false`, `google_meet_execution_fetch_space_name()` devuelve `reason=scope_not_granted`, y el backfill no puede resolver ningún `space_name`. La correlación por path 3 queda vacía hasta completar la reconexión.
+
+### Verificación pre-flag
+
+```sql
+-- Columnas Meet presentes (debe devolver 10 filas):
+SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='calendar_events'
+  AND COLUMN_NAME IN ('google_meet_space_code','google_meet_space_name',
+    'meeting_execution_status','meeting_started_at','meeting_ended_at',
+    'meeting_duration_seconds','meeting_detected_source','conference_record_name',
+    'meeting_last_event_type','meeting_last_detected_at');
+
+-- Tablas Meet presentes (debe devolver 2 filas):
+SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA=DATABASE()
+  AND TABLE_NAME IN ('google_meet_event_log','google_meet_subscriptions');
+
+-- Al menos 1 evento confirmado con space_name backfilleado:
+SELECT COUNT(*) FROM calendar_events
+WHERE google_meet_space_name IS NOT NULL AND google_meet_space_name <> ''
+  AND status = 'confirmed';
+```
+
+---
+
 ## 9. Encaje funcional con MedTravel
 
 - Calendar / Meet sigue siendo herramienta de coordinación y agenda.

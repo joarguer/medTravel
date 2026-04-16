@@ -1,5 +1,33 @@
 # Changelog Decisions
 
+## 2026-04-16 — ops(google-meet-execution): plan de activación canonizado; código Fase 1 completo; bloqueante gordo = reconexión OAuth con scope Meet
+
+**Outcome**
+- Código de Fase 1 completo: migración, consumer, backfill, schema guard, correlación 3-path, feature flag.
+- Plan operacional de activación producido y canonizado en `14_CALENDAR_MEET_INTEGRATION_MODEL.md` (nota operativa 2026-04-16) y `12_EXECUTION_BACKLOG.md`.
+- `PROJECT_STATE.md` frente 1 actualizado a "código completo, flag OFF, pendiente activación".
+
+**Decision**
+- El flag `MT_GOOGLE_MEET_EXECUTION_ENABLED` permanece OFF hasta completar la cadena de activación.
+- La cadena de activación tiene orden estricto de dependencia:
+  1. migración aplicada en todos los entornos
+  2. SQL backfill `google_meet_space_code` desde `google_meet_url` para eventos existentes
+  3. reconexión OAuth `medtravelusa@gmail.com` con scope `meetings.space.readonly` ← **sin esto los pasos 4-8 son no-op**
+  4. dry-run backfill `google_meet_space_name`
+  5. backfill real
+  6. env vars Pub/Sub (`GOOGLE_CLOUD_PROJECT_ID`, `GOOGLE_PUBSUB_SUBSCRIPTION`, `GOOGLE_PUBSUB_SERVICE_ACCOUNT_JSON_PATH`)
+  7. consumer smoke (`MT_GOOGLE_MEET_EXECUTION_ENABLED=1 php scripts/google_meet_consumer.php --limit=1`)
+  8. flag ON en producción
+
+**Por qué el OAuth es el bloqueante gordo**
+- La conexión existente de `medtravelusa@gmail.com` (`admin_google_calendar_connections`) fue autorizada en Fase 1 solo con `https://www.googleapis.com/auth/calendar`.
+- `google_meet_execution_connection_has_space_read_scope()` exige uno de: `meetings.space.readonly`, `meetings.space.created`, `meetings.space.settings`. Sin ninguno de estos, `google_meet_execution_fetch_space_name()` devuelve `reason=scope_not_granted` para cada fila. El backfill reporta `unresolved=N`, `resolved=0`. La correlación por path 3 (el más robusto para eventos sin suscripción activa) queda vacía.
+
+**Hallazgo local**
+- La BD `medtravel_rebuild_20260415` local no tiene la migración `2026_04_16_google_meet_execution_phase1.sql` aplicada. `calendar_events` carece de las 10 columnas Meet y no existen las tablas `google_meet_event_log` ni `google_meet_subscriptions`. `admin_google_calendar_connections` tiene 0 filas en local (datos de producción no replicados).
+
+---
+
 ## 2026-04-16 — canon(google-meet-execution): se formaliza capa futura de evidencia real de ejecución Meet, separada de agenda y lifecycle clínico
 
 **Outcome**

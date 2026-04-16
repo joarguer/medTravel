@@ -170,13 +170,30 @@ Backlog canónico vigente del proyecto.
 - Se canoniza que la Fase 1 de este frente **no** altera state machine clínica, UI clínica ni lógica de comisión.
 - Se canoniza que la comisión futura podrá leer esta evidencia vía `calendar_events`, sin escribir directo en `commission_payments`.
 
-#### Implementación pendiente por fases
+#### Implementación completada (2026-04-16)
 
-- [ ] Fase 1: extender el modelo de persistencia de cita con snapshot mínimo de ejecución real Meet (`meeting_execution_status`, `meeting_started_at`, `meeting_ended_at`, `meeting_duration_seconds`, `conference_record_name`, `google_meet_space_name`, `meeting_last_event_type`, `meeting_last_detected_at`)
-- [ ] Fase 1: crear tabla append-only de eventos Meet recibidos (`google_meet_event_log`) para dedupe, auditoría y reproceso
-- [ ] Fase 1: crear tabla de suscripciones Meet (`google_meet_subscriptions`) para `workspace_subscription_name`, `target_resource`, `expire_time`, `state`, `last_error`
-- [ ] Fase 1: agregar scopes y gestión de autorización técnica necesarios para Meet / Workspace Events sin forzar reconexión masiva en producción
-- [ ] Fase 1: implementar consumer pull-based vía PHP CLI / cron sobre `medtravel-meet-events-sub`
+- DONE 2026-04-16: migración `sql/2026_04_16_google_meet_execution_phase1.sql` escrita — añade 10 columnas a `calendar_events` (`google_meet_space_code`, `google_meet_space_name`, `meeting_execution_status`, `meeting_started_at`, `meeting_ended_at`, `meeting_duration_seconds`, `meeting_detected_source`, `conference_record_name`, `meeting_last_event_type`, `meeting_last_detected_at`); crea tablas `google_meet_event_log` y `google_meet_subscriptions`. Idempotente.
+- DONE 2026-04-16: `inc/google_meet_execution.php` (824 líneas) — consumer completo con schema guard, correlación 3-path, Pub/Sub pull/ack, backfill helpers, extracción de space_code desde URL y desde raw event Google API
+- DONE 2026-04-16: `scripts/google_meet_consumer.php` — consumer CLI pull-based sobre `medtravel-meet-events-sub`, con gate `MT_GOOGLE_MEET_EXECUTION_ENABLED` (sale limpio como noop si flag=0)
+- DONE 2026-04-16: `scripts/google_meet_backfill_space_names.php` — backfill con `--dry-run` y `--limit`, JSON output, idempotente
+- DONE 2026-04-16: correlación 3-path implementada (commit `2e418e58`): path 1 por `google_meet_subscriptions.workspace_subscription_name`, path 2 por `conference_record_name`, path 3 por `google_meet_space_name`
+- DONE 2026-04-16: feature flag `MT_GOOGLE_MEET_EXECUTION_ENABLED` operativo (OFF en producción)
+
+#### Pendientes de activación (cadena en orden)
+
+- [ ] **[local]** Aplicar `sql/2026_04_16_google_meet_execution_phase1.sql` a `medtravel_rebuild_20260415`
+- [ ] **[producción]** Verificar que la migración está aplicada en `medtravelcom_medtravel` (la Fase 1 se reporta como desplegada, confirmar con `SHOW COLUMNS`)
+- [ ] **[producción]** SQL backfill `google_meet_space_code` desde `google_meet_url` para eventos existentes con `space_code=NULL`: `UPDATE calendar_events SET google_meet_space_code = LOWER(SUBSTRING_INDEX(SUBSTRING_INDEX(google_meet_url, 'meet.google.com/', -1), '?', 1)) WHERE google_meet_url LIKE '%meet.google.com/%' AND (google_meet_space_code IS NULL OR google_meet_space_code = '')`
+- [ ] **[bloqueante]** Reconectar OAuth del organizer (`medtravelusa@gmail.com`, `admin_user_id=1`) añadiendo scope `https://www.googleapis.com/auth/meetings.space.readonly` — sin esto `google_meet_execution_fetch_space_name()` devuelve `scope_not_granted` y el backfill es no-op total
+- [ ] Dry-run backfill post-reconexión: `php scripts/google_meet_backfill_space_names.php --dry-run --limit=50` — verificar `scanned>0`, `resolved>0`, `unresolved=0`
+- [ ] Backfill real: `php scripts/google_meet_backfill_space_names.php --limit=50`
+- [ ] Configurar env vars Pub/Sub en producción: `GOOGLE_CLOUD_PROJECT_ID`, `GOOGLE_PUBSUB_SUBSCRIPTION` (default `medtravel-meet-events-sub`), `GOOGLE_PUBSUB_SERVICE_ACCOUNT_JSON_PATH`
+- [ ] Verificar suscripción Pub/Sub activa y suscrita a Google Workspace Events en Google Cloud Console
+- [ ] Consumer smoke con flag ON: `MT_GOOGLE_MEET_EXECUTION_ENABLED=1 php scripts/google_meet_consumer.php --limit=1`
+- [ ] `MT_GOOGLE_MEET_EXECUTION_ENABLED=1` en producción
+
+#### Pendiente de fases posteriores
+
 - [ ] Fase 2: renovación y reactivación automática de suscripciones (`suspended`, `expirationReminder`, `expired`)
 - [ ] Fase 2: dedupe robusto por `workspace_event_id` y reproceso seguro / catch-up
 - [ ] Fase 2: evaluar si el volumen exige migrar de suscripción por cita a suscripción por organizer / user
