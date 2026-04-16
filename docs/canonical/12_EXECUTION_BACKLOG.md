@@ -185,6 +185,47 @@ Backlog canónico vigente del proyecto.
 - [ ] Extender logica de ownership visible a otras superficies admin: inbox, detalle de solicitud, app_calendar
 - [ ] Notificaciones dirigidas al staff asignado tras la asignacion (email / inbox)
 
+### Frente especifico — Lifecycle médico completo en admin (2026-04-15)
+
+#### Canon cerrado
+
+- DONE 2026-04-15: ciclo clínico completo implementado en `admin/ajax/my_booking_requests.php` y `admin/js/my_booking_requests.js`:
+  - estados: `provider_confirmed → virtual_assessment_pending → virtual_assessment_done → treatment_plan_agreed → procedure_scheduled → treatment_completed → case_closed`
+  - acción "Iniciar valoración virtual" (`virtual_assessment_pending`) con fix de reversa controlada (`$isActualReversal`): no exige `reversal_reason` para transiciones de avance desde `provider_confirmed` / `client_accepted` / `awaiting_client`
+  - acción "Registrar plan clínico acordado" (`treatment_plan_agreed`): modal `modal-lg` + Summernote rich editor + texto de ayuda
+  - acción "Programar procedimiento presencial" (`procedure_scheduled`): modal con fechas y notas
+  - acción "Completar tratamiento" (`treatment_completed`): ya existía, alineado al pipeline
+  - acción "Cerrar caso" (`case_closed`): cierre formal exitoso
+  - tab "Atención clínica" en modal detalle: panel guía operativa colapsable (Bootstrap data-toggle) + matriz de botones de acción por estado normalizado
+- DONE 2026-04-15: reversas controladas — `$isActualReversal` discrimina avance vs reversa real; solo reversas reales requieren `reversal_reason`
+- DONE 2026-04-15: `timeline_from` / `timeline_to` confirmados como columnas de producción en `booking_requests`; acción `update_timeline_window` las escribe; migración requerida antes de activar en servidor
+- DONE 2026-04-15: labels amigables en español para todos los estados lifecycle en `genericStatusLabelEs` y colores de badge en `renderStatusBadge` (`admin/js/my_booking_requests.js`); coinciden con mapa PHP `generic_status_label_es`
+
+#### Pendientes del lifecycle médico
+
+- [ ] Ejecutar migración `timeline_from` / `timeline_to` en servidor de producción antes de activar acción `update_timeline_window`
+- [ ] Smoke test E2E del ciclo completo en servidor: valoración → plan → procedimiento → completado → cierre
+- [ ] Revisar otros lugares del admin con estados crudos (app_inbox, app_calendar, otros modales) y aplicar mismo mapa de labels
+- [ ] Labels del portal del paciente (inglés) para los nuevos estados lifecycle — `client/` pendiente de revisión separada
+
+### Frente especifico — Documentos del caso (client_documents)
+
+#### Canon cerrado
+
+- DONE 2026-04-15: `client_documents` canonizado en `docs/canonical/15_DOCUMENTS_MODEL.md`; deuda heredada DOC-D1 a DOC-D7 explícita
+- DONE 2026-04-15: fix scope de documentos en `admin/ajax/my_booking_requests.php` (`get_detail`): removida rama `WHERE client_id = ?` que usaba `usuarios.id` (client_user_id) como si fuera `clientes.id` — ahora siempre `WHERE 1=1 + booking_request_id`, mismo patrón que `admin/ajax/inbox.php`
+- DONE 2026-04-15: visor de documentos (`#adminDocViewerModal`) replicado desde `app_inbox` en `admin/my_booking_requests.php` + `admin/js/my_booking_requests.js`; soporta PDF (iframe), imagen, fallback genérico; botón descarga separado; cleanup `hidden.bs.modal`
+
+#### Deuda pendiente de documentos
+
+- [ ] DOC-D1: unificar `client_id` (clientes.id) y `client_user_id` (usuarios.id) en `client_documents` — dos ID spaces coexisten sin migración unificadora
+- [ ] DOC-D2: `shared_with_provider` sin migración SQL versionada visible — riesgo en entornos nuevos
+- [ ] DOC-D3: no existe regla de lifecycle de documentos al cancelar/archivar caso
+- [ ] DOC-D4: no existe endpoint dedicado de lectura — flujo embebido en `get_thread` y `get_detail`
+- [ ] DOC-D5: no existe UI de gestión de documentos propia (listar, eliminar, resubir)
+- [ ] DOC-D6: columna `description` sin UI de edición expuesta
+- [ ] DOC-D7: no hay FK declarada en BD entre `client_documents.booking_request_id → booking_requests.id` ni `item_id → booking_request_items.id`
+
 ### Bloque pre-smoke integral (pendiente obligatorio)
 
 - [ ] Ejecutar `sql/2026_04_02_calendar_events_appointment_mode.sql`

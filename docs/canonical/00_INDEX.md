@@ -34,6 +34,7 @@ Si existe un archivo específico de proveedor o modelo como `CLAUDE.md`, se cons
 | `docs/canonical/12_EXECUTION_BACKLOG.md` | Backlog de ejecución y estado de fases |
 | `docs/canonical/13_CHANGELOG_DECISIONS.md` | Decisiones arquitectónicas registradas |
 | `docs/canonical/14_CALENDAR_MEET_INTEGRATION_MODEL.md` | Spec Google Calendar/Meet |
+| `docs/canonical/15_DOCUMENTS_MODEL.md` | Modelo canónico de `client_documents` y flujo de documentos del caso |
 
 ---
 

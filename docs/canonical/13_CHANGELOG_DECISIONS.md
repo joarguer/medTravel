@@ -1,5 +1,80 @@
 # Changelog Decisions
 
+## 2026-04-15 — feat(lifecycle): ciclo médico completo en panel admin
+
+**Outcome**
+- `admin/ajax/my_booking_requests.php` y `admin/js/my_booking_requests.js` implementan el ciclo clínico completo: `provider_confirmed → virtual_assessment_pending → virtual_assessment_done → treatment_plan_agreed → procedure_scheduled → treatment_completed → case_closed`.
+- Acciones nuevas: "Iniciar valoración virtual", "Registrar plan clínico acordado" (Summernote, modal-lg), "Programar procedimiento presencial", "Cerrar caso".
+- Tab "Atención clínica" en modal detalle con guía operativa colapsable (Bootstrap data-toggle/Metronic mt-panel) y matriz de botones por estado normalizado.
+- Reversas controladas: `$isActualReversal` discrimina avance vs reversa real. Solo reversas reales exigen `reversal_reason`. Fix específico: `virtual_assessment_pending` desde `provider_confirmed` / `client_accepted` / `awaiting_client` es avance, no reversa.
+
+**Decision**
+- El pipeline de estados vive en `booking_request_items.item_status`. Los estados nuevos son formales y permanentes; no son alias de estados existentes.
+- `normalizeItemStatus()` en JS no mapea los estados clínicos a otros — cada uno tiene su propio label.
+- `$isActualReversal` es la regla canónica para discriminar avance vs reversa en `update_item_status`. Toda nueva transición que pueda parecer reversa por estar en `$reversalTargets` debe evaluarse explícitamente.
+
+---
+
+## 2026-04-15 — fix(sql): timeline_from / timeline_to como prerequisito de producción
+
+**Outcome**
+- `timeline_from` y `timeline_to` son columnas reales de `booking_requests` usadas por la acción `update_timeline_window` del modal detalle admin.
+- El runtime ya las escribe y lee. No existe migración versionada en `sql/` todavía.
+
+**Decision**
+- Antes de activar `update_timeline_window` en servidor de producción, ejecutar migración que agregue `timeline_from DATE NULL` y `timeline_to DATE NULL` a `booking_requests` si no existen.
+- Crear migración `sql/2026_04_15_booking_requests_timeline_columns.sql` (idempotente) como próxima acción de infra.
+
+---
+
+## 2026-04-15 — fix(documents): scope robusto por booking_request_id en modal detalle
+
+**Outcome**
+- `admin/ajax/my_booking_requests.php` (`get_detail`): removida rama `WHERE client_id = ?` que usaba `booking_requests.client_user_id` (`usuarios.id`) como si fuera `client_documents.client_id` (`clientes.id`) — ID spaces distintos, filtrado incorrecto.
+- Ahora siempre `WHERE 1=1 AND shared_with_provider = 1 AND booking_request_id = ?`, mismo patrón que `admin/ajax/inbox.php`.
+
+**Decision**
+- `booking_request_id` es el anchor canónico de scope para queries de documentos en todas las superficies admin/provider. `client_id` / `client_user_id` son datos de dueño, no de scope de caso.
+- Ver `docs/canonical/15_DOCUMENTS_MODEL.md` para modelo completo.
+
+---
+
+## 2026-04-15 — feat(ui): visor de documentos alineado con app_inbox en modal detalle
+
+**Outcome**
+- `admin/my_booking_requests.php`: CSS + HTML modal `#adminDocViewerModal` idéntico al de `admin/app_inbox.php`.
+- `admin/js/my_booking_requests.js`: helpers `dv*` + `openDocViewer()` replicados desde `app_inbox.js`. Preview: PDF vía iframe, imagen vía `<img>`, fallback con botones abrir/descargar. Endpoint de preview: `/admin/ajax/preview_medical_document.php?doc_id=`.
+- Tabla de documentos: nombre clickeable como `<button .mt-doc-preview-btn>` + columna descarga separada.
+
+**Decision**
+- El visor de documentos en admin es una capacidad transversal. La implementación canónica vive en `app_inbox`. Otros módulos deben replicar el patrón (modal + helpers + openDocViewer), no inventar uno diferente.
+
+---
+
+## 2026-04-15 — fix(ui): labels amigables en español para estados lifecycle en admin
+
+**Outcome**
+- `admin/js/my_booking_requests.js`: `genericStatusLabelEs` completada con los 5 estados nuevos (`virtual_assessment_pending`, `virtual_assessment_done`, `treatment_plan_agreed`, `procedure_scheduled`, `case_closed`) más estados de cita (`appointment_proposed`, `appointment_confirmed`, `appointment_requested_change`, `appointment_cancelled`, `new`).
+- `renderStatusBadge` actualizado con colores: warning → `virtual_assessment_pending`; success → `virtual_assessment_done`, `treatment_plan_agreed`, `case_closed`; info → `procedure_scheduled`.
+- Mapa JS ahora espeja completamente al mapa PHP `generic_status_label_es` (L513-554).
+
+**Decision**
+- Ningún estado raw debe mostrarse visible en el admin sin pasar por `genericStatusLabelEs`. El mapa JS debe mantenerse sincronizado con el PHP. Al agregar un nuevo estado al pipeline, actualizar ambos simultáneamente.
+
+---
+
+## 2026-04-15 — docs(canon): client_documents canonizado en 15_DOCUMENTS_MODEL.md
+
+**Outcome**
+- `docs/canonical/15_DOCUMENTS_MODEL.md` creado: modelo de tabla, scope canónico, reglas de visibilidad por actor, superficies de display y upload, diferencias por rol, deuda heredada DOC-D1 a DOC-D7.
+- `docs/canonical/00_INDEX.md` actualizado con puntero al nuevo archivo.
+
+**Decision**
+- `client_documents` es tabla operativa sin FK forzadas y con dos ID spaces de dueño coexistiendo (`client_id` → `clientes.id`, `client_user_id` → `usuarios.id`). Esta es deuda técnica explícita, no un diseño intencional.
+- El modelo canónico declara `booking_request_id` como anchor obligatorio. Toda query de documentos en admin/provider debe incluirlo.
+
+---
+
 ## 2026-04-15 — feat(providers): archive/restore reversible de proveedores
 
 **Outcome**
