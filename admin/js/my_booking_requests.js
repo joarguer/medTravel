@@ -898,7 +898,7 @@
         html += '</h5>';
         html += '<div id="' + guideId + '" class="collapse" style="margin-top:10px;">';
         html += '<ol style="padding-left:18px;margin:0 0 12px 0;line-height:1.8;">';
-        html += '<li><strong>Valoraci\u00f3n inicial</strong> &mdash; Realiza la videollamada de valoraci\u00f3n con el paciente y registra observaciones.</li>';
+        html += '<li><strong>Valoraci\u00f3n inicial</strong> &mdash; La reuni\u00f3n ya fue confirmada por el paciente. Una vez realizada la videollamada, pulsa <strong>Iniciar valoraci\u00f3n virtual</strong> para registrar el inicio de la atenci\u00f3n cl\u00ednica y continuar el caso.</li>';
         html += '<li><strong>Plan acordado</strong> &mdash; Documenta el plan cl\u00ednico confirmado con el paciente tras la valoraci\u00f3n.</li>';
         html += '<li><strong>Procedimiento presencial</strong> &mdash; Agenda el procedimiento. La fecha debe quedar dentro de la ventana de viaje vigente del paciente.</li>';
         html += '<li><strong>Procedimiento realizado</strong> &mdash; Marca el tratamiento como completado una vez ejecutado.</li>';
@@ -1005,6 +1005,7 @@
 
     function renderClinicalActionsPanel(d, options, normalizedStatus) {
         options = options || {};
+        var rawStatus = String(d.item_status || d.provider_status || '').toLowerCase().trim();
         normalizedStatus = normalizedStatus || normalizeItemStatus(d.item_status || d.provider_status || '');
         var isAdmin = !!(pageContext.isAdminSession);
         var isSupervisor = parseInt(d.supervisor_override_required, 10) === 1;
@@ -1058,6 +1059,10 @@
             html += '<div class="alert alert-info" style="margin-top:8px;"><strong>Asignaci\u00f3n pendiente.</strong> ' + escapeHtml(d.linked_staff_auto_claim_message || 'Si contin\u00faas, asumir\u00e1s este item como responsable operativo.') + '</div>';
         } else if (d.operational_owner_note_es) {
             html += '<div class="alert alert-info" style="margin-top:8px;"><strong>Responsabilidad operativa.</strong> ' + escapeHtml(d.operational_owner_note_es) + '</div>';
+        }
+
+        if (rawStatus === 'appointment_confirmed') {
+            html += '<div class="alert alert-info" style="margin-top:8px;"><strong>Siguiente paso cl\u00ednico.</strong> La cita fue aceptada por el paciente. El siguiente paso cl\u00ednico es realizar la videollamada y luego pulsar <strong>Iniciar valoraci\u00f3n virtual</strong>.</div>';
         }
 
         if (hasActions) {
