@@ -1074,10 +1074,6 @@ function google_calendar_create_event($conexion, $adminUserId, array $payload)
         return ['ok' => false, 'error' => 'summary, start_at y end_at son obligatorios para crear el evento.'];
     }
 
-    // Normalizar a RFC 3339: Google Calendar requiere T entre fecha y hora (no espacio)
-    $startAt = str_replace(' ', 'T', $startAt);
-    $endAt   = str_replace(' ', 'T', $endAt);
-
     $timezone = trim((string)($payload['timezone'] ?? 'America/Bogota'));
     $calendarId = trim((string)($payload['calendar_id'] ?? 'primary'));
     $createMeet = !isset($payload['create_meet']) || !empty($payload['create_meet']);
