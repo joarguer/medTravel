@@ -156,6 +156,33 @@ Backlog canónico vigente del proyecto.
 - [ ] Endurecimiento del admin/inbox donde aun existe mezcla semantica entre acciones de comunicacion y cambios de estado del item
 - [ ] Definir que acciones del inbox pueden disparar sincronizacion de estado del item y cuales son solo comunicacion libre (avance parcial: commit `4c9a142` — confirmacion de reunion desde inbox y `final_accept_and_pay` disparan sync; politica exhaustiva para otras acciones pendiente)
 
+### Frente especifico — Evidencia real de ejecución Google Meet
+
+#### Canon cerrado (documental, 2026-04-16)
+
+- Se canoniza una nueva capa separada de `calendar_events.status` y de `booking_request_items.item_status` para detectar si una reunión virtual realmente ocurrió.
+- La nueva capa se ancla en `calendar_events.id`; la ejecución real pertenece a la cita, no al lifecycle clínico.
+- La ruta técnica canónica propuesta es:
+  - al confirmar una cita virtual, resolver `spaces/{space}` a partir del `meetingCode`
+  - crear suscripción Google Workspace Events por cita / espacio Meet
+  - consumir eventos desde Pub/Sub (`medtravel-meet-events-sub`)
+  - persistir evidencia mínima: conferencia iniciada / finalizada y log crudo
+- Se canoniza que la Fase 1 de este frente **no** altera state machine clínica, UI clínica ni lógica de comisión.
+- Se canoniza que la comisión futura podrá leer esta evidencia vía `calendar_events`, sin escribir directo en `commission_payments`.
+
+#### Implementación pendiente por fases
+
+- [ ] Fase 1: extender el modelo de persistencia de cita con snapshot mínimo de ejecución real Meet (`meeting_execution_status`, `meeting_started_at`, `meeting_ended_at`, `meeting_duration_seconds`, `conference_record_name`, `google_meet_space_name`, `meeting_last_event_type`, `meeting_last_detected_at`)
+- [ ] Fase 1: crear tabla append-only de eventos Meet recibidos (`google_meet_event_log`) para dedupe, auditoría y reproceso
+- [ ] Fase 1: crear tabla de suscripciones Meet (`google_meet_subscriptions`) para `workspace_subscription_name`, `target_resource`, `expire_time`, `state`, `last_error`
+- [ ] Fase 1: agregar scopes y gestión de autorización técnica necesarios para Meet / Workspace Events sin forzar reconexión masiva en producción
+- [ ] Fase 1: implementar consumer pull-based vía PHP CLI / cron sobre `medtravel-meet-events-sub`
+- [ ] Fase 2: renovación y reactivación automática de suscripciones (`suspended`, `expirationReminder`, `expired`)
+- [ ] Fase 2: dedupe robusto por `workspace_event_id` y reproceso seguro / catch-up
+- [ ] Fase 2: evaluar si el volumen exige migrar de suscripción por cita a suscripción por organizer / user
+- [ ] Fase 3: exponer badge UI opcional “Meet detectada / finalizada”
+- [ ] Fase 3: evaluar reglas operativas / comerciales derivadas usando solo evidencia estable ya validada en producción
+
 ### Frente especifico — Ownership operativo por staff asignado
 
 #### Canon cerrado (2026-04-02)

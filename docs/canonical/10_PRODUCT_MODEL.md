@@ -237,6 +237,16 @@ Esta tabla describe qué hace cada actor, desde qué panel opera, cuál es su fr
 - Una cita pertenece al contexto operativo de un item clinico concreto, aunque el caso completo pueda involucrar varios items y varios responsables.
 - El paciente no debe asumirse ligado a un unico medico ni a un unico provider durante toda la vida del caso.
 
+### Regla canónica de agenda vs ejecución real vs lifecycle clínico
+
+- `calendar_events` modela la coordinación de agenda de la cita: propuesta, confirmación, reprogramación, cancelación, modalidad y referencias externas de Google Calendar / Meet.
+- `booking_request_items.item_status` modela el lifecycle operativo / clínico del item. No debe reinterpretarse como estado técnico de una videollamada.
+- Se canoniza una capa futura y separada de **evidencia real de ejecución Meet** para responder si la reunión virtual realmente inició o terminó.
+- Esa evidencia de ejecución real no reemplaza la agenda ni el lifecycle clínico. Es trazabilidad técnica de la cita.
+- El anchor principal de esa capa futura debe ser `calendar_events.id`, porque la ejecución real pertenece a la cita y no al item clínico en abstracto.
+- Una señal técnica de Meet (`started` / `ended`) no debe cambiar por sí sola `booking_request_items.item_status`.
+- La lógica comercial futura, incluyendo comisión, podrá leer esa evidencia técnica, pero no debe escribir directamente lifecycle clínico por arrastre.
+
 ### Regla canónica de cancelación de reunión vs cancelación del caso
 
 - Cancelar una reunión no equivale a cancelar el caso.
@@ -266,6 +276,8 @@ Estos estados son técnicos y de negocio combinados. Deben guiar la UI operativa
 - `appointment_confirmed` — cita confirmada por el paciente (nombre legacy de negocio: `date_confirmed`)
 - `appointment_requested_change` — se solicitó reprogramación (nombre legacy de negocio: `rescheduled`)
 - `appointment_cancelled` — cita cancelada; el caso puede seguir activo y reprogramable
+
+**Nota de frontera:** estos estados siguen describiendo coordinación de agenda. Aun cuando en una fase futura exista evidencia técnica de reunión iniciada o terminada, esa evidencia no crea nuevos `item_status` clínicos por sí sola.
 
 #### Fase clínica operativa (implementada 2026-04-15)
 

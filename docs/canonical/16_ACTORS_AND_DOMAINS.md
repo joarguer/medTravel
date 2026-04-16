@@ -31,6 +31,7 @@ Creado 2026-04-16. Derivado de `10_PRODUCT_MODEL.md` y del análisis de código 
 | Atención médica del caso | Provider admin + Staff asignado | `my_booking_requests`, Inbox ITEM, Calendar | Ciclo clínico completo desde aceptación hasta cierre. |
 | Servicios complementarios | Provider complementario | Panel complementario | Servicios logísticos o de apoyo no clínico. |
 | Agenda y citas (técnico) | Transversal — organizador técnico: Admin MedTravel (Fase 1) | `app_calendar`, `calendar_events`, Google Calendar | El admin MedTravel es el organizador técnico de Google Calendar; el actor clínico es el responsable de la cita. |
+| Evidencia técnica de ejecución Meet | Transversal — backend MedTravel, con organizer técnico admin en Fase 2 | Google Workspace Events, Pub/Sub, Google Meet API | Capa futura para detectar si la reunión virtual realmente inició o terminó. No reemplaza agenda ni lifecycle clínico. |
 | Portal del paciente | Paciente | `client/` | Journey simplificado del paciente. En inglés. |
 | Seguimiento comercial | Admin MedTravel | Panel comisiones, reportes | Comisiones configurables por provider. |
 
@@ -108,9 +109,10 @@ ORDER BY updated_at DESC LIMIT 20;
 2. El `ROLE_ADMINISTRATIVE` (PatientCare) **no tiene acceso a ítems médicos**. Su dominio es exclusivamente el hilo CARE y el booking asistido.
 3. El staff médico **es el owner operativo del ítem una vez asignado**. Antes, el owner es el provider admin.
 4. Google Calendar organizer es un rol **técnico de infraestructura** (Fase 1: admin MedTravel), no un rol de responsabilidad clínica.
-5. La comisión es una **capa comercial configurable** que no altera la responsabilidad clínica del provider.
-6. El canal de comunicación con el paciente es **Inbox CARE** para coordinación, **Inbox ITEM** para comunicación clínica con el provider.
-7. Un agente IA que lea solo `AGENTS.md` o `PROJECT_STATE.md` **no debe asumir que el admin MedTravel es el actor responsable de proponer citas o avanzar el ciclo clínico**. Ese rol pertenece al provider admin o al staff asignado.
+5. Una señal técnica de Meet (`conference started` / `conference ended`) es **evidencia de ejecución de cita**, no transición clínica automática.
+6. La comisión es una **capa comercial configurable** que no altera la responsabilidad clínica del provider.
+7. El canal de comunicación con el paciente es **Inbox CARE** para coordinación, **Inbox ITEM** para comunicación clínica con el provider.
+8. Un agente IA que lea solo `AGENTS.md` o `PROJECT_STATE.md` **no debe asumir que el admin MedTravel es el actor responsable de proponer citas o avanzar el ciclo clínico**. Ese rol pertenece al provider admin o al staff asignado.
 
 ---
 

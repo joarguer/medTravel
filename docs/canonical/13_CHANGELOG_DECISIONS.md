@@ -1,5 +1,44 @@
 # Changelog Decisions
 
+## 2026-04-16 — canon(google-meet-execution): se formaliza capa futura de evidencia real de ejecución Meet, separada de agenda y lifecycle clínico
+
+**Outcome**
+- Se canoniza una propuesta de Fase 2 para detectar si una reunión Google Meet realmente inició o terminó.
+- La propuesta se incorpora al canon y al estado vivo del proyecto sin abrir implementación todavía.
+- Se confirma el estado actual del runtime:
+  - `calendar_events` solo persiste coordinación de agenda y referencias externas (`status`, `google_event_id`, `google_meet_url`, `organizer_email`, `appointment_mode`)
+  - `booking_request_items.item_status` sigue siendo el lifecycle clínico / operativo
+  - no existe código en repo para Google Workspace Events, Pub/Sub ni consumo de eventos Meet
+
+**Decision**
+- Se crea una tercera capa conceptual, distinta de agenda y distinta del lifecycle clínico: **evidencia real de ejecución Meet**.
+- La separación canónica queda así:
+  - agenda / coordinación: `calendar_events`
+  - lifecycle clínico: `booking_request_items.item_status`
+  - evidencia técnica de ejecución real de reunión virtual: capa futura anclada en `calendar_events.id`
+- La implementación futura mínima debe seguir este flujo:
+  1. cita virtual aceptada (`calendar_events.status=confirmed`)
+  2. resolver `spaces/{space}` desde `meetingCode`
+  3. crear suscripción Google Workspace Events por espacio Meet
+  4. consumir `google.workspace.meet.conference.v2.started` / `ended` desde Pub/Sub
+  5. llamar `conferenceRecords.get` y persistir `startTime`, `endTime`, `space`, `conferenceRecord`
+- La persistencia recomendada queda canonizada como:
+  - snapshot mínimo en `calendar_events`
+  - tabla append-only de eventos Meet
+  - tabla de suscripciones Workspace Events
+- La Fase 1 de este frente no puede:
+  - cambiar `booking_request_items.item_status` por arrastre
+  - redefinir la UI clínica
+  - disparar comisiones automáticamente
+- La lógica comercial futura podrá leer esta evidencia, pero solo después de estabilizarla en producción.
+- Riesgos canonizados:
+  - el OAuth actual cubre Calendar, no Meet / Workspace Events
+  - las suscripciones expiran y requieren renovación / reactivación
+  - `meetingCode` no es identificador estable; debe persistirse `spaces/{space}`
+  - un `conference ended` prueba ocurrencia técnica de reunión, no confirmación clínica
+
+---
+
 ## 2026-04-16 — smoke(google-calendar): smoke E2E completo validado; create-on-accept correcto; regresión revertida; attendees ok
 
 **Outcome**

@@ -10,7 +10,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 - **Plataforma:** operativa en desarrollo local
 - **Último bundle conocido:** `medtravel_local_backup_20260410.bundle`
 - **Base de datos:** entorno local moderno validado en `medtravel_rebuild_20260415` (MySQL, reconstruida desde dump real del servidor). `medtravel` queda preservada solo como referencia/backup local legacy y no debe usarse para validar el dominio moderno de providers/staff/services. Producción: `medtravelcom_medtravel`
-- **Fecha última actualización de este archivo:** 2026-04-16 (sesión cierre smoke Google E2E)
+- **Fecha última actualización de este archivo:** 2026-04-16 (sesión documental — canonización evidencia real Meet)
 
 ---
 
@@ -28,6 +28,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 
 ## Frentes completados recientes
 
+- **2026-04-16** — Canonizada la Fase 2 de evidencia real de ejecución Google Meet en la base documental: se formaliza una capa separada de `agenda/calendar` y de `booking_request_items.item_status` para detectar si la reunión virtual realmente inició o terminó usando Google Workspace Events + Pub/Sub + Google Meet API. Queda explícitamente **no implementada** por ahora. Se actualizan `PROJECT_STATE.md`, `10_PRODUCT_MODEL.md`, `12_EXECUTION_BACKLOG.md`, `13_CHANGELOG_DECISIONS.md`, `14_CALENDAR_MEET_INTEGRATION_MODEL.md` y `16_ACTORS_AND_DOMAINS.md`.
 - **2026-04-16** — Smoke Google Calendar / Meet E2E completo validado en local (commits `6a29500`, `8d8e3d0`, `b25e42b`, `d05d451`, `0d5eab4`): flujo completo `provider_propose_change → accept_dates → cancel_meeting` ejecutado de punta a punta con evento real en Google Calendar, Google Meet real, attendees correctos (paciente + staff asignado), y cancelación confirmada por Google API (`status=cancelled`). Regresión `e00a316` (crear evento al proponer) detectada, auditada y revertida con `b25e42b`. Hallazgo de staff sin invitación cerrado como artefacto de datos locales del smoke (`assigned_staff_id=NULL`). Comportamiento correcto del producto validado: el evento real se crea al aceptar el paciente, no al proponer. Ver `docs/canonical/13_CHANGELOG_DECISIONS.md` y `docs/canonical/14_CALENDAR_MEET_INTEGRATION_MODEL.md`.
 - **2026-04-16** — Alineación canónica de actores y dominios: se corrige la premisa de que el admin MedTravel es el actor responsable de proponer citas o avanzar el lifecycle clínico. Se crea `docs/canonical/16_ACTORS_AND_DOMAINS.md` (tabla maestra de actores, dominios, fronteras, recorrido correcto del smoke). Se actualiza `10_PRODUCT_MODEL.md` (tabla de actores, estados visibles completos con 7 del ciclo clínico 2026-04-15, acciones con actor asignado), `13_CHANGELOG_DECISIONS.md` (decisión 2026-04-16), `AGENTS.md` (RBAC con función real por actor), `12_EXECUTION_BACKLOG.md` (smoke test con 3 sesiones correctas y queries de validación), `14_CALENDAR_MEET_INTEGRATION_MODEL.md` (dos paths de propuesta de cita), `00_INDEX.md` (puntero a nuevo doc).
 - **2026-04-15** — Lifecycle médico completo en admin: ciclo clínico `provider_confirmed → virtual_assessment_pending → virtual_assessment_done → treatment_plan_agreed → procedure_scheduled → treatment_completed → case_closed` implementado en `admin/ajax/my_booking_requests.php` con reversas controladas (`$isActualReversal`) y acciones formales de atención clínica (valoración virtual, plan acordado, procedimiento presencial, cierre de caso). Modal `my_booking_requests` incluye tab "Atención clínica" con panel de guía operativa y acciones por estado.
@@ -66,7 +67,18 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 
 ---
 
-### 1. Homepage · oferta · confianza · empaque comercial
+### 1. Google Meet · evidencia real de ejecución
+
+| Campo | Detalle |
+|-------|---------|
+| **Estado** | canonizado, no implementado |
+| **Impacto** | alto |
+| **Evidencia** | El runtime actual solo persiste coordinación de agenda (`calendar_events.status`, `google_event_id`, `google_meet_url`, `organizer_email`, `appointment_mode`) y mantiene el lifecycle clínico separado en `booking_request_items.item_status`. No existe aún detección automática de reunión iniciada/finalizada ni consumo de Google Workspace Events / Pub/Sub. |
+| **Siguiente acción** | Abrir frente técnico por fases: 1) resolver `spaces/{space}` al confirmar cita virtual, crear suscripción Workspace Events por cita y consumir `started/ended` desde `medtravel-meet-events-sub`; 2) renovación/reactivación y lifecycle de suscripciones; 3) UI/commission rules opcionales. Sin tocar `item_status` ni comisiones en fase 1. |
+
+---
+
+### 2. Homepage · oferta · confianza · empaque comercial
 
 | Campo | Detalle |
 |-------|---------|
@@ -77,7 +89,7 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 
 ---
 
-### 2. Chat IA RAG MedTravel USA
+### 3. Chat IA RAG MedTravel USA
 
 | Campo | Detalle |
 |-------|---------|
@@ -88,7 +100,7 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 
 ---
 
-### 3. Provider · staff · services semantics
+### 4. Provider · staff · services semantics
 
 | Campo | Detalle |
 |-------|---------|
@@ -99,7 +111,7 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 
 ---
 
-### 4. SEO · perfiles médicos · E-E-A-T
+### 5. SEO · perfiles médicos · E-E-A-T
 
 | Campo | Detalle |
 |-------|---------|
@@ -110,7 +122,7 @@ Orden de cierre recomendado. Actualizar estado al cerrar cada frente.
 
 ---
 
-### 5. Mantenimiento documental fino
+### 6. Mantenimiento documental fino
 
 | Campo | Detalle |
 |-------|---------|

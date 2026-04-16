@@ -62,12 +62,24 @@ Este canon también fija una transición explícita por fases:
 ### Fase 2 — Meet avanzado y trazabilidad extendida
 
 - La Google Meet API avanzada se incorpora después de estabilizar la Fase 1.
-- Esta fase cubre metadatos extendidos y, cuando aplique por permisos y producto:
+- Esta fase cubre primero una salida mínima y de alto valor de negocio: **evidencia real de ejecución de reunión virtual**.
+- Esa salida mínima se implementa sin romper Fase 1 y sin mezclar agenda con lifecycle clínico.
+- El objetivo inicial de Fase 2 es responder técnicamente:
+  - la reunión virtual inició
+  - la reunión virtual terminó
+  - cuándo ocurrió
+  - cuánto duró
+- Para esa salida mínima, la integración debe usar Google Workspace Events + Google Meet API para obtener:
+  - `space` canónico de Meet
+  - `conferenceRecord`
+  - `startTime`
+  - `endTime`
+  - duración derivada
+- Después de estabilizar esa evidencia mínima, la fase puede ampliarse a metadatos extendidos y, cuando aplique por permisos y producto:
   - participantes
-  - duración
-  - conference records
-  - artefactos como recordings o transcripts
-  - eventos y trazabilidad avanzada
+  - recordings
+  - transcripts
+  - otros artefactos y trazabilidad avanzada
 - La Fase 2 no redefine el modelo de cita; lo enriquece.
 
 ### Fase 2+ — Consentimiento OAuth opcional por actor
@@ -132,6 +144,21 @@ Este canon también fija una transición explícita por fases:
 
 - Es una capacidad de la cita cuando la modalidad o el flujo requiera atención virtual.
 - Debe considerarse derivado del evento o de la integración externa de agenda, no como módulo independiente del producto.
+
+### Evidencia real de ejecución Meet
+
+- Es una capa técnica separada de la coordinación de agenda y del lifecycle clínico.
+- Su propósito es responder si una reunión virtual realmente ocurrió, sin inferir por ello actos clínicos ni comerciales automáticos.
+- Debe anclarse en la cita (`calendar_events.id`) porque la ejecución real corresponde a un evento concreto de agenda.
+- Debe poder persistir como mínimo:
+  - identificador canónico del espacio Meet (`spaces/{space}`)
+  - identificador de conference record
+  - timestamp de inicio
+  - timestamp de fin
+  - duración derivada
+  - fuente técnica de detección
+  - último tipo de evento recibido
+- Esta capa no sustituye el `item_status` clínico ni crea por sí sola nuevos estados del item.
 
 ## 5. Regla de ownership de agenda
 
@@ -203,6 +230,20 @@ La estrategia canónica recomendada es progresiva.
 - Cuando la cita sea virtual o requiera enlace remoto, Google Meet debe generarse desde la cita o el evento externo cuando aplique.
 - Meet se trata como capacidad de la cita, no como producto separado.
 
+### Evidencia de ejecución real propuesta
+
+- Cuando una cita virtual ya fue aceptada y el evento externo existe, MedTravel debe poder resolver el `space` canónico de Meet a partir del `meetingCode`.
+- La recomendación canónica inicial es suscripción por cita / espacio Meet:
+  - `targetResource = //meet.googleapis.com/spaces/{SPACE_ID}`
+  - `eventTypes = conference.started / conference.ended`
+  - `notificationEndpoint = Pub/Sub`
+- El flujo de alto nivel queda canonizado así:
+  - `calendar_events.status=confirmed` = cita aceptada
+  - `google.workspace.meet.conference.v2.started` = reunión realmente iniciada
+  - `google.workspace.meet.conference.v2.ended` = reunión realmente terminada
+  - el consumer toma `conferenceRecord.name`, consulta `conferenceRecords.get` y actualiza MedTravel
+- Este modelo no altera la regla de que la cita sigue siendo agenda y el item sigue siendo lifecycle clínico.
+
 ## 8. Reglas de seguridad
 
 - Los tokens OAuth se separan por admin conectado.
@@ -210,6 +251,7 @@ La estrategia canónica recomendada es progresiva.
 - El refresh token debe almacenarse protegido y cifrado en backend.
 - El flujo OAuth debe validar `state` para prevenir CSRF y callbacks inválidos.
 - Los scopes deben ser mínimos para la Fase 1 y ampliarse solo cuando la Fase 2 lo exija.
+- La ampliación de scopes para Fase 2 debe introducirse de forma incremental y no forzar reconexión masiva de organizers en producción sin rollout controlado.
 - No se exponen secretos OAuth ni tokens en frontend.
 - La conexión Google se gestiona solo desde backend/admin autenticado.
 - En fases posteriores, la misma regla de aislamiento debe extenderse por actor conectado; una aceptacion funcional interna no puede crear ni ampliar scopes OAuth por inferencia.
@@ -310,15 +352,24 @@ Sin definir aún implementación detallada, el canon deja asentado que serán ne
 - conciliación entre cambios hechos en MedTravel y cambios hechos en agenda externa
 - base futura para ampliar metadatos de Meet sin rediseñar el modelo de cita
 - base futura para conexiones OAuth opcionales por actor manteniendo aislamiento por usuario y separacion entre aceptacion funcional y autorizacion tecnica
+- resolución y persistencia del `space` canónico de Meet al confirmar una cita virtual
+- suscripción Google Workspace Events para eventos de conferencia iniciada / finalizada
+- consumer backend pull-based desde Pub/Sub con dedupe y reproceso seguro
+- persistencia separada de:
+  - snapshot mínimo de ejecución en `calendar_events`
+  - log crudo append-only de eventos Meet
+  - metadatos de suscripción y su lifecycle
 
 ## 12. Fuera de Fase 1
 
 - No se canoniza todavía ownership fino de organizer por provider o por `provider_medical_staff` como comportamiento inicial obligatorio.
 - No se canoniza todavía sincronización bidireccional completa ni reconciliación avanzada de cambios.
-- No se canoniza todavía explotación de artefactos avanzados de Meet como recordings, transcripts o conference records.
-- No se canoniza todavía analítica avanzada de participantes y duración.
+- No se implementa todavía la evidencia real de ejecución Meet; queda solo canonizada como frente futuro por fases.
+- No se canoniza todavía explotación avanzada de artefactos Meet como recordings y transcripts más allá de lo que eventualmente exija detectar ejecución real.
+- No se canoniza todavía analítica avanzada de participantes.
 - No se canoniza todavía exposición pública o gestión de OAuth desde frontend paciente.
 - No se canoniza todavía que aceptar una cita dentro de MedTravel baste como consentimiento tecnico sobre Google; esa equivalencia queda explícitamente prohibida.
+- No se canoniza todavía cambio automático de lifecycle clínico ni de comisión derivado de señales técnicas `started` / `ended`.
 
 ## 13. Frontera de producto
 
@@ -339,6 +390,9 @@ Sin definir aún implementación detallada, el canon deja asentado que serán ne
 - Fase futura: conexiones OAuth opcionales por actor con aislamiento por usuario
 - Fase futura: solicitud de conexión Google como paso adicional cuando un actor acepte en MedTravel pero aún no haya autorizado OAuth
 - Fase 2: metadatos avanzados de Google Meet
+- Fase 2: resolver `space` canónico, crear suscripción por cita y detectar `started` / `ended`
+- Fase 2: persistir snapshot mínimo de ejecución real Meet + log append-only + estado de suscripciones
+- Fase 2: renovación / reactivación de suscripciones y manejo de lifecycle events
 - Fase 2: conference records y artefactos cuando apliquen
 - Fase futura: ownership fino de agenda por provider o `provider_medical_staff`
 - Fase futura: no solapamiento por staff
