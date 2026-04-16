@@ -3961,16 +3961,23 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     // Reversas deben incluir motivo.
     // virtual_assessment_pending es reversa solo si viene de virtual_assessment_done;
     // desde provider_confirmed/client_accepted/awaiting_client es avance normal.
+    // provider_confirmed desde pending_provider es avance (primera confirmación del provider);
+    // solo es reversa cuando viene de virtual_assessment_pending (volver a confirmado tras valoración).
     $advanceSourcesForVirtualPending = ['provider_confirmed', 'client_accepted', 'awaiting_client'];
     $isActualReversal = $isReversal && !(
         $targetStatus === 'virtual_assessment_pending'
         && in_array($currentStatus, $advanceSourcesForVirtualPending, true)
+    ) && !(
+        $targetStatus === 'provider_confirmed'
+        && $currentStatus === 'pending_provider'
     );
     if ($isActualReversal) {
         $reversalReasonRaw = trim((string)($_POST['reversal_reason'] ?? ''));
         if ($reversalReasonRaw === '') {
             json_err('reversal_reason_required', 422);
         }
+    } else {
+        $reversalReasonRaw = '';
     }
 
     $providerResponseBy = isset($_SESSION['id_usuario']) ? intval($_SESSION['id_usuario']) : (isset($_SESSION['id']) ? intval($_SESSION['id']) : 0);
@@ -4276,7 +4283,8 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
         $sql .= ' AND br.is_deleted = 0';
     }
     $sql .= $scopeWhere;
-    $sql .= ' LIMIT 1';
+    // LIMIT 1 eliminado: MySQL prohíbe LIMIT en UPDATE multi-tabla con JOIN.
+    // La unicidad está garantizada por WHERE bri.id = ? (PK) más el scopeWhere de sesión.
 
     $finalTypes = $types . $scopeTypes;
     $finalParams = array_merge($params, $scopeParams);
