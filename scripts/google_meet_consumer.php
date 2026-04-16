@@ -6,7 +6,6 @@ if (PHP_SAPI !== 'cli') {
     exit(1);
 }
 
-require_once __DIR__ . '/../admin/include/conexion.php';
 require_once __DIR__ . '/../inc/google_meet_execution.php';
 
 $options = getopt('', ['limit::']);
@@ -31,6 +30,8 @@ if (!empty($config['errors'])) {
     ], JSON_UNESCAPED_SLASHES) . PHP_EOL);
     exit(1);
 }
+
+require_once __DIR__ . '/../admin/include/conexion.php';
 
 $pullState = google_meet_execution_pubsub_pull($config, $limit);
 if (empty($pullState['ok'])) {
@@ -72,6 +73,7 @@ foreach ($receivedMessages as $receivedMessage) {
         continue;
     }
 
+    $summary['ok'] = false;
     $summary['errors'][] = [
         'workspace_event_id' => (string)($result['workspace_event_id'] ?? ''),
         'error' => (string)($result['error'] ?? 'unknown'),
