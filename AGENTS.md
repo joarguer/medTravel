@@ -48,8 +48,10 @@ sql/            Esquemas y migraciones
 - `booking_request_events` — citas/eventos ligados a ítems
 - `booking_request_quotes` — cotizaciones versionadas por ítem
 
-Pipeline de estado por ítem:
-`availability_checked` → `virtual_assessment_scheduled` → `assessment_completed` → `quote_sent` → `quote_accepted` → `scheduled` → `ready_for_payment` → `paid` / `pay_on_arrival` / `cancelled`
+Pipeline de estado por ítem (happy path):
+`pending_provider` → `provider_reviewing` → `provider_confirmed` → `appointment_proposed` → `appointment_confirmed` → `virtual_assessment_pending` → `virtual_assessment_done` → `treatment_plan_agreed` → `procedure_scheduled` → `treatment_completed` → `case_closed`
+
+Estados adicionales del pipeline: `needs_more_info`, `doctor_assigned`, `client_accepted`, `awaiting_client`, `appointment_requested_change`, `appointment_cancelled`, `post_treatment_follow_up`, `cancelled`. Ver `docs/canonical/10_PRODUCT_MODEL.md` para lista completa con fases.
 
 ### Proveedores vs. personal médico
 - `providers` — entidad que presta servicios
@@ -66,18 +68,19 @@ Pipeline de estado por ítem:
 
 ## RBAC
 
-| Rol | ID | Alcance |
-|-----|----|---------|
-| ROLE_ADMIN | 1 | Acceso total |
-| ROLE_ADMINISTRATIVE | 2 | Operaciones administrativas |
-| ROLE_PROVIDER_ADMIN | 12 | Dueño/admin del proveedor |
-| ROLE_PROVIDER | 4 | Personal del proveedor (solo lectura) |
-| ROLE_COMPLEMENTARY_ADMIN | 13 | Admin servicio complementario |
-| ROLE_ACCOUNTING | 11 | Reportes financieros |
-| ROLE_CLIENT | 3 | Portal del paciente |
+| Rol | ID | Función operativa real | Frontera |
+|-----|----|----------------------|----------|
+| ROLE_ADMIN | 1 | **Gestor de plataforma**: alta de providers, catálogo, comisiones, configuración técnica, monitoreo. Puede supervisar cualquier caso. | **No es actor clínico.** No propone citas ni avanza el lifecycle clínico como responsable. |
+| ROLE_ADMINISTRATIVE | 2 | **Coordinador PatientCare**: coordina con el paciente vía hilo CARE, crea booking asistido, gestiona su perfil. | Solo dominio CARE y booking asistido. Sin acceso a ítems médicos ni lifecycle clínico. |
+| ROLE_PROVIDER_ADMIN | 12 | **Owner del provider médico**: acepta/rechaza caso, propone citas, avanza lifecycle clínico, gestiona staff. Actor clínico responsable del caso. | Scope `provider_id` propio. |
+| ROLE_PROVIDER | 4 | **Staff médico asignado** (`linked_user_id` en `provider_medical_staff`): ejecuta valoración, plan clínico, procedimiento, seguimiento. Owner operativo del ítem asignado. | Scope `assigned_staff_id`. Sin acceso a ítems no asignados. |
+| ROLE_COMPLEMENTARY_ADMIN | 13 | Admin de servicio complementario (no médico). | Scope `service_provider_id`. |
+| ROLE_ACCOUNTING | 11 | Reportes financieros. | Solo lectura comercial. |
+| ROLE_CLIENT | 3 | **Paciente**: portal propio, acepta propuestas, comunica. | Portal `client/` separado. Sin acceso al panel admin. |
 
 - Permisos granulares en `admin/include/roles.php`
 - El super-admin (`usuarios.id = 1`) está protegido; nunca reutilizar en flujos de proveedores
+- Ver `docs/canonical/16_ACTORS_AND_DOMAINS.md` para tabla completa de actores, dominios y fronteras
 
 ---
 

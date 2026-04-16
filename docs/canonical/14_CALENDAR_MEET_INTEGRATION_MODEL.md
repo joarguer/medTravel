@@ -214,6 +214,23 @@ La estrategia canónica recomendada es progresiva.
 - La conexión Google se gestiona solo desde backend/admin autenticado.
 - En fases posteriores, la misma regla de aislamiento debe extenderse por actor conectado; una aceptacion funcional interna no puede crear ni ampliar scopes OAuth por inferencia.
 
+## Nota operativa — dos paths de propuesta de cita (2026-04-16)
+
+En el runtime actual existen **dos paths** distintos para que un provider / staff proponga una cita. Su comportamiento en `organizer_admin_user_id` es diferente.
+
+| Path | Archivo | Quién puede invocarlo | Comportamiento de `organizer_admin_user_id` |
+|------|---------|----------------------|----------------------------------------------|
+| **Path modal my_booking_requests** | `admin/ajax/my_booking_requests.php` → acción `propose_appointment` | Provider admin, Staff asignado, Admin MedTravel (excepcionalmente) | Se fija al ejecutar la propuesta. Si el actor es admin MedTravel, `organizer_admin_user_id = id del admin`. Si es provider, queda vacío o se resuelve por fallback al admin OAuth conectado. |
+| **Path calendar directo** | `admin/ajax/calendar.php` → creación de evento | Admin MedTravel, Provider admin | `organizer_admin_user_id` se fija al admin OAuth conectado en el momento de crear el evento Google Calendar. |
+
+**Implicaciones operativas:**
+
+- El path correcto para la propuesta de cita dentro del flujo clínico del caso es `my_booking_requests` (propose_appointment), ya que actualiza `item_status`, envía mensaje al inbox y emite socket al hilo CARE.
+- El path `calendar` directo crea el evento en Google Calendar pero puede no sincronizar `item_status` si no va acompañado de la acción formal en el ítem.
+- En ambos paths, el organizer técnico del evento Google es siempre un admin MedTravel con OAuth conectado. Eso no convierte al admin en el actor clínico responsable de la cita.
+
+---
+
 ## 9. Encaje funcional con MedTravel
 
 - Calendar / Meet sigue siendo herramienta de coordinación y agenda.

@@ -1,5 +1,27 @@
 # Changelog Decisions
 
+## 2026-04-16 — canon(actors): corrección de premisa — Admin MedTravel es gestor de plataforma, no actor clínico
+
+**Outcome**
+- Se detecta y corrige una premisa incorrecta en el contexto operativo: el admin MedTravel no es el actor responsable de proponer citas ni de avanzar el lifecycle clínico de los ítems. Esa responsabilidad pertenece al provider admin y al staff asignado.
+- Se crea `docs/canonical/16_ACTORS_AND_DOMAINS.md` como documento centralizado de actores, dominios y fronteras.
+- Se actualiza `docs/canonical/10_PRODUCT_MODEL.md` con:
+  - tabla de actores por dominio con función, herramienta y frontera explícita
+  - acciones oficiales del ítem con actor responsable asignado a cada una
+  - estados visibles completos incluyendo los 7 del ciclo clínico 2026-04-15
+  - reglas canónicas de separación de dominios
+- Se actualiza `AGENTS.md` con función operativa real por actor en la sección RBAC.
+- Se actualiza `docs/canonical/14_CALENDAR_MEET_INTEGRATION_MODEL.md` con nota sobre los dos paths de propuesta de cita.
+
+**Decision**
+- El **admin MedTravel** es gestor de la plataforma: alta de providers, catálogo, monitoreo, comisiones, configuración técnica. Puede supervisar, pero no es el actor responsable de avanzar el ciclo clínico.
+- El **actor clínico responsable** del lifecycle (desde `virtual_assessment_pending` en adelante) es el **provider admin o el staff asignado**.
+- El `ROLE_ADMINISTRATIVE` (PatientCare) opera exclusivamente en dominio CARE y booking asistido. Sin acceso a ítems médicos ni al lifecycle clínico.
+- El **staff médico es el owner operativo del ítem una vez asignado**. Antes de la asignación, el owner es el provider admin.
+- Esta corrección debe aplicarse al ejecutar el smoke test E2E: las sesiones de propuesta de cita y avance clínico deben usar credenciales de provider admin o staff, no de admin MedTravel.
+
+---
+
 ## 2026-04-15 — feat(lifecycle): ciclo médico completo en panel admin
 
 **Outcome**

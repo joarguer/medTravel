@@ -10,7 +10,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 - **Plataforma:** operativa en desarrollo local
 - **Último bundle conocido:** `medtravel_local_backup_20260410.bundle`
 - **Base de datos:** entorno local moderno validado en `medtravel_rebuild_20260415` (MySQL, reconstruida desde dump real del servidor). `medtravel` queda preservada solo como referencia/backup local legacy y no debe usarse para validar el dominio moderno de providers/staff/services. Producción: `medtravelcom_medtravel`
-- **Fecha última actualización de este archivo:** 2026-04-15
+- **Fecha última actualización de este archivo:** 2026-04-16
 
 ---
 
@@ -28,6 +28,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 
 ## Frentes completados recientes
 
+- **2026-04-16** — Alineación canónica de actores y dominios: se corrige la premisa de que el admin MedTravel es el actor responsable de proponer citas o avanzar el lifecycle clínico. Se crea `docs/canonical/16_ACTORS_AND_DOMAINS.md` (tabla maestra de actores, dominios, fronteras, recorrido correcto del smoke). Se actualiza `10_PRODUCT_MODEL.md` (tabla de actores, estados visibles completos con 7 del ciclo clínico 2026-04-15, acciones con actor asignado), `13_CHANGELOG_DECISIONS.md` (decisión 2026-04-16), `AGENTS.md` (RBAC con función real por actor), `12_EXECUTION_BACKLOG.md` (smoke test con 3 sesiones correctas y queries de validación), `14_CALENDAR_MEET_INTEGRATION_MODEL.md` (dos paths de propuesta de cita), `00_INDEX.md` (puntero a nuevo doc).
 - **2026-04-15** — Lifecycle médico completo en admin: ciclo clínico `provider_confirmed → virtual_assessment_pending → virtual_assessment_done → treatment_plan_agreed → procedure_scheduled → treatment_completed → case_closed` implementado en `admin/ajax/my_booking_requests.php` con reversas controladas (`$isActualReversal`) y acciones formales de atención clínica (valoración virtual, plan acordado, procedimiento presencial, cierre de caso). Modal `my_booking_requests` incluye tab "Atención clínica" con panel de guía operativa y acciones por estado.
 - **2026-04-15** — Modal detalle solicitud mejorado: visor de documentos (`#adminDocViewerModal`) replicado desde `app_inbox` (PDF/imagen/fallback, preview endpoint, descarga); labels amigables en español para todos los estados lifecycle en `genericStatusLabelEs` y colores en `renderStatusBadge`; fix de scope de documentos (`client_id` vs `client_user_id` desync resuelto — ahora siempre scope por `booking_request_id`).
 - **2026-04-15** — `client_documents` canonizado: modelo y flujo documentados en `docs/canonical/15_DOCUMENTS_MODEL.md`. Deuda heredada explícita (DOC-D1 a DOC-D7). `00_INDEX.md` actualizado.

@@ -228,10 +228,56 @@ Backlog canónico vigente del proyecto.
 
 ### Bloque pre-smoke integral (pendiente obligatorio)
 
+#### Corrección de premisa — actor correcto en el smoke (2026-04-16)
+
+El smoke E2E del ciclo clínico debe ejecutarse con los actores correctos. El admin MedTravel es gestor de plataforma, no actor clínico. Las transiciones clínicas deben producir `sender_role = PROVIDER` o `PROVIDER_ADMIN`, no `ADMIN`.
+
+**Sesiones requeridas para el smoke:**
+
+| Sesión | Rol | Qué valida |
+|--------|-----|-----------|
+| Sesión 1 — Admin MedTravel | `ROLE_ADMIN` | Alta de provider, asignación de staff, monitoreo. NO avanzar lifecycle clínico. |
+| Sesión 2 — Provider admin | `ROLE_PROVIDER_ADMIN` | Aceptar caso, proponer cita, iniciar valoración virtual, registrar plan, programar procedimiento, completar tratamiento, cerrar caso. |
+| Sesión 3 — Paciente | `ROLE_CLIENT` | Confirmar cita, ver journey en portal. |
+
+**Recorrido correcto del smoke lifecycle completo:**
+
+```
+[Sesión admin] Alta de provider + asignación de staff
+[Sesión paciente] Crear solicitud desde portal
+[Sesión provider] Revisar → Aceptar caso (provider_confirmed)
+[Sesión provider] Proponer cita (appointment_proposed)
+[Sesión paciente] Confirmar cita (appointment_confirmed)
+[Sesión provider] Iniciar valoración virtual (virtual_assessment_pending)
+[Sesión provider] Registrar plan clínico acordado (treatment_plan_agreed)
+[Sesión provider] Programar procedimiento presencial (procedure_scheduled)
+[Sesión provider] Completar tratamiento (treatment_completed)
+[Sesión provider] Cerrar caso (case_closed)
+```
+
+**Queries de validación post-smoke:**
+```sql
+-- Verificar que las transiciones clínicas tienen updated_by_role = PROVIDER, no ADMIN
+SELECT id, item_status, updated_at FROM booking_request_items
+WHERE item_status IN ('virtual_assessment_pending','virtual_assessment_done',
+  'treatment_plan_agreed','procedure_scheduled','treatment_completed','case_closed')
+ORDER BY updated_at DESC LIMIT 20;
+
+-- Verificar sender_role en propuestas de cita (debe ser PROVIDER, no ADMIN)
+SELECT id, sender_role, message_type, created_at FROM inbox_messages
+WHERE message_type = 'appointment_proposal'
+ORDER BY created_at DESC LIMIT 10;
+```
+
+Ver `docs/canonical/16_ACTORS_AND_DOMAINS.md` para la tabla completa.
+
+#### Migraciones previas al smoke
+
 - [ ] Ejecutar `sql/2026_04_02_calendar_events_appointment_mode.sql`
 - [ ] Ejecutar `sql/2026_04_02_booking_request_items_treatment_completed.sql`
 - [ ] Ejecutar `sql/2026_04_02_booking_request_items_post_treatment_follow_up.sql`
-- [ ] Correr smoke test end-to-end integral despues de migraciones
+- [ ] Ejecutar migración `timeline_from` / `timeline_to` en servidor de producción (ver frente lifecycle médico arriba)
+- [ ] Correr smoke test end-to-end integral con 3 sesiones correctas (ver recorrido arriba)
 - [ ] Publicar observabilidad Fase 1 del bloque staff/lifecycle (checklist de validacion y resultados)
 - [ ] Definir fase terminal/cierre final del lifecycle del item para cierre canónico completo
 

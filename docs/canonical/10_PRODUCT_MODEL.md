@@ -121,6 +121,29 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 - El staff NO debe reutilizar `ROLE_PROVIDER` ni `ROLE_PROVIDER_ADMIN` para autenticarse.
 - El acceso del staff al panel debe ser restringido por asignacion de items/casos (`booking_request_items.assigned_staff_id`), no solo por `provider_id`.
 
+## Actores del sistema por dominio
+
+Esta tabla describe qué hace cada actor, desde qué panel opera, cuál es su frontera operativa y qué no puede hacer. Es la fuente de verdad para distinguir gestor de plataforma de actor clínico.
+
+| Actor | Función principal | Herramienta principal | Frontera — lo que NO hace |
+|-------|------------------|----------------------|--------------------------|
+| **Admin MedTravel** (`ROLE_ADMIN`) | Gestiona la plataforma: alta de providers, catálogo, monitoreo de casos, comisiones, configuración técnica (Google OAuth). Puede supervisar e intervenir en cualquier caso. | Panel admin general | No ejecuta actos clínicos. No propone citas como actor responsable del caso. No avanza el lifecycle clínico en nombre del provider. |
+| **Coordinador PatientCare** (`ROLE_ADMINISTRATIVE`) | Coordina comunicación con el paciente vía hilo CARE. Crea booking asistido. Opera solo el dominio de coordinación. | Inbox CARE, booking asistido | Sin acceso a items médicos ni al lifecycle clínico. Sin acceso global a usuarios, roles o configuración sensible. |
+| **Provider admin** (`ROLE_PROVIDER_ADMIN`) | Owner del prestador médico. Acepta/rechaza caso, avanza lifecycle clínico, propone citas, gestiona su equipo. Responsable contractual del caso. | `admin/my_booking_requests.php`, Inbox ITEM, Calendar | Scope `provider_id` propio. No accede a providers de terceros. No gestiona configuración global de MedTravel. |
+| **Staff médico** (`ROLE_PROVIDER` con `linked_user_id`) | Ejecuta la atención real: valoración virtual, plan clínico, procedimiento presencial, seguimiento. Owner operativo del item una vez asignado. | Solicitudes asignadas, Inbox ITEM asignado, Agenda asignada | Scope `assigned_staff_id`. No gestiona configuración del provider. No accede a items no asignados. |
+| **Provider complementario** (`ROLE_COMPLEMENTARY_ADMIN`) | Gestiona servicios no médicos vinculados al caso. | Panel provider complementario | Scope `service_provider_id`. Dominio separado del médico. |
+| **Paciente** (`ROLE_CLIENT`) | Solicita, acepta propuestas de cita, cancela, comunica. Dueño del expediente. | Portal `client/` | Sin acceso al panel admin. No avanza lifecycle clínico. No puede aceptar Términos en nombre de otro. |
+
+### Reglas canónicas de separación de dominios
+
+- El **admin MedTravel puede supervisar** el lifecycle de un item pero **no es el responsable operativo de avanzarlo**. Esa responsabilidad pertenece al provider admin o al staff asignado.
+- El `ROLE_ADMINISTRATIVE` (PatientCare) **no tiene acceso a items médicos ni al lifecycle clínico**. Su dominio es exclusivamente el hilo CARE y el booking asistido.
+- El **staff médico es el owner operativo del item una vez asignado**. Antes de la asignación, el owner es el provider admin.
+- El **organizer de Google Calendar es un rol técnico de infraestructura**, no de responsabilidad clínica. En Fase 1 ese rol recae en el admin MedTravel.
+- La **comisión es una capa comercial configurable** que no altera la responsabilidad clínica del provider ni los dominios operativos.
+
+---
+
 ## Actores oficiales con acceso al sistema
 
 ### Superusuario MedTravel
@@ -225,32 +248,61 @@ MedTravel se canoniza como una plataforma de gestion de casos de turismo medico 
 
 ### Estados visibles oficiales del item
 
-Estos estados son de negocio y deben guiar la UI operativa. Pueden convivir con estados tecnicos internos adicionales.
+Estos estados son técnicos y de negocio combinados. Deben guiar la UI operativa. El nombre técnico es el que vive en `booking_request_items.item_status`. Los labels visibles en español se resuelven vía `genericStatusLabelEs` (JS) / `generic_status_label_es` (PHP).
 
-- `pending_provider`
-- `provider_reviewing`
-- `needs_more_info`
-- `doctor_assigned`
-- `date_proposed`
-- `date_confirmed`
-- `rescheduled`
-- `treatment_completed`
-- `post_treatment_follow_up`
-- `cancelled`
+#### Fase de admisión y revisión
+
+- `pending_provider` — ítem recibido, pendiente de revisión por el provider
+- `provider_reviewing` — provider está revisando el caso
+- `needs_more_info` — provider solicita información adicional al paciente
+- `doctor_assigned` — médico / staff asignado al ítem
+- `provider_confirmed` — provider confirmó la aceptación del caso
+- `client_accepted` — paciente aceptó la propuesta
+- `awaiting_client` — esperando respuesta del paciente
+
+#### Fase de agenda y cita
+
+- `appointment_proposed` — cita propuesta por el provider / staff (nombre legacy de negocio: `date_proposed`)
+- `appointment_confirmed` — cita confirmada por el paciente (nombre legacy de negocio: `date_confirmed`)
+- `appointment_requested_change` — se solicitó reprogramación (nombre legacy de negocio: `rescheduled`)
+- `appointment_cancelled` — cita cancelada; el caso puede seguir activo y reprogramable
+
+#### Fase clínica operativa (implementada 2026-04-15)
+
+- `virtual_assessment_pending` — valoración virtual iniciada, pendiente de realización
+- `virtual_assessment_done` — valoración virtual completada
+- `treatment_plan_agreed` — plan clínico acordado entre provider/staff y paciente
+- `procedure_scheduled` — procedimiento presencial programado
+- `treatment_completed` — tratamiento completado
+
+#### Fase de cierre
+
+- `post_treatment_follow_up` — seguimiento post tratamiento en curso
+- `case_closed` — caso cerrado formalmente
+- `cancelled` — ítem cancelado
 
 Compatibilidad legacy:
-- `completed` se considera alias legacy de `treatment_completed` en runtime y no debe usarse como nuevo estado canonico.
+- `completed` se considera alias legacy de `treatment_completed` en runtime y no debe usarse como nuevo estado canónico.
+- `date_proposed`, `date_confirmed`, `rescheduled` son nombres de negocio legacy; los nombres técnicos actuales son `appointment_proposed`, `appointment_confirmed`, `appointment_requested_change`.
 
 ### Acciones oficiales del item
 
-Las acciones de negocio oficialmente reconocidas para un item son:
+Las acciones de negocio oficialmente reconocidas para un item, con el actor responsable de cada una:
 
-- Aceptar caso
-- Rechazar caso
-- Solicitar informacion
-- Proponer cita
-- Marcar tratamiento completado
-- Iniciar seguimiento post tratamiento
+| Acción | Actor responsable | Notas |
+|--------|------------------|-------|
+| Aceptar caso | Provider admin | Confirma la aceptación del caso para ese item |
+| Rechazar caso | Provider admin | Cierra el item sin atención clínica |
+| Solicitar información | Provider admin / Staff asignado | Pausa el flujo hasta recibir info del paciente |
+| Proponer cita | Provider admin / Staff asignado | Actor clínico propone fecha/hora; MedTravel admin NO propone como actor responsable |
+| Iniciar valoración virtual | Provider admin / Staff asignado | Abre el ciclo clínico; disponible desde 2026-04-15 |
+| Registrar plan clínico acordado | Provider admin / Staff asignado | Documenta el plan acordado; disponible desde 2026-04-15 |
+| Programar procedimiento presencial | Provider admin / Staff asignado | Fija fechas de ventana operativa; disponible desde 2026-04-15 |
+| Marcar tratamiento completado | Provider admin / Staff asignado | Cierra la fase activa del tratamiento |
+| Cerrar caso | Provider admin / Staff asignado | Cierre formal exitoso del caso; disponible desde 2026-04-15 |
+| Iniciar seguimiento post tratamiento | Provider admin / Staff asignado | Activa la fase de seguimiento clínico |
+
+**Regla de actor en acciones clínicas:** las acciones que avanzan el ciclo clínico (`virtual_assessment_pending` en adelante) son responsabilidad del provider admin o del staff asignado. El admin MedTravel puede monitorear y excepcionalmente intervenir, pero no es el actor responsable de esas transiciones.
 
 Estas acciones deben reflejarse en vocabulario UI y trazabilidad, incluso si internamente algunas implementaciones actuales aun usan nombres tecnicos legacy.
 
