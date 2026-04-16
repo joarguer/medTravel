@@ -2070,6 +2070,11 @@ $canonicalItemStatuses = [
     'case_closed',
     'client_rejected',
     'cancelled',
+    // Estados calendario — Path A y puente encadenado (2026-04-16)
+    'appointment_proposed',
+    'appointment_confirmed',
+    'appointment_requested_change',
+    'appointment_cancelled',
 ];
 $providerAllowedTargets = [
     'provider_confirmed',
@@ -3917,13 +3922,15 @@ if (in_array($action, ['provider_confirm', 'provider_reject', 'provider_propose_
     } elseif ($targetStatus === 'provider_rejected') {
         $allowedCurrentStatuses = ['pending_provider'];
     } elseif ($targetStatus === 'provider_proposed_change') {
-        $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change', 'awaiting_client'];
+        // Incluye provider_confirmed y client_accepted para path encadenado (2026-04-16)
+        $allowedCurrentStatuses = ['pending_provider', 'provider_proposed_change', 'awaiting_client', 'provider_confirmed', 'client_accepted'];
     } elseif ($targetStatus === 'virtual_assessment_pending') {
         // Avance: desde provider_confirmed/client_accepted/awaiting_client
         // Reversa: desde virtual_assessment_done (volver a pendiente de valoración)
         $allowedCurrentStatuses = [
             'provider_confirmed', 'client_accepted', 'awaiting_client',
             'virtual_assessment_done', // reversa
+            'appointment_confirmed',  // puente encadenado (2026-04-16)
         ];
     } elseif ($targetStatus === 'virtual_assessment_done') {
         $allowedCurrentStatuses = ['virtual_assessment_pending'];
