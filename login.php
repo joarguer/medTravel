@@ -245,6 +245,25 @@ foreach ($publicSocialLinks as $social) {
                 background: #13357b;
                 border-color: #13357b;
             }
+        body.login {
+            background-image: url('img/background_login.jpeg');
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            min-height: 100vh;
+        }
+        body.login::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 0;
+        }
+        body.login .logo,
+        body.login .content {
+            position: relative;
+            z-index: 1;
+        }
         </style>
         <link rel="shortcut icon" href="admin/favicon.ico" /> </head>
     <!-- END HEAD -->
