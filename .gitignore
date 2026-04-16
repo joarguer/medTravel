@@ -8,7 +8,11 @@
 img/surgeon/*_files/
 img/surgeon/**/Fotos y videos de Instagram_files/
 *.heic
+# Env — credenciales locales: nunca versionar ninguna variante
 .env
+.env.*
+.env.local
+.env.*.local
 admin/include/conexion.local.php
 admin/include/email_credentials.php
 img/surgeon/*Instagram*
@@ -24,6 +28,10 @@ admin/img/perfil/*.pdf
 
 # Stripe credentials — never commit real keys
 config/stripe.php
+config/conectarbot_api.php
+
+# Runtime noise — nunca versionar
+nohup.out
 
 # Media / uploads — housekeeping
 admin/img/providers/
