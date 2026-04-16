@@ -237,23 +237,33 @@ El smoke E2E del ciclo clínico debe ejecutarse con los actores correctos. El ad
 | Sesión | Rol | Qué valida |
 |--------|-----|-----------|
 | Sesión 1 — Admin MedTravel | `ROLE_ADMIN` | Alta de provider, asignación de staff, monitoreo. NO avanzar lifecycle clínico. |
-| Sesión 2 — Provider admin | `ROLE_PROVIDER_ADMIN` | Aceptar caso, proponer cita, iniciar valoración virtual, registrar plan, programar procedimiento, completar tratamiento, cerrar caso. |
+| Sesión 2 — Provider admin | `ROLE_PROVIDER_ADMIN` | Aceptar caso o proponer cita (según path). Avanzar ciclo clínico. |
 | Sesión 3 — Paciente | `ROLE_CLIENT` | Confirmar cita, ver journey en portal. |
 
-**Recorrido correcto del smoke lifecycle completo:**
+**Recorrido smoke — Path A (Appointment-first, validado 2026-04-16):**
 
 ```
 [Sesión admin] Alta de provider + asignación de staff
 [Sesión paciente] Crear solicitud desde portal
-[Sesión provider] Revisar → Aceptar caso (provider_confirmed)
-[Sesión provider] Proponer cita (appointment_proposed)
+[Sesión provider] Proponer cita desde triage (pending_provider → appointment_proposed)
 [Sesión paciente] Confirmar cita (appointment_confirmed)
+[Sesión paciente] Cancelar cita (appointment_requested_change)
+```
+
+**Recorrido smoke — Path B (Clinical, parcialmente validado 2026-04-16):**
+
+```
+[Sesión admin] Alta de provider + asignación de staff
+[Sesión paciente] Crear solicitud desde portal
+[Sesión provider] Aceptar caso (provider_confirmed)
 [Sesión provider] Iniciar valoración virtual (virtual_assessment_pending)
 [Sesión provider] Registrar plan clínico acordado (treatment_plan_agreed)
 [Sesión provider] Programar procedimiento presencial (procedure_scheduled)
 [Sesión provider] Completar tratamiento (treatment_completed)
 [Sesión provider] Cerrar caso (case_closed)
 ```
+
+**Decisión pendiente:** el recorrido encadenado `provider_confirmed → appointment_proposed → … → virtual_assessment_pending` **no está implementado** en código hoy. Mientras no se tome la decisión de producto y se implemente el puente, el smoke no puede ejecutar ese path combinado. Ver `docs/canonical/13_CHANGELOG_DECISIONS.md` (2026-04-16).
 
 **Queries de validación post-smoke:**
 ```sql

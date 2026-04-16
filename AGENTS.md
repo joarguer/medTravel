@@ -48,10 +48,17 @@ sql/            Esquemas y migraciones
 - `booking_request_events` — citas/eventos ligados a ítems
 - `booking_request_quotes` — cotizaciones versionadas por ítem
 
-Pipeline de estado por ítem (happy path):
-`pending_provider` → `provider_reviewing` → `provider_confirmed` → `appointment_proposed` → `appointment_confirmed` → `virtual_assessment_pending` → `virtual_assessment_done` → `treatment_plan_agreed` → `procedure_scheduled` → `treatment_completed` → `case_closed`
+Pipeline de estado por ítem — hoy existen **dos paths separados en código** (validado en smoke 2026-04-16):
 
-Estados adicionales del pipeline: `needs_more_info`, `doctor_assigned`, `client_accepted`, `awaiting_client`, `appointment_requested_change`, `appointment_cancelled`, `post_treatment_follow_up`, `cancelled`. Ver `docs/canonical/10_PRODUCT_MODEL.md` para lista completa con fases.
+**Path A — Appointment-first** (cita propuesta directamente desde triage, sin confirmación previa del caso):
+`pending_provider` → `provider_proposed_change` → `appointment_proposed` → `appointment_confirmed` → `appointment_requested_change`
+
+**Path B — Clinical / Confirm-first** (aceptación formal del caso + ciclo clínico):
+`pending_provider` → `provider_confirmed` → `virtual_assessment_pending` → `virtual_assessment_done` → `treatment_plan_agreed` → `procedure_scheduled` → `treatment_completed` → `case_closed`
+
+**Decisión de producto pendiente:** el puente `provider_confirmed → appointment_proposed` **no está implementado** en código. Los paths son hoy alternativos, no encadenables. Ver `docs/canonical/13_CHANGELOG_DECISIONS.md` (2026-04-16).
+
+Estados adicionales válidos en ambos paths: `provider_reviewing`, `needs_more_info`, `doctor_assigned`, `client_accepted`, `awaiting_client`, `appointment_cancelled`, `post_treatment_follow_up`, `cancelled`. Ver `docs/canonical/10_PRODUCT_MODEL.md` para lista completa con fases.
 
 ### Proveedores vs. personal médico
 - `providers` — entidad que presta servicios

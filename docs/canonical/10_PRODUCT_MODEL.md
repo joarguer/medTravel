@@ -285,6 +285,25 @@ Compatibilidad legacy:
 - `completed` se considera alias legacy de `treatment_completed` en runtime y no debe usarse como nuevo estado canónico.
 - `date_proposed`, `date_confirmed`, `rescheduled` son nombres de negocio legacy; los nombres técnicos actuales son `appointment_proposed`, `appointment_confirmed`, `appointment_requested_change`.
 
+### Dos paths de estado implementados hoy (smoke 2026-04-16)
+
+El runtime de `booking_request_items` implementa hoy **dos caminos separados**, no un flujo lineal único:
+
+**Path A — Appointment-first** (`admin/ajax/my_booking_requests.php`, acción `provider_propose_change`):
+El provider propone una cita directamente desde triage sin confirmar el caso formalmente.
+```
+pending_provider → provider_proposed_change → appointment_proposed → appointment_confirmed → appointment_requested_change
+```
+Los estados `appointment_proposed`, `appointment_confirmed`, `appointment_requested_change`, `appointment_cancelled` los escribe `google_calendar_sync_item_status_for_transition` como efecto del evento de Calendar. **Estos estados no están en `$canonicalItemStatuses` del handler principal** y no permiten avanzar al ciclo clínico desde ahí.
+
+**Path B — Clinical / Confirm-first** (`admin/ajax/my_booking_requests.php`, acciones `provider_confirm` + `update_item_status`):
+El provider acepta el caso formalmente y luego avanza el ciclo clínico.
+```
+pending_provider → provider_confirmed → virtual_assessment_pending → virtual_assessment_done → treatment_plan_agreed → procedure_scheduled → treatment_completed → case_closed
+```
+
+**Decisión de producto pendiente (2026-04-16):** el puente `provider_confirmed → appointment_proposed` no está implementado en código. Los paths son hoy mutuamente excluyentes. Antes de implementar el encadenamiento, la decisión de producto debe quedar registrada en `13_CHANGELOG_DECISIONS.md`. Ver frente correspondiente en `12_EXECUTION_BACKLOG.md`.
+
 ### Acciones oficiales del item
 
 Las acciones de negocio oficialmente reconocidas para un item, con el actor responsable de cada una:

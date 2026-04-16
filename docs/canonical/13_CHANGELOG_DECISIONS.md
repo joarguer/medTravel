@@ -1,5 +1,43 @@
 # Changelog Decisions
 
+## 2026-04-16 — smoke(state-machine): dos paths separados confirmados; puente provider_confirmed→appointment_proposed no implementado
+
+**Outcome**
+- Smoke E2E local ejecutado sobre item_id=2, BD `medtravel_rebuild_20260415`.
+- Se confirma en código que `admin/ajax/my_booking_requests.php` implementa hoy **dos paths separados y mutuamente excluyentes**, no un flujo lineal único.
+
+**Path A — Appointment-first (validado):**
+`pending_provider → provider_proposed_change → appointment_proposed → appointment_confirmed → appointment_requested_change`
+- Flujo iniciado por `provider_propose_change` desde `pending_provider`.
+- Los estados `appointment_proposed`, `appointment_confirmed`, `appointment_requested_change`, `appointment_cancelled` los escribe `google_calendar_sync_item_status_for_transition` (`inc/google_calendar.php:219`).
+- Estos cuatro estados **no están en `$canonicalItemStatuses`** del handler principal (`my_booking_requests.php:2056`), por lo que desde ahí no se puede avanzar al ciclo clínico.
+
+**Path B — Clinical (validado `provider_confirmed` ✅; fases clínicas pendientes de smoke en prod):**
+`pending_provider → provider_confirmed → virtual_assessment_pending → virtual_assessment_done → treatment_plan_agreed → procedure_scheduled → treatment_completed → case_closed`
+
+**Gap de código confirmado:**
+- `$allowedCurrentStatuses` de `provider_proposed_change` acepta: `['pending_provider', 'provider_proposed_change', 'awaiting_client']`.
+- `provider_confirmed` **no está en esa lista**. La transición `provider_confirmed → appointment_proposed` retorna `transition_not_allowed_from_provider_confirmed` (HTTP 409).
+
+**Correcciones documentales aplicadas en esta sesión (2026-04-16):**
+- `AGENTS.md`: reemplazado happy path lineal por descripción de dos paths separados con nota de decisión pendiente.
+- `docs/canonical/10_PRODUCT_MODEL.md`: agregada sección "Dos paths de estado implementados hoy" después de la compatibilidad legacy.
+- `docs/canonical/12_EXECUTION_BACKLOG.md`: reemplazado único recorrido de smoke por recorridos separados Path A y Path B, con nota de puente no implementado.
+- `docs/canonical/16_ACTORS_AND_DOMAINS.md`: sección 4 (smoke) actualizada para reflejar dos sesiones de provider distintas y queries corregidas.
+
+**Decision**
+- Los dos paths son hoy mutuamente excluyentes en código.
+- El canon anterior describía un happy path lineal (`provider_confirmed → appointment_proposed → … → virtual_assessment_pending`) que no existe en ningún bloque del handler.
+- **Decisión de producto pendiente: ¿los paths deben permanecer alternativos o deben ser encadenables?**
+  - Si **alternativos**: el canon queda correcto como está. No se toca código.
+  - Si **encadenables**: se requieren 3 cambios quirúrgicos en `admin/ajax/my_booking_requests.php`:
+    1. Agregar `appointment_proposed`, `appointment_confirmed`, `appointment_requested_change`, `appointment_cancelled` al `$canonicalItemStatuses` (línea 2056).
+    2. Agregar `provider_confirmed`, `client_accepted` a `$allowedCurrentStatuses` de `provider_proposed_change` (línea 3917).
+    3. Agregar `appointment_confirmed` como estado origen válido para `virtual_assessment_pending` (línea 3922).
+  - Esta decisión debe registrarse aquí antes de abrir un frente técnico.
+
+---
+
 ## 2026-04-16 — canon(actors): corrección de premisa — Admin MedTravel es gestor de plataforma, no actor clínico
 
 **Outcome**

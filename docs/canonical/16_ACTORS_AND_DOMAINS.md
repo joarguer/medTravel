@@ -68,15 +68,28 @@ El lifecycle de un ítem clínico vive en `booking_request_items.item_status`.
 
 ## 4. Smoke test — actores correctos por sesión
 
-Al ejecutar el smoke test E2E del ciclo clínico, usar estas sesiones:
+Al ejecutar el smoke test E2E, usar estas sesiones. **Importante:** el código implementa hoy dos paths separados (smoke 2026-04-16). No se puede ejecutar un recorrido lineal único que combine ambos.
 
 | Sesión | Rol a usar | Acción que valida |
 |--------|-----------|------------------|
 | Sesión 1 — Admin MedTravel | `ROLE_ADMIN` | Alta de provider, asignación de staff, monitoreo de caso. NO avanzar lifecycle clínico desde esta sesión. |
-| Sesión 2 — Provider admin | `ROLE_PROVIDER_ADMIN` | Aceptar caso, proponer cita, iniciar valoración virtual, registrar plan, programar procedimiento, completar tratamiento, cerrar caso. |
-| Sesión 3 — Paciente | `ROLE_CLIENT` | Recibir propuesta de cita, confirmar cita. Ver journey desde portal. |
+| Sesión 2 — Provider admin (Path A) | `ROLE_PROVIDER_ADMIN` | Proponer cita desde triage (`pending_provider → appointment_proposed`). |
+| Sesión 2 — Provider admin (Path B) | `ROLE_PROVIDER_ADMIN` | Aceptar caso (`provider_confirmed`), luego iniciar valoración virtual, registrar plan, programar procedimiento, completar tratamiento, cerrar caso. |
+| Sesión 3 — Paciente | `ROLE_CLIENT` | Confirmar o cancelar cita (Path A). Ver journey desde portal. |
 
-Queries de validación post-smoke:
+**Path A validado en smoke 2026-04-16:**
+```
+pending_provider → appointment_proposed → appointment_confirmed → appointment_requested_change
+```
+
+**Path B validado parcialmente en smoke 2026-04-16:**
+```
+pending_provider → provider_confirmed → virtual_assessment_pending → … → case_closed
+```
+
+**Puente no implementado:** `provider_confirmed → appointment_proposed`. Decisión de producto pendiente; ver `13_CHANGELOG_DECISIONS.md` (2026-04-16).
+
+Queries de validación post-smoke Path B:
 ```sql
 -- Verificar que las transiciones clínicas llegaron al estado correcto
 SELECT id, item_status, updated_at
@@ -85,13 +98,6 @@ WHERE item_status IN ('virtual_assessment_pending','virtual_assessment_done',
                       'treatment_plan_agreed','procedure_scheduled',
                       'treatment_completed','case_closed')
 ORDER BY updated_at DESC LIMIT 20;
-
--- Verificar sender_role en propuestas de cita (debe ser PROVIDER, no ADMIN)
-SELECT id, thread_id, sender_role, created_at
-FROM inbox_messages
-WHERE sender_role IN ('PROVIDER','ADMIN')
-  AND message_type = 'appointment_proposal'
-ORDER BY created_at DESC LIMIT 10;
 ```
 
 ---
