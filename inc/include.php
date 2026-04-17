@@ -282,7 +282,7 @@ $head = '<meta charset="utf-8">
     <link href="' . $style_css_url . '" rel="stylesheet">' . $jsonld_scripts . "\n    " . $meta_pixel_head;
 
 $logo = '<a href="index.php" class="navbar-brand p-0">
-<img src="/img/site/logo-navbar.png" srcset="/img/site/logo-navbar-small.png 239w, /img/site/logo-navbar.png 500w" sizes="(max-width: 991.98px) 239px, 500px" alt="MedTravel">
+<img src="/img/site/logo-navbar.png" srcset="/img/site/logo-navbar-small.png 239w, /img/site/logo-navbar.png 958w" sizes="(max-width: 991.98px) 239px, 958px" alt="MedTravel">
 </a>';
 
 $company_links = [

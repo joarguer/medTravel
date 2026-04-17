@@ -144,7 +144,7 @@ $top_header = '<div class="clearfix navbar-fixed-top">
                     </span>
                 </button>
                 <a id="index" class="page-logo" href="/client/index.php">
-                    <img src="/img/site/logo-navbar.png" srcset="/img/site/logo-navbar-small.png 239w, /img/site/logo-navbar.png 500w" sizes="(max-width: 991.98px) 180px, 220px" alt="MedTravel" style="max-width:220px;width:100%;height:auto;">
+                    <img src="/img/site/logo-navbar.png" srcset="/img/site/logo-navbar-small.png 239w, /img/site/logo-navbar.png 958w" sizes="(max-width: 991.98px) 180px, 220px" alt="MedTravel" style="max-width:220px;width:100%;height:auto;">
                 </a>
                 <div class="topbar-actions">
                     <div class="btn-group-notification btn-group" id="header_notification_bar_client" style="margin-right:10px;">

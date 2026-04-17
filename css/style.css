@@ -452,6 +452,25 @@
     background-size: cover;
 }
 
+/* Fix tablet blind-spot (769–991px): navbar is in-flow, not position:absolute */
+@media (max-width: 991.98px) {
+    .hero-video-block,
+    .hero-video-block__content {
+        min-height: calc(100vh - 72px);
+        min-height: calc(100svh - 72px);
+        height: auto;
+    }
+
+    .hero-video-block__content {
+        padding-top: 2rem;
+    }
+
+    .carousel-header .carousel-inner .carousel-item {
+        min-height: calc(100vh - 72px);
+        min-height: calc(100svh - 72px);
+    }
+}
+
 @media (max-width: 768px) {
     .carousel-header .carousel-control-prev .carousel-control-prev-icon,
     .carousel-header .carousel-control-next .carousel-control-next-icon {
@@ -553,6 +572,13 @@
     .booking,
     .subscribe {
         background-attachment: scroll;
+    }
+}
+
+/* Fix B3: reducir padding excesivo en bg-breadcrumb cuando navbar es in-flow (mobile/tablet) */
+@media (max-width: 991.98px) {
+    .bg-breadcrumb {
+        padding: 4rem 0 3rem;
     }
 }
 
