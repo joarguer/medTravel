@@ -179,18 +179,22 @@ Backlog canónico vigente del proyecto.
 - DONE 2026-04-16: correlación 3-path implementada (commit `2e418e58`): path 1 por `google_meet_subscriptions.workspace_subscription_name`, path 2 por `conference_record_name`, path 3 por `google_meet_space_name`
 - DONE 2026-04-16: feature flag `MT_GOOGLE_MEET_EXECUTION_ENABLED` operativo (OFF en producción)
 
-#### Pendientes de activación (cadena en orden)
+#### Validado en servidor (2026-04-16)
+
+- DONE 2026-04-16: migración aplicada en `medtravelcom_medtravel` — columnas y tablas Meet presentes
+- DONE 2026-04-16: consumer smoke noop correcto — `{"ok":true,"noop":true,"reason":"MT_GOOGLE_MEET_EXECUTION_ENABLED=0"}`
+- DONE 2026-04-16: env vars Pub/Sub presentes en `.env` de servidor (`GOOGLE_CLOUD_PROJECT_ID=medtravel-calendar`, `GOOGLE_PUBSUB_SUBSCRIPTION=medtravel-meet-events-sub`, `GOOGLE_PUBSUB_SERVICE_ACCOUNT_JSON_PATH=/home/medtravelcom/secure/google/medtravel-calendar-c28004e85efa.json`)
+- DONE 2026-04-16: service account creada con rol Pub/Sub Subscriber
+- DONE 2026-04-16: OAuth `medtravelusa@gmail.com` reconectado — permiso Google Meet visible en consentimiento; scope bloqueante resuelto
+- DONE 2026-04-16: dry-run backfill ejecutado — `{"ok":true,"scanned":0,"resolved":0}` — sin error; causa: no hay `calendar_events.status='confirmed'` con Meet activos en producción en este momento (todos `cancelled`)
+
+#### Pendientes de activación (próxima sesión)
 
 - [ ] **[local]** Aplicar `sql/2026_04_16_google_meet_execution_phase1.sql` a `medtravel_rebuild_20260415`
-- [ ] **[producción]** Verificar que la migración está aplicada en `medtravelcom_medtravel` (la Fase 1 se reporta como desplegada, confirmar con `SHOW COLUMNS`)
-- [ ] **[producción]** SQL backfill `google_meet_space_code` desde `google_meet_url` para eventos existentes con `space_code=NULL`: `UPDATE calendar_events SET google_meet_space_code = LOWER(SUBSTRING_INDEX(SUBSTRING_INDEX(google_meet_url, 'meet.google.com/', -1), '?', 1)) WHERE google_meet_url LIKE '%meet.google.com/%' AND (google_meet_space_code IS NULL OR google_meet_space_code = '')`
-- [ ] **[bloqueante]** Reconectar OAuth del organizer (`medtravelusa@gmail.com`, `admin_user_id=1`) añadiendo scope `https://www.googleapis.com/auth/meetings.space.readonly` — sin esto `google_meet_execution_fetch_space_name()` devuelve `scope_not_granted` y el backfill es no-op total
-- [ ] Dry-run backfill post-reconexión: `php scripts/google_meet_backfill_space_names.php --dry-run --limit=50` — verificar `scanned>0`, `resolved>0`, `unresolved=0`
+- [ ] **[producción — SIGUIENTE PASO]** Crear cita virtual Meet con `status='confirmed'` en producción (propuesta + aceptación del paciente). Sin este candidato el backfill no tiene filas que procesar.
+- [ ] Re-ejecutar dry-run con candidato vivo: `php scripts/google_meet_backfill_space_names.php --dry-run --limit=10` — verificar `scanned>0`, `resolved>0`, `unresolved=0`
 - [ ] Backfill real: `php scripts/google_meet_backfill_space_names.php --limit=50`
-- [ ] Configurar env vars Pub/Sub en producción: `GOOGLE_CLOUD_PROJECT_ID`, `GOOGLE_PUBSUB_SUBSCRIPTION` (default `medtravel-meet-events-sub`), `GOOGLE_PUBSUB_SERVICE_ACCOUNT_JSON_PATH`
-- [ ] Verificar suscripción Pub/Sub activa y suscrita a Google Workspace Events en Google Cloud Console
-- [ ] Consumer smoke con flag ON: `MT_GOOGLE_MEET_EXECUTION_ENABLED=1 php scripts/google_meet_consumer.php --limit=1`
-- [ ] `MT_GOOGLE_MEET_EXECUTION_ENABLED=1` en producción
+- [ ] `MT_GOOGLE_MEET_EXECUTION_ENABLED=1` en producción — solo después de `resolved>0` en dry-run
 
 #### Pendiente de fases posteriores
 

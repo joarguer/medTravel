@@ -1,5 +1,42 @@
 # Changelog Decisions
 
+## 2026-04-16 — ops(meet-execution): validación parcial en servidor; capa desplegada y apagada; dry-run ejecutado sin candidatos confirmados
+
+**Outcome**
+- Validación de servidor completada para todos los prerequisitos excepto el backfill real de `google_meet_space_name`.
+- La capa Meet execution evidence está desplegada en producción y apagada (`MT_GOOGLE_MEET_EXECUTION_ENABLED=0`).
+- La sesión se cierra sin activar el flag. Mañana se continúa desde este punto exacto.
+
+**Qué quedó validado en servidor hoy:**
+
+| Paso | Resultado |
+|------|-----------|
+| Migración `2026_04_16_google_meet_execution_phase1.sql` aplicada | ✅ confirmado |
+| Consumer noop correcto con flag OFF | ✅ `{"ok":true,"noop":true,"reason":"MT_GOOGLE_MEET_EXECUTION_ENABLED=0"}` |
+| Env vars Pub/Sub en `.env` | ✅ `GOOGLE_CLOUD_PROJECT_ID=medtravel-calendar`, `GOOGLE_PUBSUB_SUBSCRIPTION=medtravel-meet-events-sub`, `GOOGLE_PUBSUB_SERVICE_ACCOUNT_JSON_PATH=/home/medtravelcom/secure/google/medtravel-calendar-c28004e85efa.json` |
+| Service account creada con rol Pub/Sub Subscriber | ✅ confirmado |
+| OAuth `medtravelusa@gmail.com` reconectado con permiso Google Meet visible | ✅ scope Meet presente en consentimiento |
+| Dry-run backfill `space_name` ejecutado | ✅ `{"ok":true,"scanned":0,"resolved":0}` |
+
+**Por qué `scanned=0` en el dry-run — no es un error:**
+- El backfill filtra `WHERE status='confirmed' AND google_meet_space_code <> '' AND google_meet_space_name = ''`.
+- Todos los eventos con Meet visibles en `calendar_events` hoy están `status='cancelled'`.
+- No existe ninguna cita Meet en estado `confirmed` activa en este momento en producción.
+- El dry-run es correcto: no procesa filas que no están disponibles para procesar.
+- **No es un bug de código ni de scope. Es ausencia de candidatos.**
+
+**Decisión de cierre de sesión:**
+- No activar `MT_GOOGLE_MEET_EXECUTION_ENABLED` hoy.
+- El siguiente paso es crear una cita Meet con `status='confirmed'` en producción, ejecutar el dry-run nuevamente y verificar `scanned>0`, `resolved>0` antes de proceder al backfill real y al flag.
+
+**Próximo paso exacto para mañana:**
+1. Crear/confirmar cita virtual con Meet link (`accept_dates` o equivalente) en producción → `calendar_events.status='confirmed'`
+2. `php scripts/google_meet_backfill_space_names.php --dry-run --limit=10` → verificar `scanned>0`, `resolved>0`
+3. Si ok: `php scripts/google_meet_backfill_space_names.php --limit=50`
+4. Solo después: evaluar activar `MT_GOOGLE_MEET_EXECUTION_ENABLED=1`
+
+---
+
 ## 2026-04-16 — ops(google-meet-execution): plan de activación canonizado; código Fase 1 completo; bloqueante gordo = reconexión OAuth con scope Meet
 
 **Outcome**

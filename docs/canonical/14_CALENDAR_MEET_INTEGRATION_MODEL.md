@@ -309,35 +309,36 @@ En el runtime actual existen **dos paths** distintos para que un provider / staf
 
 ## Nota operativa — Plan de activación Meet execution evidence (2026-04-16)
 
-Estado: código completo, **flag OFF**, pendiente de activación operacional.
+Estado: desplegada en servidor, **flag OFF**, pendiente backfill con candidato `confirmed` vivo. Sesión 2026-04-16 cerrada en este punto.
 
-### Qué quedó listo
+### Estado en servidor (validado 2026-04-16)
 
 | Componente | Estado |
 |---|---|
-| `sql/2026_04_16_google_meet_execution_phase1.sql` | Escrito. 10 cols en `calendar_events` + tablas `google_meet_event_log` + `google_meet_subscriptions`. |
-| `inc/google_meet_execution.php` | Completo (824 líneas). Consumer, backfill helpers, correlación 3-path, Pub/Sub pull/ack, schema guard. |
-| `scripts/google_meet_consumer.php` | Completo. Gate `MT_GOOGLE_MEET_EXECUTION_ENABLED`. Noop limpio si flag=0. |
-| `scripts/google_meet_backfill_space_names.php` | Completo. `--dry-run`, `--limit`, JSON output, idempotente. |
-| Correlación 3-path (commit `2e418e58`) | Activo en lógica. Path 3 por `google_meet_space_name`. |
-| Feature flag `MT_GOOGLE_MEET_EXECUTION_ENABLED` | En producción. OFF. |
+| Migración `2026_04_16_google_meet_execution_phase1.sql` | ✅ Aplicada en `medtravelcom_medtravel` |
+| `inc/google_meet_execution.php` | ✅ Desplegado (824 líneas). Consumer, backfill helpers, correlación 3-path, Pub/Sub pull/ack, schema guard. |
+| `scripts/google_meet_consumer.php` | ✅ Desplegado. Noop correcto: `{"ok":true,"noop":true,"reason":"MT_GOOGLE_MEET_EXECUTION_ENABLED=0"}` |
+| `scripts/google_meet_backfill_space_names.php` | ✅ Desplegado. Dry-run ejecutado: `scanned=0` (sin candidatos `confirmed`) |
+| Env vars Pub/Sub | ✅ Presentes en `.env` servidor |
+| Service account Google Cloud | ✅ Creada con rol Pub/Sub Subscriber |
+| OAuth `medtravelusa@gmail.com` | ✅ Reconectado con scope Meet visible |
+| Correlación 3-path (commit `2e418e58`) | ✅ Activo en lógica |
+| Feature flag `MT_GOOGLE_MEET_EXECUTION_ENABLED` | ✅ Presente. **OFF** |
 
-### Cadena de activación (orden estricto)
+### Próximo paso (mañana)
 
 ```
-1. Aplicar migración donde falte (local + confirmar producción)
-2. SQL backfill google_meet_space_code desde google_meet_url (eventos existentes)
-3. Reconectar OAuth organizer con scope meetings.space.readonly  ← BLOQUEANTE GORDO
-4. Dry-run backfill: php scripts/google_meet_backfill_space_names.php --dry-run --limit=50
-5. Backfill real: php scripts/google_meet_backfill_space_names.php --limit=50
-6. Configurar env vars Pub/Sub (GOOGLE_CLOUD_PROJECT_ID, GOOGLE_PUBSUB_SUBSCRIPTION, GOOGLE_PUBSUB_SERVICE_ACCOUNT_JSON_PATH)
-7. Consumer smoke: MT_GOOGLE_MEET_EXECUTION_ENABLED=1 php scripts/google_meet_consumer.php --limit=1
-8. MT_GOOGLE_MEET_EXECUTION_ENABLED=1 en producción
+1. Crear cita virtual Meet en producción con status='confirmed'
+   (propuesta provider → aceptación paciente → google_event_id y google_meet_url presentes)
+2. Dry-run: php scripts/google_meet_backfill_space_names.php --dry-run --limit=10
+   → verificar scanned>0, resolved>0, unresolved=0
+3. Backfill real: php scripts/google_meet_backfill_space_names.php --limit=50
+4. MT_GOOGLE_MEET_EXECUTION_ENABLED=1 en producción
 ```
 
-### Bloqueante principal
+### Por qué el dry-run dio scanned=0 (no es error)
 
-El OAuth de `medtravelusa@gmail.com` fue autorizado solo con `https://www.googleapis.com/auth/calendar` (Fase 1). No incluye `meetings.space.readonly`. Sin ese scope `google_meet_execution_connection_has_space_read_scope()` devuelve `false`, `google_meet_execution_fetch_space_name()` devuelve `reason=scope_not_granted`, y el backfill no puede resolver ningún `space_name`. La correlación por path 3 queda vacía hasta completar la reconexión.
+El backfill filtra `WHERE status='confirmed' AND google_meet_space_code <> '' AND google_meet_space_name = ''`. Todos los eventos con Meet en producción están `cancelled` en este momento. No hay filas candidatas. El scope OAuth ya está resuelto (reconexión completada). El único prerequisito que falta es una cita Meet en estado `confirmed`.
 
 ### Verificación pre-flag
 
