@@ -229,8 +229,13 @@
 
 @media (max-width: 991.98px) {
     .sticky-top.navbar-light {
-        position: relative;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 1030;
         background: var(--bs-white);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
     }
 
     .navbar-light .navbar-brand h1 {
@@ -246,6 +251,13 @@
     .navbar-light .navbar-collapse {
         margin-top: 15px;
         border-top: 1px solid #DDDDDD;
+    }
+
+    /* Sign In button in non-hero-shell mobile collapse */
+    .navbar-collapse > .btn {
+        align-self: flex-start;
+        margin-top: 0.5rem;
+        margin-bottom: 0.25rem;
     }
 
     .navbar-light .navbar-nav .nav-link,
@@ -471,9 +483,11 @@
    - padding-top:120px reset: hero content needs 2rem top, not 120px.
 ────────────────────────────────────────────────────────────────────────────────── */
 @media (max-width: 991.98px) {
-    /* Fix A: hamburger collapse overlays the hero — does NOT push it down */
-    .hero-shell > .navbar {
-        position: relative; /* anchor for the absolute collapse */
+    /* Fix A: hamburger collapse overlays the hero — does NOT push it down.
+       :not(.sticky-top) prevents this relative from overriding position:fixed
+       once JS adds sticky-top on scroll (same specificity, later order). */
+    .hero-shell > .navbar:not(.sticky-top) {
+        position: relative;
     }
     .hero-shell .navbar-collapse {
         position: absolute;
@@ -487,6 +501,16 @@
         max-height: 75svh;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        padding: 0.25rem 1.25rem 1rem;
+        margin-top: 0;
+    }
+    /* Sign In button inside the overlay collapse panel */
+    .hero-shell .navbar-collapse > .btn {
+        display: block;
+        width: 100%;
+        text-align: center;
+        margin-top: 0.75rem;
+        margin-bottom: 0.25rem;
     }
 
     /* Fix B: hero fills exactly the viewport remainder after the in-flow navbar.
