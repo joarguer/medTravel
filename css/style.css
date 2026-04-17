@@ -452,22 +452,66 @@
     background-size: cover;
 }
 
-/* Fix tablet blind-spot (769–991px): navbar is in-flow, not position:absolute */
+/* ── Mobile fold fix ──────────────────────────────────────────────────────────────
+   hero-shell = one screen via flex; navbar rigid; hero fills exact remainder.
+   Hamburger collapse overlays hero (position:absolute) — does NOT push it down.
+   No manual navbar-height guessing: flex distributes space automatically.
+─────────────────────────────────────────────────────────────────────────────────── */
 @media (max-width: 991.98px) {
-    .hero-video-block,
-    .hero-video-block__content {
-        min-height: calc(100vh - 72px);
-        min-height: calc(100svh - 72px);
-        height: auto;
+    /* 1. hero-shell = exactly one viewport, flex column layout */
+    .hero-shell {
+        min-height: 100vh;
+        min-height: 100svh;
+        display: flex;
+        flex-direction: column;
     }
 
-    .hero-video-block__content {
+    /* 2. navbar header row: rigid natural height, anchor for absolute collapse */
+    .hero-shell > .navbar {
+        position: relative;
+        flex: 0 0 auto;
+    }
+
+    /* 3. hamburger collapse: overlays hero, doesn't expand the fold */
+    .hero-shell .navbar-collapse {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 1050;
+        background-color: var(--bs-white);
+        border-top: 1px solid rgba(0, 0, 0, .08);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, .14);
+        max-height: 75svh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 4. video hero fills remaining space after navbar */
+    .hero-shell > .hero-video-block {
+        flex: 1 1 auto;
+    }
+    /* reset inner min-heights that competed with flex distribution */
+    .hero-shell .hero-video-block,
+    .hero-shell .hero-video-block__content {
+        min-height: 0;
+    }
+    /* desktop had padding-top:120px for absolute navbar; reset for in-flow mobile */
+    .hero-shell .hero-video-block__content {
         padding-top: 2rem;
     }
 
-    .carousel-header .carousel-inner .carousel-item {
-        min-height: calc(100vh - 72px);
-        min-height: calc(100svh - 72px);
+    /* 5. carousel hero fills remaining space via height chain */
+    .hero-shell > .carousel-header {
+        flex: 1 1 auto;
+    }
+    .hero-shell .carousel-header .carousel,
+    .hero-shell .carousel-header .carousel-inner,
+    .hero-shell .carousel-header .carousel-item {
+        height: 100%;
+    }
+    .hero-shell .carousel-header .carousel-item {
+        min-height: 0;
     }
 }
 
@@ -1943,6 +1987,21 @@
     border: 1px solid var(--bs-white) !important;
 }
 /*** Subscribe End ***/
+
+/* ── Prevent section/subscribe title decorators from causing horizontal overflow
+   at narrow viewports (≤430px). The ::before/::after extend ±50px outside the
+   inline-block; long titles (e.g. "READY TO PLAN YOUR MEDICAL JOURNEY?") push
+   those lines past the right edge of the viewport, causing horizontal scroll. ── */
+@media (max-width: 575.98px) {
+    .section-title::before,
+    .section-title::after {
+        display: none;
+    }
+    .subscribe .subscribe-title::before,
+    .subscribe .subscribe-title::after {
+        display: none;
+    }
+}
 
 /*** Footer Start ***/
 .footer {
