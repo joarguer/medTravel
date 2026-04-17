@@ -452,27 +452,29 @@
     background-size: cover;
 }
 
-/* ── Mobile fold fix ──────────────────────────────────────────────────────────────
-   hero-shell = one screen via flex; navbar rigid; hero fills exact remainder.
-   Hamburger collapse overlays hero (position:absolute) — does NOT push it down.
-   No manual navbar-height guessing: flex distributes space automatically.
-─────────────────────────────────────────────────────────────────────────────────── */
+/* ── Mobile fold fix (v3 — corrected) ────────────────────────────────────────────
+   THREE bugs fixed without using flex on hero-shell.
+
+   WHY NOT FLEX: the v2 flex approach trapped the navbar inside hero-shell.
+   Bootstrap JS adds .sticky-top (position:sticky;top:0) on scroll >45px.
+   position:sticky confines itself to its containing block. Inside a flex
+   container, the containing block is the flex parent (hero-shell = 100svh).
+   Once the user scrolls past the hero, hero-shell exits the viewport and
+   takes the sticky navbar with it → navbar gone below the fold.
+
+   CORRECT MODEL:
+   - hero-shell stays a plain block (no flex) → navbar is free to sticky
+     relative to the DOCUMENT (body), not the hero-shell box.
+   - Hero block height: calc(100svh - 77px). 77px is not a guess; it is
+     derived from values in this file: py-3 (2×16px) + logo max-height (45px).
+   - Hamburger collapse: position:absolute overlay — kept from v2 (correct).
+   - padding-top:120px reset: hero content needs 2rem top, not 120px.
+────────────────────────────────────────────────────────────────────────────────── */
 @media (max-width: 991.98px) {
-    /* 1. hero-shell = exactly one viewport, flex column layout */
-    .hero-shell {
-        min-height: 100vh;
-        min-height: 100svh;
-        display: flex;
-        flex-direction: column;
-    }
-
-    /* 2. navbar header row: rigid natural height, anchor for absolute collapse */
+    /* Fix A: hamburger collapse overlays the hero — does NOT push it down */
     .hero-shell > .navbar {
-        position: relative;
-        flex: 0 0 auto;
+        position: relative; /* anchor for the absolute collapse */
     }
-
-    /* 3. hamburger collapse: overlays hero, doesn't expand the fold */
     .hero-shell .navbar-collapse {
         position: absolute;
         top: 100%;
@@ -487,31 +489,24 @@
         -webkit-overflow-scrolling: touch;
     }
 
-    /* 4. video hero fills remaining space after navbar */
-    .hero-shell > .hero-video-block {
-        flex: 1 1 auto;
-    }
-    /* reset inner min-heights that competed with flex distribution */
+    /* Fix B: hero fills exactly the viewport remainder after the in-flow navbar.
+       77px = py-3 top+bottom padding (2×16px) + logo max-height (45px).
+       Specificity (0,2,0) wins over the generic .hero-video-block (0,1,0) rules
+       in @768px and @480px blocks, so the calc value is the authoritative one. */
     .hero-shell .hero-video-block,
     .hero-shell .hero-video-block__content {
-        min-height: 0;
+        min-height: calc(100svh - 77px);
+        height: auto;
     }
-    /* desktop had padding-top:120px for absolute navbar; reset for in-flow mobile */
+
+    /* Fix C: desktop padding-top:120px was for position:absolute navbar — reset */
     .hero-shell .hero-video-block__content {
         padding-top: 2rem;
     }
 
-    /* 5. carousel hero fills remaining space via height chain */
-    .hero-shell > .carousel-header {
-        flex: 1 1 auto;
-    }
-    .hero-shell .carousel-header .carousel,
-    .hero-shell .carousel-header .carousel-inner,
-    .hero-shell .carousel-header .carousel-item {
-        height: 100%;
-    }
-    .hero-shell .carousel-header .carousel-item {
-        min-height: 0;
+    /* Same height constraint for carousel hero */
+    .hero-shell .carousel-header .carousel-inner .carousel-item {
+        min-height: calc(100svh - 77px);
     }
 }
 
