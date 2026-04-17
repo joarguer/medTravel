@@ -10,7 +10,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 - **Plataforma:** operativa en desarrollo local
 - **Último bundle conocido:** `medtravel_local_backup_20260410.bundle`
 - **Base de datos:** entorno local moderno validado en `medtravel_rebuild_20260415` (MySQL, reconstruida desde dump real del servidor). `medtravel` queda preservada solo como referencia/backup local legacy y no debe usarse para validar el dominio moderno de providers/staff/services. Producción: `medtravelcom_medtravel`
-- **Fecha última actualización de este archivo:** 2026-04-16 (cierre de sesión — validación parcial servidor Meet execution; capa desplegada y apagada)
+- **Fecha última actualización de este archivo:** 2026-04-17 (cierre de sesión — fix mínimo para materializar owner/admin del provider como staff médico reutilizando su cuenta)
 
 ---
 
@@ -27,6 +27,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 ---
 
 ## Frentes completados recientes
+- **2026-04-17** — fix(provider-staff): `admin/ajax/provider_medical_staff.php` permite reutilizar como `provider_medical_staff` la cuenta existente del owner/admin inicial canónico del mismo `provider_id`. La excepción queda concentrada en `pms_evaluate_staff_access_user()` y solo salta para el usuario exacto resuelto por `pms_fetch_provider_owner_user(...)`; se mantienen vivos los bloqueos para otros providers, `service_provider_id > 0`, usuarios ya vinculados a otro staff y cuentas incompatibles. No se crean usuarios duplicados: el flujo reutiliza `linked_user_id` tanto en validación previa por email como en `save_staff`.
 - **2026-04-17** — fix(offers): forzar contexto provider+service en servidor para evitar datasets ambiguos. `offers.php` ahora aplica filtro server-side cuando se provee `service_id` + `provider_id`; si `service_id` llega sin `provider_id` la página muestra un estado controlado y no renderiza cards mezcladas. `admin/js/service_catalog.js` genera URLs públicas con `provider_id+service_id`. Smoke validado contra `medtravel_rebuild_20260415` (provider_id=2, service_id=9). Riesgo UX de degradación a provider-only registrado para decisión futura.
 - **2026-04-16** — Validación parcial en servidor de Meet execution evidence: migración aplicada, consumer noop correcto (`{"ok":true,"noop":true}`), env vars Pub/Sub presentes, service account creada, OAuth reconectado con scope Meet. Dry-run backfill ejecutado con `scanned=0` — causa correcta: no hay `calendar_events.status='confirmed'` con Meet activos en producción (todos `cancelled`). Flag sigue OFF. Próximo paso: crear cita Meet confirmed viva y re-ejecutar dry-run. Ver `13_CHANGELOG_DECISIONS.md` (2026-04-16 ops/validación).
 - **2026-04-16** — Plan operacional de activación Meet execution evidence canonizado: código Fase 1 completo (`inc/google_meet_execution.php`, `scripts/google_meet_consumer.php`, `scripts/google_meet_backfill_space_names.php`, migración `2026_04_16_google_meet_execution_phase1.sql`). Flag OFF. Ver `13_CHANGELOG_DECISIONS.md` (2026-04-16 ops).

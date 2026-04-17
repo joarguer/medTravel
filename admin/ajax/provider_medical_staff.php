@@ -476,6 +476,18 @@ function pms_user_is_sensitive_owner_account($row)
     return isset($row['ppal']) && (int)$row['ppal'] === 1;
 }
 
+function pms_is_provider_owner_admin_user($conexion, $providerId, $userId)
+{
+    $providerId = (int)$providerId;
+    $userId = (int)$userId;
+    if ($providerId <= 0 || $userId <= 0) {
+        return false;
+    }
+
+    $owner = pms_fetch_provider_owner_user($conexion, $providerId);
+    return $owner && (int)($owner['id'] ?? 0) === $userId;
+}
+
 function pms_user_reuse_public_message($status)
 {
     switch ((string)$status) {
@@ -506,6 +518,7 @@ function pms_evaluate_staff_access_user($conexion, $providerId, $userRow, $curre
     $serviceProviderId = isset($userRow['service_provider_id']) && $userRow['service_provider_id'] !== null ? (int)$userRow['service_provider_id'] : 0;
     $roleId = pms_resolve_user_role_id($userRow);
     $linkedElsewhere = pms_validate_user_not_linked_elsewhere($conexion, $userId, $currentStaffId);
+    $isProviderOwnerAdminUser = pms_is_provider_owner_admin_user($conexion, $providerId, $userId);
 
     if ($userProviderId <= 0 || $userProviderId !== (int)$providerId) {
         return [
@@ -523,7 +536,7 @@ function pms_evaluate_staff_access_user($conexion, $providerId, $userRow, $curre
         ];
     }
 
-    if (pms_user_is_sensitive_owner_account($userRow)) {
+    if (!$isProviderOwnerAdminUser && pms_user_is_sensitive_owner_account($userRow)) {
         return [
             'ok' => false,
             'status' => 'existing_user_sensitive_account',
@@ -531,7 +544,7 @@ function pms_evaluate_staff_access_user($conexion, $providerId, $userRow, $curre
         ];
     }
 
-    if ($roleId !== ROLE_PROVIDER) {
+    if (!$isProviderOwnerAdminUser && $roleId !== ROLE_PROVIDER) {
         return [
             'ok' => false,
             'status' => 'existing_user_privileged_or_incompatible_role',

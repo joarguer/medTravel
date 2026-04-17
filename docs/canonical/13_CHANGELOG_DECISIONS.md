@@ -1,5 +1,24 @@
 # Changelog Decisions
 
+## 2026-04-17 — fix(provider-staff): el owner/admin inicial del mismo provider puede materializarse como staff médico reutilizando su cuenta
+
+**Outcome**
+- Se corrige el bloqueo backend que impedía vincular como `provider_medical_staff` al owner/admin inicial del mismo provider cuando su cuenta ya existía en `usuarios`.
+- La excepción queda acotada al usuario canónico resuelto por `pms_fetch_provider_owner_user(...)`; no se abre a cualquier `ROLE_PROVIDER_ADMIN`.
+- El flujo de validación previa por email, vinculación por `linked_user_id` y guardado final vuelve a reutilizar la cuenta existente sin crear duplicados.
+
+**Decision**
+- El owner/admin inicial canónico del mismo provider puede materializarse en `provider_medical_staff` reutilizando su misma cuenta (`linked_user_id`), incluso si esa cuenta tiene `ppal=1` o rol distinto de `ROLE_PROVIDER`.
+- La excepción aplica solo cuando el `user_id` coincide exactamente con el owner/admin inicial resuelto canónicamente para ese `provider_id`.
+- Siguen bloqueados:
+  - usuarios de otro provider
+  - cuentas con `service_provider_id > 0`
+  - usuarios ya vinculados a otro registro de `provider_medical_staff`
+  - cualquier cuenta privilegiada o incompatible que no sea el owner/admin inicial del mismo provider
+- El checkbox "Marcar como médico principal" no participa en esta regla de elegibilidad; solo afecta el flag clínico del registro staff una vez resuelto el acceso.
+
+---
+
 ## 2026-04-16 — ops(meet-execution): validación parcial en servidor; capa desplegada y apagada; dry-run ejecutado sin candidatos confirmados
 
 **Outcome**
