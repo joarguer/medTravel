@@ -51,12 +51,10 @@ if (mysqli_num_rows($busca_header) > 0) {
 }
 
 // Parámetros de filtro server-side (mantienen compatibilidad con campañas y SEO existentes)
-$category_id           = isset($_GET['category'])    ? (int)$_GET['category']    : 0;
-$provider_filter_id    = isset($_GET['provider_id']) ? (int)$_GET['provider_id'] : 0;
-
-// service_id en URL → se pasa a JS para inicializar el filtro client-side de servicio
-// No genera filtrado server-side: opera sobre las cards ya renderizadas
-$preselected_service_filter = isset($_GET['service_id']) ? (int)$_GET['service_id'] : 0;
+$category_id        = isset($_GET['category']) ? (int)$_GET['category'] : 0;
+$provider_filter_id = isset($_GET['provider_id']) ? (int)$_GET['provider_id'] : 0;
+$service_filter_id  = isset($_GET['service_id']) ? (int)$_GET['service_id'] : 0;
+$preselected_service_filter = $service_filter_id;
 
 // UTM params: se preservan en los enlaces de salida para mantener atribución de campaña
 $_utm_qs = '';
@@ -71,6 +69,8 @@ $category_name        = $offers_header_title;
 $category_description = '';
 $provider_filter_name = '';
 $provider_filter_city = '';
+$service_filter_name  = '';
+$context_error_message = '';
 
 if ($category_id > 0) {
     $cat_query = mysqli_prepare($conexion, "SELECT name, description FROM service_categories WHERE id = ? LIMIT 1");
@@ -102,6 +102,32 @@ if ($provider_filter_id > 0) {
     }
 }
 
+if ($service_filter_id > 0) {
+    $service_query = mysqli_prepare($conexion, "SELECT name FROM service_catalog WHERE id = ? LIMIT 1");
+    if ($service_query) {
+        mysqli_stmt_bind_param($service_query, 'i', $service_filter_id);
+        mysqli_stmt_execute($service_query);
+        $service_result = mysqli_stmt_get_result($service_query);
+        if ($service_row = mysqli_fetch_assoc($service_result)) {
+            $service_filter_name = trim((string)($service_row['name'] ?? ''));
+        } else {
+            $service_filter_id = 0;
+            $preselected_service_filter = 0;
+        }
+        mysqli_stmt_close($service_query);
+    } else {
+        $service_filter_id = 0;
+        $preselected_service_filter = 0;
+    }
+}
+
+$requires_provider_service_context = $service_filter_id > 0 && $provider_filter_id <= 0;
+if ($requires_provider_service_context) {
+    $context_error_message = $service_filter_name !== ''
+        ? 'To view offers for ' . $service_filter_name . ', select a medical provider first. This page requires provider and service context to avoid mixing providers.'
+        : 'To view these offers, select a medical provider first. This page requires provider and service context to avoid mixing providers.';
+}
+
 // Verificar disponibilidad de tabla provider_verification
 $hasProviderVerification = false;
 $pvTableCheck = mysqli_query($conexion, "SHOW TABLES LIKE 'provider_verification'");
@@ -117,8 +143,26 @@ if ($hasProviderVerification) {
     $verificationJoin   = "";
 }
 
-// Consulta de ofertas activas — 4 ramas según combinación de filtros server-side
-if ($category_id > 0 && $provider_filter_id > 0) {
+// Consulta de ofertas activas
+if ($requires_provider_service_context) {
+    $stmt = null;
+} elseif ($provider_filter_id > 0 && $service_filter_id > 0) {
+    $offers_query = "
+        SELECT
+            o.id, o.title, o.description, o.price_from, o.currency,
+            p.id AS provider_id, p.name AS provider_name, p.city, p.logo,
+            {$verificationSelect}
+            sc.id AS service_id, sc.name AS service_name
+        FROM provider_service_offers o
+        INNER JOIN providers p ON o.provider_id = p.id
+        {$verificationJoin}
+        INNER JOIN service_catalog sc ON o.service_id = sc.id
+        WHERE o.provider_id = ? AND o.service_id = ? AND o.is_active = 1
+        ORDER BY o.id DESC
+    ";
+    $stmt = mysqli_prepare($conexion, $offers_query);
+    mysqli_stmt_bind_param($stmt, 'ii', $provider_filter_id, $service_filter_id);
+} elseif ($category_id > 0 && $provider_filter_id > 0) {
     $offers_query = "
         SELECT
             o.id, o.title, o.description, o.price_from, o.currency,
@@ -183,16 +227,17 @@ if ($category_id > 0 && $provider_filter_id > 0) {
     $stmt = mysqli_prepare($conexion, $offers_query);
 }
 
-mysqli_stmt_execute($stmt);
-$offers_result = mysqli_stmt_get_result($stmt);
-
 $offers = [];
-if ($offers_result) {
-    while ($offer_row = mysqli_fetch_assoc($offers_result)) {
-        $offers[] = $offer_row;
+if ($stmt) {
+    mysqli_stmt_execute($stmt);
+    $offers_result = mysqli_stmt_get_result($stmt);
+    if ($offers_result) {
+        while ($offer_row = mysqli_fetch_assoc($offers_result)) {
+            $offers[] = $offer_row;
+        }
     }
+    mysqli_stmt_close($stmt);
 }
-mysqli_stmt_close($stmt);
 
 // Construir datos para filtros client-side a partir del dataset cargado
 $services_for_filter  = [];
@@ -235,9 +280,35 @@ $show_provider_filter = $provider_filter_id === 0 && count($providers_for_filter
 // Mostrar filtro de ciudad solo si hay más de una ciudad
 $show_city_filter     = count($cities_for_filter) > 1;
 
-// SEO
+// SEO + contexto visible
+$hero_label = $page_subtitle_1;
+$hero_title = $category_name;
+$hero_description = $page_subtitle_2;
+
+if ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
+    $hero_label = 'MEDICAL PROVIDER SERVICE';
+    $hero_title = $service_filter_name;
+    $hero_description = 'Explore ' . $service_filter_name . ' offered by ' . $provider_filter_name . ($provider_filter_city !== '' ? ' in ' . $provider_filter_city : '') . '.';
+} elseif ($requires_provider_service_context) {
+    $hero_label = 'INCOMPLETE SERVICE CONTEXT';
+    $hero_title = $service_filter_name !== '' ? $service_filter_name : 'Medical Service';
+    $hero_description = $context_error_message;
+} elseif ($provider_filter_id > 0 && $provider_filter_name !== '') {
+    $hero_label = $category_id > 0 ? 'PROVIDER CATEGORY' : 'MEDICAL PROVIDER SERVICES';
+    $hero_title = $category_id > 0 ? $category_name : ($provider_filter_name . ' Services');
+    $hero_description = $category_id > 0
+        ? 'Explore ' . strtolower($category_name) . ' services offered by ' . $provider_filter_name . ($provider_filter_city !== '' ? ' in ' . $provider_filter_city : '') . '.'
+        : 'Explore medical services offered by ' . $provider_filter_name . ($provider_filter_city !== '' ? ' in ' . $provider_filter_city : '') . '.';
+} elseif ($category_id > 0 && !empty($category_description)) {
+    $hero_label = 'MEDICAL CATEGORY';
+    $hero_title = $category_name;
+    $hero_description = $category_description;
+}
+
 $seo_title_source = $category_id > 0 ? $category_name : $offers_header_title;
-if ($provider_filter_id > 0 && $provider_filter_name !== '') {
+if ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
+    $seo_title_source = $service_filter_name . ' - ' . $provider_filter_name;
+} elseif ($provider_filter_id > 0 && $provider_filter_name !== '') {
     $seo_title_source = $category_id > 0
         ? $category_name . ' - ' . $provider_filter_name
         : $provider_filter_name . ' Medical Services';
@@ -251,22 +322,29 @@ $seo_offers_description = trim(html_entity_decode((string)$category_description,
 if ($seo_offers_description === '') {
     $seo_offers_description = trim((string)$page_subtitle_2);
 }
-if ($provider_filter_id > 0 && $provider_filter_name !== '') {
+if ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
+    $seo_offers_description = 'Browse ' . $service_filter_name . ' offered by ' . $provider_filter_name . ' through MedTravel.';
+} elseif ($provider_filter_id > 0 && $provider_filter_name !== '') {
     $seo_offers_description = $category_id > 0
         ? 'Browse ' . $category_name . ' services offered by ' . $provider_filter_name . ' through MedTravel.'
         : 'Browse medical services offered by ' . $provider_filter_name . ' through MedTravel.';
+} elseif ($requires_provider_service_context) {
+    $seo_offers_description = $context_error_message;
 }
 $page_description = $seo_offers_description !== ''
     ? $seo_offers_description
     : 'Browse medical service offers in Colombia from certified providers coordinated by MedTravel.';
 $page_canonical = 'https://medtravel.com.co/offers.php';
-if ($provider_filter_id > 0 || $category_id > 0) {
+if ($provider_filter_id > 0 || $category_id > 0 || ($service_filter_id > 0 && $provider_filter_id > 0)) {
     $canonical_params = [];
     if ($provider_filter_id > 0) {
         $canonical_params['provider_id'] = $provider_filter_id;
     }
     if ($category_id > 0) {
         $canonical_params['category'] = $category_id;
+    }
+    if ($service_filter_id > 0 && $provider_filter_id > 0) {
+        $canonical_params['service_id'] = $service_filter_id;
     }
     $page_canonical .= '?' . http_build_query($canonical_params);
 }
@@ -698,37 +776,13 @@ include('inc/include.php');
     ?>">
         <div class="container text-center">
             <h5 class="text-white-50 mb-3">
-                <?php
-                if ($provider_filter_id > 0) {
-                    echo $category_id > 0 ? 'PROVIDER CATEGORY' : 'MEDICAL PROVIDER SERVICES';
-                } else {
-                    echo $category_id > 0 ? 'MEDICAL CATEGORY' : htmlspecialchars($page_subtitle_1);
-                }
-                ?>
+                <?php echo htmlspecialchars($hero_label, ENT_QUOTES, 'UTF-8'); ?>
             </h5>
             <h1 class="display-3 text-white mb-4">
-                <?php
-                if ($provider_filter_id > 0 && $provider_filter_name !== '') {
-                    echo htmlspecialchars($category_id > 0 ? $category_name : ($provider_filter_name . ' Services'));
-                } else {
-                    echo htmlspecialchars($category_name);
-                }
-                ?>
+                <?php echo htmlspecialchars($hero_title, ENT_QUOTES, 'UTF-8'); ?>
             </h1>
             <p class="text-white-50 mb-0" style="max-width: 800px; margin: 0 auto; font-size: 1.1rem;">
-                <?php
-                if ($provider_filter_id > 0 && $provider_filter_name !== '') {
-                    echo htmlspecialchars(
-                        $category_id > 0
-                            ? 'Explore ' . strtolower($category_name) . ' services offered by ' . $provider_filter_name . ($provider_filter_city !== '' ? ' in ' . $provider_filter_city : '') . '.'
-                            : 'Explore medical services offered by ' . $provider_filter_name . ($provider_filter_city !== '' ? ' in ' . $provider_filter_city : '') . '.'
-                    );
-                } elseif ($category_id > 0 && !empty($category_description)) {
-                    echo $category_description;
-                } else {
-                    echo htmlspecialchars($page_subtitle_2);
-                }
-                ?>
+                <?php echo htmlspecialchars($hero_description, ENT_QUOTES, 'UTF-8'); ?>
             </p>
             <div class="category-header-trust">
                 <span><i class="fas fa-shield-alt"></i> Certified Providers</span>
@@ -845,10 +899,13 @@ include('inc/include.php');
         <div class="container py-4">
 
             <!-- Section label (contextual, only when server-side filter active) -->
-            <?php if ($category_id > 0 || ($provider_filter_id > 0 && $provider_filter_name !== '')): ?>
+            <?php if ($category_id > 0 || ($provider_filter_id > 0 && $provider_filter_name !== '') || ($service_filter_id > 0 && $provider_filter_name !== '' && $service_filter_name !== '')): ?>
             <div class="offers-section-label">
                 <span class="label-text">
-                    <?php if ($category_id > 0 && $provider_filter_id > 0 && $provider_filter_name !== ''): ?>
+                    <?php if ($service_filter_id > 0 && $provider_filter_id > 0 && $provider_filter_name !== '' && $service_filter_name !== ''): ?>
+                        Service: <strong><?php echo htmlspecialchars($service_filter_name); ?></strong>
+                        &nbsp;·&nbsp; Provider: <strong><?php echo htmlspecialchars($provider_filter_name); ?></strong>
+                    <?php elseif ($category_id > 0 && $provider_filter_id > 0 && $provider_filter_name !== ''): ?>
                         Category: <strong><?php echo htmlspecialchars($category_name); ?></strong>
                         &nbsp;·&nbsp; Provider: <strong><?php echo htmlspecialchars($provider_filter_name); ?></strong>
                     <?php elseif ($category_id > 0): ?>
@@ -857,7 +914,10 @@ include('inc/include.php');
                         Provider: <strong><?php echo htmlspecialchars($provider_filter_name); ?></strong>
                     <?php endif; ?>
                 </span>
-                <?php if ($category_id > 0): ?>
+                <?php if ($service_filter_id > 0 && $provider_filter_id > 0): ?>
+                <a href="offers.php?provider_id=<?php echo (int)$provider_filter_id; ?>"
+                   class="btn-view-all-cat"><i class="fas fa-th me-1"></i>View all provider services</a>
+                <?php elseif ($category_id > 0): ?>
                 <a href="offers.php<?php echo $provider_filter_id > 0 ? '?provider_id=' . (int)$provider_filter_id : ''; ?>"
                    class="btn-view-all-cat"><i class="fas fa-th me-1"></i>View all categories</a>
                 <?php endif; ?>
@@ -1003,9 +1063,11 @@ include('inc/include.php');
             <?php else: ?>
                 <div class="no-offers">
                     <i class="fas fa-inbox"></i>
-                    <h3 class="text-muted mb-3">No offers available yet</h3>
+                    <h3 class="text-muted mb-3"><?php echo $requires_provider_service_context ? 'Provider required to view this service' : 'No offers available yet'; ?></h3>
                     <p class="text-muted">
-                        <?php if ($provider_filter_id > 0 && $provider_filter_name !== ''): ?>
+                        <?php if ($requires_provider_service_context): ?>
+                            <?php echo htmlspecialchars($context_error_message, ENT_QUOTES, 'UTF-8'); ?>
+                        <?php elseif ($provider_filter_id > 0 && $provider_filter_name !== ''): ?>
                             Check back soon for services from <?php echo htmlspecialchars($provider_filter_name, ENT_QUOTES, 'UTF-8'); ?>
                         <?php elseif ($category_id > 0): ?>
                             Check back soon for new medical services in this category
@@ -1013,6 +1075,13 @@ include('inc/include.php');
                             Check back soon for new medical services
                         <?php endif; ?>
                     </p>
+                    <?php if ($requires_provider_service_context): ?>
+                        <p class="mt-3">
+                            <a href="offers.php" class="btn btn-outline-primary">
+                                <i class="fas fa-th me-2"></i>Browse all services
+                            </a>
+                        </p>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
 

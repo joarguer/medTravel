@@ -223,7 +223,9 @@ $(document).ready(function(){
                 tbody += '<td>'+escapeHtml(r.slug)+'</td>';
                 tbody += '<td>'+r.sort_order+'</td>';
                 tbody += '<td>'+(r.is_active == 1 ? '<button class="btn btn-xs btn-success toggle-active" data-val="0">Activo</button>' : '<button class="btn btn-xs btn-default toggle-active" data-val="1">Inactivo</button>')+'</td>';
-                var campaignUrl = 'https://medtravel.com.co/offers.php?service_id=' + serviceId;
+                var campaignUrl = rowProviderId > 0
+                    ? ('https://medtravel.com.co/offers.php?provider_id=' + rowProviderId + '&service_id=' + serviceId)
+                    : 'https://medtravel.com.co/offers.php';
                 tbody += '<td>';
                 tbody += '<a class="'+offersClass+' mr5" href="'+offersUrl+'">'+offersLabel+'</a> ';
                 tbody += staffAction + ' ';

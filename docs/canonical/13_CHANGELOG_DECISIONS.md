@@ -398,6 +398,27 @@
 
 **Commit**: `4c9a142`
 
+## 2026-04-17 — fix(offers): forzar contexto provider+service en servidor para evitar datasets ambiguos
+
+**Outcome**
+- `offers.php` ahora valida y aplica filtro server-side cuando se provee `service_id` + `provider_id`. Si `service_id` llega sin `provider_id`, la página muestra un estado controlado (mensaje de contexto incompleto) y no renderiza un dataset ambiguo mezclando proveedores.
+- `admin/js/service_catalog.js` genera URLs públicas de campaña con `provider_id` + `service_id` (ej.: `offers.php?provider_id=2&service_id=9`).
+- Cabeceras/hero/contadores se alinean al mismo contexto server-side para evitar discrepancias entre dataset cargado y UI.
+
+**Smoke validado (runtime real)**
+- BD local usada: `medtravel_rebuild_20260415` vía socket MAMP.
+- Pruebas realizadas: `offers.php?service_id=9` (sin provider) → estado controlado, sin cards mezcladas.
+- `offers.php?provider_id=2&service_id=9` → contexto coherente, cards y CTAs pertenecen al `provider_id=2`.
+- `offers.php?provider_id=2` → contexto coherente, listado por proveedor correcto.
+- `offers.php?provider_id=2&service_id=999999` → degradación segura a provider-only (sin crash, sin mezcla).
+
+**Decision / Canon**
+- `offers.php` no debe renderizar datasets ambiguos usando solo `service_id`. La URL pública canónica para un contexto específico es `provider_id + service_id`.
+- Si falta `provider_id` y viene `service_id`, la página debe mostrar un estado controlado (sin cards ambiguas) y orientar al usuario a seleccionar un proveedor.
+
+**Riesgo residual**
+- UX: `service_id` inválido o no existente degrada a contexto provider-only. Es seguro técnicamente pero deja una decisión de UX pendiente: elegir entre mostrar un mensaje explícito de error/404 de servicio vs. degradación silenciosa a proveedor-only. Registrar para decisión de producto.
+
 **Outcome**
 - Admin quick-reply ya no se envia directamente desde el listado. El click en `.admin-quick-reply` abre `#adminQuickReplyPreviewModal` para revision antes de enviar.
 - El cliente puede confirmar una reunion propuesta directamente desde `client/app_inbox.php`: el sistema invoca `google_calendar_create_event()` o el flujo de confirmacion interna segun el modo del evento.
