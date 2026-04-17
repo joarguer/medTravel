@@ -207,6 +207,39 @@ $bootstrap_css_url = htmlspecialchars(mt_asset_url('css/bootstrap.min.css'), ENT
 $style_css_url = htmlspecialchars(mt_asset_url('css/style.css'), ENT_QUOTES, 'UTF-8');
 $toastr_js_url = htmlspecialchars(mt_asset_url('assets/global/plugins/bootstrap-toastr/toastr.min.js'), ENT_QUOTES, 'UTF-8');
 $booking_summary_js_url = htmlspecialchars(mt_asset_url('/js/booking_summary.js'), ENT_QUOTES, 'UTF-8');
+$meta_pixel_head = '<!-- Meta Pixel Code -->
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version=\'2.0\';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,\'script\',
+        \'https://connect.facebook.net/en_US/fbevents.js\');
+        fbq(\'init\', \'2081221109277505\');
+        fbq(\'track\', \'PageView\');
+    </script>
+    <!-- End Meta Pixel Code -->';
+$meta_pixel_noscript = '<noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=2081221109277505&ev=PageView&noscript=1"
+    alt="" /></noscript>';
+
+if (empty($GLOBALS['mt_meta_pixel_output_buffer_started'] ?? false)) {
+    $GLOBALS['mt_meta_pixel_output_buffer_started'] = true;
+    ob_start(static function ($buffer) use ($meta_pixel_noscript) {
+        if (stripos($buffer, '<body') === false || stripos($buffer, 'facebook.com/tr?id=2081221109277505') !== false) {
+            return $buffer;
+        }
+
+        return preg_replace(
+            '~<body([^>]*)>~i',
+            '<body$1>' . "\n    " . $meta_pixel_noscript,
+            $buffer,
+            1
+        ) ?: $buffer;
+    });
+}
 
 $head = '<meta charset="utf-8">
     <title>' . $meta_title . '</title>
@@ -246,7 +279,7 @@ $head = '<meta charset="utf-8">
     <link href="' . $bootstrap_css_url . '" rel="stylesheet">
 
     <!-- Template Stylesheet -->
-    <link href="' . $style_css_url . '" rel="stylesheet">' . $jsonld_scripts;
+    <link href="' . $style_css_url . '" rel="stylesheet">' . $jsonld_scripts . "\n    " . $meta_pixel_head;
 
 $logo = '<a href="index.php" class="navbar-brand p-0">
 <img src="/img/site/logo-navbar.png" srcset="/img/site/logo-navbar-small.png 239w, /img/site/logo-navbar.png 500w" sizes="(max-width: 991.98px) 239px, 500px" alt="MedTravel">
