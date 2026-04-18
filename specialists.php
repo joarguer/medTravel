@@ -53,6 +53,33 @@ include(__DIR__ . '/inc/include.php');
             flex-wrap: wrap;
             margin-top: 14px;
         }
+        .sp-offers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 12px;
+            margin-bottom: 4px;
+        }
+        .sp-offers span {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            background: #f0fdf4;
+            color: #166534;
+            padding: 3px 9px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid #bbf7d0;
+            white-space: nowrap;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sp-offers .sp-chip-more {
+            background: #f8fafc;
+            color: #64748b;
+            border-color: #e2e8f0;
+        }
     </style>
 </head>
 <body>
@@ -110,6 +137,20 @@ include(__DIR__ . '/inc/include.php');
                                 <p class="sp-role"><?php echo htmlspecialchars((string)$specialist['display_role'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <p class="sp-provider"><?php echo htmlspecialchars((string)$specialist['provider_label'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <p class="sp-bio"><?php echo htmlspecialchars((string)($specialist['bio_short'] !== '' ? $specialist['bio_short'] : 'Independent specialist available through MedTravel coordination.'), ENT_QUOTES, 'UTF-8'); ?></p>
+                                <?php if (!empty($specialist['offer_chips'])) {
+                                    $sp_chips   = $specialist['offer_chips'];
+                                    $sp_visible = array_slice($sp_chips, 0, 3);
+                                    $sp_extra   = count($sp_chips) - count($sp_visible);
+                                ?>
+                                <div class="sp-offers">
+                                    <?php foreach ($sp_visible as $sp_chip) { ?>
+                                        <span><?php echo htmlspecialchars($sp_chip, ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php } ?>
+                                    <?php if ($sp_extra > 0) { ?>
+                                        <span class="sp-chip-more">+<?php echo $sp_extra; ?> more</span>
+                                    <?php } ?>
+                                </div>
+                                <?php } ?>
                                 <div class="sp-card-cta">
                                     <a href="/offers.php?staff_id=<?php echo (int)$specialist['id']; ?>" class="btn btn-sm btn-success rounded-pill">View services</a>
                                     <a href="/booking.php#booking-section" class="btn btn-sm btn-primary rounded-pill">Start your case review</a>

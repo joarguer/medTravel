@@ -202,7 +202,102 @@ if (!function_exists('mt_home_specialists_fetch')) {
         }
 
         mysqli_stmt_close($stmt);
+        mt_home_specialists_attach_offer_chips($conexion, $items);
         return $items;
+    }
+}
+
+if (!function_exists('mt_home_specialists_attach_offer_chips')) {
+    function mt_home_specialists_attach_offer_chips($conexion, array &$items)
+    {
+        foreach ($items as &$item) {
+            $item['offer_chips'] = [];
+        }
+        unset($item);
+
+        if (
+            empty($items) ||
+            !function_exists('mt_db_table_exists') ||
+            !function_exists('mt_db_table_has_column') ||
+            !mt_db_table_exists($conexion, 'provider_medical_staff_services') ||
+            !mt_db_table_exists($conexion, 'provider_service_offers') ||
+            !mt_db_table_exists($conexion, 'service_catalog')
+        ) {
+            return;
+        }
+
+        $staffIds = array_values(array_unique(array_filter(
+            array_map(function ($i) { return (int)($i['id'] ?? 0); }, $items)
+        )));
+        if (empty($staffIds)) {
+            return;
+        }
+
+        $hasRelActive = mt_db_table_has_column($conexion, 'provider_medical_staff_services', 'active');
+        $hasRelPcsId  = mt_db_table_has_column($conexion, 'provider_medical_staff_services', 'provider_catalog_service_id');
+        $hasPcsTable  = mt_db_table_exists($conexion, 'provider_catalog_services');
+        $hasScActive  = mt_db_table_has_column($conexion, 'service_catalog', 'is_active');
+        $hasScDeleted = mt_db_table_has_column($conexion, 'service_catalog', 'is_deleted');
+
+        $serviceIdExpr = 'rel.service_id';
+        $pcsJoin = '';
+        if ($hasRelPcsId && $hasPcsTable) {
+            $pcsJoin = ' LEFT JOIN provider_catalog_services pcs'
+                . ' ON pcs.id = rel.provider_catalog_service_id'
+                . ' AND pcs.provider_id = pms.provider_id';
+            $serviceIdExpr = 'COALESCE(pcs.service_id, rel.service_id)';
+        }
+
+        $placeholders = implode(',', array_fill(0, count($staffIds), '?'));
+
+        $sql = 'SELECT rel.provider_medical_staff_id AS staff_id,
+                       COALESCE(MIN(NULLIF(TRIM(o.title), \'\')), MIN(sc.name)) AS label,
+                       o.service_id
+                FROM provider_medical_staff_services rel
+                INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id'
+             . $pcsJoin
+             . ' INNER JOIN provider_service_offers o
+                        ON o.provider_id = pms.provider_id
+                       AND o.service_id = ' . $serviceIdExpr . '
+                       AND o.is_active = 1
+                INNER JOIN service_catalog sc ON sc.id = o.service_id
+                WHERE rel.provider_medical_staff_id IN (' . $placeholders . ')';
+
+        if ($hasRelActive)   { $sql .= ' AND rel.active = 1'; }
+        if ($hasScActive)    { $sql .= ' AND sc.is_active = 1'; }
+        if ($hasScDeleted)   { $sql .= ' AND sc.is_deleted = 0'; }
+
+        $sql .= ' GROUP BY rel.provider_medical_staff_id, o.service_id'
+              . ' ORDER BY rel.provider_medical_staff_id ASC, MIN(sc.name) ASC';
+
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return;
+        }
+
+        $types = str_repeat('i', count($staffIds));
+        mysqli_stmt_bind_param($stmt, $types, ...$staffIds);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+
+        $chipMap = [];
+        while ($res && ($row = mysqli_fetch_assoc($res))) {
+            $sid   = (int)$row['staff_id'];
+            $label = trim((string)$row['label']);
+            if ($label === '') {
+                continue;
+            }
+            if (mb_strlen($label, 'UTF-8') > 40) {
+                $label = mb_substr($label, 0, 38, 'UTF-8') . '…';
+            }
+            $chipMap[$sid][] = $label;
+        }
+        mysqli_stmt_close($stmt);
+
+        foreach ($items as &$item) {
+            $item['offer_chips'] = $chipMap[(int)($item['id'] ?? 0)] ?? [];
+        }
+        unset($item);
     }
 }
 

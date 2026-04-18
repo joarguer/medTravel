@@ -187,6 +187,32 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                 background: #0d9488;
                 color: #fff;
             }
+            .home-specialist-offers {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin-top: 10px;
+            }
+            .home-specialist-offers span {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                background: #f0fdf4;
+                color: #166534;
+                padding: 3px 9px;
+                font-size: 11px;
+                font-weight: 600;
+                border: 1px solid #bbf7d0;
+                white-space: nowrap;
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .home-specialist-offers .hs-chip-more {
+                background: #f8fafc;
+                color: #64748b;
+                border-color: #e2e8f0;
+            }
         </style>
     </head>
 
@@ -787,6 +813,20 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                                         <span><?php echo htmlspecialchars($specialist['provider_city'], ENT_QUOTES, 'UTF-8'); ?></span>
                                     <?php } ?>
                                 </div>
+                                <?php if (!empty($specialist['offer_chips'])) {
+                                    $hs_chips   = $specialist['offer_chips'];
+                                    $hs_visible = array_slice($hs_chips, 0, 3);
+                                    $hs_extra   = count($hs_chips) - count($hs_visible);
+                                ?>
+                                <div class="home-specialist-offers">
+                                    <?php foreach ($hs_visible as $hs_chip) { ?>
+                                        <span><?php echo htmlspecialchars($hs_chip, ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php } ?>
+                                    <?php if ($hs_extra > 0) { ?>
+                                        <span class="hs-chip-more">+<?php echo $hs_extra; ?> more</span>
+                                    <?php } ?>
+                                </div>
+                                <?php } ?>
                                 <a href="/offers.php?staff_id=<?php echo (int)$specialist['id']; ?>"
                                    class="home-specialist-cta">
                                     <i class="fas fa-stethoscope me-1"></i>View services
