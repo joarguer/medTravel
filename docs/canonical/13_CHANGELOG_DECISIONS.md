@@ -1,5 +1,28 @@
 # Changelog Decisions
 
+## 2026-04-18 — feat(blog): `video_url` del blog soporta Instagram público sin cambiar schema
+
+**Outcome**
+- `blog_posts.video_url` sigue siendo el único campo para media externa.
+- El runtime del blog ahora acepta y resuelve:
+  - YouTube
+  - Vimeo
+  - Instagram post público
+  - Instagram reel público
+- La lógica de normalización y resolución deja de estar duplicada entre admin y frontend y pasa a helper compartido.
+
+**Decision**
+- No se agrega `video_provider`.
+- Instagram no se embebe como iframe genérico.
+- Para Instagram se usa bloque oficial `instagram-media` con script `embed.js` y fallback visible `View on Instagram`.
+- Si la URL es válida pero el contenido no resulta embebible en runtime real, el layout no se rompe y el enlace externo sigue disponible.
+
+**Archivos modificados**
+- `inc/blog_media_embed.php`
+- `admin/ajax/blog_posts.php`
+- `blog_post.php`
+- `admin/blog_edit.php`
+
 ## 2026-04-18 — feat(specialists): chips de ofertas activas en cards públicas de especialistas
 
 Public specialist cards now expose a short list of compatible active offers/services.

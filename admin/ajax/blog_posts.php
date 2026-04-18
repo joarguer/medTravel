@@ -2,6 +2,7 @@
 session_start();
 include("../include/conexion.php");
 require_once __DIR__ . '/../include/roles.php';
+require_once __DIR__ . '/../../inc/blog_media_embed.php';
 
 $is_admin = is_role_admin_session();
 $can_manage_all_posts = $is_admin || user_can(PERM_CONTENT_MANAGE);
@@ -163,55 +164,6 @@ function blog_posts_has_video_file($conexion) {
     }
 
     return $hasColumn;
-}
-
-function normalize_blog_video_url($url) {
-    $url = trim((string)$url);
-    if ($url === '') {
-        return '';
-    }
-
-    if (!preg_match('~^https?://~i', $url)) {
-        return false;
-    }
-
-    $parts = @parse_url($url);
-    if (!$parts || empty($parts['host'])) {
-        return false;
-    }
-
-    $host = strtolower((string)$parts['host']);
-    $host = preg_replace('~^www\.~', '', $host);
-    $path = isset($parts['path']) ? trim((string)$parts['path']) : '';
-    $pathSegments = array_values(array_filter(explode('/', trim($path, '/')), 'strlen'));
-
-    if ($host === 'youtu.be') {
-        $videoId = $pathSegments[0] ?? '';
-        return preg_match('~^[A-Za-z0-9_-]{11}$~', $videoId) ? 'https://www.youtube.com/watch?v=' . $videoId : false;
-    }
-
-    if (in_array($host, ['youtube.com', 'm.youtube.com'], true)) {
-        $videoId = '';
-        if ($path === '/watch' && !empty($parts['query'])) {
-            parse_str($parts['query'], $query);
-            $videoId = trim((string)($query['v'] ?? ''));
-        } elseif (($pathSegments[0] ?? '') === 'embed' || ($pathSegments[0] ?? '') === 'shorts') {
-            $videoId = trim((string)($pathSegments[1] ?? ''));
-        }
-        return preg_match('~^[A-Za-z0-9_-]{11}$~', $videoId) ? 'https://www.youtube.com/watch?v=' . $videoId : false;
-    }
-
-    if (in_array($host, ['vimeo.com', 'player.vimeo.com'], true)) {
-        $videoId = '';
-        if (($pathSegments[0] ?? '') === 'video') {
-            $videoId = trim((string)($pathSegments[1] ?? ''));
-        } else {
-            $videoId = trim((string)($pathSegments[count($pathSegments) - 1] ?? ''));
-        }
-        return preg_match('~^\d+$~', $videoId) ? 'https://vimeo.com/' . $videoId : false;
-    }
-
-    return false;
 }
 
 function normalize_blog_video_file_path($path) {
@@ -382,9 +334,9 @@ if ($tipo === 'save') {
     }
 
     if ($hasVideoUrl) {
-        $normalized_video_url = normalize_blog_video_url($video_url);
+        $normalized_video_url = blog_normalize_video_url($video_url);
         if ($normalized_video_url === false) {
-            json_exit(['status' => 'error', 'message' => 'Video URL must be a valid YouTube or Vimeo link']);
+            json_exit(['status' => 'error', 'message' => 'Video URL must be a valid public YouTube, Vimeo, or Instagram post/reel link']);
         }
         $video_url = $normalized_video_url;
     } else {

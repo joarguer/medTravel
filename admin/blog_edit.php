@@ -217,9 +217,9 @@ if ($can_manage_all_posts && isset($conexion) && $conexion) {
                                                 <p class="help-block" style="margin-top:6px;"><small>Formatos: jpg, png, gif, webp. Tamaño recomendado: 1200&times;630 px.</small></p>
                                             </div>
                                             <div class="form-group">
-                                                <label>Video URL (YouTube / Vimeo)</label>
-                                                <input type="url" class="form-control" name="video_url" id="video_url" placeholder="https://www.youtube.com/watch?v=... o https://vimeo.com/...">
-                                                <small class="text-muted">Opcional. Solo se aceptan enlaces de YouTube o Vimeo.</small>
+                                                <label>Video / Post URL</label>
+                                                <input type="url" class="form-control" name="video_url" id="video_url" placeholder="https://www.youtube.com/watch?v=... o https://vimeo.com/... o https://www.instagram.com/p/...">
+                                                <small class="text-muted">Accepts public YouTube, Vimeo, or Instagram links (post or reel).</small>
                                             </div>
                                             <div class="form-group">
                                                 <label class="control-label">Video MP4 subido</label>

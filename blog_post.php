@@ -1,6 +1,7 @@
 <?php
 include_once(__DIR__ . '/admin/include/conexion.php');
 require_once __DIR__ . '/inc/blog_header.php';
+require_once __DIR__ . '/inc/blog_media_embed.php';
 
 if (!function_exists('provider_verification_level_label')) {
     function provider_verification_level_label($level)
@@ -112,85 +113,6 @@ if (!function_exists('blog_author_avatar_href')) {
         }
 
         return '/' . $normalized;
-    }
-}
-
-if (!function_exists('blog_normalize_video_url')) {
-    function blog_normalize_video_url($url)
-    {
-        $url = trim((string)$url);
-        if ($url === '' || !preg_match('~^https?://~i', $url)) {
-            return '';
-        }
-
-        $parts = @parse_url($url);
-        if (!$parts || empty($parts['host'])) {
-            return '';
-        }
-
-        $host = strtolower((string)$parts['host']);
-        $host = preg_replace('~^www\.~', '', $host);
-        $path = isset($parts['path']) ? trim((string)$parts['path']) : '';
-        $pathSegments = array_values(array_filter(explode('/', trim($path, '/')), 'strlen'));
-
-        if ($host === 'youtu.be') {
-            $videoId = trim((string)($pathSegments[0] ?? ''));
-            return preg_match('~^[A-Za-z0-9_-]{11}$~', $videoId) ? 'https://www.youtube.com/watch?v=' . $videoId : '';
-        }
-
-        if (in_array($host, ['youtube.com', 'm.youtube.com'], true)) {
-            $videoId = '';
-            if ($path === '/watch' && !empty($parts['query'])) {
-                parse_str($parts['query'], $query);
-                $videoId = trim((string)($query['v'] ?? ''));
-            } elseif (($pathSegments[0] ?? '') === 'embed' || ($pathSegments[0] ?? '') === 'shorts') {
-                $videoId = trim((string)($pathSegments[1] ?? ''));
-            }
-            return preg_match('~^[A-Za-z0-9_-]{11}$~', $videoId) ? 'https://www.youtube.com/watch?v=' . $videoId : '';
-        }
-
-        if (in_array($host, ['vimeo.com', 'player.vimeo.com'], true)) {
-            $videoId = '';
-            if (($pathSegments[0] ?? '') === 'video') {
-                $videoId = trim((string)($pathSegments[1] ?? ''));
-            } else {
-                $videoId = trim((string)($pathSegments[count($pathSegments) - 1] ?? ''));
-            }
-            return preg_match('~^\d+$~', $videoId) ? 'https://vimeo.com/' . $videoId : '';
-        }
-
-        return '';
-    }
-}
-
-if (!function_exists('blog_video_embed_url')) {
-    function blog_video_embed_url($url)
-    {
-        $normalized = blog_normalize_video_url($url);
-        if ($normalized === '') {
-            return '';
-        }
-
-        $parts = parse_url($normalized);
-        $host = strtolower((string)($parts['host'] ?? ''));
-        $host = preg_replace('~^www\.~', '', $host);
-
-        if ($host === 'youtube.com' && !empty($parts['query'])) {
-            parse_str($parts['query'], $query);
-            $videoId = trim((string)($query['v'] ?? ''));
-            if (preg_match('~^[A-Za-z0-9_-]{11}$~', $videoId)) {
-                return 'https://www.youtube.com/embed/' . rawurlencode($videoId);
-            }
-        }
-
-        if ($host === 'vimeo.com') {
-            $videoId = trim((string)basename((string)($parts['path'] ?? '')));
-            if (preg_match('~^\d+$~', $videoId)) {
-                return 'https://player.vimeo.com/video/' . rawurlencode($videoId);
-            }
-        }
-
-        return '';
     }
 }
 
@@ -449,7 +371,7 @@ $providerDescription = $post ? trim(strip_tags((string)($post['provider_descript
 $providerWebsiteHref = blog_provider_url_href($providerWebsite);
 $authorAvatarPath = $post ? blog_author_avatar_href($post['author_avatar'] ?? '') : '';
 $localVideoPath = $post ? blog_local_video_href($post['video_file'] ?? '') : '';
-$videoEmbedUrl = $post ? blog_video_embed_url($post['video_url'] ?? '') : '';
+$videoEmbed = $post ? blog_resolve_video_embed($post['video_url'] ?? '') : blog_resolve_video_embed('');
 $providerLogoPath = '';
 if ($providerExists && !empty($post['provider_logo'])) {
     $providerLogoPath = blog_provider_logo_href($post['provider_id'], $post['provider_logo']);
@@ -520,7 +442,7 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
                                 }
                                 $coverPath = '/' . ltrim($coverPath, '/');
                             }
-                            $showFeaturedImage = ($localVideoPath === '' && $videoEmbedUrl === '');
+                            $showFeaturedImage = ($localVideoPath === '' && ($videoEmbed['embed_mode'] ?? '') === '');
                         ?>
                         <article class="card border-0 shadow-sm mb-4 blog-article-card">
                             <div class="card-body p-4 p-lg-5">
@@ -552,15 +474,29 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
                                             Your browser does not support HTML5 video.
                                         </video>
                                     </div>
-                                <?php elseif ($videoEmbedUrl !== ''): ?>
+                                <?php elseif (($videoEmbed['embed_mode'] ?? '') === 'iframe' && !empty($videoEmbed['embed_url'])): ?>
                                     <div class="ratio ratio-16x9 mt-4 rounded overflow-hidden blog-featured-media blog-featured-media--video">
                                         <iframe
-                                            src="<?php echo htmlspecialchars($videoEmbedUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                            src="<?php echo htmlspecialchars($videoEmbed['embed_url'], ENT_QUOTES, 'UTF-8'); ?>"
                                             title="<?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?>"
                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                             allowfullscreen
                                             loading="lazy"
                                             referrerpolicy="strict-origin-when-cross-origin"></iframe>
+                                    </div>
+                                <?php elseif (($videoEmbed['embed_mode'] ?? '') === 'instagram' && !empty($videoEmbed['instagram_permalink'])): ?>
+                                    <div class="mt-4 blog-featured-media blog-featured-media--instagram">
+                                        <div class="border rounded bg-white p-3">
+                                            <blockquote
+                                                class="instagram-media"
+                                                data-instgrm-permalink="<?php echo htmlspecialchars($videoEmbed['instagram_permalink'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                data-instgrm-version="14"
+                                                style="background:#fff; border:0; border-radius:12px; margin:0 auto; max-width:540px; min-width:326px; padding:0; width:100%;">
+                                            </blockquote>
+                                            <div class="text-center mt-3">
+                                                <a class="btn btn-outline-dark rounded-pill px-4" href="<?php echo htmlspecialchars($videoEmbed['external_url'], ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener noreferrer">View on Instagram</a>
+                                            </div>
+                                        </div>
                                     </div>
                                 <?php endif; ?>
                                 <?php if (!empty($post['excerpt'])): ?>
@@ -652,6 +588,9 @@ $verificationLevel = $post ? trim((string)($post['verification_level'] ?? '')) :
         <script src="lib/waypoints/waypoints.min.js"></script>
         <script src="lib/owlcarousel/owl.carousel.min.js"></script>
         <script src="lib/lightbox/js/lightbox.min.js"></script>
+        <?php if ($localVideoPath === '' && !empty($videoEmbed['requires_instagram_script'])): ?>
+        <script async src="https://www.instagram.com/embed.js"></script>
+        <?php endif; ?>
         <?php echo $script; ?>
         <script src="<?php echo htmlspecialchars(mt_asset_url('js/main.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
     </body>
