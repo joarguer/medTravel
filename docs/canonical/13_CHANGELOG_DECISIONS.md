@@ -1,5 +1,18 @@
 # Changelog Decisions
 
+## 2026-04-18 — feat(specialists): chips de ofertas activas en cards públicas de especialistas
+
+Public specialist cards now expose a short list of compatible active offers/services.
+
+Semantic rule preserved: only services assigned to the specialist and simultaneously published as active provider offers are shown in public cards.
+
+- Source resolved in `inc/public_specialists.php` (`mt_home_specialists_attach_offer_chips`); single batch query, no N+1.
+- Intersection: `provider_medical_staff_services` × `provider_service_offers` on `provider_id` + `service_id` + `is_active = 1`.
+- Label: `offer.title` if non-empty, else `service_catalog.name`.
+- Max 3 visible chips per card; `+N more` when additional compatible services exist.
+- No empty services block is rendered when there is no valid intersection.
+- Applies to `index.php` (home) and `specialists.php`.
+
 ## 2026-04-18 — feat(catalog): filtrar offers por especialista desde cards públicas
 
 **Outcome**
