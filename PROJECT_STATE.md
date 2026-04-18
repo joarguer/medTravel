@@ -159,3 +159,7 @@ Regla operativa local:
 
 Última implantación de base documental: 2026-04-13.
 Ver `docs/canonical/02_DOC_MAP.md` para estructura completa.
+
+## Cambios rápidos (audit trail)
+
+- **2026-04-18** — fix(home): separar reglas CSS de `home-specialist-photo` y `home-specialist-avatar` para asegurar `object-fit: cover` en imágenes de especialista. Se dejó `home-specialist-photo` con `width:100%`, `height:320px`, `object-fit:cover`, `object-position:center top`, `display:block`. `home-specialist-avatar` mantiene el `display:flex` centrado y estilos de fondo/typography. El contenedor `.home-specialist-card` ya provee `overflow:hidden` y `border-radius:14px`, por tanto no fue necesario tocar wrappers. Validación manual recomendada en navegadores (Chrome, Safari, Firefox) verificando que la imagen no se distorsione ni se sobre-dimensione.
