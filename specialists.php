@@ -123,7 +123,7 @@ include(__DIR__ . '/inc/include.php');
             </div>
         </div>
 
-        <div class="row g-4">
+        <div class="row g-4 justify-content-center">
             <?php if (!empty($specialists)) { ?>
                 <?php foreach ($specialists as $specialist) { ?>
                     <div class="col-sm-6 col-lg-4 col-xl-3">
