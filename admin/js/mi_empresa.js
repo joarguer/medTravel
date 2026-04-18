@@ -268,11 +268,20 @@ function isValidURL(url) {
 
 var checklistLoaded = false;
 
+// Bootstrap 3 / Metronic: escuchar desde document y filtrar por target es más fiable
+// que binding directo en el <a>, que puede perderse si Metronic intercepta el tab.
+$(document).on('shown.bs.tab', function(e) {
+    if ($(e.target).attr('href') === '#tab-documentacion' && !checklistLoaded) {
+        loadMyChecklist();
+    }
+});
+
+// Fallback: click directo por si shown.bs.tab no llega (temas que manejan tabs con JS propio)
 $(document).ready(function() {
-    $('a[href="#tab-documentacion"]').on('shown.bs.tab', function() {
-        if (!checklistLoaded) {
-            loadMyChecklist();
-        }
+    $(document).on('click', '#tab-documentacion-link', function() {
+        setTimeout(function() {
+            if (!checklistLoaded) { loadMyChecklist(); }
+        }, 80);
     });
 });
 
