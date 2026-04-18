@@ -136,7 +136,7 @@ include(__DIR__ . '/inc/include.php');
                                 <h4 class="mb-2"><?php echo htmlspecialchars((string)$specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?></h4>
                                 <p class="sp-role"><?php echo htmlspecialchars((string)$specialist['display_role'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <p class="sp-provider"><?php echo htmlspecialchars((string)$specialist['provider_label'], ENT_QUOTES, 'UTF-8'); ?></p>
-                                <p class="sp-bio"><?php echo htmlspecialchars((string)($specialist['bio_short'] !== '' ? $specialist['bio_short'] : 'Independent specialist available through MedTravel coordination.'), ENT_QUOTES, 'UTF-8'); ?></p>
+                                <p class="sp-bio"><?php echo htmlspecialchars($specialist['display_bio'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <?php if (!empty($specialist['offer_chips'])) {
                                     $sp_chips   = $specialist['offer_chips'];
                                     $sp_visible = array_slice($sp_chips, 0, 3);

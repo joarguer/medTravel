@@ -134,6 +134,7 @@ if (!function_exists('mt_home_specialists_fetch')) {
             'p.name AS provider_name',
             mt_db_table_has_column($conexion, 'providers', 'city') ? 'p.city AS provider_city' : "'' AS provider_city",
             mt_db_table_has_column($conexion, 'providers', 'logo') ? 'p.logo AS provider_logo' : "'' AS provider_logo",
+            mt_db_table_has_column($conexion, 'providers', 'description') ? 'p.description AS provider_description' : "'' AS provider_description",
         ];
 
         $sql = 'SELECT ' . implode(', ', $select) . '
@@ -165,6 +166,7 @@ if (!function_exists('mt_home_specialists_fetch')) {
             $roleTitle = trim((string)($row['role_title'] ?? ''));
             $specialty = trim((string)($row['specialty'] ?? ''));
             $bioShort = trim((string)($row['bio_short'] ?? ''));
+            $providerDescription = trim((string)($row['provider_description'] ?? ''));
             $clinicName = trim((string)($row['clinic_name'] ?? ''));
             $providerName = trim((string)($row['provider_name'] ?? ''));
             $providerId = (int)($row['provider_id'] ?? 0);
@@ -190,6 +192,13 @@ if (!function_exists('mt_home_specialists_fetch')) {
                 'specialty' => $specialty,
                 'display_role' => $specialty !== '' ? $specialty : ($roleTitle !== '' ? $roleTitle : 'Medical Specialist'),
                 'bio_short' => $bioShort,
+                'display_bio' => $bioShort !== ''
+                    ? $bioShort
+                    : ($providerDescription !== ''
+                        ? (mb_strlen($providerDescription, 'UTF-8') > 180
+                            ? mb_substr($providerDescription, 0, 178, 'UTF-8') . '…'
+                            : $providerDescription)
+                        : 'Specialist available through MedTravel care coordination.'),
                 'photo' => $photo,
                 'photo_fallback' => $photoFallback,
                 'clinic_name' => $clinicName,
