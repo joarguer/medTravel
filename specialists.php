@@ -111,6 +111,7 @@ include(__DIR__ . '/inc/include.php');
                                 <p class="sp-provider"><?php echo htmlspecialchars((string)$specialist['provider_label'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <p class="sp-bio"><?php echo htmlspecialchars((string)($specialist['bio_short'] !== '' ? $specialist['bio_short'] : 'Independent specialist available through MedTravel coordination.'), ENT_QUOTES, 'UTF-8'); ?></p>
                                 <div class="sp-card-cta">
+                                    <a href="/offers.php?staff_id=<?php echo (int)$specialist['id']; ?>" class="btn btn-sm btn-success rounded-pill">View services</a>
                                     <a href="/booking.php#booking-section" class="btn btn-sm btn-primary rounded-pill">Start your case review</a>
                                 </div>
                             </div>

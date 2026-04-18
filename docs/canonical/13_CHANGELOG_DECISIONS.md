@@ -1,5 +1,36 @@
 # Changelog Decisions
 
+## 2026-04-18 — feat(catalog): filtrar offers por especialista desde cards públicas
+
+**Outcome**
+- Las cards de especialistas en `index.php` y `specialists.php` ahora llevan a `offers.php?staff_id=N` (`provider_medical_staff.id`).
+- `offers.php` implementa un nuevo branch de query server-side que filtra solo las ofertas activas del provider del especialista cuyo `service_id` está en `provider_medical_staff_services` (servicios asignados al staff).
+- El filtro es estrictamente semántico: no se mezclan ofertas de otros especialistas ni de otros providers.
+- Se añade un banner visual en `offers.php` con nombre/rol del especialista y enlace para quitar el filtro.
+
+**Semántica de estados del filtro `?staff_id=N`**
+| Caso | Comportamiento |
+|------|----------------|
+| Staff válido + publicado + con servicios asignados | Muestra solo las ofertas de ese especialista |
+| Staff válido + publicado + sin servicios asignados | Empty state "No services assigned yet" |
+| Tabla `provider_medical_staff_services` no existe en el entorno | Empty state controlado (nunca fallback al catálogo) |
+| Staff inválido / inexistente / no publicado (`allow_home_publication=0`) | Empty state "Specialist not available" con link a /offers.php sin filtro |
+| Sin `?staff_id` | Comportamiento previo sin cambios |
+
+**Decision**
+- El ID público para el filtro es `provider_medical_staff.id`. No expone PII. La URL resultante es `offers.php?staff_id=N`.
+- La relación canónica es `staff.provider_id = offer.provider_id AND offer.service_id IN (servicios del staff)`.
+- No existe FK directa entre `provider_service_offers` y `provider_medical_staff`; la relación pasa por `provider_medical_staff_services`.
+- El fallback silencioso a catálogo completo cuando el staff es inválido fue descartado explícitamente: rompe semántica y confunde al paciente.
+- No se añade `?staff_id` al canonical URL cuando el staff es inválido (`$staff_filter_id === 0`).
+
+**Archivos modificados**
+- `offers.php` — query, hero, SEO, canonical URL, CSS banner, HTML banner + empty states diferenciados
+- `index.php` — CSS `.home-specialist-cta` + botón "View services" en cada card
+- `specialists.php` — botón "View services" en cada card
+
+---
+
 ## 2026-04-17 — fix(provider-staff): el owner/admin inicial del mismo provider puede materializarse como staff médico reutilizando su cuenta
 
 **Outcome**

@@ -128,6 +128,102 @@ if ($requires_provider_service_context) {
         : 'To view these offers, select a medical provider first. This page requires provider and service context to avoid mixing providers.';
 }
 
+// ── Staff (specialist) filter ──────────────────────────────────────────────
+// Pasado como ?staff_id=N desde las cards públicas de especialistas.
+// Semántica: offer.provider_id = staff.provider_id
+//            AND offer.service_id IN (servicios asignados al staff).
+// Si la tabla de servicios no existe → empty state (nunca fallback a catálogo).
+// Si el staff no existe / no está publicado → empty state con aviso.
+$staff_filter_id_requested = isset($_GET['staff_id']) ? (int)$_GET['staff_id'] : 0;
+$staff_filter_id          = $staff_filter_id_requested;
+$staff_filter_name        = '';
+$staff_filter_role        = '';
+$staff_filter_provider_id = 0;
+$staff_service_ids        = [];   // IDs de service_catalog vinculados al staff
+$staff_has_service_table  = false;// true cuando provider_medical_staff_services existe
+
+if ($staff_filter_id > 0) {
+    $has_pms_table = function_exists('mt_db_table_exists')
+        ? mt_db_table_exists($conexion, 'provider_medical_staff')
+        : (bool)mysqli_query($conexion, "SHOW TABLES LIKE 'provider_medical_staff'");
+
+    if ($has_pms_table) {
+        // Columna de estado del staff (is_active o active según el schema)
+        $staffStatusCol = '1 = 1';
+        if (function_exists('mt_db_table_has_column')) {
+            if (mt_db_table_has_column($conexion, 'provider_medical_staff', 'is_active')) {
+                $staffStatusCol = 'pms.is_active = 1';
+            } elseif (mt_db_table_has_column($conexion, 'provider_medical_staff', 'active')) {
+                $staffStatusCol = 'pms.active = 1';
+            }
+        }
+        $staffStmt = mysqli_prepare(
+            $conexion,
+            "SELECT pms.id, pms.full_name, pms.provider_id,
+                    COALESCE(pms.role_title, '') AS role_title,
+                    COALESCE(pms.specialty, '')  AS specialty
+             FROM provider_medical_staff pms
+             INNER JOIN providers p ON p.id = pms.provider_id
+             WHERE pms.id = ? AND pms.allow_home_publication = 1
+               AND {$staffStatusCol}
+             LIMIT 1"
+        );
+        if ($staffStmt) {
+            mysqli_stmt_bind_param($staffStmt, 'i', $staff_filter_id);
+            mysqli_stmt_execute($staffStmt);
+            $staffResult = mysqli_stmt_get_result($staffStmt);
+            if ($staffRow = mysqli_fetch_assoc($staffResult)) {
+                $staff_filter_name        = trim((string)($staffRow['full_name'] ?? ''));
+                $staff_filter_provider_id = (int)($staffRow['provider_id'] ?? 0);
+                $roleTitle = trim((string)($staffRow['role_title'] ?? ''));
+                $specialty = trim((string)($staffRow['specialty'] ?? ''));
+                $staff_filter_role = $specialty !== '' ? $specialty
+                    : ($roleTitle !== '' ? $roleTitle : 'Medical Specialist');
+            } else {
+                $staff_filter_id = 0; // no existe o no es publicable
+            }
+            mysqli_stmt_close($staffStmt);
+        } else {
+            $staff_filter_id = 0;
+        }
+    } else {
+        $staff_filter_id = 0;
+    }
+
+    // Obtener los servicios asignados al staff
+    if ($staff_filter_id > 0 && $staff_filter_provider_id > 0) {
+        $pvmsCheck = mysqli_query($conexion, "SHOW TABLES LIKE 'provider_medical_staff_services'");
+        $staff_has_service_table = ($pvmsCheck && mysqli_num_rows($pvmsCheck) > 0);
+        if ($staff_has_service_table) {
+            $hasRelActiveCol = (function_exists('mt_db_table_has_column'))
+                ? mt_db_table_has_column($conexion, 'provider_medical_staff_services', 'active')
+                : false;
+            $svcSql = 'SELECT DISTINCT rel.service_id
+                       FROM provider_medical_staff_services rel
+                       INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id
+                       WHERE rel.provider_medical_staff_id = ?
+                         AND pms.provider_id = ?';
+            if ($hasRelActiveCol) {
+                $svcSql .= ' AND rel.active = 1';
+            }
+            $svcStmt = mysqli_prepare($conexion, $svcSql);
+            if ($svcStmt) {
+                mysqli_stmt_bind_param($svcStmt, 'ii', $staff_filter_id, $staff_filter_provider_id);
+                mysqli_stmt_execute($svcStmt);
+                $svcResult = mysqli_stmt_get_result($svcStmt);
+                while ($svcRow = mysqli_fetch_assoc($svcResult)) {
+                    $svcId = (int)($svcRow['service_id'] ?? 0);
+                    if ($svcId > 0) {
+                        $staff_service_ids[] = $svcId;
+                    }
+                }
+                mysqli_stmt_close($svcStmt);
+            }
+        }
+    }
+}
+// ── Fin staff filter ───────────────────────────────────────────────────────
+
 // Verificar disponibilidad de tabla provider_verification
 $hasProviderVerification = false;
 $pvTableCheck = mysqli_query($conexion, "SHOW TABLES LIKE 'provider_verification'");
@@ -145,6 +241,48 @@ if ($hasProviderVerification) {
 
 // Consulta de ofertas activas
 if ($requires_provider_service_context) {
+    $stmt = null;
+} elseif ($staff_filter_id > 0 && $staff_filter_provider_id > 0) {
+    // ── Filtro por especialista ──────────────────────────────────────────
+    // Semántica: provider_id del staff + service_id IN (asignados al staff).
+    // Si la tabla de servicios no existe: empty state (no fallback a provider).
+    // Si el staff no tiene servicios asignados: empty state (correcto).
+    if (!$staff_has_service_table || empty($staff_service_ids)) {
+        // Empty state controlado — no se muestran ofertas de otros especialistas
+        $stmt = null;
+    } elseif (!empty($staff_service_ids)) {
+        // Filtro estricto: provider + servicios del especialista
+        $_placeholders = implode(',', array_fill(0, count($staff_service_ids), '?'));
+        $offers_query = "
+            SELECT
+                o.id, o.title, o.description, o.price_from, o.currency,
+                p.id AS provider_id, p.name AS provider_name, p.city, p.logo,
+                {$verificationSelect}
+                sc.id AS service_id, sc.name AS service_name
+            FROM provider_service_offers o
+            INNER JOIN providers p ON o.provider_id = p.id
+            {$verificationJoin}
+            INNER JOIN service_catalog sc ON o.service_id = sc.id
+            WHERE o.provider_id = ? AND o.service_id IN ({$_placeholders}) AND o.is_active = 1
+            ORDER BY o.id DESC
+        ";
+        $stmt = mysqli_prepare($conexion, $offers_query);
+        if ($stmt) {
+            $_bindTypes  = 'i' . str_repeat('i', count($staff_service_ids));
+            $_bindValues = array_values(array_merge([$staff_filter_provider_id], $staff_service_ids));
+            $_bindRefs   = [];
+            foreach ($_bindValues as $_k => $_dummy) {
+                $_bindRefs[] = &$_bindValues[$_k];
+            }
+            unset($_k, $_dummy);
+            call_user_func_array([$stmt, 'bind_param'], array_merge([$_bindTypes], $_bindRefs));
+        }
+    } else {
+        $stmt = null;
+    }
+} elseif ($staff_filter_id_requested > 0 && $staff_filter_id === 0) {
+    // Staff solicitado vía ?staff_id pero no existe, está inactivo o no es publicable.
+    // Nunca mostrar el catálogo completo en este caso: empty state con aviso.
     $stmt = null;
 } elseif ($provider_filter_id > 0 && $service_filter_id > 0) {
     $offers_query = "
@@ -285,7 +423,18 @@ $hero_label = $page_subtitle_1;
 $hero_title = $category_name;
 $hero_description = $page_subtitle_2;
 
-if ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
+if ($staff_filter_id_requested > 0 && $staff_filter_id === 0) {
+    // Staff solicitado pero no encontrado / no publicado
+    $hero_label       = 'SPECIALIST UNAVAILABLE';
+    $hero_title       = 'Specialist Not Available';
+    $hero_description = 'This specialist profile is not currently available for public listing. Browse all services below.';
+} elseif ($staff_filter_id > 0 && $staff_filter_name !== '') {
+    $hero_label       = 'SPECIALIST SERVICES';
+    $hero_title       = $staff_filter_name;
+    $hero_description = 'Medical services available through ' . $staff_filter_name
+        . ($staff_filter_role !== '' ? ' — ' . $staff_filter_role : '')
+        . '. Coordinated by MedTravel for international patients.';
+} elseif ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
     $hero_label = 'MEDICAL PROVIDER SERVICE';
     $hero_title = $service_filter_name;
     $hero_description = 'Explore ' . $service_filter_name . ' offered by ' . $provider_filter_name . ($provider_filter_city !== '' ? ' in ' . $provider_filter_city : '') . '.';
@@ -306,7 +455,11 @@ if ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !=
 }
 
 $seo_title_source = $category_id > 0 ? $category_name : $offers_header_title;
-if ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
+if ($staff_filter_id_requested > 0 && $staff_filter_id === 0) {
+    $seo_title_source = 'Specialist Unavailable';
+} elseif ($staff_filter_id > 0 && $staff_filter_name !== '') {
+    $seo_title_source = $staff_filter_name . ' — Specialist Services';
+} elseif ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
     $seo_title_source = $service_filter_name . ' - ' . $provider_filter_name;
 } elseif ($provider_filter_id > 0 && $provider_filter_name !== '') {
     $seo_title_source = $category_id > 0
@@ -322,7 +475,14 @@ $seo_offers_description = trim(html_entity_decode((string)$category_description,
 if ($seo_offers_description === '') {
     $seo_offers_description = trim((string)$page_subtitle_2);
 }
-if ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
+if ($staff_filter_id_requested > 0 && $staff_filter_id === 0) {
+    $seo_offers_description = 'This specialist profile is not currently available. Browse available medical services coordinated by MedTravel.';
+} elseif ($staff_filter_id > 0 && $staff_filter_name !== '') {
+    $seo_offers_description = 'Browse medical services available through specialist '
+        . $staff_filter_name
+        . ($staff_filter_role !== '' ? ' (' . $staff_filter_role . ')' : '')
+        . ' — coordinated by MedTravel for international patients.';
+} elseif ($service_filter_id > 0 && $provider_filter_id > 0 && $service_filter_name !== '' && $provider_filter_name !== '') {
     $seo_offers_description = 'Browse ' . $service_filter_name . ' offered by ' . $provider_filter_name . ' through MedTravel.';
 } elseif ($provider_filter_id > 0 && $provider_filter_name !== '') {
     $seo_offers_description = $category_id > 0
@@ -335,7 +495,9 @@ $page_description = $seo_offers_description !== ''
     ? $seo_offers_description
     : 'Browse medical service offers in Colombia from certified providers coordinated by MedTravel.';
 $page_canonical = 'https://medtravel.com.co/offers.php';
-if ($provider_filter_id > 0 || $category_id > 0 || ($service_filter_id > 0 && $provider_filter_id > 0)) {
+if ($staff_filter_id > 0) {
+    $page_canonical .= '?staff_id=' . $staff_filter_id;
+} elseif ($provider_filter_id > 0 || $category_id > 0 || ($service_filter_id > 0 && $provider_filter_id > 0)) {
     $canonical_params = [];
     if ($provider_filter_id > 0) {
         $canonical_params['provider_id'] = $provider_filter_id;
@@ -745,6 +907,67 @@ include('inc/include.php');
             margin-bottom: 20px;
             display: block;
         }
+
+        /* ── Specialist context banner ───────────────────────── */
+        .specialist-filter-banner {
+            background: #f0fdfa;
+            border: 1px solid #99f6e4;
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+        .specialist-filter-banner-body {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .specialist-filter-banner-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #0f766e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .specialist-filter-banner-name {
+            font-weight: 700;
+            color: #0f4c44;
+            font-size: 15px;
+        }
+        .specialist-filter-banner-role {
+            color: #475569;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+        .specialist-filter-banner-clear {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 20px;
+            padding: 6px 14px;
+            text-decoration: none;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .specialist-filter-banner-clear:hover {
+            border-color: #0f766e;
+            color: #0f766e;
+            background: #f0fdfa;
+        }
     </style>
 </head>
 <body>
@@ -897,6 +1120,31 @@ include('inc/include.php');
     <!-- Offers Grid Start -->
     <div class="container-fluid py-5">
         <div class="container py-4">
+
+            <?php if ($staff_filter_id > 0 && $staff_filter_name !== ''): ?>
+            <!-- Specialist context banner -->
+            <div class="specialist-filter-banner">
+                <div class="specialist-filter-banner-body">
+                    <div class="specialist-filter-banner-icon">
+                        <i class="fas fa-user-md"></i>
+                    </div>
+                    <div>
+                        <div class="specialist-filter-banner-name">
+                            <?php echo htmlspecialchars($staff_filter_name, ENT_QUOTES, 'UTF-8'); ?>
+                        </div>
+                        <?php if ($staff_filter_role !== ''): ?>
+                        <div class="specialist-filter-banner-role">
+                            <?php echo htmlspecialchars($staff_filter_role, ENT_QUOTES, 'UTF-8'); ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <a href="offers.php" class="specialist-filter-banner-clear">
+                    <i class="fas fa-times"></i>View all services
+                </a>
+            </div>
+            <!-- /Specialist context banner -->
+            <?php endif; ?>
 
             <!-- Section label (contextual, only when server-side filter active) -->
             <?php if ($category_id > 0 || ($provider_filter_id > 0 && $provider_filter_name !== '') || ($service_filter_id > 0 && $provider_filter_name !== '' && $service_filter_name !== '')): ?>
@@ -1062,24 +1310,40 @@ include('inc/include.php');
 
             <?php else: ?>
                 <div class="no-offers">
-                    <i class="fas fa-inbox"></i>
-                    <h3 class="text-muted mb-3"><?php echo $requires_provider_service_context ? 'Provider required to view this service' : 'No offers available yet'; ?></h3>
-                    <p class="text-muted">
-                        <?php if ($requires_provider_service_context): ?>
-                            <?php echo htmlspecialchars($context_error_message, ENT_QUOTES, 'UTF-8'); ?>
-                        <?php elseif ($provider_filter_id > 0 && $provider_filter_name !== ''): ?>
-                            Check back soon for services from <?php echo htmlspecialchars($provider_filter_name, ENT_QUOTES, 'UTF-8'); ?>
-                        <?php elseif ($category_id > 0): ?>
-                            Check back soon for new medical services in this category
-                        <?php else: ?>
-                            Check back soon for new medical services
-                        <?php endif; ?>
-                    </p>
-                    <?php if ($requires_provider_service_context): ?>
+                    <?php if ($staff_filter_id_requested > 0 && $staff_filter_id === 0): ?>
+                        <i class="fas fa-user-slash"></i>
+                        <h3 class="text-muted mb-3">Specialist not available</h3>
+                        <p class="text-muted mb-4">This specialist profile is not currently listed for public viewing.</p>
+                        <a href="offers.php" class="btn btn-outline-primary">
+                            <i class="fas fa-th me-2"></i>Browse all services
+                        </a>
+                    <?php elseif ($staff_filter_id > 0 && empty($staff_service_ids)): ?>
+                        <i class="fas fa-stethoscope"></i>
+                        <h3 class="text-muted mb-3">No services assigned yet</h3>
+                        <p class="text-muted mb-4">This specialist has no published services at the moment. Check back soon or browse all available services.</p>
+                        <a href="offers.php" class="btn btn-outline-primary">
+                            <i class="fas fa-th me-2"></i>Browse all services
+                        </a>
+                    <?php elseif ($requires_provider_service_context): ?>
+                        <i class="fas fa-inbox"></i>
+                        <h3 class="text-muted mb-3">Provider required to view this service</h3>
+                        <p class="text-muted"><?php echo htmlspecialchars($context_error_message, ENT_QUOTES, 'UTF-8'); ?></p>
                         <p class="mt-3">
                             <a href="offers.php" class="btn btn-outline-primary">
                                 <i class="fas fa-th me-2"></i>Browse all services
                             </a>
+                        </p>
+                    <?php else: ?>
+                        <i class="fas fa-inbox"></i>
+                        <h3 class="text-muted mb-3">No offers available yet</h3>
+                        <p class="text-muted">
+                            <?php if ($provider_filter_id > 0 && $provider_filter_name !== ''): ?>
+                                Check back soon for services from <?php echo htmlspecialchars($provider_filter_name, ENT_QUOTES, 'UTF-8'); ?>
+                            <?php elseif ($category_id > 0): ?>
+                                Check back soon for new medical services in this category
+                            <?php else: ?>
+                                Check back soon for new medical services
+                            <?php endif; ?>
                         </p>
                     <?php endif; ?>
                 </div>

@@ -169,6 +169,24 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                 font-size: 12px;
                 font-weight: 600;
             }
+            .home-specialist-cta {
+                display: block;
+                text-align: center;
+                margin-top: 16px;
+                padding: 9px 16px;
+                border-radius: 8px;
+                background: #0f766e;
+                color: #fff;
+                font-size: 13px;
+                font-weight: 700;
+                text-decoration: none;
+                transition: background 0.2s;
+                letter-spacing: 0.3px;
+            }
+            .home-specialist-cta:hover {
+                background: #0d9488;
+                color: #fff;
+            }
         </style>
     </head>
 
@@ -769,6 +787,10 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                                         <span><?php echo htmlspecialchars($specialist['provider_city'], ENT_QUOTES, 'UTF-8'); ?></span>
                                     <?php } ?>
                                 </div>
+                                <a href="/offers.php?staff_id=<?php echo (int)$specialist['id']; ?>"
+                                   class="home-specialist-cta">
+                                    <i class="fas fa-stethoscope me-1"></i>View services
+                                </a>
                             </div>
                         </article>
                     </div>
