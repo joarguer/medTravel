@@ -645,17 +645,19 @@ if ($action === 'get_my_checklist') {
 
     $hasDocTable = me_table_exists($conexion, 'provider_documents');
     if ($hasDocTable) {
+        // JOIN solo por id — el scope ya está en WHERE pvi.provider_id = ?
+        // No añadir pd.provider_id = ? al JOIN: evita falsos null si existe
+        // algún documento con discrepancia de provider_id heredada.
         $sql = 'SELECT pvi.id, pvi.item_key, pvi.item_label, pvi.item_description,
                        pvi.item_category, pvi.is_required, pvi.is_checked, pvi.evidence_document_id,
                        pd.original_filename, pd.file_path, pd.uploaded_at
                 FROM provider_verification_items pvi
-                LEFT JOIN provider_documents pd
-                       ON pd.id = pvi.evidence_document_id AND pd.provider_id = ?
+                LEFT JOIN provider_documents pd ON pd.id = pvi.evidence_document_id
                 WHERE pvi.provider_id = ?
                 ORDER BY pvi.item_category, pvi.item_key';
         $stmt = mysqli_prepare($conexion, $sql);
         if (!$stmt) { json_err('Error DB', 500, 'db_prepare_error'); }
-        mysqli_stmt_bind_param($stmt, 'ii', $scopeId, $scopeId);
+        mysqli_stmt_bind_param($stmt, 'i', $scopeId);
     } else {
         $sql = 'SELECT id, item_key, item_label, item_description, item_category,
                        is_required, is_checked, evidence_document_id
@@ -784,9 +786,14 @@ if ($action === 'upload_my_document') {
     $docId = (int)mysqli_insert_id($conexion);
     mysqli_stmt_close($ins);
 
+    // Reemplazar evidencia siempre resetea validación — nueva evidencia exige re-revisión.
     $upd = mysqli_prepare($conexion,
         "UPDATE provider_verification_items
-         SET evidence_document_id = ?, evidence_type = 'document'
+         SET evidence_document_id = ?,
+             evidence_type        = 'document',
+             is_checked           = 0,
+             checked_at           = NULL,
+             checked_by           = NULL
          WHERE id = ? AND provider_id = ?"
     );
     if ($upd) {

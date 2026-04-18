@@ -357,15 +357,35 @@ function renderChecklist(items) {
 
         var actionsHtml = '';
         if (item.view_url) {
-            actionsHtml += '<a href="' + item.view_url + '" target="_blank" class="btn btn-xs btn-default" style="margin-right: 4px;" title="Ver archivo"><i class="fa fa-eye"></i></a>';
+            actionsHtml += '<a href="' + item.view_url + '" target="_blank" rel="noopener noreferrer"'
+                + ' class="btn btn-xs btn-default" style="margin-right: 4px;" title="Ver archivo">'
+                + '<i class="fa fa-eye"></i> Ver</a>';
         }
-        if (!item.is_checked) {
-            var label = item.has_document ? 'Reemplazar' : 'Subir';
-            actionsHtml += '<button type="button" class="btn btn-xs btn-primary btn-upload-doc" data-item-id="' + item.id + '">'
-                + '<i class="fa fa-upload"></i> ' + label + '</button>';
+        // Reemplazar disponible siempre que exista documento, incluso si está validado.
+        // El backend resetea is_checked=0 al reemplazar — nueva evidencia exige re-revisión.
+        if (item.has_document) {
+            var replaceTitle = item.is_checked
+                ? 'Reemplazar (invalidará la validación — requerirá nueva revisión)'
+                : 'Reemplazar documento';
+            actionsHtml += '<button type="button" class="btn btn-xs btn-warning btn-upload-doc"'
+                + ' data-item-id="' + item.id + '" title="' + replaceTitle + '">'
+                + '<i class="fa fa-refresh"></i> Reemplazar</button>';
+        } else {
+            actionsHtml += '<button type="button" class="btn btn-xs btn-primary btn-upload-doc"'
+                + ' data-item-id="' + item.id + '" title="Subir documento">'
+                + '<i class="fa fa-upload"></i> Subir</button>';
         }
         if (item.has_document && item.original_filename) {
-            actionsHtml += '<br><small class="text-muted" style="font-size: 11px;">' + $('<span>').text(item.original_filename).html() + '</small>';
+            var dateStr = '';
+            if (item.uploaded_at) {
+                var d = new Date(item.uploaded_at.replace(' ', 'T'));
+                if (!isNaN(d)) {
+                    dateStr = ' · ' + d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
+                }
+            }
+            actionsHtml += '<br><small class="text-muted" style="font-size: 11px;">'
+                + $('<span>').text(item.original_filename).html()
+                + dateStr + '</small>';
         }
 
         var $tr = $('<tr>')
