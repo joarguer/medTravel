@@ -71,7 +71,7 @@ try {
         $slug = ensure_unique_slug($conexion, $base_slug);
         $sql = "INSERT INTO service_categories (name, slug, description, sort_order, is_active) VALUES (?,?,?,?,?)";
         if($stmt = mysqli_prepare($conexion, $sql)){
-            mysqli_stmt_bind_param($stmt, 'ssiii', $name, $slug, $description, $sort_order, $is_active);
+            mysqli_stmt_bind_param($stmt, 'sssii', $name, $slug, $description, $sort_order, $is_active);
             $exec = mysqli_stmt_execute($stmt);
             if(!$exec){ error_log('service_categories create error: '.mysqli_stmt_error($stmt)); echo json_encode(['ok'=>false,'error'=>'db_insert']); mysqli_stmt_close($stmt); exit; }
             $id = mysqli_insert_id($conexion);

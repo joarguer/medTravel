@@ -6,7 +6,7 @@ $(document).ready(function(){
             if(!res.ok) return console.error(res.error);
             let tbody = '';
             res.data.forEach(function(row){
-                tbody += '<tr data-id="'+row.id+'">';
+                tbody += '<tr data-id="'+row.id+'" data-description="'+encodeURIComponent(row.description || '')+'">';
                 tbody += '<td>'+escapeHtml(row.name)+'</td>';
                 tbody += '<td>'+escapeHtml(row.slug)+'</td>';
                 tbody += '<td>'+row.sort_order+'</td>';
@@ -64,9 +64,15 @@ $(document).ready(function(){
         let slug = tr.find('td').eq(1).text();
         let order = tr.find('td').eq(2).text();
         let activeText = tr.find('td').eq(3).text();
+        let description = '';
+        try {
+            description = decodeURIComponent(tr.attr('data-description') || '');
+        } catch (e) {
+            description = '';
+        }
         $('#cat-id').val(id);
         $('#cat-name').val(name);
-        $('#cat-desc').val('');
+        $('#cat-desc').val(description);
         $('#cat-order').val(order);
         $('#cat-active').prop('checked', activeText.trim().toLowerCase().indexOf('activo') !== -1);
         $('#categoryModal').modal('show');
