@@ -44,6 +44,11 @@ $company = [
     'email' => '',
     'address' => '',
     'website' => '',
+    'instagram_url' => '',
+    'facebook_url' => '',
+    'linkedin_url' => '',
+    'youtube_url' => '',
+    'whatsapp_url' => '',
     'description' => '',
     'logo' => '',
     'is_active' => 0,
@@ -83,6 +88,11 @@ if ($domain_type === 'medical') {
     $company['email'] = isset($provider['email']) ? $provider['email'] : '';
     $company['address'] = isset($provider['address']) ? $provider['address'] : '';
     $company['website'] = isset($provider['website']) ? $provider['website'] : '';
+    $company['instagram_url'] = isset($provider['instagram_url']) ? $provider['instagram_url'] : '';
+    $company['facebook_url'] = isset($provider['facebook_url']) ? $provider['facebook_url'] : '';
+    $company['linkedin_url'] = isset($provider['linkedin_url']) ? $provider['linkedin_url'] : '';
+    $company['youtube_url'] = isset($provider['youtube_url']) ? $provider['youtube_url'] : '';
+    $company['whatsapp_url'] = isset($provider['whatsapp_url']) ? $provider['whatsapp_url'] : '';
     $company['description'] = isset($provider['description']) ? $provider['description'] : '';
     $company['logo'] = isset($provider['logo']) ? $provider['logo'] : '';
     $company['is_active'] = isset($provider['is_active']) ? intval($provider['is_active']) : 0;
@@ -208,226 +218,338 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                                 <input type="hidden" id="company_scope_id" value="<?php echo (int)$scope_id; ?>" />
                                                 
                                                 <div class="form-body">
-                                                    <div class="row">
-                                                        <div class="col-md-6">
-                                                            <div class="form-group">
-                                                                <label class="col-md-3 control-label"><?php echo htmlspecialchars($type_label, ENT_QUOTES); ?></label>
-                                                                <div class="col-md-9">
-                                                                    <p class="form-control-static" id="company-type-text"><?php echo htmlspecialchars(ucfirst((string)$company['type']), ENT_QUOTES); ?></p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-md-6">
-                                                            <div class="form-group">
-                                                                <label class="col-md-3 control-label">Estado</label>
-                                                                <div class="col-md-9">
-                                                                    <p class="form-control-static" id="company-status-badges">
-                                                                        <?php if ($domain_type === 'medical'): ?>
-                                                                            <?php
-                                                                            $status = $verification['status'];
-                                                                            $badge_map = [
-                                                                                'verified' => 'badge-success',
-                                                                                'in_review' => 'badge-warning',
-                                                                                'pending' => 'badge-default',
-                                                                                'rejected' => 'badge-danger'
-                                                                            ];
-                                                                            $label_map = [
-                                                                                'verified' => 'Verificado',
-                                                                                'in_review' => 'En revisión',
-                                                                                'pending' => 'Pendiente',
-                                                                                'rejected' => 'Rechazado'
-                                                                            ];
-                                                                            $badge_class = isset($badge_map[$status]) ? $badge_map[$status] : 'badge-default';
-                                                                            $label = isset($label_map[$status]) ? $label_map[$status] : ucfirst($status);
-                                                                            ?>
-                                                                            <span class="badge <?php echo $badge_class; ?>"><?php echo htmlspecialchars($label, ENT_QUOTES); ?></span>
-                                                                            <?php if ((int)$company['is_active'] === 1): ?>
-                                                                                <span class="badge badge-info">Activo</span>
-                                                                            <?php else: ?>
-                                                                                <span class="badge badge-default">Inactivo</span>
-                                                                            <?php endif; ?>
-                                                                        <?php elseif ($domain_type === 'complementary'): ?>
-                                                                            <span class="badge badge-info">Proveedor Complementario</span>
-                                                                            <?php if ((int)$company['is_active'] === 1): ?>
-                                                                                <span class="badge badge-success">Activo</span>
-                                                                            <?php else: ?>
-                                                                                <span class="badge badge-default">Inactivo</span>
-                                                                            <?php endif; ?>
-                                                                        <?php else: ?>
-                                                                            <span class="badge badge-default">Admin Global</span>
-                                                                        <?php endif; ?>
-                                                                    </p>
-                                                                    <?php if ($domain_type === 'medical'): ?>
-                                                                        <p class="form-control-static" id="company-status-meta">
-                                                                            Nivel: <strong><?php echo htmlspecialchars($verification['verification_level'], ENT_QUOTES); ?></strong>
-                                                                            &nbsp;·&nbsp; Avance checklist: <strong><?php echo $verification['completion_percent']; ?>%</strong>
-                                                                            <?php if ($verification['verified_at']) { echo ' &nbsp;·&nbsp; Verificado: '.htmlspecialchars($verification['verified_at'], ENT_QUOTES); } ?>
-                                                                        </p>
-                                                                    <?php elseif ($domain_type === 'complementary'): ?>
-                                                                        <p class="form-control-static" id="company-status-meta">
-                                                                            Gestión de empresa limitada al proveedor complementario asociado a tu sesión.
-                                                                        </p>
-                                                                    <?php else: ?>
-                                                                        <p class="form-control-static" id="company-status-meta">
-                                                                            Admin global puede consultar esta vista, pero no guardar cambios como empresa propia.
-                                                                        </p>
-                                                                    <?php endif; ?>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    <ul class="nav nav-tabs" role="tablist">
+                                                        <li role="presentation" class="active">
+                                                            <a href="#tab-general" data-toggle="tab">Información general</a>
+                                                        </li>
+                                                        <?php if ($domain_type === 'medical'): ?>
+                                                        <li role="presentation">
+                                                            <a href="#tab-canales" data-toggle="tab">Canales institucionales</a>
+                                                        </li>
+                                                        <?php endif; ?>
+                                                        <li role="presentation">
+                                                            <a href="#tab-operacion" data-toggle="tab">Operación</a>
+                                                        </li>
+                                                        <?php if ($domain_type === 'medical'): ?>
+                                                        <li role="presentation">
+                                                            <a href="#tab-identidad" data-toggle="tab">Identidad visual</a>
+                                                        </li>
+                                                        <?php endif; ?>
+                                                    </ul>
 
-                                                    <div class="row">
-                                                        <div class="col-md-6">
-                                                            <div class="form-group">
-                                                                <label class="col-md-3 control-label"><?php echo htmlspecialchars($name_label, ENT_QUOTES); ?></label>
-                                                                <div class="col-md-9">
-                                                                    <input type="text" id="name" name="name" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars((string)$company['name'], ENT_QUOTES); ?>" 
-                                                                           required maxlength="200" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-md-6">
-                                                            <div class="form-group">
-                                                                <label class="col-md-3 control-label">Ciudad</label>
-                                                                <div class="col-md-9">
-                                                                    <input type="text" id="city" name="city" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars((string)$company['city'], ENT_QUOTES); ?>" 
-                                                                           maxlength="120" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    <div class="tab-content" style="padding-top: 20px;">
 
-                                                    <div class="row">
-                                                        <div class="col-md-6">
-                                                            <div class="form-group">
-                                                                <label class="col-md-3 control-label">Teléfono</label>
-                                                                <div class="col-md-9">
-                                                                    <input type="text" id="phone" name="phone" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars((string)$company['phone'], ENT_QUOTES); ?>" 
-                                                                           maxlength="60" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div class="col-md-6">
-                                                            <div class="form-group">
-                                                                <label class="col-md-3 control-label">Email</label>
-                                                                <div class="col-md-9">
-                                                                    <input type="email" id="email" name="email" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars((string)$company['email'], ENT_QUOTES); ?>" 
-                                                                           maxlength="160" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="row">
-                                                        <div class="col-md-12">
-                                                            <div class="form-group">
-                                                                <label class="col-md-2 control-label">Dirección</label>
-                                                                <div class="col-md-10">
-                                                                    <input type="text" id="address" name="address" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars((string)$company['address'], ENT_QUOTES); ?>" 
-                                                                           <?php echo $domain_type === 'medical' ? '' : 'readonly'; ?>
-                                                                           maxlength="200" />
-                                                                    <?php if ($domain_type !== 'medical'): ?>
-                                                                    <span class="help-block" id="address-unavailable-hint">No disponible para proveedores complementarios.</span>
-                                                                    <?php endif; ?>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="row">
-                                                        <div class="col-md-12">
-                                                            <div class="form-group">
-                                                                <label class="col-md-2 control-label">Website</label>
-                                                                <div class="col-md-10">
-                                                                    <input type="url" id="website" name="website" class="form-control" 
-                                                                           value="<?php echo htmlspecialchars((string)$company['website'], ENT_QUOTES); ?>" 
-                                                                           maxlength="200" placeholder="https://..." />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="row">
-                                                        <div class="col-md-12">
-                                                            <div class="form-group">
-                                                                <label class="col-md-2 control-label"><?php echo htmlspecialchars($description_label, ENT_QUOTES); ?></label>
-                                                                <div class="col-md-10">
-                                                                    <textarea id="description" name="description" class="form-control" 
-                                                                              rows="5"><?php echo htmlspecialchars((string)$company['description'], ENT_QUOTES); ?></textarea>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="row">
-                                                        <div class="col-md-12">
-                                                            <div class="form-group">
-                                                                <label class="col-md-2 control-label">Capacidad de citas simultáneas</label>
-                                                                <div class="col-md-10">
-                                                                    <div class="input-group">
-                                                                        <span class="input-group-addon"><i class="fa fa-calendar"></i></span>
-                                                                        <input type="number" id="calendar_capacity" name="calendar_capacity" class="form-control"
-                                                                               min="1" max="50" step="1"
-                                                                               value="<?php echo max(1, (int)$company['calendar_capacity']); ?>" />
+                                                        <!-- Tab 1: Información general -->
+                                                        <div class="tab-pane active" id="tab-general" role="tabpanel">
+                                                            <div class="row">
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label"><?php echo htmlspecialchars($type_label, ENT_QUOTES); ?></label>
+                                                                        <div class="col-md-9">
+                                                                            <p class="form-control-static" id="company-type-text"><?php echo htmlspecialchars(ucfirst((string)$company['type']), ENT_QUOTES); ?></p>
+                                                                        </div>
                                                                     </div>
-                                                                    <span class="help-block">Define cuántos eventos de agenda tipo cita pueden solaparse al mismo tiempo para tu empresa. Hoy este valor funciona como un límite global del prestador en la agenda y no equivale todavía a disponibilidad por médico, staff o sede.</span>
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label">Estado</label>
+                                                                        <div class="col-md-9">
+                                                                            <p class="form-control-static" id="company-status-badges">
+                                                                                <?php if ($domain_type === 'medical'): ?>
+                                                                                    <?php
+                                                                                    $status = $verification['status'];
+                                                                                    $badge_map = [
+                                                                                        'verified' => 'badge-success',
+                                                                                        'in_review' => 'badge-warning',
+                                                                                        'pending' => 'badge-default',
+                                                                                        'rejected' => 'badge-danger'
+                                                                                    ];
+                                                                                    $label_map = [
+                                                                                        'verified' => 'Verificado',
+                                                                                        'in_review' => 'En revisión',
+                                                                                        'pending' => 'Pendiente',
+                                                                                        'rejected' => 'Rechazado'
+                                                                                    ];
+                                                                                    $badge_class = isset($badge_map[$status]) ? $badge_map[$status] : 'badge-default';
+                                                                                    $label = isset($label_map[$status]) ? $label_map[$status] : ucfirst($status);
+                                                                                    ?>
+                                                                                    <span class="badge <?php echo $badge_class; ?>"><?php echo htmlspecialchars($label, ENT_QUOTES); ?></span>
+                                                                                    <?php if ((int)$company['is_active'] === 1): ?>
+                                                                                        <span class="badge badge-info">Activo</span>
+                                                                                    <?php else: ?>
+                                                                                        <span class="badge badge-default">Inactivo</span>
+                                                                                    <?php endif; ?>
+                                                                                <?php elseif ($domain_type === 'complementary'): ?>
+                                                                                    <span class="badge badge-info">Proveedor Complementario</span>
+                                                                                    <?php if ((int)$company['is_active'] === 1): ?>
+                                                                                        <span class="badge badge-success">Activo</span>
+                                                                                    <?php else: ?>
+                                                                                        <span class="badge badge-default">Inactivo</span>
+                                                                                    <?php endif; ?>
+                                                                                <?php else: ?>
+                                                                                    <span class="badge badge-default">Admin Global</span>
+                                                                                <?php endif; ?>
+                                                                            </p>
+                                                                            <?php if ($domain_type === 'medical'): ?>
+                                                                                <p class="form-control-static" id="company-status-meta">
+                                                                                    Nivel: <strong><?php echo htmlspecialchars($verification['verification_level'], ENT_QUOTES); ?></strong>
+                                                                                    &nbsp;·&nbsp; Avance checklist: <strong><?php echo $verification['completion_percent']; ?>%</strong>
+                                                                                    <?php if ($verification['verified_at']) { echo ' &nbsp;·&nbsp; Verificado: '.htmlspecialchars($verification['verified_at'], ENT_QUOTES); } ?>
+                                                                                </p>
+                                                                            <?php elseif ($domain_type === 'complementary'): ?>
+                                                                                <p class="form-control-static" id="company-status-meta">
+                                                                                    Gestión de empresa limitada al proveedor complementario asociado a tu sesión.
+                                                                                </p>
+                                                                            <?php else: ?>
+                                                                                <p class="form-control-static" id="company-status-meta">
+                                                                                    Admin global puede consultar esta vista, pero no guardar cambios como empresa propia.
+                                                                                </p>
+                                                                            <?php endif; ?>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    </div>
 
-                                                    <div class="row" <?php echo $can_upload_logo ? '' : 'style="display:none;"'; ?>>
-                                                        <div class="col-md-12">
-                                                            <div class="form-group">
-                                                                <label class="col-md-2 control-label">Logo</label>
-                                                                <div class="col-md-10">
-                                                                    <div class="fileinput fileinput-new" data-provides="fileinput">
-                                                                        <div class="fileinput-new thumbnail" style="width: 200px; height: 150px;">
-                                                                            <?php 
-                                                                            $logo_path = 'https://via.placeholder.com/200x150?text=Sin+Logo';
-                                                                            if (!empty($company['logo'])) {
-                                                                                // Construir path correcto
-                                                                                $logo_file = 'img/providers/' . $scope_id . '/' . $company['logo'];
-                                                                                if (file_exists('../' . $logo_file)) {
-                                                                                    $logo_path = '../' . $logo_file . '?v=' . time();
-                                                                                }
-                                                                            }
-                                                                            ?>
-                                                                            <img id="logo-preview" src="<?php echo $logo_path; ?>" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                                            <div class="row">
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label"><?php echo htmlspecialchars($name_label, ENT_QUOTES); ?></label>
+                                                                        <div class="col-md-9">
+                                                                            <input type="text" id="name" name="name" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['name'], ENT_QUOTES); ?>"
+                                                                                   required maxlength="200" />
                                                                         </div>
-                                                                        <div class="fileinput-preview fileinput-exists thumbnail" style="max-width: 200px; max-height: 150px;"></div>
-                                                                        <div>
-                                                                            <span class="btn default btn-file">
-                                                                                <span class="fileinput-new">Seleccionar imagen</span>
-                                                                                <span class="fileinput-exists">Cambiar</span>
-                                                                                <input type="file" id="logo" name="logo" accept="image/jpeg,image/png,image/webp" />
-                                                                            </span>
-                                                                            <a href="javascript:;" class="btn red fileinput-exists" data-dismiss="fileinput">Eliminar</a>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label">Ciudad</label>
+                                                                        <div class="col-md-9">
+                                                                            <input type="text" id="city" name="city" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['city'], ENT_QUOTES); ?>"
+                                                                                   maxlength="120" />
                                                                         </div>
-                                                                        <span class="help-block">Formatos permitidos: JPG, PNG, WEBP. Máximo 2MB.</span>
-                                                                        <?php if (!empty($company['logo'])): ?>
-                                                                        <span class="help-block">Archivo actual: <?php echo htmlspecialchars((string)$company['logo']); ?></span>
-                                                                        <?php endif; ?>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="row">
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label">Teléfono</label>
+                                                                        <div class="col-md-9">
+                                                                            <input type="text" id="phone" name="phone" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['phone'], ENT_QUOTES); ?>"
+                                                                                   maxlength="60" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label">Email</label>
+                                                                        <div class="col-md-9">
+                                                                            <input type="email" id="email" name="email" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['email'], ENT_QUOTES); ?>"
+                                                                                   maxlength="160" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-2 control-label">Dirección</label>
+                                                                        <div class="col-md-10">
+                                                                            <input type="text" id="address" name="address" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['address'], ENT_QUOTES); ?>"
+                                                                                   <?php echo $domain_type === 'medical' ? '' : 'readonly'; ?>
+                                                                                   maxlength="200" />
+                                                                            <?php if ($domain_type !== 'medical'): ?>
+                                                                            <span class="help-block" id="address-unavailable-hint">No disponible para proveedores complementarios.</span>
+                                                                            <?php endif; ?>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-2 control-label">Website</label>
+                                                                        <div class="col-md-10">
+                                                                            <input type="url" id="website" name="website" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['website'], ENT_QUOTES); ?>"
+                                                                                   maxlength="200" placeholder="https://..." />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-2 control-label"><?php echo htmlspecialchars($description_label, ENT_QUOTES); ?></label>
+                                                                        <div class="col-md-10">
+                                                                            <textarea id="description" name="description" class="form-control"
+                                                                                      rows="5"><?php echo htmlspecialchars((string)$company['description'], ENT_QUOTES); ?></textarea>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    <?php if (!$can_upload_logo): ?>
-                                                    <div class="row">
-                                                        <div class="col-md-12">
-                                                            <div class="alert alert-info">
-                                                                <i class="fa fa-info-circle"></i> La gestión de logo no está disponible para este dominio de empresa.
+
+                                                        <!-- Tab 2: Canales institucionales (medical only) -->
+                                                        <?php if ($domain_type === 'medical'): ?>
+                                                        <div class="tab-pane" id="tab-canales" role="tabpanel">
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-2 control-label">Aviso</label>
+                                                                        <div class="col-md-10">
+                                                                            <p class="form-control-static" style="padding-top: 0; color: #6b7280;">
+                                                                                Usa solo enlaces oficiales del prestador o clínica. No incluyas perfiles personales del staff médico.
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="row">
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label">Instagram</label>
+                                                                        <div class="col-md-9">
+                                                                            <input type="url" id="instagram_url" name="instagram_url" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['instagram_url'], ENT_QUOTES); ?>"
+                                                                                   maxlength="255" placeholder="https://www.instagram.com/..." />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label">Facebook</label>
+                                                                        <div class="col-md-9">
+                                                                            <input type="url" id="facebook_url" name="facebook_url" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['facebook_url'], ENT_QUOTES); ?>"
+                                                                                   maxlength="255" placeholder="https://www.facebook.com/..." />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="row">
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label">LinkedIn</label>
+                                                                        <div class="col-md-9">
+                                                                            <input type="url" id="linkedin_url" name="linkedin_url" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['linkedin_url'], ENT_QUOTES); ?>"
+                                                                                   maxlength="255" placeholder="https://www.linkedin.com/..." />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="col-md-6">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-3 control-label">YouTube</label>
+                                                                        <div class="col-md-9">
+                                                                            <input type="url" id="youtube_url" name="youtube_url" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['youtube_url'], ENT_QUOTES); ?>"
+                                                                                   maxlength="255" placeholder="https://www.youtube.com/..." />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-2 control-label">WhatsApp comercial</label>
+                                                                        <div class="col-md-10">
+                                                                            <input type="url" id="whatsapp_url" name="whatsapp_url" class="form-control"
+                                                                                   value="<?php echo htmlspecialchars((string)$company['whatsapp_url'], ENT_QUOTES); ?>"
+                                                                                   maxlength="255" placeholder="https://wa.me/..." />
+                                                                            <span class="help-block">Estos enlaces refuerzan la credibilidad institucional pública del prestador.</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    <?php endif; ?>
+                                                        <?php endif; ?>
+
+                                                        <!-- Tab 3: Operación -->
+                                                        <div class="tab-pane" id="tab-operacion" role="tabpanel">
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-2 control-label">Capacidad de citas simultáneas</label>
+                                                                        <div class="col-md-10">
+                                                                            <div class="input-group">
+                                                                                <span class="input-group-addon"><i class="fa fa-calendar"></i></span>
+                                                                                <input type="number" id="calendar_capacity" name="calendar_capacity" class="form-control"
+                                                                                       min="1" max="50" step="1"
+                                                                                       value="<?php echo max(1, (int)$company['calendar_capacity']); ?>" />
+                                                                            </div>
+                                                                            <span class="help-block">Define cuántos eventos de agenda tipo cita pueden solaparse al mismo tiempo para tu empresa. Hoy este valor funciona como un límite global del prestador en la agenda y no equivale todavía a disponibilidad por médico, staff o sede.</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Tab 4: Identidad visual (medical only) -->
+                                                        <?php if ($domain_type === 'medical'): ?>
+                                                        <div class="tab-pane" id="tab-identidad" role="tabpanel">
+                                                            <?php if ($can_upload_logo): ?>
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <div class="form-group">
+                                                                        <label class="col-md-2 control-label">Logo</label>
+                                                                        <div class="col-md-10">
+                                                                            <div class="fileinput fileinput-new" data-provides="fileinput">
+                                                                                <div class="fileinput-new thumbnail" style="width: 200px; height: 150px;">
+                                                                                    <?php
+                                                                                    $logo_path = 'https://via.placeholder.com/200x150?text=Sin+Logo';
+                                                                                    if (!empty($company['logo'])) {
+                                                                                        $logo_file = 'img/providers/' . $scope_id . '/' . $company['logo'];
+                                                                                        if (file_exists('../' . $logo_file)) {
+                                                                                            $logo_path = '../' . $logo_file . '?v=' . time();
+                                                                                        }
+                                                                                    }
+                                                                                    ?>
+                                                                                    <img id="logo-preview" src="<?php echo $logo_path; ?>" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                                                                </div>
+                                                                                <div class="fileinput-preview fileinput-exists thumbnail" style="max-width: 200px; max-height: 150px;"></div>
+                                                                                <div>
+                                                                                    <span class="btn default btn-file">
+                                                                                        <span class="fileinput-new">Seleccionar imagen</span>
+                                                                                        <span class="fileinput-exists">Cambiar</span>
+                                                                                        <input type="file" id="logo" name="logo" accept="image/jpeg,image/png,image/webp" />
+                                                                                    </span>
+                                                                                    <a href="javascript:;" class="btn red fileinput-exists" data-dismiss="fileinput">Eliminar</a>
+                                                                                </div>
+                                                                                <span class="help-block">Formatos permitidos: JPG, PNG, WEBP. Máximo 2MB.</span>
+                                                                                <?php if (!empty($company['logo'])): ?>
+                                                                                <span class="help-block">Archivo actual: <?php echo htmlspecialchars((string)$company['logo']); ?></span>
+                                                                                <?php endif; ?>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <?php else: ?>
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <div class="alert alert-info">
+                                                                        <i class="fa fa-info-circle"></i> La gestión de logo no está disponible para este perfil.
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <?php endif; ?>
+
+                                                    </div><!-- /.tab-content -->
                                                 </div>
 
                                                 <div class="form-actions">
