@@ -1,4 +1,12 @@
 var miEmpresaCtx = window.MI_EMPRESA_CTX || {};
+var providerUrlRules = {
+    website: { label: 'Website', hosts: [] },
+    instagram_url: { label: 'Instagram', hosts: ['instagram.com', 'www.instagram.com'] },
+    facebook_url: { label: 'Facebook', hosts: ['facebook.com', 'www.facebook.com', 'fb.me'] },
+    linkedin_url: { label: 'LinkedIn', hosts: ['linkedin.com', 'www.linkedin.com'] },
+    youtube_url: { label: 'YouTube', hosts: ['youtube.com', 'www.youtube.com', 'youtu.be'] },
+    whatsapp_url: { label: 'WhatsApp comercial', hosts: ['wa.me', 'api.whatsapp.com'] }
+};
 
 $(document).ready(function() {
     if (!miEmpresaCtx.canEditSelf) {
@@ -28,6 +36,11 @@ $(document).ready(function() {
             phone: $('#phone').val(),
             email: $('#email').val(),
             website: $('#website').val(),
+            instagram_url: $('#instagram_url').val(),
+            facebook_url: $('#facebook_url').val(),
+            linkedin_url: $('#linkedin_url').val(),
+            youtube_url: $('#youtube_url').val(),
+            whatsapp_url: $('#whatsapp_url').val(),
             calendar_capacity: $('#calendar_capacity').val()
         };
 
@@ -88,11 +101,13 @@ $(document).ready(function() {
         }
     });
 
-    $('#website').on('blur', function() {
-        var url = $(this).val();
-        if (url && !isValidURL(url)) {
-            toastr.warning('El formato de la URL no es válido', 'Validación');
-        }
+    Object.keys(providerUrlRules).forEach(function(field) {
+        $('#' + field).on('blur', function() {
+            var url = $(this).val();
+            if (url && !isValidProviderUrl(field, url)) {
+                toastr.warning('El enlace de ' + providerUrlRules[field].label + ' no es válido para ese canal.', 'Validación');
+            }
+        });
     });
 });
 
@@ -143,6 +158,11 @@ function populateCompanyForm(data) {
     $('#phone').val(data.phone || '');
     $('#email').val(data.email || '');
     $('#website').val(data.website || '');
+    $('#instagram_url').val(data.instagram_url || '');
+    $('#facebook_url').val(data.facebook_url || '');
+    $('#linkedin_url').val(data.linkedin_url || '');
+    $('#youtube_url').val(data.youtube_url || '');
+    $('#whatsapp_url').val(data.whatsapp_url || '');
     $('#calendar_capacity').val(Math.max(1, parseInt(data.calendar_capacity || 1, 10)));
 
     if ($('#company-type-text').length) {
@@ -240,4 +260,22 @@ function isValidEmail(email) {
 function isValidURL(url) {
     var re = /^https?:\/\/.+/i;
     return re.test(url);
+}
+
+function isValidProviderUrl(field, url) {
+    if (!isValidURL(url)) {
+        return false;
+    }
+
+    var rule = providerUrlRules[field];
+    if (!rule || !rule.hosts || rule.hosts.length === 0) {
+        return true;
+    }
+
+    try {
+        var parsed = new URL(url);
+        return rule.hosts.indexOf(parsed.hostname.toLowerCase()) !== -1;
+    } catch (err) {
+        return false;
+    }
 }

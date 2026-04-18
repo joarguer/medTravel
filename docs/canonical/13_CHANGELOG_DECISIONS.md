@@ -1,5 +1,42 @@
 # Changelog Decisions
 
+## 2026-04-18 — feat(provider-profile): redes institucionales del prestador en `providers` y señales públicas de credibilidad
+
+**Outcome**
+- El perfil institucional médico del prestador en `admin/mi_empresa.php` ahora soporta:
+  - `website`
+  - `instagram_url`
+  - `facebook_url`
+  - `linkedin_url`
+  - `youtube_url`
+  - `whatsapp_url`
+- La primera fase queda acotada al dominio médico (`providers`). No se toca `service_providers`.
+- Las superficies públicas consumen solo una señal discreta de credibilidad:
+  - `index.php` → cards `Our Specialists`
+  - `specialists.php`
+  - `blog.php`
+
+**Decision**
+- Las redes sociales son identidad institucional del provider, no del staff médico.
+- No se reutilizan tablas legacy como `social_media` o `specialist_list`.
+- Se guarda URL completa por canal; no handles ni lógica derivada.
+- En cards públicas se renderizan por ahora máximo 2 links:
+  - `website`
+  - `instagram`
+- Los demás canales quedan persistidos para uso futuro.
+
+**Archivos modificados**
+- `inc/provider_public_links.php`
+- `admin/mi_empresa.php`
+- `admin/js/mi_empresa.js`
+- `admin/ajax/mi_empresa.php`
+- `inc/public_specialists.php`
+- `index.php`
+- `specialists.php`
+- `blog.php`
+- `sql/providers.sql`
+- `sql/2026_04_18_provider_social_links.sql`
+
 ## 2026-04-18 — feat(blog): `video_url` del blog soporta Instagram público sin cambiar schema
 
 **Outcome**

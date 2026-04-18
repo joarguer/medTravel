@@ -5,6 +5,7 @@ ini_set('log_errors', 1);
 
 require_once('../include/conexion.php');
 require_once('../include/roles.php');
+require_once('../../inc/provider_public_links.php');
 
 require_login_ajax();
 header('Content-Type: application/json; charset=utf-8');
@@ -221,6 +222,11 @@ function build_company_payload($conexion, $scope, $row) {
             'email' => (string)($row['email'] ?? ''),
             'address' => (string)($row['address'] ?? ''),
             'website' => (string)($row['website'] ?? ''),
+            'instagram_url' => (string)($row['instagram_url'] ?? ''),
+            'facebook_url' => (string)($row['facebook_url'] ?? ''),
+            'linkedin_url' => (string)($row['linkedin_url'] ?? ''),
+            'youtube_url' => (string)($row['youtube_url'] ?? ''),
+            'whatsapp_url' => (string)($row['whatsapp_url'] ?? ''),
             'description' => (string)($row['description'] ?? ''),
             'logo' => $logoFile,
             'logo_url' => $logoUrl,
@@ -246,6 +252,11 @@ function build_company_payload($conexion, $scope, $row) {
         'email' => (string)($row['contact_email'] ?? ''),
         'address' => '',
         'website' => (string)($row['website'] ?? ''),
+        'instagram_url' => '',
+        'facebook_url' => '',
+        'linkedin_url' => '',
+        'youtube_url' => '',
+        'whatsapp_url' => '',
         'description' => (string)($row['notes'] ?? ''),
         'logo' => '',
         'logo_url' => '',
@@ -349,6 +360,11 @@ if ($action === 'update_self_company') {
     $phone = isset($_POST['phone']) ? trim((string)$_POST['phone']) : '';
     $email = isset($_POST['email']) ? trim((string)$_POST['email']) : '';
     $website = isset($_POST['website']) ? trim((string)$_POST['website']) : '';
+    $instagramUrl = isset($_POST['instagram_url']) ? trim((string)$_POST['instagram_url']) : '';
+    $facebookUrl = isset($_POST['facebook_url']) ? trim((string)$_POST['facebook_url']) : '';
+    $linkedinUrl = isset($_POST['linkedin_url']) ? trim((string)$_POST['linkedin_url']) : '';
+    $youtubeUrl = isset($_POST['youtube_url']) ? trim((string)$_POST['youtube_url']) : '';
+    $whatsappUrl = isset($_POST['whatsapp_url']) ? trim((string)$_POST['whatsapp_url']) : '';
     $calendarCapacity = isset($_POST['calendar_capacity']) ? (int)$_POST['calendar_capacity'] : 1;
     if ($calendarCapacity < 1) {
         $calendarCapacity = 1;
@@ -362,20 +378,87 @@ if ($action === 'update_self_company') {
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         json_err('Email inválido', 422, 'invalid_email');
     }
+    $publicLinkInputs = [
+        'website' => $website,
+        'instagram_url' => $instagramUrl,
+        'facebook_url' => $facebookUrl,
+        'linkedin_url' => $linkedinUrl,
+        'youtube_url' => $youtubeUrl,
+        'whatsapp_url' => $whatsappUrl,
+    ];
+    foreach ($publicLinkInputs as $field => $value) {
+        $validation = mt_provider_public_link_validate($field, $value);
+        if (!$validation['valid']) {
+            json_err($validation['message'], 422, 'invalid_public_link', ['field' => $field]);
+        }
+        $publicLinkInputs[$field] = $validation['normalized'];
+    }
+    $website = $publicLinkInputs['website'];
+    $instagramUrl = $publicLinkInputs['instagram_url'];
+    $facebookUrl = $publicLinkInputs['facebook_url'];
+    $linkedinUrl = $publicLinkInputs['linkedin_url'];
+    $youtubeUrl = $publicLinkInputs['youtube_url'];
+    $whatsappUrl = $publicLinkInputs['whatsapp_url'];
 
     $scopeId = intval($scope['scope_id']);
 
     if ($scope['domain'] === 'medical') {
+        $hasSocialColumns = table_has_column($conexion, 'providers', 'instagram_url')
+            && table_has_column($conexion, 'providers', 'facebook_url')
+            && table_has_column($conexion, 'providers', 'linkedin_url')
+            && table_has_column($conexion, 'providers', 'youtube_url')
+            && table_has_column($conexion, 'providers', 'whatsapp_url');
         $hasCapacityColumn = table_has_column($conexion, 'providers', 'calendar_capacity');
-        if ($hasCapacityColumn) {
-            $sql = "UPDATE providers SET name = ?, description = ?, city = ?, address = ?, phone = ?, email = ?, website = ?, calendar_capacity = ? WHERE id = ? AND is_active = 1 LIMIT 1";
+        if ($hasSocialColumns && $hasCapacityColumn) {
+            $sql = "UPDATE providers
+                    SET name = ?,
+                        description = ?,
+                        city = ?,
+                        address = ?,
+                        phone = ?,
+                        email = ?,
+                        website = NULLIF(?, ''),
+                        instagram_url = NULLIF(?, ''),
+                        facebook_url = NULLIF(?, ''),
+                        linkedin_url = NULLIF(?, ''),
+                        youtube_url = NULLIF(?, ''),
+                        whatsapp_url = NULLIF(?, ''),
+                        calendar_capacity = ?
+                    WHERE id = ? AND is_active = 1 LIMIT 1";
+            $stmt = mysqli_prepare($conexion, $sql);
+            if (!$stmt) {
+                json_err('Error al preparar actualización', 500, 'db_prepare_error');
+            }
+            mysqli_stmt_bind_param($stmt, 'ssssssssssssii', $name, $description, $city, $address, $phone, $email, $website, $instagramUrl, $facebookUrl, $linkedinUrl, $youtubeUrl, $whatsappUrl, $calendarCapacity, $scopeId);
+        } elseif ($hasSocialColumns) {
+            $sql = "UPDATE providers
+                    SET name = ?,
+                        description = ?,
+                        city = ?,
+                        address = ?,
+                        phone = ?,
+                        email = ?,
+                        website = NULLIF(?, ''),
+                        instagram_url = NULLIF(?, ''),
+                        facebook_url = NULLIF(?, ''),
+                        linkedin_url = NULLIF(?, ''),
+                        youtube_url = NULLIF(?, ''),
+                        whatsapp_url = NULLIF(?, '')
+                    WHERE id = ? AND is_active = 1 LIMIT 1";
+            $stmt = mysqli_prepare($conexion, $sql);
+            if (!$stmt) {
+                json_err('Error al preparar actualización', 500, 'db_prepare_error');
+            }
+            mysqli_stmt_bind_param($stmt, 'ssssssssssssi', $name, $description, $city, $address, $phone, $email, $website, $instagramUrl, $facebookUrl, $linkedinUrl, $youtubeUrl, $whatsappUrl, $scopeId);
+        } elseif ($hasCapacityColumn) {
+            $sql = "UPDATE providers SET name = ?, description = ?, city = ?, address = ?, phone = ?, email = ?, website = NULLIF(?, ''), calendar_capacity = ? WHERE id = ? AND is_active = 1 LIMIT 1";
             $stmt = mysqli_prepare($conexion, $sql);
             if (!$stmt) {
                 json_err('Error al preparar actualización', 500, 'db_prepare_error');
             }
             mysqli_stmt_bind_param($stmt, 'sssssssii', $name, $description, $city, $address, $phone, $email, $website, $calendarCapacity, $scopeId);
         } else {
-            $sql = "UPDATE providers SET name = ?, description = ?, city = ?, address = ?, phone = ?, email = ?, website = ? WHERE id = ? AND is_active = 1 LIMIT 1";
+            $sql = "UPDATE providers SET name = ?, description = ?, city = ?, address = ?, phone = ?, email = ?, website = NULLIF(?, '') WHERE id = ? AND is_active = 1 LIMIT 1";
             $stmt = mysqli_prepare($conexion, $sql);
             if (!$stmt) {
                 json_err('Error al preparar actualización', 500, 'db_prepare_error');

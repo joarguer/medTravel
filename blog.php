@@ -3,6 +3,7 @@ $page_title = 'Medical Travel Blog | MedTravel';
 $page_description = 'Discover updates, patient-oriented guidance, and medical travel stories from MedTravel.';
 $page_canonical = 'https://medtravel.com.co/blog.php';
 include('inc/include.php'); 
+require_once __DIR__ . '/inc/provider_public_links.php';
 require_once __DIR__ . '/inc/blog_header.php';
 
 if (!function_exists('blog_author_avatar_href')) {
@@ -53,8 +54,16 @@ $authorUserSelect = $hasAuthorUserId
 $authorUserJoin = $hasAuthorUserId
     ? "LEFT JOIN usuarios au ON au.id = bp.author_user_id"
     : "";
+$providerWebsiteSelect = (function_exists('mt_db_table_has_column') && mt_db_table_has_column($conexion, 'providers', 'website'))
+    ? "COALESCE(p.website, '') AS provider_website,"
+    : "'' AS provider_website,";
+$providerInstagramSelect = (function_exists('mt_db_table_has_column') && mt_db_table_has_column($conexion, 'providers', 'instagram_url'))
+    ? "COALESCE(p.instagram_url, '') AS provider_instagram_url,"
+    : "'' AS provider_instagram_url,";
 $sql_posts = "SELECT bp.id, bp.title, bp.slug, bp.excerpt, bp.body, bp.cover_image, bp.author_name, bp.provider_id,
                      {$authorUserSelect}
+                     {$providerWebsiteSelect}
+                     {$providerInstagramSelect}
                      COALESCE(p.name, '') AS provider_name,
                      COALESCE(p.city, '') AS provider_city,
                      DATE_FORMAT(COALESCE(bp.published_at, bp.created_at), '%b %e, %Y') as published_on
@@ -150,6 +159,10 @@ if ($res_posts) {
                             $authorUserName = trim((string)($post['author_user_name'] ?? ''));
                             $providerName = trim((string)($post['provider_name'] ?? ''));
                             $providerCity = trim((string)($post['provider_city'] ?? ''));
+                            $providerPublicLinks = mt_provider_public_card_links([
+                                'website' => (string)($post['provider_website'] ?? ''),
+                                'instagram_url' => (string)($post['provider_instagram_url'] ?? ''),
+                            ]);
                             $authorName = $authorName !== '' ? $authorName : $authorUserName;
                             $authorName = $authorName !== '' ? $authorName : 'MedTravel Editorial Team';
                             $authorAvatarPath = blog_author_avatar_href($post['author_avatar'] ?? '');
@@ -187,6 +200,20 @@ if ($res_posts) {
                                     <?php endif; ?>
                                     <?php if ($hasProviderContributor && $providerCity !== ''): ?>
                                         <p class="text-muted small mb-3 blog-card__location"><i class="fa fa-map-marker-alt text-primary me-2"></i><?php echo htmlspecialchars($providerCity, ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <?php endif; ?>
+                                    <?php if ($hasProviderContributor && !empty($providerPublicLinks)): ?>
+                                        <div class="d-flex gap-2 mb-3" aria-label="Provider links">
+                                            <?php foreach ($providerPublicLinks as $providerLink): ?>
+                                                <a href="<?php echo htmlspecialchars((string)$providerLink['url'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                   target="_blank"
+                                                   rel="noopener noreferrer"
+                                                   aria-label="<?php echo htmlspecialchars((string)$providerLink['label'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                   class="btn btn-sm btn-outline-primary rounded-circle d-inline-flex align-items-center justify-content-center"
+                                                   style="width: 34px; height: 34px;">
+                                                    <i class="<?php echo htmlspecialchars((string)$providerLink['icon_class'], ENT_QUOTES, 'UTF-8'); ?>"></i>
+                                                </a>
+                                            <?php endforeach; ?>
+                                        </div>
                                     <?php endif; ?>
                                     <h2 class="h4 blog-card__title"><?php echo htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8'); ?></h2>
                                     <p class="my-3 flex-grow-1 blog-card__excerpt"><?php echo $excerpt_safe; ?></p>

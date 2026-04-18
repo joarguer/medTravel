@@ -42,6 +42,28 @@ include(__DIR__ . '/inc/include.php');
         .sp-role { color: #13357B; font-weight: 600; margin-bottom: 8px; }
         .sp-provider { color: #64748b; font-size: 14px; margin-bottom: 8px; }
         .sp-bio { color: #475569; font-size: 14px; margin-bottom: 0; }
+        .sp-provider-links {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            margin-bottom: 2px;
+        }
+        .sp-provider-links a {
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid #dbeafe;
+            background: #f8fbff;
+            color: #1d4ed8;
+            text-decoration: none;
+        }
+        .sp-provider-links a:hover {
+            background: #eff6ff;
+            color: #13357b;
+        }
         .sp-trust-list {
             margin: 0;
             padding-left: 18px;
@@ -136,6 +158,18 @@ include(__DIR__ . '/inc/include.php');
                                 <h4 class="mb-2"><?php echo htmlspecialchars((string)$specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?></h4>
                                 <p class="sp-role"><?php echo htmlspecialchars((string)$specialist['display_role'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <p class="sp-provider"><?php echo htmlspecialchars((string)$specialist['provider_label'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                <?php if (!empty($specialist['provider_public_links'])) { ?>
+                                <div class="sp-provider-links" aria-label="Provider links">
+                                    <?php foreach ($specialist['provider_public_links'] as $providerLink) { ?>
+                                        <a href="<?php echo htmlspecialchars((string)$providerLink['url'], ENT_QUOTES, 'UTF-8'); ?>"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           aria-label="<?php echo htmlspecialchars((string)$providerLink['label'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <i class="<?php echo htmlspecialchars((string)$providerLink['icon_class'], ENT_QUOTES, 'UTF-8'); ?>"></i>
+                                        </a>
+                                    <?php } ?>
+                                </div>
+                                <?php } ?>
                                 <p class="sp-bio"><?php echo htmlspecialchars($specialist['display_bio'], ENT_QUOTES, 'UTF-8'); ?></p>
                                 <?php if (!empty($specialist['offer_chips'])) {
                                     $sp_chips   = $specialist['offer_chips'];

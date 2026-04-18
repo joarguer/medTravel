@@ -213,6 +213,29 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                 color: #64748b;
                 border-color: #e2e8f0;
             }
+            .home-specialist-links {
+                display: flex;
+                gap: 8px;
+                margin-top: 12px;
+            }
+            .home-specialist-links a {
+                width: 32px;
+                height: 32px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 999px;
+                border: 1px solid #dbeafe;
+                background: #f8fbff;
+                color: #1d4ed8;
+                text-decoration: none;
+                transition: background 0.2s, color 0.2s, border-color 0.2s;
+            }
+            .home-specialist-links a:hover {
+                background: #eff6ff;
+                color: #13357b;
+                border-color: #bfdbfe;
+            }
         </style>
     </head>
 
@@ -813,6 +836,18 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                                         <span><?php echo htmlspecialchars($specialist['provider_city'], ENT_QUOTES, 'UTF-8'); ?></span>
                                     <?php } ?>
                                 </div>
+                                <?php if (!empty($specialist['provider_public_links'])) { ?>
+                                <div class="home-specialist-links" aria-label="Provider links">
+                                    <?php foreach ($specialist['provider_public_links'] as $providerLink) { ?>
+                                        <a href="<?php echo htmlspecialchars((string)$providerLink['url'], ENT_QUOTES, 'UTF-8'); ?>"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           aria-label="<?php echo htmlspecialchars((string)$providerLink['label'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <i class="<?php echo htmlspecialchars((string)$providerLink['icon_class'], ENT_QUOTES, 'UTF-8'); ?>"></i>
+                                        </a>
+                                    <?php } ?>
+                                </div>
+                                <?php } ?>
                                 <?php if (!empty($specialist['offer_chips'])) {
                                     $hs_chips   = $specialist['offer_chips'];
                                     $hs_visible = array_slice($hs_chips, 0, 3);

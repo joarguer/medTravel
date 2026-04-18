@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/provider_public_links.php';
+
 if (!function_exists('mt_home_specialist_placeholder_photo')) {
     function mt_home_specialist_placeholder_photo()
     {
@@ -135,6 +137,8 @@ if (!function_exists('mt_home_specialists_fetch')) {
             mt_db_table_has_column($conexion, 'providers', 'city') ? 'p.city AS provider_city' : "'' AS provider_city",
             mt_db_table_has_column($conexion, 'providers', 'logo') ? 'p.logo AS provider_logo' : "'' AS provider_logo",
             mt_db_table_has_column($conexion, 'providers', 'description') ? 'p.description AS provider_description' : "'' AS provider_description",
+            mt_db_table_has_column($conexion, 'providers', 'website') ? 'p.website AS provider_website' : "'' AS provider_website",
+            mt_db_table_has_column($conexion, 'providers', 'instagram_url') ? 'p.instagram_url AS provider_instagram_url' : "'' AS provider_instagram_url",
         ];
 
         $sql = 'SELECT ' . implode(', ', $select) . '
@@ -205,6 +209,10 @@ if (!function_exists('mt_home_specialists_fetch')) {
                 'provider_name' => $providerName,
                 'provider_city' => trim((string)($row['provider_city'] ?? '')),
                 'provider_logo' => $providerLogo,
+                'provider_public_links' => mt_provider_public_card_links([
+                    'website' => (string)($row['provider_website'] ?? ''),
+                    'instagram_url' => (string)($row['provider_instagram_url'] ?? ''),
+                ]),
                 'is_primary_doctor' => (int)($row['is_primary_doctor'] ?? 0),
                 'provider_label' => $clinicName !== '' ? $clinicName : ($providerName !== '' ? $providerName : 'Trusted provider'),
             ];
