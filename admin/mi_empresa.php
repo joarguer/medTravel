@@ -178,6 +178,7 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
     <link href="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.css" rel="stylesheet" type="text/css" />
     <?php echo $theme_global_style;?>
     <?php echo $theme_layout_style;?>
+    <link href="../../assets/global/plugins/bootstrap-summernote/summernote.css" rel="stylesheet" type="text/css" />
     <script src="../../assets/global/plugins/jquery.min.js" type="text/javascript"></script>
 </head>
 <body class="page-header-fixed page-sidebar-closed-hide-logo page-md">
@@ -647,6 +648,7 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
         };
         window.PROVIDER_ID = <?php echo $domain_type === 'medical' ? (int)$scope_id : 0; ?>;
     </script>
+    <script src="../../assets/global/plugins/bootstrap-summernote/summernote.min.js" type="text/javascript"></script>
     <script src="js/mi_empresa.js" type="text/javascript"></script>
 
 </body>

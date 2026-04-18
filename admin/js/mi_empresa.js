@@ -9,6 +9,21 @@ var providerUrlRules = {
 };
 
 $(document).ready(function() {
+    if ($.fn.summernote) {
+        $('#description').summernote({
+            height: 200,
+            toolbar: [
+                ['style', ['bold', 'italic', 'underline', 'clear']],
+                ['para',  ['ul', 'ol']],
+                ['insert',['link']],
+                ['view',  ['codeview']]
+            ]
+        });
+        if (!miEmpresaCtx.canEditSelf) {
+            $('#description').summernote('disable');
+        }
+    }
+
     if (!miEmpresaCtx.canEditSelf) {
         setReadOnlyMode();
     }
@@ -30,7 +45,7 @@ $(document).ready(function() {
         var formData = {
             action: 'update_self_company',
             name: $('#name').val(),
-            description: $('#description').val(),
+            description: ($.fn.summernote ? $('#description').summernote('code') : $('#description').val()),
             city: $('#city').val(),
             address: $('#address').val(),
             phone: $('#phone').val(),
@@ -115,6 +130,7 @@ function setReadOnlyMode() {
     $('#form-empresa').find('input, textarea, select').not('#company_scope_id').prop('readonly', true);
     $('#form-empresa').find('input[type="file"]').prop('disabled', true);
     $('#btn-guardar').prop('disabled', true);
+    if ($.fn.summernote) { $('#description').summernote('disable'); }
 }
 
 function loadSelfCompany() {
@@ -152,7 +168,11 @@ function loadSelfCompany() {
 
 function populateCompanyForm(data) {
     $('#name').val(data.name || '');
-    $('#description').val(data.description || '');
+    if ($.fn.summernote && $('#description').next('.note-editor').length) {
+        $('#description').summernote('code', data.description || '');
+    } else {
+        $('#description').val(data.description || '');
+    }
     $('#city').val(data.city || '');
     $('#address').val(data.address || '');
     $('#phone').val(data.phone || '');
