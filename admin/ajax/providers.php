@@ -1697,6 +1697,7 @@ try{
             
             // 3. Actualizar relaciones
             $category_ids = isset($_REQUEST['category_ids']) && is_array($_REQUEST['category_ids']) ? $_REQUEST['category_ids'] : [];
+            $has_service_field = array_key_exists('services_field_present', $_REQUEST);
             $service_ids = isset($_REQUEST['service_ids']) && is_array($_REQUEST['service_ids']) ? $_REQUEST['service_ids'] : [];
             
             // Eliminar relaciones existentes
@@ -1705,10 +1706,12 @@ try{
             mysqli_stmt_execute($d1); 
             mysqli_stmt_close($d1);
             
-            $d2 = mysqli_prepare($conexion, "DELETE FROM provider_catalog_services WHERE provider_id = ?"); 
-            mysqli_stmt_bind_param($d2,'i',$id); 
-            mysqli_stmt_execute($d2); 
-            mysqli_stmt_close($d2);
+            if($has_service_field){
+                $d2 = mysqli_prepare($conexion, "DELETE FROM provider_catalog_services WHERE provider_id = ?"); 
+                mysqli_stmt_bind_param($d2,'i',$id); 
+                mysqli_stmt_execute($d2); 
+                mysqli_stmt_close($d2);
+            }
             
             // Reinsertar
             if(!empty($category_ids)){
@@ -1720,7 +1723,7 @@ try{
                 }
                 mysqli_stmt_close($ins);
             }
-            if(!empty($service_ids)){
+            if($has_service_field && !empty($service_ids)){
                 $ins2 = mysqli_prepare($conexion, "INSERT IGNORE INTO provider_catalog_services (provider_id, service_id) VALUES (?,?)");
                 foreach($service_ids as $sid){ 
                     $sid = (int)$sid; 

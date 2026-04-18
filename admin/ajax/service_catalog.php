@@ -139,6 +139,46 @@ function ensure_provider_service_link($conexion, $providerId, $serviceId) {
 }
 
 try{
+    if ($tipo === 'list_master_catalog') {
+        if (!$isAdminPrincipal) {
+            json_err('forbidden', 403);
+        }
+
+        $rows = [];
+        $descriptionColumn = service_catalog_description_column($conexion);
+        $sql = "SELECT
+                    sc.id,
+                    sc.category_id,
+                    c.name AS category_name,
+                    sc.name,
+                    sc.slug,
+                    " . ($descriptionColumn !== '' ? ('sc.' . $descriptionColumn . ' AS short_description') : "'' AS short_description") . ",
+                    sc.sort_order,
+                    sc.is_active,
+                    sc.created_at
+                FROM service_catalog sc
+                LEFT JOIN service_categories c ON sc.category_id = c.id
+                ORDER BY c.name ASC, sc.sort_order ASC, sc.id DESC";
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) json_err('db_prepare');
+        if (!mysqli_stmt_execute($stmt)) {
+            $err = mysqli_stmt_error($stmt);
+            mysqli_stmt_close($stmt);
+            error_log('service_catalog list_master_catalog error: ' . $err);
+            json_err('db');
+        }
+
+        $res = mysqli_stmt_get_result($stmt);
+        while ($r = mysqli_fetch_assoc($res)) {
+            $rows[] = $r;
+        }
+        mysqli_stmt_close($stmt);
+
+        json_ok([
+            'data' => $rows,
+        ]);
+    }
+
     if ($tipo === 'list') {
         $rows = [];
         $categoryFilter = isset($_REQUEST['category_id']) ? intval($_REQUEST['category_id']) : 0;

@@ -225,7 +225,7 @@ $(document).ready(function(){
             done();
         }, 'json');
 
-        $.post(urlServices, { tipo: 'list' }, function(res){
+        $.post(urlServices, { tipo: 'list_master_catalog' }, function(res){
             if(res && res.ok){
                 let activeServices = res.data.filter(function(s){ return s.is_active == 1; });
                 let opts = buildServiceOptionGroups(activeServices);
@@ -600,7 +600,8 @@ $(document).ready(function(){
             email: $('#prov-email').val().trim(),
             website: $('#prov-website').val().trim(),
             is_verified: $('#prov-verified').is(':checked') ? 1 : 0,
-            is_active: $('#prov-active').is(':checked') ? 1 : 0
+            is_active: $('#prov-active').is(':checked') ? 1 : 0,
+            services_field_present: 1
         };
 
         let catVals = $('#prov-categories').val() || [];
