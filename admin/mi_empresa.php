@@ -615,6 +615,25 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
         <?php echo $sider_bar;?>
     </div>
 
+    <!-- Modal: visor de documentos del checklist -->
+    <div class="modal fade" id="doc-viewer-modal" tabindex="-1" role="dialog" aria-labelledby="doc-viewer-title">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="doc-viewer-title">Documento</h4>
+                </div>
+                <div class="modal-body" id="doc-viewer-body" style="min-height: 320px; padding: 0;"></div>
+                <div class="modal-footer">
+                    <a id="doc-viewer-open-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-default">
+                        <i class="fa fa-external-link"></i> Abrir en nueva pestaña
+                    </a>
+                    <button type="button" class="btn btn-primary" data-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="../../assets/global/plugins/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
     <script src="../../assets/global/plugins/bootstrap-fileinput/bootstrap-fileinput.js" type="text/javascript"></script>
     <?php echo $theme_layout_script;?>

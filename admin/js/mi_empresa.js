@@ -267,6 +267,7 @@ function isValidURL(url) {
 // -----------------------------------------------------------------------
 
 var checklistLoaded = false;
+var checklistItems  = {};
 
 // Bootstrap 3 / Metronic: escuchar desde document y filtrar por target es más fiable
 // que binding directo en el <a>, que puede perderse si Metronic intercepta el tab.
@@ -336,8 +337,10 @@ var categoryColors = {
 };
 
 function renderChecklist(items) {
+    checklistItems = {};
     var $tbody = $('#checklist-tbody').empty();
     items.forEach(function(item) {
+        checklistItems[item.id] = item;
         var catLabel = categoryLabels[item.item_category] || item.item_category;
         var catColor = categoryColors[item.item_category] || 'badge-default';
         var reqBadge = item.is_required
@@ -357,9 +360,10 @@ function renderChecklist(items) {
 
         var actionsHtml = '';
         if (item.view_url) {
-            actionsHtml += '<a href="' + item.view_url + '" target="_blank" rel="noopener noreferrer"'
-                + ' class="btn btn-xs btn-default" style="margin-right: 4px;" title="Ver archivo">'
-                + '<i class="fa fa-eye"></i> Ver</a>';
+            actionsHtml += '<button type="button" class="btn btn-xs btn-default btn-view-doc"'
+                + ' data-item-id="' + item.id + '"'
+                + ' style="margin-right: 4px;" title="Ver archivo">'
+                + '<i class="fa fa-eye"></i> Ver</button>';
         }
         // Reemplazar disponible siempre que exista documento, incluso si está validado.
         // El backend resetea is_checked=0 al reemplazar — nueva evidencia exige re-revisión.
@@ -405,6 +409,12 @@ function renderChecklist(items) {
         var itemId = $(this).data('item-id');
         triggerDocUpload(itemId);
     });
+
+    $('#checklist-table').on('click', '.btn-view-doc', function() {
+        var itemId = $(this).data('item-id');
+        var item = checklistItems[itemId];
+        if (item) { openDocViewer(item); }
+    });
 }
 
 function triggerDocUpload(itemId) {
@@ -449,6 +459,47 @@ function uploadProviderDocument(itemId, file, onDone) {
             if (typeof onDone === 'function') { onDone(); }
         }
     });
+}
+
+function openDocViewer(item) {
+    var $modal   = $('#doc-viewer-modal');
+    var $body    = $('#doc-viewer-body');
+    var $title   = $('#doc-viewer-title');
+    var $openBtn = $('#doc-viewer-open-btn');
+
+    var label = item.item_label || 'Documento';
+    if (item.original_filename) {
+        label += ' — ' + item.original_filename;
+    }
+    $title.text(label);
+    $openBtn.attr('href', item.view_url);
+
+    $body.empty().css('padding', '0');
+
+    var mime = (item.mime_type || '').toLowerCase();
+    var ext  = (item.file_extension || '').toLowerCase();
+
+    if (mime === 'application/pdf' || ext === 'pdf') {
+        $body.html('<iframe src="' + item.view_url + '" style="width:100%;height:520px;border:none;" title="' + $('<span>').text(label).html() + '"></iframe>');
+    } else if (['image/jpeg', 'image/png', 'image/webp'].indexOf(mime) !== -1
+               || ['jpg', 'jpeg', 'png', 'webp'].indexOf(ext) !== -1) {
+        $body.css('padding', '16px').html(
+            '<div style="text-align:center;">'
+            + '<img src="' + item.view_url + '" style="max-width:100%;max-height:520px;object-fit:contain;" alt="' + $('<span>').text(item.original_filename || '').html() + '" />'
+            + '</div>'
+        );
+    } else {
+        $body.css('padding', '16px').html(
+            '<div style="text-align:center;padding:40px 0;">'
+            + '<i class="fa fa-file-text-o fa-3x text-muted" style="display:block;margin-bottom:12px;"></i>'
+            + '<p class="text-muted">' + $('<span>').text(item.original_filename || 'Documento').html() + '</p>'
+            + '<a href="' + item.view_url + '" target="_blank" rel="noopener noreferrer" class="btn btn-primary">'
+            + '<i class="fa fa-download"></i> Abrir archivo</a>'
+            + '</div>'
+        );
+    }
+
+    $modal.modal('show');
 }
 
 function isValidProviderUrl(field, url) {

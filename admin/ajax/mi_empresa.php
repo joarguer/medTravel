@@ -650,7 +650,8 @@ if ($action === 'get_my_checklist') {
         // algún documento con discrepancia de provider_id heredada.
         $sql = 'SELECT pvi.id, pvi.item_key, pvi.item_label, pvi.item_description,
                        pvi.item_category, pvi.is_required, pvi.is_checked, pvi.evidence_document_id,
-                       pd.original_filename, pd.file_path, pd.uploaded_at
+                       pd.original_filename, pd.file_path, pd.uploaded_at,
+                       pd.mime_type, pd.file_extension
                 FROM provider_verification_items pvi
                 LEFT JOIN provider_documents pd ON pd.id = pvi.evidence_document_id
                 WHERE pvi.provider_id = ?
@@ -673,8 +674,9 @@ if ($action === 'get_my_checklist') {
     $items = [];
     while ($res && ($row = mysqli_fetch_assoc($res))) {
         $filePath = $row['file_path'] ?? null;
+        $itemIdInt = (int)$row['id'];
         $items[] = [
-            'id'                => (int)$row['id'],
+            'id'                => $itemIdInt,
             'item_key'          => (string)($row['item_key'] ?? ''),
             'item_label'        => (string)($row['item_label'] ?? ''),
             'item_description'  => (string)($row['item_description'] ?? ''),
@@ -684,7 +686,9 @@ if ($action === 'get_my_checklist') {
             'has_document'      => !empty($row['evidence_document_id']),
             'original_filename' => $row['original_filename'] ?? null,
             'uploaded_at'       => $row['uploaded_at'] ?? null,
-            'view_url'          => $filePath ? 'uploads/provider_documents/' . $filePath : null,
+            'mime_type'         => $row['mime_type'] ?? null,
+            'file_extension'    => $row['file_extension'] ?? null,
+            'view_url'          => $filePath ? 'ajax/download_provider_doc.php?item_id=' . $itemIdInt : null,
         ];
     }
     mysqli_stmt_close($stmt);
@@ -806,7 +810,7 @@ if ($action === 'upload_my_document') {
         'message'           => 'Documento subido correctamente',
         'document_id'       => $docId,
         'original_filename' => $origName,
-        'view_url'          => 'uploads/provider_documents/' . $filePath,
+        'view_url'          => 'ajax/download_provider_doc.php?item_id=' . $itemId,
     ]);
 }
 
