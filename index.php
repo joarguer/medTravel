@@ -824,7 +824,7 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                                 </div>
                                 <h4 class="mt-2 mb-2"><?php echo htmlspecialchars($specialist['full_name'], ENT_QUOTES, 'UTF-8'); ?></h4>
                                 <p class="home-specialist-role"><?php echo htmlspecialchars($specialist['display_role'], ENT_QUOTES, 'UTF-8'); ?></p>
-                                <p class="home-specialist-bio"><?php echo htmlspecialchars($specialist['display_bio'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                <p class="home-specialist-bio"><?php echo $specialist['display_bio']; ?></p>
                                 <div class="home-specialist-meta">
                                     <?php if ($specialist['is_primary_doctor'] === 1) { ?>
                                         <span>Lead specialist</span>

@@ -75,6 +75,26 @@ if (!function_exists('mt_home_specialist_is_legacy_placeholder')) {
     }
 }
 
+if (!function_exists('mt_bio_safe_html')) {
+    function mt_bio_safe_html($raw, $maxTextLen = 180)
+    {
+        $raw = trim((string)$raw);
+        if ($raw === '') {
+            return '';
+        }
+        // Keep only safe inline tags; strip everything else
+        $stripped = strip_tags($raw, '<b><strong><i><em><br>');
+        // Remove attributes from allowed tags to prevent onclick/style injection
+        $stripped = preg_replace('/<(b|strong|i|em|br)(\s[^>]*)?>/', '<$1>', $stripped);
+        $textOnly = strip_tags($stripped);
+        if (mb_strlen($textOnly, 'UTF-8') > $maxTextLen) {
+            // Too long: safe truncated plain text
+            return htmlspecialchars(mb_substr($textOnly, 0, $maxTextLen - 1, 'UTF-8') . '…', ENT_QUOTES, 'UTF-8');
+        }
+        return $stripped;
+    }
+}
+
 if (!function_exists('mt_home_specialists_fetch')) {
     function mt_home_specialists_fetch($conexion, $limit = 8)
     {
@@ -197,11 +217,9 @@ if (!function_exists('mt_home_specialists_fetch')) {
                 'display_role' => $specialty !== '' ? $specialty : ($roleTitle !== '' ? $roleTitle : 'Medical Specialist'),
                 'bio_short' => $bioShort,
                 'display_bio' => $bioShort !== ''
-                    ? $bioShort
+                    ? htmlspecialchars($bioShort, ENT_QUOTES, 'UTF-8')
                     : ($providerDescription !== ''
-                        ? (mb_strlen($providerDescription, 'UTF-8') > 180
-                            ? mb_substr($providerDescription, 0, 178, 'UTF-8') . '…'
-                            : $providerDescription)
+                        ? mt_bio_safe_html($providerDescription, 180)
                         : 'Specialist available through MedTravel care coordination.'),
                 'photo' => $photo,
                 'photo_fallback' => $photoFallback,

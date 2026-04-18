@@ -170,7 +170,7 @@ include(__DIR__ . '/inc/include.php');
                                     <?php } ?>
                                 </div>
                                 <?php } ?>
-                                <p class="sp-bio"><?php echo htmlspecialchars($specialist['display_bio'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                <p class="sp-bio"><?php echo $specialist['display_bio']; ?></p>
                                 <?php if (!empty($specialist['offer_chips'])) {
                                     $sp_chips   = $specialist['offer_chips'];
                                     $sp_visible = array_slice($sp_chips, 0, 3);
