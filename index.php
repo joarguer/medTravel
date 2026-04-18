@@ -103,16 +103,19 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                 box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
                 border: 1px solid rgba(226, 232, 240, 0.9);
             }
-            .home-specialist-photo,
-            .home-specialist-avatar {
+            .home-specialist-photo {
                 width: 100%;
                 height: 320px;
                 object-fit: cover;
+                object-position: center top;
+                display: block;
+            }
+            .home-specialist-avatar {
+                width: 100%;
+                height: 320px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-            }
-            .home-specialist-avatar {
                 background: linear-gradient(135deg, #13357b, #1d4ed8);
                 color: #fff;
                 font-size: 72px;
