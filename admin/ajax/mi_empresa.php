@@ -576,4 +576,231 @@ if ($action === 'upload_logo') {
     ]);
 }
 
+// -----------------------------------------------------------------------
+// Checklist de documentación — solo dominio médico
+// -----------------------------------------------------------------------
+
+function me_table_exists($conexion, $table) {
+    static $cache = [];
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+    $esc = mysqli_real_escape_string($conexion, $table);
+    $r = mysqli_query($conexion, "SHOW TABLES LIKE '{$esc}'");
+    $cache[$table] = ($r && mysqli_num_rows($r) > 0);
+    return $cache[$table];
+}
+
+function me_checklist_canonical_items() {
+    return [
+        ['key' => 'business_registration', 'label' => 'Registro Empresarial',       'desc' => 'Certificado de cámara de comercio o registro de empresa',                    'category' => 'legal',      'required' => 1],
+        ['key' => 'tax_id',                 'label' => 'RUT o Tax ID',               'desc' => 'Identificación tributaria vigente',                                          'category' => 'legal',      'required' => 1],
+        ['key' => 'medical_license',        'label' => 'Licencia Médica',            'desc' => 'Licencia profesional médica vigente',                                        'category' => 'medical',    'required' => 1],
+        ['key' => 'professional_certifications', 'label' => 'Certificaciones Profesionales', 'desc' => 'Certificados de especialización',                                    'category' => 'medical',    'required' => 0],
+        ['key' => 'clinic_accreditation',   'label' => 'Acreditación de Clínica',   'desc' => 'Certificado de habilitación de secretaría de salud',                         'category' => 'medical',    'required' => 1],
+        ['key' => 'facility_photos',        'label' => 'Fotos de Instalaciones',    'desc' => 'Mínimo 5 fotos de consultorios, quirófanos, áreas de recuperación',          'category' => 'facilities', 'required' => 1],
+        ['key' => 'equipment_certification','label' => 'Certificación de Equipos',  'desc' => 'Documentos de calibración/certificación de equipos médicos',                 'category' => 'facilities', 'required' => 0],
+        ['key' => 'owner_identity',         'label' => 'Identidad del Responsable', 'desc' => 'Cédula o pasaporte del director/dueño',                                      'category' => 'identity',   'required' => 1],
+        ['key' => 'staff_credentials',      'label' => 'Credenciales del Personal', 'desc' => 'Lista de personal médico con sus licencias',                                 'category' => 'identity',   'required' => 0],
+        ['key' => 'liability_insurance',    'label' => 'Seguro de Responsabilidad', 'desc' => 'Póliza de seguro de responsabilidad civil vigente',                          'category' => 'insurance',  'required' => 1],
+        ['key' => 'malpractice_insurance',  'label' => 'Seguro contra Mala Praxis', 'desc' => 'Póliza de seguro médico profesional',                                        'category' => 'insurance',  'required' => 0],
+    ];
+}
+
+if ($action === 'get_my_checklist') {
+    if ($scope['domain'] !== 'medical') {
+        json_err('No aplica a este dominio', 403, 'wrong_domain');
+    }
+    if (!me_table_exists($conexion, 'provider_verification_items')) {
+        json_ok(['items' => [], 'checklist_unavailable' => true]);
+    }
+
+    $scopeId = (int)$scope['scope_id'];
+
+    $cntStmt = mysqli_prepare($conexion, 'SELECT COUNT(*) FROM provider_verification_items WHERE provider_id = ?');
+    if ($cntStmt) {
+        mysqli_stmt_bind_param($cntStmt, 'i', $scopeId);
+        mysqli_stmt_execute($cntStmt);
+        $cntRes = mysqli_stmt_get_result($cntStmt);
+        $count = (int)(mysqli_fetch_row($cntRes)[0] ?? 0);
+        mysqli_stmt_close($cntStmt);
+    } else {
+        $count = 0;
+    }
+
+    if ($count === 0) {
+        foreach (me_checklist_canonical_items() as $ci) {
+            $k   = mysqli_real_escape_string($conexion, $ci['key']);
+            $l   = mysqli_real_escape_string($conexion, $ci['label']);
+            $d   = mysqli_real_escape_string($conexion, $ci['desc']);
+            $cat = mysqli_real_escape_string($conexion, $ci['category']);
+            $req = (int)$ci['required'];
+            mysqli_query($conexion,
+                "INSERT IGNORE INTO provider_verification_items
+                 (provider_id, item_key, item_label, item_description, item_category, is_required, evidence_type)
+                 VALUES ($scopeId, '$k', '$l', '$d', '$cat', $req, 'document')"
+            );
+        }
+    }
+
+    $hasDocTable = me_table_exists($conexion, 'provider_documents');
+    if ($hasDocTable) {
+        $sql = 'SELECT pvi.id, pvi.item_key, pvi.item_label, pvi.item_description,
+                       pvi.item_category, pvi.is_required, pvi.is_checked, pvi.evidence_document_id,
+                       pd.original_filename, pd.file_path, pd.uploaded_at
+                FROM provider_verification_items pvi
+                LEFT JOIN provider_documents pd
+                       ON pd.id = pvi.evidence_document_id AND pd.provider_id = ?
+                WHERE pvi.provider_id = ?
+                ORDER BY pvi.item_category, pvi.item_key';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) { json_err('Error DB', 500, 'db_prepare_error'); }
+        mysqli_stmt_bind_param($stmt, 'ii', $scopeId, $scopeId);
+    } else {
+        $sql = 'SELECT id, item_key, item_label, item_description, item_category,
+                       is_required, is_checked, evidence_document_id
+                FROM provider_verification_items
+                WHERE provider_id = ?
+                ORDER BY item_category, item_key';
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) { json_err('Error DB', 500, 'db_prepare_error'); }
+        mysqli_stmt_bind_param($stmt, 'i', $scopeId);
+    }
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $items = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $filePath = $row['file_path'] ?? null;
+        $items[] = [
+            'id'                => (int)$row['id'],
+            'item_key'          => (string)($row['item_key'] ?? ''),
+            'item_label'        => (string)($row['item_label'] ?? ''),
+            'item_description'  => (string)($row['item_description'] ?? ''),
+            'item_category'     => (string)($row['item_category'] ?? ''),
+            'is_required'       => (int)($row['is_required'] ?? 0),
+            'is_checked'        => (int)($row['is_checked'] ?? 0),
+            'has_document'      => !empty($row['evidence_document_id']),
+            'original_filename' => $row['original_filename'] ?? null,
+            'uploaded_at'       => $row['uploaded_at'] ?? null,
+            'view_url'          => $filePath ? 'uploads/provider_documents/' . $filePath : null,
+        ];
+    }
+    mysqli_stmt_close($stmt);
+    json_ok(['items' => $items]);
+}
+
+if ($action === 'upload_my_document') {
+    if ($scope['domain'] !== 'medical') {
+        json_err('No aplica a este dominio', 403, 'wrong_domain');
+    }
+    if (!$scope['can_edit_self']) {
+        json_err('Sin permiso de edición en este perfil', 403, 'edit_forbidden');
+    }
+    if (!me_table_exists($conexion, 'provider_documents') || !me_table_exists($conexion, 'provider_verification_items')) {
+        json_err('Sistema de documentos no disponible', 503, 'tables_unavailable');
+    }
+
+    $scopeId = (int)$scope['scope_id'];
+    $itemId  = (int)($_POST['item_id'] ?? 0);
+
+    if ($itemId <= 0) {
+        json_err('item_id requerido', 422, 'item_id_required');
+    }
+
+    $chk = mysqli_prepare($conexion, 'SELECT id FROM provider_verification_items WHERE id = ? AND provider_id = ? LIMIT 1');
+    if (!$chk) { json_err('Error DB', 500, 'db_prepare_error'); }
+    mysqli_stmt_bind_param($chk, 'ii', $itemId, $scopeId);
+    mysqli_stmt_execute($chk);
+    $chkRes  = mysqli_stmt_get_result($chk);
+    $itemRow = $chkRes ? mysqli_fetch_assoc($chkRes) : null;
+    mysqli_stmt_close($chk);
+    if (!$itemRow) {
+        json_err('Item no encontrado o no pertenece a este prestador', 403, 'item_not_found');
+    }
+
+    if (!isset($_FILES['document']) || $_FILES['document']['error'] !== UPLOAD_ERR_OK) {
+        json_err('Archivo requerido', 422, 'file_required');
+    }
+    $file = $_FILES['document'];
+    if ($file['size'] > 10 * 1024 * 1024) {
+        json_err('El archivo excede 10MB', 422, 'file_too_large');
+    }
+
+    $allowedMimes = [
+        'application/pdf'    => 'pdf',
+        'image/jpeg'         => 'jpg',
+        'image/png'          => 'png',
+        'application/msword' => 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+    ];
+    $mime = $file['type'];
+    if (function_exists('finfo_open')) {
+        $fi = finfo_open(FILEINFO_MIME_TYPE);
+        if ($fi) {
+            $detected = finfo_file($fi, $file['tmp_name']);
+            finfo_close($fi);
+            if ($detected) { $mime = $detected; }
+        }
+    }
+    if (!isset($allowedMimes[$mime])) {
+        json_err('Formato no permitido. Use PDF, JPG, PNG, DOC', 422, 'invalid_file_type');
+    }
+    $ext      = $allowedMimes[$mime];
+    $origName = basename($file['name']);
+
+    $uploadDir = '../uploads/provider_documents/provider_' . $scopeId . '/';
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
+        json_err('Error creando directorio de subida', 500, 'upload_dir_error');
+    }
+
+    $filename = 'doc_' . $scopeId . '_' . $itemId . '_' . time() . '.' . $ext;
+    $filePath = 'provider_' . $scopeId . '/' . $filename;
+    $fullPath = $uploadDir . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
+        json_err('Error guardando archivo', 500, 'upload_failed');
+    }
+
+    $userId   = (int)($_SESSION['id_usuario'] ?? 0);
+    $fileSize = (int)$file['size'];
+
+    $ins = mysqli_prepare($conexion,
+        'INSERT INTO provider_documents
+         (provider_id, document_type, file_path, filename, original_filename,
+          file_size, mime_type, file_extension, uploaded_by, uploaded_at)
+         VALUES (?, \'other\', ?, ?, ?, ?, ?, ?, ?, NOW())'
+    );
+    if (!$ins) {
+        @unlink($fullPath);
+        json_err('Error preparando inserción', 500, 'db_prepare_error');
+    }
+    mysqli_stmt_bind_param($ins, 'isssissi', $scopeId, $filePath, $filename, $origName, $fileSize, $mime, $ext, $userId);
+    if (!mysqli_stmt_execute($ins)) {
+        $dbErr = mysqli_stmt_error($ins);
+        mysqli_stmt_close($ins);
+        @unlink($fullPath);
+        json_err('Error guardando metadata', 500, 'db_error', ['detail' => $dbErr]);
+    }
+    $docId = (int)mysqli_insert_id($conexion);
+    mysqli_stmt_close($ins);
+
+    $upd = mysqli_prepare($conexion,
+        "UPDATE provider_verification_items
+         SET evidence_document_id = ?, evidence_type = 'document'
+         WHERE id = ? AND provider_id = ?"
+    );
+    if ($upd) {
+        mysqli_stmt_bind_param($upd, 'iii', $docId, $itemId, $scopeId);
+        mysqli_stmt_execute($upd);
+        mysqli_stmt_close($upd);
+    }
+
+    json_ok([
+        'message'           => 'Documento subido correctamente',
+        'document_id'       => $docId,
+        'original_filename' => $origName,
+        'view_url'          => 'uploads/provider_documents/' . $filePath,
+    ]);
+}
+
 json_err('Acción inválida', 400, 'invalid_action');

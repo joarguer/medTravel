@@ -234,6 +234,9 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                                         <li role="presentation">
                                                             <a href="#tab-identidad" data-toggle="tab">Identidad visual</a>
                                                         </li>
+                                                        <li role="presentation">
+                                                            <a href="#tab-documentacion" data-toggle="tab" id="tab-documentacion-link">Documentación</a>
+                                                        </li>
                                                         <?php endif; ?>
                                                     </ul>
 
@@ -546,6 +549,39 @@ $description_label = ($domain_type === 'complementary') ? 'Notas del Proveedor' 
                                                                 </div>
                                                             </div>
                                                             <?php endif; ?>
+                                                        </div>
+                                                        <?php endif; ?>
+
+                                                        <!-- Tab 5: Documentación (medical only) -->
+                                                        <?php if ($domain_type === 'medical'): ?>
+                                                        <div class="tab-pane" id="tab-documentacion" role="tabpanel">
+                                                            <div class="row">
+                                                                <div class="col-md-12">
+                                                                    <p class="text-muted" style="font-size: 13px; margin-bottom: 12px;">
+                                                                        Sube los documentos requeridos para la verificación del prestador. El equipo MedTravel los revisará y marcará cada ítem como validado.
+                                                                    </p>
+                                                                    <div id="checklist-loading" class="text-center" style="padding: 24px 0; display: none;">
+                                                                        <i class="fa fa-spinner fa-spin fa-2x text-muted"></i>
+                                                                    </div>
+                                                                    <div id="checklist-unavailable" class="alert alert-warning" style="display: none;">
+                                                                        <i class="fa fa-exclamation-triangle"></i> El módulo de documentación no está disponible en este entorno.
+                                                                    </div>
+                                                                    <div id="checklist-error" class="alert alert-danger" style="display: none;"></div>
+                                                                    <table class="table table-condensed table-bordered" id="checklist-table" style="display: none;">
+                                                                        <thead>
+                                                                            <tr>
+                                                                                <th style="width: 34%">Documento</th>
+                                                                                <th style="width: 13%">Categoría</th>
+                                                                                <th style="width: 9%; text-align: center;">Req.</th>
+                                                                                <th style="width: 20%">Estado</th>
+                                                                                <th style="width: 24%">Acciones</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody id="checklist-tbody"></tbody>
+                                                                    </table>
+                                                                    <p class="text-muted" id="checklist-empty" style="display: none; font-style: italic; font-size: 13px;">No hay ítems de checklist para este prestador.</p>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                         <?php endif; ?>
 

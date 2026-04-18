@@ -262,6 +262,166 @@ function isValidURL(url) {
     return re.test(url);
 }
 
+// -----------------------------------------------------------------------
+// Checklist de documentación
+// -----------------------------------------------------------------------
+
+var checklistLoaded = false;
+
+$(document).ready(function() {
+    $('a[href="#tab-documentacion"]').on('shown.bs.tab', function() {
+        if (!checklistLoaded) {
+            loadMyChecklist();
+        }
+    });
+});
+
+function loadMyChecklist() {
+    $('#checklist-loading').show();
+    $('#checklist-table, #checklist-empty, #checklist-unavailable, #checklist-error').hide();
+
+    $.ajax({
+        url: 'ajax/mi_empresa.php',
+        type: 'POST',
+        data: { action: 'get_my_checklist' },
+        dataType: 'json',
+        success: function(response) {
+            $('#checklist-loading').hide();
+            if (!response.ok) {
+                $('#checklist-error').text(response.error || 'No fue posible cargar el checklist.').show();
+                return;
+            }
+            if (response.checklist_unavailable) {
+                $('#checklist-unavailable').show();
+                return;
+            }
+            if (!response.items || response.items.length === 0) {
+                $('#checklist-empty').show();
+                return;
+            }
+            renderChecklist(response.items);
+            checklistLoaded = true;
+        },
+        error: function() {
+            $('#checklist-loading').hide();
+            $('#checklist-error').text('Error de conexión al cargar el checklist.').show();
+        }
+    });
+}
+
+var categoryLabels = {
+    legal: 'Legal',
+    medical: 'Médico',
+    facilities: 'Instalaciones',
+    identity: 'Identidad',
+    insurance: 'Seguros',
+    other: 'Otro'
+};
+var categoryColors = {
+    legal: 'badge-primary',
+    medical: 'badge-info',
+    facilities: 'badge-warning',
+    identity: 'badge-default',
+    insurance: 'badge-success',
+    other: 'badge-default'
+};
+
+function renderChecklist(items) {
+    var $tbody = $('#checklist-tbody').empty();
+    items.forEach(function(item) {
+        var catLabel = categoryLabels[item.item_category] || item.item_category;
+        var catColor = categoryColors[item.item_category] || 'badge-default';
+        var reqBadge = item.is_required
+            ? '<span class="label label-danger">Sí</span>'
+            : '<span class="label label-default">No</span>';
+
+        var statusHtml;
+        if (item.is_checked) {
+            statusHtml = '<span class="label label-success"><i class="fa fa-check"></i> Validado</span>';
+        } else if (item.has_document) {
+            statusHtml = '<span class="label label-warning"><i class="fa fa-clock-o"></i> En revisión</span>';
+        } else {
+            statusHtml = item.is_required
+                ? '<span class="label label-danger"><i class="fa fa-times"></i> Faltante</span>'
+                : '<span class="label label-default"><i class="fa fa-minus"></i> Sin subir</span>';
+        }
+
+        var actionsHtml = '';
+        if (item.view_url) {
+            actionsHtml += '<a href="' + item.view_url + '" target="_blank" class="btn btn-xs btn-default" style="margin-right: 4px;" title="Ver archivo"><i class="fa fa-eye"></i></a>';
+        }
+        if (!item.is_checked) {
+            var label = item.has_document ? 'Reemplazar' : 'Subir';
+            actionsHtml += '<button type="button" class="btn btn-xs btn-primary btn-upload-doc" data-item-id="' + item.id + '">'
+                + '<i class="fa fa-upload"></i> ' + label + '</button>';
+        }
+        if (item.has_document && item.original_filename) {
+            actionsHtml += '<br><small class="text-muted" style="font-size: 11px;">' + $('<span>').text(item.original_filename).html() + '</small>';
+        }
+
+        var $tr = $('<tr>')
+            .append($('<td>').html('<strong>' + $('<span>').text(item.item_label).html() + '</strong><br>'
+                + '<small class="text-muted">' + $('<span>').text(item.item_description || '').html() + '</small>'))
+            .append($('<td>').html('<span class="badge ' + catColor + '">' + catLabel + '</span>'))
+            .append($('<td style="text-align:center;">').html(reqBadge))
+            .append($('<td>').html(statusHtml))
+            .append($('<td>').html(actionsHtml));
+
+        $tbody.append($tr);
+    });
+
+    $('#checklist-table').show();
+
+    $('#checklist-table').on('click', '.btn-upload-doc', function() {
+        var itemId = $(this).data('item-id');
+        triggerDocUpload(itemId);
+    });
+}
+
+function triggerDocUpload(itemId) {
+    var $input = $('<input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="display:none;">');
+    $('body').append($input);
+    $input.on('change', function() {
+        var file = this.files[0];
+        if (!file) { $input.remove(); return; }
+        uploadProviderDocument(itemId, file, function() { $input.remove(); });
+    });
+    $input.trigger('click');
+}
+
+function uploadProviderDocument(itemId, file, onDone) {
+    var formData = new FormData();
+    formData.append('action', 'upload_my_document');
+    formData.append('item_id', itemId);
+    formData.append('document', file);
+
+    toastr.info('Subiendo documento...', 'Procesando');
+
+    $.ajax({
+        url: 'ajax/mi_empresa.php',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: 'json',
+        success: function(response) {
+            if (response.ok) {
+                toastr.success(response.message || 'Documento subido', 'Éxito');
+                checklistLoaded = false;
+                loadMyChecklist();
+            } else {
+                toastr.error(response.error || 'Error al subir el documento', 'Error');
+            }
+        },
+        error: function() {
+            toastr.error('Error de conexión al subir el documento', 'Error');
+        },
+        complete: function() {
+            if (typeof onDone === 'function') { onDone(); }
+        }
+    });
+}
+
 function isValidProviderUrl(field, url) {
     if (!isValidURL(url)) {
         return false;
