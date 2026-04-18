@@ -430,7 +430,7 @@ if (!function_exists('is_role_admin_session') || !is_role_admin_session()) {
                             <div class="provider-section">
                                 <div class="row">
                                     <div class="col-md-12">
-                                        <h4 class="provider-section-title"><i class="fa fa-stethoscope"></i> D. Servicios iniciales</h4>
+                                        <h4 class="provider-section-title"><i class="fa fa-stethoscope"></i> D. Servicios habilitados del prestador</h4>
                                         <p class="provider-section-help">Selecciona los servicios médicos habilitados con los que arranca el prestador en MedTravel.</p>
                                     </div>
                                 </div>
