@@ -1136,8 +1136,7 @@
         $('#pms-photo').val(photoUrl);
         $('#pms-photo-file').val('');
         if (photoUrl) {
-            var previewSrc = (photoUrl.indexOf('://') === -1) ? '../../' + photoUrl : photoUrl;
-            $('#pms-photo-preview').attr('src', previewSrc);
+            $('#pms-photo-preview').attr('src', photoUrl);
             $('#pms-photo-preview-wrap').show();
         } else {
             $('#pms-photo-preview').attr('src', '');
