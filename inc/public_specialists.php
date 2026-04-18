@@ -82,10 +82,16 @@ if (!function_exists('mt_bio_safe_html')) {
         if ($raw === '') {
             return '';
         }
+        // Convert block-level closings (p, div) to <br> before stripping
+        // so summernote paragraph breaks are preserved as line breaks in cards
+        $raw = preg_replace('/<\/(p|div)\s*>/i', '<br>', $raw);
+        // Also collapse consecutive <br>s from back-to-back p/div into one
+        $raw = preg_replace('/(<br\s*\/?>\s*){2,}/i', '<br>', $raw);
         // Keep only safe inline tags; strip everything else
         $stripped = strip_tags($raw, '<b><strong><i><em><br>');
         // Remove attributes from allowed tags to prevent onclick/style injection
         $stripped = preg_replace('/<(b|strong|i|em|br)(\s[^>]*)?>/', '<$1>', $stripped);
+        $stripped = trim($stripped, " \t\n\r\0\x0B");
         $textOnly = strip_tags($stripped);
         if (mb_strlen($textOnly, 'UTF-8') > $maxTextLen) {
             // Too long: safe truncated plain text
