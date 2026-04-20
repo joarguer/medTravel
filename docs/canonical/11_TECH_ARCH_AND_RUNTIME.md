@@ -867,11 +867,31 @@ Regla de compatibilidad durante despliegue por fases:
 
 | Archivo                              | Rol                                                               |
 |--------------------------------------|-------------------------------------------------------------------|
-| `admin/booking_asistido.php`         | UI del agente: seleccion de canal, paciente, categoria/servicio/oferta |
-| `admin/ajax/booking_asistido.php`    | Backend: lookup/creacion de usuario, creacion de booking + items, envio de credenciales |
+| `admin/booking_asistido.php`         | UI del agente: seleccion de canal, paciente, categoria/servicio/oferta. Acepta GET prefill desde ConectarBot/Chatwoot (ver abajo). |
+| `admin/ajax/booking_asistido.php`    | Backend: lookup/creacion de usuario, creacion de booking + items, envio de credenciales. Persiste `cw_conversation_id`. |
 | `client/terms_gate.php`              | Pagina de aceptacion de Terminos para pacientes recien creados por agente |
 | `client/ajax/accept_terms.php`       | Endpoint AJAX: registra aceptacion de Terminos con auditoria       |
 | `sql/2026_04_02_agent_assisted_booking.sql` | Migracion iterativa con ADD COLUMN IF NOT EXISTS + backfill |
+| `sql/2026_04_20_booking_cw_conversation.sql` | Agrega columna `cw_conversation_id` a `booking_requests` |
+
+### Prefill desde ConectarBot/Chatwoot (desde 2026-04-20)
+
+El flujo de agent-assisted soporta precarga de datos del paciente vía parámetros GET firmados desde ConectarBot. El agente en Chatwoot aplica el label `booking_medtravel` a la conversación; ConectarBot genera la URL y la posta como nota privada; el agente hace clic y el formulario se abre precargado.
+
+| Parámetro GET | Campo de destino | Notas |
+|---|---|---|
+| `prefill_email` | `#patient_email` | Dispara lookup automático al cargar |
+| `prefill_name` | `#patient_name` | |
+| `prefill_phone` | `#patient_phone` | |
+| `prefill_channel` | `#agent_channel` (select) | Whitelist contra enum válido |
+| `cw_conversation_id` | Hidden → POST → `booking_requests.cw_conversation_id` | Trazabilidad |
+| `cw_contact_id` | Hidden → POST (no se persiste en DB) | |
+
+Invariantes:
+- El booking **no se crea automáticamente** por el label. El agente completa categoría/servicio/oferta y envía.
+- `creation_source` sigue siendo `'agent_assisted'`. `cw_conversation_id` es trazabilidad adicional.
+- Todos los parámetros GET son opcionales. Sin prefill el flujo funciona exactamente igual que antes.
+- Los parámetros se sanean con `trim(strip_tags(...))` antes de usarse en HTML.
 
 ## Social links y URLs publicas compartidas — `inc/public_site_links.php` (desde 2026-04-02)
 

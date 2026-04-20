@@ -1,5 +1,30 @@
 # Changelog Decisions
 
+## 2026-04-20 — feat(booking): prefill desde ConectarBot/Chatwoot en booking asistido + trazabilidad `cw_conversation_id`
+
+**Outcome**
+- `admin/booking_asistido.php` acepta parámetros GET opcionales para precargar el formulario cuando el agente llega desde una conversación de Chatwoot:
+  - `prefill_email`, `prefill_name`, `prefill_phone` → campos de paciente
+  - `prefill_channel` → preselecciona el canal (whitelist contra enum de `agent_channel`)
+  - `cw_conversation_id`, `cw_contact_id` → trazabilidad
+- Se muestra un banner verde identificando que los datos vienen de Chatwoot, con el número de conversación.
+- Si llega `prefill_email`, el lookup de cliente existente se dispara automáticamente al cargar la página.
+- `admin/ajax/booking_asistido.php` acepta `cw_conversation_id` y `cw_contact_id` en el POST de `action=submit`.
+- `booking_requests` guarda `cw_conversation_id` (VARCHAR 64, nullable) para trazabilidad end-to-end.
+- Migración: `sql/2026_04_20_booking_cw_conversation.sql` (`ALTER TABLE booking_requests ADD COLUMN IF NOT EXISTS cw_conversation_id`).
+
+**Decision**
+- El booking NO se crea automáticamente por ningún label de Chatwoot. El agente siempre abre el formulario y completa categoría / servicio / oferta manualmente.
+- El flujo sigue siendo `creation_source = 'agent_assisted'`. El campo `cw_conversation_id` es trazabilidad adicional, no cambia el pipeline.
+- Los parámetros GET se sanean con `trim(strip_tags(...))` antes de ser usados. No se necesita firma de URL porque la página exige sesión PHP con `PERM_BOOKING_ASSISTED_CREATE`; la nota privada en Chatwoot no es visible al contacto.
+- `cw_contact_id` se recibe en el POST pero no se persiste en `booking_requests` (es inmutable y recuperable vía `cw_conversation_id` desde la API de Chatwoot si se necesita).
+- La integración es unidireccional: ConectarBot genera la URL y la posta como nota privada; medtravel no llama de vuelta a ConectarBot ni a Chatwoot.
+
+**Archivos modificados**
+- `admin/booking_asistido.php`
+- `admin/ajax/booking_asistido.php`
+- `sql/2026_04_20_booking_cw_conversation.sql`
+
 ## 2026-04-18 — feat(provider-profile): redes institucionales del prestador en `providers` y señales públicas de credibilidad
 
 **Outcome**
