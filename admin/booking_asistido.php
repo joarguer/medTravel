@@ -10,6 +10,17 @@ if (!user_can(PERM_BOOKING_ASSISTED_CREATE)) {
 $assisted_booking_back_href = is_administrative_session() ? 'index.php' : 'booking_requests.php';
 $assisted_booking_back_label = is_administrative_session() ? 'Coordination' : 'Booking Requests';
 
+// GET prefill — populated by ConectarBot/Chatwoot integration (all optional)
+$ab_prefill_email   = trim(strip_tags((string)($_GET['prefill_email']   ?? '')));
+$ab_prefill_name    = trim(strip_tags((string)($_GET['prefill_name']    ?? '')));
+$ab_prefill_phone   = trim(strip_tags((string)($_GET['prefill_phone']   ?? '')));
+$ab_prefill_channel = trim(strip_tags((string)($_GET['prefill_channel'] ?? '')));
+$ab_cw_conversation = trim(strip_tags((string)($_GET['cw_conversation_id'] ?? '')));
+$ab_cw_contact      = trim(strip_tags((string)($_GET['cw_contact_id']   ?? '')));
+$ab_has_prefill     = ($ab_prefill_email !== '' || $ab_prefill_name !== '' || $ab_prefill_phone !== '');
+$ab_prefill_channel_valid = in_array($ab_prefill_channel, ['whatsapp','widget_chat','phone','email_inquiry','other'], true)
+    ? $ab_prefill_channel : '';
+
 function ab_page_has_column($conexion, $table, $column)
 {
     static $cache = [];
@@ -149,6 +160,18 @@ if ($categoriesRes) {
                             <strong>must personally accept the Terms &amp; Conditions</strong> on first login.
                         </div>
 
+                        <?php if ($ab_has_prefill): ?>
+                        <div class="alert alert-success alert-dismissable">
+                            <button type="button" class="close" data-dismiss="alert">×</button>
+                            <i class="fa fa-whatsapp"></i>
+                            <strong>Pre-filled from Chatwoot.</strong>
+                            Patient data has been loaded from the active conversation.
+                            <?php if ($ab_cw_conversation !== ''): ?>
+                                Conversation #<?php echo htmlspecialchars($ab_cw_conversation, ENT_QUOTES, 'UTF-8'); ?>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+
                         <div class="portlet light bordered">
                             <div class="portlet-title">
                                 <div class="caption">
@@ -168,11 +191,14 @@ if ($categoriesRes) {
                                                 <label>Channel <span class="required">*</span></label>
                                                 <select name="agent_channel" id="agent_channel" class="form-control" required>
                                                     <option value="">— Select channel —</option>
-                                                    <option value="whatsapp">WhatsApp</option>
-                                                    <option value="widget_chat">Widget Chat</option>
-                                                    <option value="phone">Phone call</option>
-                                                    <option value="email_inquiry">Email inquiry</option>
-                                                    <option value="other">Other</option>
+                                                    <?php
+                                                    $ab_channels = ['whatsapp' => 'WhatsApp', 'widget_chat' => 'Widget Chat', 'phone' => 'Phone call', 'email_inquiry' => 'Email inquiry', 'other' => 'Other'];
+                                                    foreach ($ab_channels as $ab_ch_val => $ab_ch_label):
+                                                    ?>
+                                                    <option value="<?php echo htmlspecialchars($ab_ch_val, ENT_QUOTES); ?>"<?php echo ($ab_prefill_channel_valid === $ab_ch_val) ? ' selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($ab_ch_label, ENT_QUOTES); ?>
+                                                    </option>
+                                                    <?php endforeach; ?>
                                                 </select>
                                             </div>
                                         </div>
@@ -185,7 +211,7 @@ if ($categoriesRes) {
                                             <div class="form-group">
                                                 <label>Email <span class="required">*</span></label>
                                                 <div class="input-group">
-                                                    <input type="email" name="email" id="patient_email" class="form-control" placeholder="patient@example.com" required />
+                                                    <input type="email" name="email" id="patient_email" class="form-control" placeholder="patient@example.com" required value="<?php echo htmlspecialchars($ab_prefill_email, ENT_QUOTES, 'UTF-8'); ?>" />
                                                     <span class="input-group-btn">
                                                         <button type="button" class="btn btn-default" id="btn-lookup-client" title="Look up existing client">
                                                             <i class="fa fa-search"></i>
@@ -198,7 +224,7 @@ if ($categoriesRes) {
                                         <div class="col-md-6">
                                             <div class="form-group">
                                                 <label>Full name <span class="required">*</span></label>
-                                                <input type="text" name="name" id="patient_name" class="form-control" placeholder="Jane Doe" required />
+                                                <input type="text" name="name" id="patient_name" class="form-control" placeholder="Jane Doe" required value="<?php echo htmlspecialchars($ab_prefill_name, ENT_QUOTES, 'UTF-8'); ?>" />
                                             </div>
                                         </div>
                                     </div>
@@ -206,7 +232,7 @@ if ($categoriesRes) {
                                         <div class="col-md-4">
                                             <div class="form-group">
                                                 <label>Phone</label>
-                                                <input type="text" name="phone" id="patient_phone" class="form-control" placeholder="+1 305 000 0000" />
+                                                <input type="text" name="phone" id="patient_phone" class="form-control" placeholder="+1 305 000 0000" value="<?php echo htmlspecialchars($ab_prefill_phone, ENT_QUOTES, 'UTF-8'); ?>" />
                                             </div>
                                         </div>
                                         <div class="col-md-4">
@@ -323,6 +349,13 @@ if ($categoriesRes) {
                                         The patient will be required to personally accept the Terms of Service on
                                         their first login. The agent cannot accept on their behalf.
                                     </div>
+
+                                    <?php if ($ab_cw_conversation !== ''): ?>
+                                    <input type="hidden" name="cw_conversation_id" value="<?php echo htmlspecialchars($ab_cw_conversation, ENT_QUOTES, 'UTF-8'); ?>" />
+                                    <?php endif; ?>
+                                    <?php if ($ab_cw_contact !== ''): ?>
+                                    <input type="hidden" name="cw_contact_id" value="<?php echo htmlspecialchars($ab_cw_contact, ENT_QUOTES, 'UTF-8'); ?>" />
+                                    <?php endif; ?>
 
                                     <div class="form-actions" style="margin-top:24px;">
                                         <button type="submit" class="btn btn-primary btn-lg" id="btn-submit-booking">
@@ -549,6 +582,13 @@ if ($categoriesRes) {
         var d = document.createElement('div');
         d.appendChild(document.createTextNode(str || ''));
         return d.innerHTML;
+    }
+
+    // Auto-lookup when page loads with prefill email from ConectarBot
+    var hasPrefill = <?php echo json_encode($ab_has_prefill); ?>;
+    var prefillEmail = <?php echo json_encode($ab_prefill_email); ?>;
+    if (hasPrefill && prefillEmail) {
+        document.getElementById('btn-lookup-client').click();
     }
 }());
 </script>

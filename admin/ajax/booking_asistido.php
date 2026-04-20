@@ -849,6 +849,7 @@ function ab_insert_booking_request_safe($conexion, array $baseData)
         'utm_campaign' => $baseData['utm_campaign'] ?? null,
         'utm_content' => $baseData['utm_content'] ?? null,
         'utm_term' => $baseData['utm_term'] ?? null,
+        'cw_conversation_id' => $baseData['cw_conversation_id'] ?? null,
         'status' => $baseData['status'] ?? 'pending',
         'created_at' => $baseData['created_at'] ?? date('Y-m-d H:i:s'),
     ];
@@ -1174,8 +1175,10 @@ if ($action === 'submit') {
     $specialRequest = trim((string)($_POST['special_request'] ?? ''));
     $timelineFrom   = trim((string)($_POST['timeline_from'] ?? ''));
     $timelineTo     = trim((string)($_POST['timeline_to'] ?? ''));
-    $agentChannel   = trim((string)($_POST['agent_channel'] ?? 'other'));
-    $agentUserId    = (int)($_SESSION['id_usuario'] ?? 0);
+    $agentChannel      = trim((string)($_POST['agent_channel'] ?? 'other'));
+    $agentUserId       = (int)($_SESSION['id_usuario'] ?? 0);
+    $cwConversationId  = trim((string)($_POST['cw_conversation_id'] ?? ''));
+    $cwContactId       = trim((string)($_POST['cw_contact_id'] ?? ''));
 
     // Offer IDs
     $rawOffers = $_POST['selected_offers'] ?? [];
@@ -1315,6 +1318,8 @@ if ($action === 'submit') {
         'utm_campaign' => '',
         'utm_content'  => '',
         'utm_term'     => '',
+        // ConectarBot/Chatwoot traceability
+        'cw_conversation_id' => $cwConversationId !== '' ? $cwConversationId : null,
     ];
 
     $bookingInsert = ab_insert_booking_request_safe($conexion, $brData);
