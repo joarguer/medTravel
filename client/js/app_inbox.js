@@ -2834,14 +2834,6 @@
             deferred.reject({ code: 'COMMISSION_REQUIRED', message: 'Commission payment required' });
             return deferred.promise();
         }
-        if (feeGateActive && String(currentThread.thread_type || '').toUpperCase() !== 'CARE') {
-            toastr.warning('Coordination fee required');
-            deferred.reject({
-                code: 'FEE_REQUIRED',
-                message: 'Messaging remains available here. The coordination fee may still unlock additional downstream steps.'
-            });
-            return deferred.promise();
-        }
 
         var pendingId = addPendingMessage(text);
         emitTyping('stop');
