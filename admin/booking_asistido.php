@@ -539,9 +539,13 @@ if ($categoriesRes) {
         resultEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Looking up…';
         $.post('ajax/booking_asistido.php', { action: 'lookup', email: email }, function (res) {
             if (res.found) {
-                resultEl.innerHTML = '<span class="text-success"><i class="fa fa-check"></i> Existing client: <strong>' + escHtml(res.nombre) + '</strong></span>';
-                if (res.nombre)   document.getElementById('patient_name').value  = res.nombre;
-                if (res.telefono) document.getElementById('patient_phone').value = res.telefono;
+                var infoExtra = res.telefono ? ' · ' + escHtml(res.telefono) : '';
+                resultEl.innerHTML = '<span class="text-success"><i class="fa fa-check"></i> Existing client: <strong>' + escHtml(res.nombre) + '</strong>' + infoExtra + '</span>';
+                // Only fill fields that are currently empty — never overwrite prefilled data
+                var nameField  = document.getElementById('patient_name');
+                var phoneField = document.getElementById('patient_phone');
+                if (res.nombre   && !nameField.value.trim())  nameField.value  = res.nombre;
+                if (res.telefono && !phoneField.value.trim()) phoneField.value = res.telefono;
             } else if (res.conflict) {
                 resultEl.innerHTML = '<span class="text-warning"><i class="fa fa-exclamation-triangle"></i> ' + escHtml(res.message || 'This email belongs to an internal MedTravel user.') + '</span>';
             } else {
