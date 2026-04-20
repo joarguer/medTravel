@@ -397,7 +397,7 @@ $home_specialists = mt_home_specialists_fetch($conexion, 8);
                     <div class="col-lg-10">
                         <div class="p-4 bg-light rounded">
                             <p class="mb-2"><strong>MedTravel is a coordination platform.</strong> We are not a hospital or clinic. Medical care is provided by independent specialists and providers.</p>
-                            <div class="d-flex gap-2 flex-wrap mt-3">
+                            <div class="d-flex justify-content-center gap-2 flex-wrap mt-3">
                                 <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
                                 <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
                                 <a href="/about.php" class="btn btn-outline-primary rounded-pill py-2 px-4">About MedTravel</a>

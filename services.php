@@ -227,7 +227,7 @@ function format_price($amount, $currency){
                         <div class="p-4 bg-white rounded border">
                             <p class="mb-2"><strong>Commercial clarity:</strong> MedTravel coordinates your case review, provider communication, and travel planning.</p>
                             <p class="mb-0"><strong>Clinical clarity:</strong> MedTravel is not a hospital or clinic. Medical care is provided by independent providers and specialists.</p>
-                            <div class="d-flex gap-2 flex-wrap mt-3">
+                            <div class="d-flex justify-content-center gap-2 flex-wrap mt-3">
                                 <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
                                 <a href="/specialists.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View specialists</a>
                                 <a href="/medical-travel-colombia.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Medical travel in Colombia</a>

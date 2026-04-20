@@ -44,7 +44,7 @@ $us_testimonials = mt_testimonials_fetch_approved($conexion, 2);
                     <h2 class="h4 mb-3">Built for U.S.-based patients and families</h2>
                     <p class="mb-2">MedTravel supports U.S.-based patients with bilingual communication, timeline guidance, and logistics coordination before travel.</p>
                     <p class="mb-3"><strong>Role clarity:</strong> MedTravel is a coordinator and facilitator, not a medical provider.</p>
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="d-flex justify-content-center gap-2 flex-wrap">
                         <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Request care coordination</a>
                         <a href="/medical-travel-colombia.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Medical Travel Colombia</a>
                         <a href="/contact.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Request assistance</a>
@@ -100,7 +100,7 @@ $us_testimonials = mt_testimonials_fetch_approved($conexion, 2);
             <div class="col-lg-10">
                 <div class="p-4 bg-light rounded">
                     <h2 class="h4 mb-3">Related pages</h2>
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="d-flex justify-content-center gap-2 flex-wrap">
                         <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
                         <a href="/how-medtravel-works.php" class="btn btn-outline-primary rounded-pill py-2 px-4">How MedTravel Works</a>
                         <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>

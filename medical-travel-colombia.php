@@ -44,7 +44,7 @@ $landing_testimonials = mt_testimonials_fetch_approved($conexion, 2);
                     <h2 class="h4 mb-3">National coordination path for Colombia</h2>
                     <p class="mb-2">MedTravel coordinates your case review journey, including communication, timeline planning, and logistics guidance.</p>
                     <p class="mb-3"><strong>Important:</strong> MedTravel is not a hospital or clinic. Clinical treatment is provided by independent providers and specialists.</p>
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="d-flex justify-content-center gap-2 flex-wrap">
                         <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Request care coordination</a>
                         <a href="/for-us-patients.php" class="btn btn-outline-primary rounded-pill py-2 px-4">For U.S. patients</a>
                         <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
@@ -100,7 +100,7 @@ $landing_testimonials = mt_testimonials_fetch_approved($conexion, 2);
             <div class="col-lg-10">
                 <div class="p-4 bg-light rounded">
                     <h2 class="h4 mb-3">Explore related resources</h2>
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="d-flex justify-content-center gap-2 flex-wrap">
                         <a href="/how-medtravel-works.php" class="btn btn-outline-primary rounded-pill py-2 px-4">How MedTravel Works</a>
                         <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
                         <a href="/for-us-patients.php" class="btn btn-outline-primary rounded-pill py-2 px-4">For U.S. Patients</a>

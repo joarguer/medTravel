@@ -134,7 +134,7 @@ include(__DIR__ . '/inc/include.php');
                         <li>Specialist publication is controlled by provider-side authorization settings.</li>
                         <li>MedTravel supports coordination, logistics, and patient communication across the journey.</li>
                     </ul>
-                    <div class="d-flex gap-2 flex-wrap mt-3">
+                    <div class="d-flex justify-content-center gap-2 flex-wrap mt-3">
                         <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Request care coordination</a>
                         <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
                         <a href="/medical-travel-colombia.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Medical travel in Colombia</a>

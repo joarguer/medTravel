@@ -44,7 +44,7 @@ $armenia_testimonials = mt_testimonials_fetch_approved($conexion, 2);
                     <h2 class="h4 mb-3">Armenia destination planning with clear coordination</h2>
                     <p class="mb-2">MedTravel helps structure planning for services in Armenia, Colombia, with focus on arrival timeline, destination readiness, and communication flow.</p>
                     <p class="mb-3"><strong>Medical boundary:</strong> MedTravel coordinates. Independent providers and specialists deliver treatment and clinical decisions.</p>
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="d-flex gap-2 flex-wrap justify-content-center">
                         <a href="/booking.php#booking-section" class="btn btn-primary rounded-pill py-2 px-4">Start your case review</a>
                         <a href="/contact.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Request assistance</a>
                         <a href="/services.php" class="btn btn-outline-primary rounded-pill py-2 px-4">View services</a>
@@ -94,7 +94,7 @@ $armenia_testimonials = mt_testimonials_fetch_approved($conexion, 2);
             <div class="col-lg-10">
                 <div class="p-4 bg-light rounded">
                     <h2 class="h4 mb-3">Continue exploring</h2>
-                    <div class="d-flex gap-2 flex-wrap">
+                    <div class="d-flex gap-2 flex-wrap justify-content-center">
                         <a href="/how-medtravel-works.php" class="btn btn-outline-primary rounded-pill py-2 px-4">How MedTravel Works</a>
                         <a href="/faq.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Read FAQ</a>
                         <a href="/medical-travel-colombia.php" class="btn btn-outline-primary rounded-pill py-2 px-4">Medical Travel Colombia</a>
