@@ -859,6 +859,7 @@ window.AdminInboxHelpConfig = {
 };
 </script>
 <script src="<?php echo htmlspecialchars(rtrim((string)MT_REALTIME_BASE_URL, '/'), ENT_QUOTES, 'UTF-8'); ?>/realtime/socket.io/socket.io.js"></script>
+<script src="../../assets/apps/js/inbox_message_presenter.js?v=1" type="text/javascript"></script>
 <script src="js/app_inbox.js?v=<?php echo rawurlencode($adminInboxJsVersion); ?>" type="text/javascript"></script>
 </body>
 </html>

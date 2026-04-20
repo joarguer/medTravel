@@ -38,6 +38,7 @@
     var freeMessageAllowed = true;
     var lastComposeNotice = '';
     var cancelledMeetingKeys = {};
+    var inboxPresenter = window.MedTravelInboxPresenter || null;
     var quickActions = {
         REQUEST_AVAILABILITY: 'Please confirm availability for my dates.',
         DATES_FLEXIBLE: 'My dates are flexible.',
@@ -1481,43 +1482,7 @@
         if (!normalized) {
             return '';
         }
-
-        if (normalized.indexOf('[REQUEST_INFO]') === 0) {
-            return 'Provider requested additional information';
-        }
-        if (normalized.indexOf('[PROPOSE_QUOTE]') === 0) {
-            return 'Provider sent an updated quote';
-        }
-        if (normalized.indexOf('[PROPOSAL_RESPONSE]') === 0) {
-            var proposalPayload = parseStructuredJson('[PROPOSAL_RESPONSE]', normalized);
-            var proposalAction = String(proposalPayload && proposalPayload.action_type || '').toUpperCase();
-            var proposalMeta = clientProposalResponseMeta(proposalAction);
-            return proposalMeta.label;
-        }
-
-        var rawText = String(raw || '').trim();
-        var isReplyPreview = rawText.indexOf('[REPLY]') === 0;
-        normalized = normalized.replace(/^\[(ACTION|REPLY)\]\s*/i, '').trim();
-        var previewMeta = parseReplyTokenAndNote(normalized);
-        var previewToken = String(previewMeta.token || '').trim();
-        var previewNote = String(previewMeta.note || '').replace(/\s+/g, ' ').trim();
-
-        if (previewNote) {
-            return previewNote.length > 110 ? previewNote.slice(0, 110).trim() + '…' : previewNote;
-        }
-
-        var mappedPreview = isReplyPreview
-            ? clientVisibleReplyLabel(previewToken)
-            : clientVisibleActionLabel(previewToken);
-        if (mappedPreview) {
-            return mappedPreview;
-        }
-
-        if (normalized.length > 110) {
-            normalized = normalized.slice(0, 110).trim() + '…';
-        }
-
-        return normalized;
+        return summarizeInboxText(raw, 110);
     }
 
     function cleanServiceTitle(rawTitle) {
@@ -2099,6 +2064,9 @@
                     : '';
                 return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries);
             }
+            if (isStructuredSystemText(text)) {
+                return renderStructuredSummaryFallback(text);
+            }
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
 
@@ -2167,7 +2135,36 @@
         return messageHtml;
     }
 
+    function summarizeInboxText(rawText, maxLength) {
+        if (inboxPresenter && typeof inboxPresenter.summarizeStructuredMessage === 'function') {
+            return inboxPresenter.summarizeStructuredMessage(rawText, {
+                audience: 'client',
+                maxLength: maxLength || 0
+            });
+        }
+        var text = String(rawText || '').replace(/\s+/g, ' ').trim();
+        if (!text) {
+            return '';
+        }
+        if (maxLength && text.length > maxLength) {
+            return text.slice(0, maxLength).trim() + '…';
+        }
+        return text;
+    }
+
+    function isStructuredSystemText(rawText) {
+        return /^\s*(?:\[(?:ACTION|REPLY)\]\s*)?\[[A-Z0-9_]+\]/i.test(String(rawText || ''));
+    }
+
+    function renderStructuredSummaryFallback(rawText) {
+        var summary = summarizeInboxText(rawText, 0) || 'System update';
+        return '<span style="white-space:pre-wrap;">' + esc(summary) + '</span>';
+    }
+
     function parseStructuredJson(prefix, fullText) {
+        if (inboxPresenter && typeof inboxPresenter.parseStructuredJson === 'function') {
+            return inboxPresenter.parseStructuredJson(prefix, fullText);
+        }
         var jsonText = stripStructuredPrefix(fullText, prefix);
         if (!jsonText) {
             return null;
@@ -2176,6 +2173,9 @@
     }
 
     function parseReplyTokenAndNote(text) {
+        if (inboxPresenter && typeof inboxPresenter.parseReplyTokenAndNote === 'function') {
+            return inboxPresenter.parseReplyTokenAndNote(text);
+        }
         var source = String(text || '').trim();
         if (!source) {
             return { token: '', note: '' };
@@ -2194,6 +2194,9 @@
     }
 
     function hasStructuredPrefix(fullText, prefix) {
+        if (inboxPresenter && typeof inboxPresenter.hasStructuredPrefix === 'function') {
+            return inboxPresenter.hasStructuredPrefix(fullText, prefix);
+        }
         var source = String(fullText || '').trim();
         if (!source) {
             return false;
@@ -2203,6 +2206,9 @@
     }
 
     function stripStructuredPrefix(fullText, prefix) {
+        if (inboxPresenter && typeof inboxPresenter.stripStructuredPrefix === 'function') {
+            return inboxPresenter.stripStructuredPrefix(fullText, prefix);
+        }
         var source = String(fullText || '').trim();
         if (!hasStructuredPrefix(source, prefix)) {
             return '';
@@ -2360,7 +2366,7 @@
     function renderMeetingProposalCard(fullText, actionable) {
         var proposal = parseMeetingProposalPayload(fullText);
         if (!proposal) {
-            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+            return renderStructuredSummaryFallback(fullText);
         }
         var integration = meetingIntegrationMeta(proposal.integrationMode);
 
@@ -2416,7 +2422,7 @@
     function renderRequestInfoCard(fullText) {
         var payload = parseStructuredJson('[REQUEST_INFO]', fullText);
         if (!payload) {
-            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+            return renderStructuredSummaryFallback(fullText);
         }
         var types = $.isArray(payload.required_types) ? payload.required_types : [];
         var note = String(payload.note || '').trim();
@@ -2445,7 +2451,7 @@
     function renderProposeQuoteCard(fullText) {
         var payload = parseStructuredJson('[PROPOSE_QUOTE]', fullText);
         if (!payload) {
-            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+            return renderStructuredSummaryFallback(fullText);
         }
         var amount = String(payload.amount || '').trim();
         var currency = String(payload.currency || 'USD').trim().toUpperCase() || 'USD';
@@ -2470,7 +2476,7 @@
     function renderProposalResponseCard(fullText) {
         var payload = parseStructuredJson('[PROPOSAL_RESPONSE]', fullText);
         if (!payload) {
-            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+            return renderStructuredSummaryFallback(fullText);
         }
         var actionType = String(payload.action_type || '').toUpperCase();
         var notes = String(payload.notes || '').trim();
@@ -2487,7 +2493,7 @@
     function renderMeetingConfirmedCard(fullText) {
         var payload = parseStructuredJson('[MEETING_CONFIRMED]', fullText);
         if (!payload) {
-            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+            return renderStructuredSummaryFallback(fullText);
         }
         var integration = meetingIntegrationMeta(payload.integration_mode || (payload.meet_url ? 'calendar_plus_meet' : (payload.html_link ? 'calendar_only' : 'internal_only')));
         var isCancelled = isMeetingCancelledPayload(payload);
@@ -2521,7 +2527,7 @@
     function renderMeetingCancelledCard(fullText) {
         var payload = parseStructuredJson('[MEETING_CANCELLED]', fullText);
         if (!payload) {
-            return '<span style="white-space:pre-wrap;">' + esc(fullText) + '</span>';
+            return renderStructuredSummaryFallback(fullText);
         }
         var integration = meetingIntegrationMeta(payload.integration_mode || 'calendar_plus_meet');
         var cancelledByRole = String(payload.cancelled_by_role || '').trim().toUpperCase();

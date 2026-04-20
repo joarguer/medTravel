@@ -61,6 +61,7 @@
         FINAL_APPROVED: true,
         FINAL_NOT_ELIGIBLE: true
     };
+    var inboxPresenter = window.MedTravelInboxPresenter || null;
 
     function adminVisibleQuickReplyLabel(rawValue) {
         var normalized = String(rawValue || '').trim().split(/\r?\n/, 1)[0].toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
@@ -101,6 +102,9 @@
     }
 
     function parseReplyTokenAndNote(text) {
+        if (inboxPresenter && typeof inboxPresenter.parseReplyTokenAndNote === 'function') {
+            return inboxPresenter.parseReplyTokenAndNote(text);
+        }
         var source = String(text || '').trim();
         if (!source) {
             return { token: '', note: '' };
@@ -112,6 +116,32 @@
             token: token,
             note: note
         };
+    }
+
+    function summarizeInboxText(rawText, maxLength) {
+        if (inboxPresenter && typeof inboxPresenter.summarizeStructuredMessage === 'function') {
+            return inboxPresenter.summarizeStructuredMessage(rawText, {
+                audience: 'admin',
+                maxLength: maxLength || 0
+            });
+        }
+        var text = String(rawText || '').replace(/\s+/g, ' ').trim();
+        if (!text) {
+            return '';
+        }
+        if (maxLength && text.length > maxLength) {
+            return text.slice(0, maxLength).trim() + '…';
+        }
+        return text;
+    }
+
+    function isStructuredSystemText(rawText) {
+        return /^\s*(?:\[(?:ACTION|REPLY)\]\s*)?\[[A-Z0-9_]+\]/i.test(String(rawText || ''));
+    }
+
+    function renderStructuredSummaryFallback(rawText) {
+        var summary = summarizeInboxText(rawText, 0) || 'Actualización del sistema';
+        return '<span style="white-space:pre-wrap;">' + esc(summary) + '</span>';
     }
 
     function esc(value) {
@@ -239,7 +269,7 @@
     function renderMeetingProposalCard(text) {
         var proposal = parseMeetingProposalPayload(text);
         if (!proposal) {
-            return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
+            return renderStructuredSummaryFallback(text);
         }
         var integration = meetingIntegrationMeta(proposal.integrationMode);
 
@@ -1126,6 +1156,9 @@
     }
 
     function parseStructuredJson(prefix, text) {
+        if (inboxPresenter && typeof inboxPresenter.parseStructuredJson === 'function') {
+            return inboxPresenter.parseStructuredJson(prefix, text);
+        }
         var raw = String(text || '').trim();
         if (raw.indexOf(prefix) !== 0) {
             return null;
@@ -1143,12 +1176,13 @@
     }
 
     function renderStructuredParseFallback(prefix) {
+        var humanTitle = summarizeInboxText(prefix, 0) || 'Actualización del sistema';
         return '<div class="admin-structured-card">' +
             '<div class="admin-structured-header">' +
-                '<span class="admin-structured-title">Structured message</span>' +
-                '<span class="label label-default admin-structured-badge">' + esc(prefix) + '</span>' +
+                '<span class="admin-structured-title">' + esc(humanTitle) + '</span>' +
+                '<span class="label label-default admin-structured-badge">Sistema</span>' +
             '</div>' +
-            '<div class="admin-structured-body">Unable to parse this message.</div>' +
+            '<div class="admin-structured-body">Se muestra un resumen limpio porque no se pudo interpretar el detalle técnico.</div>' +
         '</div>';
     }
 
@@ -1459,6 +1493,9 @@
                     : '';
                 return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries);
             }
+            if (isStructuredSystemText(text)) {
+                return renderStructuredSummaryFallback(text);
+            }
             return '<span style="white-space:pre-wrap;">' + esc(text) + '</span>';
         }
 
@@ -1602,62 +1639,7 @@
         if (!normalized) {
             return '';
         }
-
-        if (normalized.indexOf('[REQUEST_INFO]') === 0) {
-            return 'solicitó información adicional';
-        }
-        if (normalized.indexOf('[PROPOSE_QUOTE]') === 0) {
-            return 'envió ajuste de propuesta';
-        }
-        if (normalized.indexOf('[PROPOSAL_RESPONSE]') === 0) {
-            var proposalPayload = parseStructuredJson('[PROPOSAL_RESPONSE]', normalized);
-            var proposalAction = String(proposalPayload && proposalPayload.action_type || '').toUpperCase();
-            if (proposalAction === 'ACCEPT_PROPOSAL') return 'aceptó la propuesta';
-            if (proposalAction === 'REQUEST_CHANGES') return 'solicitó cambios';
-            if (proposalAction === 'REJECT_PROPOSAL') return 'rechazó la propuesta';
-            if (proposalAction === 'DOCS_NOT_AVAILABLE') return 'indicó documentos no disponibles';
-            return 'envió respuesta a la propuesta';
-        }
-
-        var rawText = String(raw || '').trim();
-        var isReplyPreview = rawText.indexOf('[REPLY]') === 0;
-        normalized = normalized.replace(/^\[(ACTION|REPLY)\]\s*/i, '').trim();
-        var previewMeta = parseReplyTokenAndNote(normalized);
-        var previewToken = String(previewMeta.token || '').toUpperCase().replace(/\s+/g, '_');
-        var previewNote = String(previewMeta.note || '').replace(/\s+/g, ' ').trim();
-        if (previewNote) {
-            return previewNote.length > 110 ? previewNote.slice(0, 110).trim() + '…' : previewNote;
-        }
-
-        var quickReplyPreviewMap = {
-            DATES_AVAILABLE: 'fechas disponibles',
-            DATES_NOT_AVAILABLE: 'fechas no disponibles',
-            REQUEST_MEDICAL_HISTORY: 'provider solicitó historia clínica',
-            REQUEST_LABS: 'provider solicitó laboratorios',
-            REQUEST_IMAGING: 'provider solicitó imágenes diagnósticas',
-            REQUEST_PHOTOS: 'provider solicitó fotografías clínicas',
-            FINAL_APPROVED: 'provider indicó caso viable',
-            FINAL_NOT_ELIGIBLE: 'provider indicó caso no viable'
-        };
-        if (isReplyPreview && quickReplyPreviewMap[previewToken]) {
-            return quickReplyPreviewMap[previewToken];
-        }
-
-        var actionPreviewMap = {
-            FINAL_ACCEPT_AND_PAY: 'confirmó que desea continuar',
-            FINAL_DECLINE: 'declinó continuar',
-            PROPOSE_NEW_DATES: 'solicitó nuevas fechas'
-        };
-        if (!isReplyPreview && actionPreviewMap[previewToken]) {
-            return actionPreviewMap[previewToken];
-        }
-
-        var previewText = String(raw || '').replace(/\s+/g, ' ').trim();
-        if (previewText.length > 110) {
-            previewText = previewText.slice(0, 110).trim() + '…';
-        }
-
-        return previewText;
+        return summarizeInboxText(raw, 110);
     }
 
     function cleanServiceTitle(rawTitle) {
