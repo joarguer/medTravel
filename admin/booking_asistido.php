@@ -17,7 +17,27 @@ $ab_prefill_phone   = trim(strip_tags((string)($_GET['prefill_phone']   ?? '')))
 $ab_prefill_channel = trim(strip_tags((string)($_GET['prefill_channel'] ?? '')));
 $ab_cw_conversation = trim(strip_tags((string)($_GET['cw_conversation_id'] ?? '')));
 $ab_cw_contact      = trim(strip_tags((string)($_GET['cw_contact_id']   ?? '')));
-$ab_has_prefill     = ($ab_prefill_email !== '' || $ab_prefill_name !== '' || $ab_prefill_phone !== '');
+// v2 params
+$ab_prefill_city    = trim(strip_tags((string)($_GET['prefill_city']    ?? '')));
+$ab_prefill_country = trim(strip_tags((string)($_GET['prefill_country'] ?? '')));
+$ab_prefill_company = trim(strip_tags((string)($_GET['prefill_company'] ?? '')));
+$ab_prefill_bio     = trim(strip_tags((string)($_GET['prefill_bio']     ?? '')));
+// Derived: origin = city [· country]
+$ab_prefill_origin = $ab_prefill_city !== '' && $ab_prefill_country !== ''
+    ? $ab_prefill_city . ' · ' . $ab_prefill_country
+    : ($ab_prefill_city !== '' ? $ab_prefill_city : $ab_prefill_country);
+// Derived: special_request = [Company: X\n\n] bio
+$ab_prefill_special = '';
+if ($ab_prefill_company !== '') {
+    $ab_prefill_special = 'Company: ' . $ab_prefill_company;
+    if ($ab_prefill_bio !== '') {
+        $ab_prefill_special .= "\n\n" . $ab_prefill_bio;
+    }
+} elseif ($ab_prefill_bio !== '') {
+    $ab_prefill_special = $ab_prefill_bio;
+}
+$ab_has_prefill     = ($ab_prefill_email !== '' || $ab_prefill_name !== '' || $ab_prefill_phone !== ''
+    || $ab_prefill_city !== '' || $ab_prefill_country !== '' || $ab_prefill_company !== '' || $ab_prefill_bio !== '');
 $ab_prefill_channel_valid = in_array($ab_prefill_channel, ['whatsapp','widget_chat','phone','email_inquiry','other'], true)
     ? $ab_prefill_channel : '';
 
@@ -238,7 +258,7 @@ if ($categoriesRes) {
                                         <div class="col-md-4">
                                             <div class="form-group">
                                                 <label>Origin (city/state)</label>
-                                                <input type="text" name="origin" id="patient_origin" class="form-control" placeholder="Miami, FL" />
+                                                <input type="text" name="origin" id="patient_origin" class="form-control" placeholder="Miami, FL" value="<?php echo htmlspecialchars($ab_prefill_origin, ENT_QUOTES, 'UTF-8'); ?>" />
                                             </div>
                                         </div>
                                         <div class="col-md-4">
@@ -273,7 +293,7 @@ if ($categoriesRes) {
                                     </div>
                                     <div class="form-group">
                                         <label>Patient notes / special requests</label>
-                                        <textarea name="special_request" id="patient_special_request" class="form-control" rows="3" placeholder="Medical history, preferences or special requirements…"></textarea>
+                                        <textarea name="special_request" id="patient_special_request" class="form-control" rows="3" placeholder="Medical history, preferences or special requirements…"><?php echo htmlspecialchars($ab_prefill_special, ENT_QUOTES, 'UTF-8'); ?></textarea>
                                     </div>
 
                                     <!-- Service selection — canonical: category → service → offers -->
