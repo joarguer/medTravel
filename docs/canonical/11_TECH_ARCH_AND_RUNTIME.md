@@ -884,6 +884,10 @@ El flujo de agent-assisted soporta precarga de datos del paciente vía parámetr
 | `prefill_name` | `#patient_name` | |
 | `prefill_phone` | `#patient_phone` | |
 | `prefill_channel` | `#agent_channel` (select) | Whitelist contra enum válido |
+| `prefill_city` | `#patient_origin` | Solo, o combinado con country |
+| `prefill_country` | `#patient_origin` | Combinado: "city · country" |
+| `prefill_bio` | `#patient_special_request` | Texto libre |
+| `prefill_company` | `#patient_special_request` | Prepend "Company: X" antes del bio; sin columna propia en DB |
 | `cw_conversation_id` | Hidden → POST → `booking_requests.cw_conversation_id` | Trazabilidad |
 | `cw_contact_id` | Hidden → POST (no se persiste en DB) | |
 
@@ -892,6 +896,8 @@ Invariantes:
 - `creation_source` sigue siendo `'agent_assisted'`. `cw_conversation_id` es trazabilidad adicional.
 - Todos los parámetros GET son opcionales. Sin prefill el flujo funciona exactamente igual que antes.
 - Los parámetros se sanean con `trim(strip_tags(...))` antes de usarse en HTML.
+- El auto-lookup solo rellena `patient_name` y `patient_phone` si el campo está vacío; nunca pisa datos prefillados.
+- `prefill_company` no tiene columna en `booking_requests`; va a `special_request` como contexto hasta que haya caso de uso que justifique campo propio.
 
 ## Social links y URLs publicas compartidas — `inc/public_site_links.php` (desde 2026-04-02)
 
