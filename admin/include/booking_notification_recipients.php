@@ -356,3 +356,200 @@ if (!function_exists('booking_notification_resolve_medical_offer_recipient')) {
         return $result;
     }
 }
+
+if (!function_exists('booking_notification_fetch_service_provider_scoped_user')) {
+    function booking_notification_fetch_service_provider_scoped_user($conexion, $serviceProviderId)
+    {
+        $serviceProviderId = (int)$serviceProviderId;
+        if ($serviceProviderId <= 0
+            || !booking_notification_table_has_column($conexion, 'usuarios', 'id')
+            || !booking_notification_table_has_column($conexion, 'usuarios', 'email')
+            || !booking_notification_table_has_column($conexion, 'usuarios', 'service_provider_id')
+        ) {
+            return null;
+        }
+
+        $select = [
+            'u.id',
+            booking_notification_table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
+            booking_notification_table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
+            booking_notification_table_has_column($conexion, 'usuarios', 'email') ? 'u.email' : "'' AS email",
+            booking_notification_table_has_column($conexion, 'usuarios', 'activo') ? 'u.activo' : '1 AS activo',
+            'u.service_provider_id',
+            booking_notification_table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
+            booking_notification_table_has_column($conexion, 'usuarios', 'rol') ? 'u.rol' : 'NULL AS rol',
+        ];
+
+        $sql = 'SELECT ' . implode(', ', $select) . '
+                  FROM usuarios u
+                 WHERE u.service_provider_id = ?
+                   AND u.id <> 1';
+        if (booking_notification_table_has_column($conexion, 'usuarios', 'is_deleted')) {
+            $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
+        }
+        if (booking_notification_table_has_column($conexion, 'usuarios', 'activo')) {
+            $sql .= ' AND COALESCE(u.activo, 0) = 1';
+        }
+        $sql .= " AND u.email IS NOT NULL AND u.email <> ''";
+
+        $rolePriority = booking_notification_table_has_column($conexion, 'usuarios', 'role_id')
+            ? 'CASE WHEN u.role_id = ' . (defined('ROLE_COMPLEMENTARY_ADMIN') ? (int)ROLE_COMPLEMENTARY_ADMIN : 13) . ' THEN 0 ELSE 5 END'
+            : '5';
+        $sql .= ' ORDER BY ' . $rolePriority . ', u.id ASC LIMIT 1';
+
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return null;
+        }
+        mysqli_stmt_bind_param($stmt, 'i', $serviceProviderId);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        mysqli_stmt_close($stmt);
+        if (!$row) {
+            return null;
+        }
+
+        $row['id'] = (int)($row['id'] ?? 0);
+        $row['service_provider_id'] = (int)($row['service_provider_id'] ?? 0);
+        $row['email'] = strtolower(trim((string)($row['email'] ?? '')));
+        $row['nombre'] = trim((string)($row['nombre'] ?? ''));
+        $row['usuario'] = trim((string)($row['usuario'] ?? ''));
+        return $row;
+    }
+}
+
+if (!function_exists('booking_notification_fetch_service_provider_contact_row')) {
+    function booking_notification_fetch_service_provider_contact_row($conexion, $serviceProviderId)
+    {
+        $serviceProviderId = (int)$serviceProviderId;
+        if ($serviceProviderId <= 0
+            || !booking_notification_table_exists($conexion, 'service_providers')
+            || !booking_notification_table_has_column($conexion, 'service_providers', 'id')
+            || !booking_notification_table_has_column($conexion, 'service_providers', 'contact_email')
+        ) {
+            return null;
+        }
+
+        $select = [
+            'sp.id',
+            booking_notification_table_has_column($conexion, 'service_providers', 'provider_name') ? 'sp.provider_name' : "'' AS provider_name",
+            booking_notification_table_has_column($conexion, 'service_providers', 'contact_name') ? 'sp.contact_name' : "'' AS contact_name",
+            'sp.contact_email',
+        ];
+
+        $sql = 'SELECT ' . implode(', ', $select) . '
+                  FROM service_providers sp
+                 WHERE sp.id = ?';
+        if (booking_notification_table_has_column($conexion, 'service_providers', 'is_deleted')) {
+            $sql .= ' AND COALESCE(sp.is_deleted, 0) = 0';
+        }
+        if (booking_notification_table_has_column($conexion, 'service_providers', 'is_active')) {
+            $sql .= ' AND COALESCE(sp.is_active, 0) = 1';
+        }
+        $sql .= ' LIMIT 1';
+
+        $stmt = mysqli_prepare($conexion, $sql);
+        if (!$stmt) {
+            return null;
+        }
+        mysqli_stmt_bind_param($stmt, 'i', $serviceProviderId);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        mysqli_stmt_close($stmt);
+        if (!$row) {
+            return null;
+        }
+
+        $row['id'] = (int)($row['id'] ?? 0);
+        $row['provider_name'] = trim((string)($row['provider_name'] ?? ''));
+        $row['contact_name'] = trim((string)($row['contact_name'] ?? ''));
+        $row['contact_email'] = strtolower(trim((string)($row['contact_email'] ?? '')));
+        return $row;
+    }
+}
+
+if (!function_exists('booking_notification_fetch_item_complementary_context')) {
+    function booking_notification_fetch_item_complementary_context($conexion, $itemId)
+    {
+        $itemId = (int)$itemId;
+        if ($itemId <= 0 || !booking_notification_table_exists($conexion, 'booking_request_items')) {
+            return [];
+        }
+
+        $select = [];
+        if (booking_notification_table_has_column($conexion, 'booking_request_items', 'service_provider_id')) {
+            $select[] = 'service_provider_id';
+        }
+        if (empty($select)) {
+            return [];
+        }
+
+        $stmt = mysqli_prepare($conexion, 'SELECT ' . implode(', ', $select) . ' FROM booking_request_items WHERE id = ? LIMIT 1');
+        if (!$stmt) {
+            return [];
+        }
+        mysqli_stmt_bind_param($stmt, 'i', $itemId);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $row = $res ? mysqli_fetch_assoc($res) : null;
+        mysqli_stmt_close($stmt);
+        return is_array($row) ? $row : [];
+    }
+}
+
+if (!function_exists('booking_notification_resolve_complementary_service_recipient')) {
+    function booking_notification_resolve_complementary_service_recipient($conexion, $itemId, array $item = [])
+    {
+        $itemId = (int)$itemId;
+        $context = array_merge(
+            booking_notification_fetch_item_complementary_context($conexion, $itemId),
+            $item
+        );
+        $serviceProviderId = (int)($context['service_provider_id'] ?? 0);
+
+        $result = [
+            'ok' => false,
+            'email' => '',
+            'recipient_type' => '',
+            'source' => '',
+            'actor_id' => 0,
+            'item_id' => $itemId,
+            'service_provider_id' => $serviceProviderId,
+            'skip_reason' => 'complementary_service_recipient_not_found',
+        ];
+
+        if ($serviceProviderId > 0) {
+            $scopedUser = booking_notification_fetch_service_provider_scoped_user($conexion, $serviceProviderId);
+            $scopedEmail = strtolower(trim((string)($scopedUser['email'] ?? '')));
+            if (filter_var($scopedEmail, FILTER_VALIDATE_EMAIL)) {
+                $result['ok'] = true;
+                $result['email'] = $scopedEmail;
+                $result['recipient_type'] = 'service_provider_scoped_user';
+                $result['source'] = 'usuarios.service_provider_id';
+                $result['actor_id'] = (int)($scopedUser['id'] ?? 0);
+                $result['skip_reason'] = '';
+                return $result;
+            }
+
+            $contactRow = booking_notification_fetch_service_provider_contact_row($conexion, $serviceProviderId);
+            $contactEmail = strtolower(trim((string)($contactRow['contact_email'] ?? '')));
+            if (filter_var($contactEmail, FILTER_VALIDATE_EMAIL)) {
+                $result['ok'] = true;
+                $result['email'] = $contactEmail;
+                $result['recipient_type'] = 'service_provider_contact';
+                $result['source'] = 'service_providers.contact_email';
+                $result['actor_id'] = (int)($contactRow['id'] ?? $serviceProviderId);
+                $result['skip_reason'] = '';
+                return $result;
+            }
+        }
+
+        $result['skip_reason'] = $serviceProviderId > 0
+            ? 'complementary_service_user_contact_email_not_found'
+            : 'complementary_service_provider_missing';
+
+        return $result;
+    }
+}

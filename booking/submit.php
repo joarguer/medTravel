@@ -677,6 +677,11 @@ function booking_build_provider_case_url_local($requestId, $itemId)
     return 'https://medtravel.com.co/admin/my_booking_requests.php?item_id=' . (int)$itemId . '&request_id=' . (int)$requestId;
 }
 
+function booking_build_complementary_case_url_local($requestId, $itemId)
+{
+    return 'https://medtravel.com.co/admin/my_booking_requests.php?item_id=' . (int)$itemId . '&request_id=' . (int)$requestId;
+}
+
 function booking_notify_provider_new_request_local($conexion, $bookingRequestId, $item)
 {
     $bookingRequestId = (int)$bookingRequestId;
@@ -772,6 +777,99 @@ function booking_notify_provider_new_request_local($conexion, $bookingRequestId,
             'footer_note' => 'Please handle the case through your MedTravel portal.',
             'sender_label' => 'MedTravel Coordination Team',
             'event' => 'booking_medical_offer_created',
+            'recipient_source' => (string)($recipient['source'] ?? ''),
+        ],
+        $conexion
+    );
+}
+
+function booking_notify_complementary_new_request_local($conexion, $bookingRequestId, $item)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    $itemId = (int)($item['item_id'] ?? 0);
+    if ($bookingRequestId <= 0 || $itemId <= 0) {
+        return ['success' => false, 'error' => 'invalid_item'];
+    }
+
+    $recipient = booking_notification_resolve_complementary_service_recipient($conexion, $itemId, (array)$item);
+    $providerEmail = trim((string)($recipient['email'] ?? ''));
+    if (!filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
+        return [
+            'success' => false,
+            'error' => (string)($recipient['skip_reason'] ?? 'complementary_service_recipient_not_found'),
+            'recipient' => $recipient,
+        ];
+    }
+
+    $timelineExpr = table_has_column_local($conexion, 'booking_requests', 'timeline') ? 'br.timeline' : "''";
+    $detailSql = "SELECT
+                    bri.service_provider_id,
+                    br.name AS client_name,
+                    br.email AS client_email,
+                    " . (table_has_column_local($conexion, 'booking_requests', 'phone') ? 'br.phone' : "''") . " AS client_phone,
+                    br.destination,
+                    {$timelineExpr} AS timeline,
+                    COALESCE(NULLIF(ms.service_name, ''), CONCAT('Item #', bri.id)) AS item_name
+                FROM booking_request_items bri
+                INNER JOIN booking_requests br ON br.id = bri.booking_request_id
+                LEFT JOIN medtravel_services_catalog ms ON ms.id = bri.medtravel_service_id
+                WHERE bri.id = ? AND bri.booking_request_id = ?
+                LIMIT 1";
+    $stmtDetail = mysqli_prepare($conexion, $detailSql);
+    if ($stmtDetail) {
+        mysqli_stmt_bind_param($stmtDetail, 'ii', $itemId, $bookingRequestId);
+        if (mysqli_stmt_execute($stmtDetail)) {
+            $resDetail = mysqli_stmt_get_result($stmtDetail);
+            $detailRow = $resDetail ? mysqli_fetch_assoc($resDetail) : null;
+            if (is_array($detailRow)) {
+                $item = array_merge($detailRow, $item);
+            }
+        }
+        mysqli_stmt_close($stmtDetail);
+    }
+
+    $requestMeta = interaction_email_request_meta($conexion, 'ITEM', $bookingRequestId, $itemId);
+    $itemTitle = trim((string)($requestMeta['title'] ?? ''));
+    if ($itemTitle === '') {
+        $itemTitle = trim((string)($item['item_name'] ?? 'Item #' . $itemId));
+    }
+    $patientName = trim((string)($item['client_name'] ?? 'Paciente'));
+    $patientEmail = trim((string)($item['client_email'] ?? ''));
+    $patientPhone = trim((string)($item['client_phone'] ?? ''));
+    $destination = trim((string)($item['destination'] ?? ''));
+    $timeline = trim((string)($item['timeline'] ?? ''));
+    $caseUrl = booking_build_complementary_case_url_local($bookingRequestId, $itemId);
+    $subject = 'New complementary booking request received - case #' . $bookingRequestId;
+
+    $contentHtml = '<p>A new complementary booking request has been created and is waiting for provider review.</p>'
+        . '<p style="margin:0 0 6px 0;"><strong>Case:</strong> ' . escape_html_local($itemTitle) . '</p>'
+        . '<p style="margin:0 0 6px 0;"><strong>Patient:</strong> ' . escape_html_local($patientName) . '</p>'
+        . ($patientEmail !== '' ? '<p style="margin:0 0 6px 0;"><strong>Email:</strong> ' . escape_html_local($patientEmail) . '</p>' : '')
+        . ($patientPhone !== '' ? '<p style="margin:0 0 6px 0;"><strong>Phone:</strong> ' . escape_html_local($patientPhone) . '</p>' : '')
+        . ($destination !== '' ? '<p style="margin:0 0 6px 0;"><strong>Destination:</strong> ' . escape_html_local($destination) . '</p>' : '')
+        . ($timeline !== '' ? '<p style="margin:0 0 16px 0;"><strong>Timeline:</strong> ' . escape_html_local($timeline) . '</p>' : '')
+        . '<p>Please open the provider portal to review the service details and continue the workflow.</p>';
+
+    $textBody = "A new complementary booking request has been created and is waiting for provider review.\n\n"
+        . 'Case: ' . $itemTitle . "\n"
+        . 'Patient: ' . $patientName . "\n"
+        . ($patientEmail !== '' ? 'Email: ' . $patientEmail . "\n" : '')
+        . ($patientPhone !== '' ? 'Phone: ' . $patientPhone . "\n" : '')
+        . ($destination !== '' ? 'Destination: ' . $destination . "\n" : '')
+        . ($timeline !== '' ? 'Timeline: ' . $timeline . "\n" : '')
+        . "\nOpen case: " . $caseUrl;
+
+    return send_interaction_email(
+        $providerEmail,
+        $subject,
+        $contentHtml,
+        $textBody,
+        [
+            'preheader' => 'A new complementary case is waiting for provider review in MedTravel.',
+            'cta' => ['text' => 'Open case in MedTravel', 'url' => $caseUrl],
+            'footer_note' => 'Please handle the case through your MedTravel portal.',
+            'sender_label' => 'MedTravel Coordination Team',
+            'event' => 'booking_complementary_service_created',
             'recipient_source' => (string)($recipient['source'] ?? ''),
         ],
         $conexion
@@ -2344,10 +2442,14 @@ if ($saved && $booking_request_id > 0) {
         $_SESSION['booking_submission_summary'] = $summaryPayload;
 
         foreach ($createdItems as $createdItem) {
-            if (($createdItem['item_type'] ?? '') !== 'medical_offer') {
+            $itemType = (string)($createdItem['item_type'] ?? '');
+            if ($itemType === 'medical_offer') {
+                $notifyResult = booking_notify_provider_new_request_local($conexion, $booking_request_id, $createdItem);
+            } elseif ($itemType === 'complementary_service') {
+                $notifyResult = booking_notify_complementary_new_request_local($conexion, $booking_request_id, $createdItem);
+            } else {
                 continue;
             }
-            $notifyResult = booking_notify_provider_new_request_local($conexion, $booking_request_id, $createdItem);
             if (is_array($notifyResult) && empty($notifyResult['success']) && empty($notifyResult['skipped'])) {
                 error_log('booking_submit: provider notification failed booking_id=' . intval($booking_request_id) . ' item_id=' . intval($createdItem['item_id'] ?? 0) . ' payload=' . json_encode($notifyResult));
             }
