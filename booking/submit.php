@@ -4,6 +4,7 @@ include(__DIR__ . '/../inc/include.php');
 require_once __DIR__ . '/../admin/include/roles.php';
 require_once __DIR__ . '/../admin/include/password_utils.php';
 require_once __DIR__ . '/../admin/include/email_config.php';
+require_once __DIR__ . '/../admin/include/booking_notification_recipients.php';
 require_once __DIR__ . '/../admin/include/provider_medical_staff_helpers.php';
 require_once __DIR__ . '/../inc/email_template.php';
 require_once __DIR__ . '/../inc/interaction_email.php';
@@ -684,10 +685,14 @@ function booking_notify_provider_new_request_local($conexion, $bookingRequestId,
         return ['success' => false, 'error' => 'invalid_item'];
     }
 
-    $emailSource = '';
-    $providerEmail = interaction_email_fetch_provider_email($conexion, $itemId, $emailSource);
+    $recipient = booking_notification_resolve_medical_offer_recipient($conexion, $itemId, (array)$item);
+    $providerEmail = trim((string)($recipient['email'] ?? ''));
     if (!filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
-        return ['success' => false, 'error' => 'provider_email_not_found'];
+        return [
+            'success' => false,
+            'error' => (string)($recipient['skip_reason'] ?? 'provider_email_not_found'),
+            'recipient' => $recipient,
+        ];
     }
 
     $timelineExpr = table_has_column_local($conexion, 'booking_requests', 'timeline') ? 'br.timeline' : "''";
@@ -766,6 +771,8 @@ function booking_notify_provider_new_request_local($conexion, $bookingRequestId,
             'cta' => ['text' => 'Open case in MedTravel', 'url' => $caseUrl],
             'footer_note' => 'Please handle the case through your MedTravel portal.',
             'sender_label' => 'MedTravel Coordination Team',
+            'event' => 'booking_medical_offer_created',
+            'recipient_source' => (string)($recipient['source'] ?? ''),
         ],
         $conexion
     );

@@ -18,6 +18,7 @@ require_once __DIR__ . '/../include/conexion.php';
 require_once __DIR__ . '/../include/roles.php';
 require_once __DIR__ . '/../include/password_utils.php';
 require_once __DIR__ . '/../include/email_config.php';
+require_once __DIR__ . '/../include/booking_notification_recipients.php';
 require_once __DIR__ . '/../include/provider_medical_staff_helpers.php';
 require_once __DIR__ . '/../../inc/email_template.php';
 require_once __DIR__ . '/../../inc/interaction_email.php';
@@ -918,14 +919,18 @@ function ab_notify_provider_new_request($conexion, $bookingRequestId, array $ite
 {
     $bookingRequestId = (int)$bookingRequestId;
     $itemId = (int)($item['item_id'] ?? 0);
-    if ($bookingRequestId <= 0 || $itemId <= 0 || !function_exists('interaction_email_fetch_provider_email') || !function_exists('send_interaction_email')) {
+    if ($bookingRequestId <= 0 || $itemId <= 0 || !function_exists('booking_notification_resolve_medical_offer_recipient') || !function_exists('send_interaction_email')) {
         return ['success' => false, 'error' => 'notification_dependencies_unavailable'];
     }
 
-    $emailSource = '';
-    $providerEmail = interaction_email_fetch_provider_email($conexion, $itemId, $emailSource);
+    $recipient = booking_notification_resolve_medical_offer_recipient($conexion, $itemId, $item);
+    $providerEmail = trim((string)($recipient['email'] ?? ''));
     if (!filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
-        return ['success' => false, 'error' => 'provider_email_not_found'];
+        return [
+            'success' => false,
+            'error' => (string)($recipient['skip_reason'] ?? 'provider_email_not_found'),
+            'recipient' => $recipient,
+        ];
     }
 
     $timelineExpr = ab_has_column($conexion, 'booking_requests', 'timeline') ? 'br.timeline' : "''";
@@ -1007,6 +1012,8 @@ function ab_notify_provider_new_request($conexion, $bookingRequestId, array $ite
             'cta' => ['text' => 'Open case in MedTravel', 'url' => $caseUrl],
             'footer_note' => 'Please handle the case through your MedTravel portal.',
             'sender_label' => 'MedTravel Coordination Team',
+            'event' => 'booking_medical_offer_created',
+            'recipient_source' => (string)($recipient['source'] ?? ''),
         ],
         $conexion
     );
