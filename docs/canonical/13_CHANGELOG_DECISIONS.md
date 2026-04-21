@@ -1,5 +1,28 @@
 # Changelog Decisions
 
+## 2026-04-21 — ops(runtime): gating remoto de admin/cleanup.php validado — triple condición efectiva para habilitar reset
+
+**Outcome**
+- Se confirmó en servidor remoto/público que `APP_ENV=dev` + `ALLOW_DEV_RESET=1` en `.env` remoto no son suficientes para habilitar el botón Execute de `admin/cleanup.php`.
+- `cleanup.php` mostraba `APP_ENV=prod · ALLOW_DEV_RESET=1 · Execute enabled: NO` porque `admin/include/conexion.php` fuerza `APP_ENV` a `prod` cuando el host es remoto y `ALLOW_REMOTE_DEV=1` no está presente en el entorno efectivo del servidor.
+- Al agregar `ALLOW_REMOTE_DEV=1` como variable del servidor, `cleanup.php` pasó a mostrar `APP_ENV=dev · ALLOW_DEV_RESET=1 · Execute enabled: YES`.
+
+**Gating efectivo en host remoto/público**
+
+Para que `Execute` quede habilitado en remoto se requieren las tres condiciones simultáneas en el entorno efectivo del servidor:
+1. `APP_ENV=dev` — puede venir de `.env` o variable del servidor
+2. `ALLOW_REMOTE_DEV=1` — debe ser variable del servidor; anula el hardening de `conexion.php` que fuerza `prod` en hosts no-localhost
+3. `ALLOW_DEV_RESET=1` — variable del servidor o `.env`; `cleanup.php` la lee directamente via `getenv()`
+
+Sin `ALLOW_REMOTE_DEV=1`, `APP_ENV` resuelve siempre a `prod` en remoto, lo que hace que `$resetEnabled` sea `false` independientemente de `ALLOW_DEV_RESET`.
+
+**Decision**
+- La triple condición es el comportamiento correcto de seguridad: ninguna variable aislada habilita el reset en remoto.
+- `ALLOW_REMOTE_DEV=1` y `ALLOW_DEV_RESET=1` son variables operativas temporales. **Deben retirarse del servidor inmediatamente después de completar el reset.** No dejarlas activas en producción.
+- No establecer `ALLOW_REMOTE_DEV=1` de forma permanente en ningún entorno productivo.
+
+---
+
 ## 2026-04-20 — feat(booking): prefill desde ConectarBot/Chatwoot en booking asistido + trazabilidad `cw_conversation_id`
 
 **Outcome**

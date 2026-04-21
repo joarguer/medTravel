@@ -165,6 +165,14 @@ Cada item medico debe poder exponer, por columna nativa o por derivacion segura:
 - Cuando falten campos dedicados, el sistema debe soportar derivacion segura o alias logicos sin inventar una tabla definitiva que aun no exista.
 - La separacion operativa canonica ya es obligatoria a nivel de documentacion, aunque la persistencia siga madurando por fases.
 
+## Gating de ambiente y reset en remoto (2026-04-21)
+
+- `admin/include/conexion.php` fuerza `APP_ENV` a `prod` cuando el host no es `localhost`/`127.0.0.1`, salvo que `ALLOW_REMOTE_DEV=1` esté presente en el entorno efectivo del servidor.
+- `APP_ENV=dev` en `.env` remoto, por sí solo, no es suficiente para que el runtime opere en modo dev en un host público.
+- `admin/cleanup.php` exige adicionalmente `ALLOW_DEV_RESET=1` (via `getenv()`). La condición de Execute enabled es: `APP_ENV efectivo === 'dev'` AND `ALLOW_DEV_RESET ∈ ['1','true','yes','on']`.
+- En remoto, la triple condición necesaria es: `APP_ENV=dev` + `ALLOW_REMOTE_DEV=1` + `ALLOW_DEV_RESET=1`.
+- `ALLOW_REMOTE_DEV=1` y `ALLOW_DEV_RESET=1` son variables operativas temporales. Deben retirarse del servidor tras completar la operación. No deben estar activas en producción.
+
 ## Higiene de entorno local validada (2026-04-15)
 
 - Se confirmó que la BD local historica `medtravel` estaba estructuralmente desalineada respecto del modelo moderno del dominio provider/staff/services.
