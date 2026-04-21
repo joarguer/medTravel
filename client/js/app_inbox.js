@@ -1029,9 +1029,6 @@
             return '';
         }
         var hasDocs = currentDocuments.length > 0;
-        var countHtml = hasDocs
-            ? ' <span class="badge" style="background:#7f8c9d;">' + currentDocuments.length + '</span>'
-            : '';
         var innerHtml;
         if (!hasDocs) {
             innerHtml = '<p class="mt-docs-empty text-muted">No medical documents uploaded yet.</p>';
@@ -1093,13 +1090,7 @@
             });
             innerHtml += '</div>';
         }
-        return '<div class="mt-docs-section">' +
-            '<div class="mt-docs-header">' +
-                '<i class="fa fa-paperclip mt-docs-icon" aria-hidden="true"></i> ' +
-                '<strong>Medical Documents' + countHtml + '</strong>' +
-            '</div>' +
-            innerHtml +
-        '</div>';
+        return innerHtml;
     }
 
     function findDocumentById(docId) {

@@ -1293,9 +1293,6 @@
             return '';
         }
         var hasDocs = docs && docs.length > 0;
-        var countHtml = hasDocs
-            ? ' <span class="badge" style="background:#7f8c9d;">' + docs.length + '</span>'
-            : '';
         var innerHtml;
         if (!hasDocs) {
             innerHtml = '<p class="mt-docs-empty text-muted">Aún no hay documentos compartidos.</p>';
@@ -1357,13 +1354,7 @@
             });
             innerHtml += '</div>';
         }
-        return '<div class="mt-docs-section">' +
-            '<div class="mt-docs-header">' +
-                '<i class="fa fa-paperclip mt-docs-icon" aria-hidden="true"></i> ' +
-                '<strong>Documentos compartidos' + countHtml + '</strong>' +
-            '</div>' +
-            innerHtml +
-        '</div>';
+        return innerHtml;
     }
 
     function renderDocUploadedCard(text) {

@@ -289,19 +289,6 @@ $clientInboxJsVersion = is_file($clientInboxJsPath) ? (string)filemtime($clientI
             border-radius: 8px;
             color: #2c3e50;
         }
-        #client-inbox-docs-content .mt-docs-section {
-            border: 1px solid #d4e6f1;
-            border-radius: 4px;
-            background: #eaf4fb;
-            padding: 10px 12px;
-            margin-bottom: 0;
-        }
-        #client-inbox-docs-content .mt-docs-header {
-            font-size: 13px;
-            color: #2471a3;
-            margin-bottom: 8px;
-        }
-        #client-inbox-docs-content .mt-docs-icon { margin-right: 3px; }
         #client-inbox-docs-content .mt-docs-empty {
             margin: 4px 0 0;
             font-style: italic;
