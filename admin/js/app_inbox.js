@@ -1371,7 +1371,9 @@
         var payload = null;
         try { payload = JSON.parse(jsonStr); } catch (e) {}
         if (!payload) {
-            return '<span class="label label-default" style="margin-right:6px;">Documento</span>' + esc(jsonStr);
+            return '<i class="fa fa-paperclip" aria-hidden="true" style="color:#7f8c9d;margin-right:4px;"></i>' +
+                '<span class="label label-default" style="margin-right:4px;">Documento</span>' +
+                esc(jsonStr);
         }
         var docId = parseInt(payload.document_id || 0, 10);
         var title = String(payload.title || payload.original_filename || ('Documento #' + docId)).trim();
@@ -1389,29 +1391,9 @@
             other: 'label-default'
         };
         var cls = typeCls[typeKey] || 'label-default';
-        var viewBtn = '';
-        if (docId > 0) {
-            var href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(docId));
-            var encodedHref = encodeURIComponent(href);
-            viewBtn = '<div style="margin-top:6px;">' +
-                '<a class="mt-shared-doc-link btn btn-xs btn-info"' +
-                    ' href="' + esc(href) + '"' +
-                    ' data-doc-id="' + esc(String(docId)) + '"' +
-                    ' data-url="' + esc(encodedHref) + '"' +
-                    ' title="Ver documento">' +
-                    '<i class="fa fa-eye" aria-hidden="true"></i> Ver documento' +
-                '</a>' +
-                '</div>';
-        }
-        return '<div class="admin-structured-card" style="border-left:3px solid #5bc0de;padding:8px 12px;background:#f7fbff;border-radius:3px;">' +
-            '<div class="admin-structured-header" style="margin-bottom:4px;display:flex;align-items:center;gap:6px;">' +
-                '<i class="fa fa-upload" aria-hidden="true" style="color:#5bc0de;"></i>' +
-                '<strong>Paciente subió documento</strong>' +
-                '&nbsp;<span class="label ' + cls + '">' + esc(typeLabel) + '</span>' +
-            '</div>' +
-            '<div style="color:#555;">' + esc(title) + '</div>' +
-            viewBtn +
-        '</div>';
+        return '<i class="fa fa-paperclip" aria-hidden="true" style="color:#7f8c9d;margin-right:4px;"></i>' +
+            '<span class="label ' + cls + '" style="margin-right:4px;">' + esc(typeLabel) + '</span>' +
+            esc(title);
     }
 
     function syncThreadDocumentsPanel(docs) {

@@ -168,8 +168,7 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
         #admin-inbox-messages .admin-structured-note {
             margin-top: 8px;
         }
-        /* ── Medical Documents section ── */
-        #admin-inbox-messages .mt-docs-section,
+        /* ── Medical Documents section (accordion panel #admin-inbox-docs-panel) ── */
         #admin-inbox-docs-content .mt-docs-section {
             border: 1px solid #d4e6f1;
             border-radius: 4px;
@@ -177,27 +176,22 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             padding: 10px 12px;
             margin-bottom: 14px;
         }
-        #admin-inbox-messages .mt-docs-header,
         #admin-inbox-docs-content .mt-docs-header {
             font-size: 13px;
             color: #2471a3;
             margin-bottom: 8px;
         }
-        #admin-inbox-messages .mt-docs-icon,
         #admin-inbox-docs-content .mt-docs-icon { margin-right: 3px; }
-        #admin-inbox-messages .mt-docs-empty,
         #admin-inbox-docs-content .mt-docs-empty {
             margin: 4px 0 0;
             font-style: italic;
             font-size: 12px;
         }
-        #admin-inbox-messages .mt-docs-list,
         #admin-inbox-docs-content .mt-docs-list {
             display: flex;
             flex-direction: column;
             gap: 5px;
         }
-        #admin-inbox-messages .mt-doc-row,
         #admin-inbox-docs-content .mt-doc-row {
             display: flex;
             align-items: flex-start;
@@ -207,14 +201,11 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             border-radius: 3px;
             padding: 5px 8px;
         }
-        #admin-inbox-messages .mt-doc-type,
         #admin-inbox-docs-content .mt-doc-type { flex: 0 0 auto; }
-        #admin-inbox-messages .mt-doc-main,
         #admin-inbox-docs-content .mt-doc-main {
             flex: 1 1 220px;
             min-width: 160px;
         }
-        #admin-inbox-messages .mt-doc-title,
         #admin-inbox-docs-content .mt-doc-title {
             display: block;
             font-size: 13px;
@@ -223,12 +214,10 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             text-decoration: none;
             word-break: break-word;
         }
-        #admin-inbox-messages .mt-doc-title:hover,
         #admin-inbox-docs-content .mt-doc-title:hover {
             text-decoration: underline;
             color: #1a73e8;
         }
-        #admin-inbox-messages .mt-doc-name,
         #admin-inbox-docs-content .mt-doc-name {
             display: block;
             margin-top: 2px;
@@ -236,20 +225,17 @@ if (!$can_admin_view && $provider_id <= 0 && $service_provider_id <= 0) {
             word-break: break-all;
             color: #7f8c9d;
         }
-        #admin-inbox-messages .mt-doc-note,
         #admin-inbox-docs-content .mt-doc-note {
             display: block;
             margin-top: 4px;
             font-size: 11px;
             color: #5f6c7b;
         }
-        #admin-inbox-messages .mt-doc-date,
         #admin-inbox-docs-content .mt-doc-date {
             flex: 0 0 auto;
             font-size: 11px;
             white-space: nowrap;
         }
-        #admin-inbox-messages .mt-doc-download,
         #admin-inbox-docs-content .mt-doc-download { flex: 0 0 auto; }
         /* ── Section divider ── */
         #admin-inbox-messages .mt-section-divider {

@@ -2101,9 +2101,10 @@
         var payload = null;
         try { payload = JSON.parse(jsonStr); } catch (e) {}
         if (!payload) {
-            return '<span class="label label-default" style="margin-right:6px;">Document</span>' + esc(jsonStr);
+            return '<i class="fa fa-paperclip" aria-hidden="true" style="color:#7f8c9d;margin-right:4px;"></i>' +
+                '<span class="label label-default" style="margin-right:4px;">Document</span>' +
+                esc(jsonStr);
         }
-        var docId = parseInt(payload.document_id || 0, 10);
         var title = String(payload.title || payload.original_filename || 'Document').trim();
         var docType = String(payload.document_type || 'other');
         var typeKey = normalizeDocumentTypeKey(docType);
@@ -2117,28 +2118,9 @@
             other: 'label-default'
         };
         var cls = typeCls[typeKey] || 'label-default';
-        var viewHtml = '';
-        if (docId > 0) {
-            var docFromStore = findDocumentById(String(docId));
-            var resolvedUrl = (docFromStore && docFromStore.download_url)
-                ? docFromStore.download_url
-                : buildClientDocumentUrl(String(payload.file_path || ''));
-            var encodedUrl = resolvedUrl && resolvedUrl !== '#' ? encodeURIComponent(resolvedUrl) : '';
-            viewHtml = '<div style="margin-top:6px;"><a class="mt-shared-doc-link btn btn-xs btn-default"' +
-                ' href="' + esc(resolvedUrl || '#') + '"' +
-                ' data-doc-id="' + esc(String(docId)) + '"' +
-                ' data-url="' + esc(encodedUrl) + '"' +
-                ' title="View document"><i class="fa fa-eye" aria-hidden="true"></i> View document</a></div>';
-        }
-        return '<div style="border-left:3px solid #5bc0de;padding:8px 12px;background:#f7fbff;border-radius:3px;">' +
-            '<div style="margin-bottom:4px;display:flex;align-items:center;gap:6px;">' +
-                '<i class="fa fa-upload" aria-hidden="true" style="color:#5bc0de;"></i>' +
-                '<strong>Document uploaded</strong>' +
-                '&nbsp;<span class="label ' + cls + '">' + esc(typeLabel) + '</span>' +
-            '</div>' +
-            '<div style="color:#555;">' + esc(title) + '</div>' +
-            viewHtml +
-        '</div>';
+        return '<i class="fa fa-paperclip" aria-hidden="true" style="color:#7f8c9d;margin-right:4px;"></i>' +
+            '<span class="label ' + cls + '" style="margin-right:4px;">' + esc(typeLabel) + '</span>' +
+            esc(title);
     }
 
     function formatMessageBody(body, messageContext) {
