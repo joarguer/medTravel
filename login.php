@@ -325,9 +325,7 @@ foreach ($publicSocialLinks as $social) {
                     <p>Forgot your password? <a href="https://medtravel.com.co/set_password.php">Click here to request a secure access link.</a></p>
                 </div>
                 <div class="create-account">
-                    <p> Don't have an account yet ?&nbsp;
-                        <a href="javascript:;" id="register-btn"> Create an account </a>
-                    </p>
+                    <p class="text-center" style="color:#999;font-size:12px;">&copy; MedTravel</p>
                 </div>
             </form>
             <!-- END LOGIN FORM -->
