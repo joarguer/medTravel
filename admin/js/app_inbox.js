@@ -41,6 +41,8 @@
         REQUEST_LABS: 'Solicitar laboratorios',
         REQUEST_IMAGING: 'Solicitar imágenes',
         REQUEST_PHOTOS: 'Solicitar fotografías',
+        DOCS_CONFIRMED: 'Documentos recibidos',
+        DOCS_REVISION_NEEDED: 'Revisión o reenvío requerido',
         FINAL_APPROVED: 'Aprobación final',
         FINAL_NOT_ELIGIBLE: 'No elegible'
     };
@@ -50,6 +52,8 @@
         REQUEST_LABS: 'Please share your recent lab results so we can continue evaluating your case.',
         REQUEST_IMAGING: 'Please share your diagnostic images so we can continue evaluating your case.',
         REQUEST_PHOTOS: 'Please share clinical photos so we can continue evaluating your case.',
+        DOCS_CONFIRMED: 'Hemos recibido los documentos que enviaste. Los revisaremos y te notificaremos si necesitamos algo más.',
+        DOCS_REVISION_NEEDED: 'Revisamos los documentos recibidos y necesitamos que por favor reenvíes o corrijas algunos. Te indicaremos cuáles.',
         FINAL_APPROVED: 'We reviewed your case and it is ready to move to the next step.',
         FINAL_NOT_ELIGIBLE: 'We reviewed your case and at this time it is not eligible for this service.'
     };
@@ -58,6 +62,8 @@
         REQUEST_LABS: true,
         REQUEST_IMAGING: true,
         REQUEST_PHOTOS: true,
+        DOCS_CONFIRMED: true,
+        DOCS_REVISION_NEEDED: true,
         FINAL_APPROVED: true,
         FINAL_NOT_ELIGIBLE: true
     };
@@ -73,6 +79,8 @@
             REQUEST_LABS: 'SOLICITAR LABORATORIOS',
             REQUEST_IMAGING: 'SOLICITAR IMÁGENES',
             REQUEST_PHOTOS: 'SOLICITAR FOTOGRAFÍAS',
+            DOCS_CONFIRMED: 'DOCUMENTOS RECIBIDOS',
+            DOCS_REVISION_NEEDED: 'REVISIÓN / REENVÍO REQUERIDO',
             FINAL_APPROVED: 'APROBACIÓN FINAL',
             FINAL_NOT_ELIGIBLE: 'NO ELEGIBLE',
             NOT_ELIGIBLE: 'NO ELEGIBLE'
@@ -83,9 +91,13 @@
     function adminVisibleActionLabel(rawValue) {
         var normalized = String(rawValue || '').trim().split(/\r?\n/, 1)[0].toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
         var map = {
-            FINAL_ACCEPT_AND_PAY: 'ACEPTÓ Y CONTINÚA CON EL SIGUIENTE PASO',
-            FINAL_DECLINE: 'DECLINÓ CONTINUAR',
-            PROPOSE_NEW_DATES: 'SOLICITÓ NUEVAS FECHAS'
+            FINAL_ACCEPT_AND_PAY:   'ACEPTÓ Y CONTINÚA CON EL SIGUIENTE PASO',
+            FINAL_DECLINE:          'DECLINÓ CONTINUAR',
+            PROPOSE_NEW_DATES:      'SOLICITÓ NUEVAS FECHAS',
+            REQUEST_AVAILABILITY:   'CONSULTA DISPONIBILIDAD DE FECHAS',
+            DATES_FLEXIBLE:         'FECHAS FLEXIBLES',
+            DOCS_UPLOADED:          'PACIENTE SUBIÓ DOCUMENTOS MÉDICOS',
+            DOCS_NOT_AVAILABLE:     'PACIENTE SIN DOCUMENTOS DISPONIBLES'
         };
         return map[normalized] || '';
     }
@@ -640,12 +652,21 @@
         return match ? match[1] : '';
     }
 
-    function resolveSharedMessageDocument(ref) {
+    function parseInboxTimestamp(rawValue) {
+        var raw = String(rawValue || '').trim();
+        if (!raw) {
+            return NaN;
+        }
+        var parsed = new Date(raw.replace(' ', 'T')).getTime();
+        return isNaN(parsed) ? NaN : parsed;
+    }
+
+    function resolveSharedMessageDocument(ref, messageContext) {
         var reference = ref && typeof ref === 'object'
             ? [ref.lookup_name, ref.file_name, ref.title].filter(function (value) { return String(value || '').trim() !== ''; })
             : [ref];
-        var bestDoc = null;
-        var bestScore = -1;
+        var rankedMatches = [];
+        var messageTime = parseInboxTimestamp(messageContext && (messageContext.time || messageContext.created_at || ''));
         if (!reference.length || !currentDocuments || !currentDocuments.length) {
             return null;
         }
@@ -694,20 +715,48 @@
                             overlap++;
                         }
                     });
-                    if (overlap >= 3 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
+                    if (overlap >= 2 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
                         docBestScore = Math.max(docBestScore, 70 + overlap);
                     }
                 });
             });
 
-            if (docBestScore > bestScore) {
-                bestScore = docBestScore;
-                bestDoc = doc;
+            if (docBestScore >= 0) {
+                rankedMatches.push({
+                    doc: doc,
+                    score: docBestScore,
+                    docTime: parseInboxTimestamp(doc.uploaded_at || doc.created_at || '')
+                });
             }
         });
 
-        if (bestScore >= 70) {
-            return bestDoc;
+        rankedMatches.sort(function (left, right) {
+            if (right.score !== left.score) {
+                return right.score - left.score;
+            }
+            if (!isNaN(messageTime)) {
+                var leftBefore = !isNaN(left.docTime) && left.docTime <= messageTime;
+                var rightBefore = !isNaN(right.docTime) && right.docTime <= messageTime;
+                if (leftBefore !== rightBefore) {
+                    return leftBefore ? -1 : 1;
+                }
+                if (leftBefore && rightBefore && right.docTime !== left.docTime) {
+                    return right.docTime - left.docTime;
+                }
+                if (!leftBefore && !rightBefore && !isNaN(left.docTime) && !isNaN(right.docTime) && left.docTime !== right.docTime) {
+                    return left.docTime - right.docTime;
+                }
+            }
+            var leftId = parseInt(left.doc && left.doc.id ? left.doc.id : 0, 10);
+            var rightId = parseInt(right.doc && right.doc.id ? right.doc.id : 0, 10);
+            if (isFinite(leftId) && isFinite(rightId) && rightId !== leftId) {
+                return rightId - leftId;
+            }
+            return 0;
+        });
+
+        if (rankedMatches.length && rankedMatches[0].score >= 70) {
+            return rankedMatches[0].doc;
         }
         if (currentDocuments.length === 1) {
             return currentDocuments[0];
@@ -715,7 +764,7 @@
         return null;
     }
 
-    function renderSharedDocumentsBlock(entries) {
+    function renderSharedDocumentsBlock(entries, messageContext) {
         if (!entries || !entries.length) {
             return '';
         }
@@ -737,8 +786,8 @@
             return '';
         }
         var itemsHtml = entries.map(function (entry) {
-            var doc = resolveSharedMessageDocument(entry);
-            if (!doc && entries.length === 1 && currentDocuments && currentDocuments.length) {
+            var doc = resolveSharedMessageDocument(entry, messageContext);
+            if (!doc && entries.length === 1 && currentDocuments && currentDocuments.length === 1) {
                 doc = currentDocuments[0];
                 if (window.console && typeof window.console.warn === 'function') {
                     window.console.warn('[inbox] shared document fallback to latest thread document', {
@@ -801,7 +850,9 @@
                 ? ('<div class="mt-shared-doc-actions">' +
                     '<a class="mt-shared-doc-link" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">Abrir documento</a>' +
                 '</div>')
-                : '';
+                : ('<div class="mt-shared-doc-actions">' +
+                    '<span class="text-muted mt-shared-doc-unavailable">Documento no disponible</span>' +
+                '</div>');
             return '<div class="mt-shared-doc-card">' +
                 '<div class="mt-shared-doc-label"><i class="fa fa-paperclip" aria-hidden="true"></i> Documento compartido</div>' +
                 titleHtml +
@@ -1315,6 +1366,54 @@
         '</div>';
     }
 
+    function renderDocUploadedCard(text) {
+        var jsonStr = text.replace(/^\[DOC_UPLOADED\]\s*/i, '');
+        var payload = null;
+        try { payload = JSON.parse(jsonStr); } catch (e) {}
+        if (!payload) {
+            return '<span class="label label-default" style="margin-right:6px;">Documento</span>' + esc(jsonStr);
+        }
+        var docId = parseInt(payload.document_id || 0, 10);
+        var title = String(payload.title || payload.original_filename || ('Documento #' + docId)).trim();
+        var docType = String(payload.document_type || 'other');
+        var typeKey = normalizeDocumentTypeKey(docType);
+        var typeLabel = docTypeLabel(typeKey);
+        var typeCls = {
+            lab_results: 'label-info',
+            diagnostic_imaging: 'label-primary',
+            photos: 'label-success',
+            medical_history: 'label-warning',
+            prescription: 'label-success',
+            consent_form: 'label-warning',
+            administrative_document: 'label-default',
+            other: 'label-default'
+        };
+        var cls = typeCls[typeKey] || 'label-default';
+        var viewBtn = '';
+        if (docId > 0) {
+            var href = '/admin/ajax/download_medical_document.php?doc_id=' + encodeURIComponent(String(docId));
+            var encodedHref = encodeURIComponent(href);
+            viewBtn = '<div style="margin-top:6px;">' +
+                '<a class="mt-shared-doc-link btn btn-xs btn-info"' +
+                    ' href="' + esc(href) + '"' +
+                    ' data-doc-id="' + esc(String(docId)) + '"' +
+                    ' data-url="' + esc(encodedHref) + '"' +
+                    ' title="Ver documento">' +
+                    '<i class="fa fa-eye" aria-hidden="true"></i> Ver documento' +
+                '</a>' +
+                '</div>';
+        }
+        return '<div class="admin-structured-card" style="border-left:3px solid #5bc0de;padding:8px 12px;background:#f7fbff;border-radius:3px;">' +
+            '<div class="admin-structured-header" style="margin-bottom:4px;display:flex;align-items:center;gap:6px;">' +
+                '<i class="fa fa-upload" aria-hidden="true" style="color:#5bc0de;"></i>' +
+                '<strong>Paciente subió documento</strong>' +
+                '&nbsp;<span class="label ' + cls + '">' + esc(typeLabel) + '</span>' +
+            '</div>' +
+            '<div style="color:#555;">' + esc(title) + '</div>' +
+            viewBtn +
+        '</div>';
+    }
+
     function syncThreadDocumentsPanel(docs) {
         var $panel = $('#admin-inbox-docs-panel');
         var $content = $('#admin-inbox-docs-content');
@@ -1339,6 +1438,7 @@
     function isSystemActionMessage(body) {
         var text = String(body || '').trim();
         if (text.indexOf('[REQUEST_INFO]') === 0) return true;
+        if (text.indexOf('[DOC_UPLOADED]') === 0) return true;
         if (text.indexOf('[PROPOSE_QUOTE]') === 0) return true;
         if (text.indexOf('[PROPOSAL_RESPONSE]') === 0) return true;
         var keys = Object.keys(quickReplies);
@@ -1449,7 +1549,7 @@
         '</div>';
     }
 
-    function formatAdminMessageBody(body) {
+    function formatAdminMessageBody(body, messageContext) {
         var text = String(body || '');
         var trimmed = text.trim();
         if (trimmed.indexOf('[REQUEST_INFO]') === 0) {
@@ -1469,6 +1569,9 @@
         }
         if (trimmed.indexOf('[MEETING_CANCELLED]') === 0) {
             return renderMeetingCancelledCard(trimmed);
+        }
+        if (trimmed.indexOf('[DOC_UPLOADED]') === 0) {
+            return renderDocUploadedCard(trimmed);
         }
         if (/^\[ACTION\]\s*Client rejected proposed dates$/i.test(trimmed)) {
             return renderMeetingChangeRequestedCard();
@@ -1491,7 +1594,7 @@
                 var bodyHtml = parsedShared.body
                     ? '<div style="white-space:pre-wrap;">' + esc(parsedShared.body) + '</div>'
                     : '';
-                return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries);
+                return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries, messageContext);
             }
             if (isStructuredSystemText(text)) {
                 return renderStructuredSummaryFallback(text);
@@ -1917,7 +2020,7 @@
         cancelledMeetingKeys = collectCancelledMeetingKeys(messages);
         var html = divider;
         messages.forEach(function (m) {
-            var bodyHtml = formatAdminMessageBody(m.body || '');
+            var bodyHtml = formatAdminMessageBody(m.body || '', m);
             var sysMsg = isSystemActionMessage(m.body || '');
             html += buildAdminMsgHtml(m, bodyHtml, sysMsg);
         });
@@ -1959,7 +2062,7 @@
         }
         annotateGrouping(filtered, lastMeta);
         filtered.forEach(function (m) {
-            var bodyHtml = formatAdminMessageBody(m.body || '');
+            var bodyHtml = formatAdminMessageBody(m.body || '', m);
             var sysMsg = isSystemActionMessage(m.body || '');
             html += buildAdminMsgHtml(m, bodyHtml, sysMsg);
             appended = true;
@@ -2001,6 +2104,16 @@
             if (!res || res.ok !== true) {
                 return;
             }
+            var freshDocs = $.isArray(res.documents) ? res.documents : [];
+            if (freshDocs.length) {
+                var freshIds = freshDocs.map(function (d) { return parseInt(d.id || 0, 10); });
+                var localOnly = currentDocuments.filter(function (d) {
+                    var id = parseInt(d.id || 0, 10);
+                    return id > 0 && freshIds.indexOf(id) === -1;
+                });
+                currentDocuments = freshDocs.concat(localOnly);
+            }
+            syncThreadDocumentsPanel(currentDocuments);
             var newMessages = $.isArray(res.messages) ? res.messages : [];
             if (!newMessages.length) {
                 return;

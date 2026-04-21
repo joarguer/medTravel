@@ -430,6 +430,73 @@ $clientInboxJsVersion = is_file($clientInboxJsPath) ? (string)filemtime($clientI
             margin-top: 6px;
             display: none;
         }
+        #client-inbox-fee-actions {
+            padding: 0;
+            overflow: hidden;
+        }
+        #client-inbox-fee-actions-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 15px;
+            border: 0;
+            background: transparent;
+            color: #2f353b;
+            text-align: left;
+            font-weight: 600;
+        }
+        #client-inbox-fee-actions-toggle:hover,
+        #client-inbox-fee-actions-toggle:focus {
+            background: #f7f9fb;
+            color: #1a73e8;
+            text-decoration: none;
+            outline: none;
+        }
+        #client-inbox-fee-actions-toggle .mt-fee-toggle-copy {
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        #client-inbox-fee-actions-toggle .mt-fee-toggle-copy small {
+            display: block;
+            margin-top: 2px;
+            font-weight: 400;
+            color: #7f8c9d;
+        }
+        #client-inbox-fee-actions-toggle .mt-fee-toggle-icon {
+            flex: 0 0 auto;
+            color: #7f8c9d;
+            transition: transform .18s ease;
+        }
+        #client-inbox-fee-actions-toggle[aria-expanded="true"] .mt-fee-toggle-icon {
+            transform: rotate(180deg);
+        }
+        #client-inbox-fee-actions-content {
+            display: none;
+            padding: 0 15px 15px;
+            border-top: 1px solid #e5e5e5;
+        }
+        #client-inbox-fee-actions-content .mt-fee-actions-inner {
+            padding-top: 12px;
+        }
+        @media (max-width: 767px) {
+            #client-inbox-fee-actions-toggle {
+                padding: 10px 12px;
+            }
+            #client-inbox-fee-actions-content {
+                padding: 0 12px 12px;
+            }
+            #client-inbox-quick-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            #client-inbox-quick-actions .btn {
+                float: none;
+                white-space: normal;
+            }
+        }
         @media (max-width: 767px) {
             #clientDocViewerModal .modal-dialog {
                 margin: 0;
@@ -498,49 +565,61 @@ $clientInboxJsVersion = is_file($clientInboxJsPath) ? (string)filemtime($clientI
                                 <a id="client-go-service-thread" class="btn btn-default btn-xs" style="margin-left:10px;" href="#">Go to Service Thread</a>
                             </div>
                             <div id="client-inbox-fee-actions" class="well" style="display:none;margin-bottom:12px;">
-                                <h4 style="margin-top:0;">Formal quick actions</h4>
-                                <p class="text-muted" style="margin-bottom:10px;">The coordination fee is still pending. You can keep chatting here and also record formal updates below when you want them reflected in the case workflow.</p>
-                                <div class="btn-group btn-group-sm" id="client-inbox-quick-actions" role="group" style="margin-bottom:12px;">
-                                    <button type="button" class="btn btn-default client-quick-action" data-action="REQUEST_AVAILABILITY">Ask about availability</button>
-                                    <button type="button" class="btn btn-default client-quick-action" data-action="DATES_FLEXIBLE">My dates are flexible</button>
-                                    <button type="button" class="btn btn-default client-quick-action" data-action="DOCS_UPLOADED">I uploaded documents</button>
+                                <button type="button" id="client-inbox-fee-actions-toggle" aria-expanded="false" aria-controls="client-inbox-fee-actions-content">
+                                    <span class="mt-fee-toggle-copy">
+                                        Case Actions
+                                        <small>Keep the chat focused. Open these actions only when you need to formally record something.</small>
+                                    </span>
+                                    <i class="fa fa-chevron-down mt-fee-toggle-icon" aria-hidden="true"></i>
+                                </button>
+                                <div id="client-inbox-fee-actions-content" aria-hidden="true">
+                                    <div class="mt-fee-actions-inner">
+                                        <h4 style="margin-top:0;">Quick Actions</h4>
+                                        <p class="text-muted" style="margin-bottom:10px;">Record formal case updates here when needed. Free chat messages do not change the case status on their own.</p>
+                                        <div class="btn-group btn-group-sm" id="client-inbox-quick-actions" role="group" style="margin-bottom:12px;">
+                                            <button type="button" class="btn btn-default client-quick-action" data-action="REQUEST_AVAILABILITY">Request Date Availability</button>
+                                            <button type="button" class="btn btn-default client-quick-action" data-action="DATES_FLEXIBLE">My Dates Are Flexible</button>
+                                            <button type="button" class="btn btn-default client-quick-action" data-action="DOCS_UPLOADED">I Have Uploaded Medical Documents</button>
+                                        </div>
+                                        <hr style="margin:12px 0;">
+                                        <h4 style="margin-top:0;">Upload Medical Documents</h4>
+                                        <form id="client-inbox-doc-form" enctype="multipart/form-data">
+                                            <div class="row">
+                                                <div class="col-sm-6">
+                                                    <div class="form-group">
+                                                        <label for="client-doc-type">Document Type</label>
+                                                        <select class="form-control" id="client-doc-type">
+                                                            <option value="medical_history">Medical History</option>
+                                                            <option value="lab_results">Lab Results</option>
+                                                            <option value="prescription">Prescription</option>
+                                                            <option value="diagnostic_imaging">Diagnostic Imaging</option>
+                                                            <option value="photos">Clinical Photos</option>
+                                                            <option value="administrative_document">Administrative Document</option>
+                                                            <option value="other">Other</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="col-sm-6">
+                                                    <div class="form-group">
+                                                        <label for="client-doc-file">File</label>
+                                                        <input type="file" class="form-control" id="client-doc-file" name="client_doc_files[]" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" multiple>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div id="client-doc-batch" style="margin-top:10px;"></div>
+                                            <div class="form-group">
+                                                <label for="client-doc-title">Title (optional)</label>
+                                                <input type="text" class="form-control" id="client-doc-title" maxlength="255" placeholder="Document title">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="client-doc-description">Description (optional)</label>
+                                                <textarea class="form-control" id="client-doc-description" rows="2" maxlength="500" placeholder="Brief description"></textarea>
+                                            </div>
+                                            <button type="submit" class="btn btn-success btn-sm" id="client-doc-upload-btn"><i class="fa fa-upload"></i> Upload Document</button>
+                                            <div id="client-doc-upload-status" style="margin-top:10px;"></div>
+                                        </form>
+                                    </div>
                                 </div>
-                                <hr style="margin:12px 0;">
-                                <h4 style="margin-top:0;">Upload medical documents</h4>
-                                <form id="client-inbox-doc-form" enctype="multipart/form-data">
-                                    <div class="row">
-                                        <div class="col-sm-6">
-                                            <div class="form-group">
-                                                <label for="client-doc-type">Document type</label>
-                                                <select class="form-control" id="client-doc-type">
-                                                    <option value="medical_history">Medical history</option>
-                                                    <option value="lab_results">Lab results</option>
-                                                    <option value="prescription">Prescription</option>
-                                                    <option value="insurance">Insurance</option>
-                                                    <option value="photos">Photos</option>
-                                                    <option value="other">Other</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="col-sm-6">
-                                            <div class="form-group">
-                                                <label for="client-doc-file">File</label>
-                                                <input type="file" class="form-control" id="client-doc-file" name="client_doc_files[]" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx" multiple>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="client-doc-batch" style="margin-top:10px;"></div>
-                                    <div class="form-group">
-                                        <label for="client-doc-title">Title (optional)</label>
-                                        <input type="text" class="form-control" id="client-doc-title" maxlength="255" placeholder="Document title">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="client-doc-description">Description (optional)</label>
-                                        <textarea class="form-control" id="client-doc-description" rows="2" maxlength="500" placeholder="Short description"></textarea>
-                                    </div>
-                                    <button type="submit" class="btn btn-success btn-sm" id="client-doc-upload-btn"><i class="fa fa-upload"></i> Upload document</button>
-                                    <div id="client-doc-upload-status" style="margin-top:10px;"></div>
-                                </form>
                             </div>
                             <div class="inbox-content" id="client-inbox-content" style="display:none;">
                                 <div id="client-inbox-docs-panel" class="panel panel-default" style="display:none;margin-bottom:12px;">

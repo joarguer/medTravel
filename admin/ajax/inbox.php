@@ -1584,14 +1584,16 @@ if ($action === 'send_quick_reply') {
 
     $key = strtoupper(trim((string)($_POST['reply_key'] ?? '')));
     $quickReplies = [
-        'DATES_AVAILABLE' => 'Dates available',
-        'DATES_NOT_AVAILABLE' => 'Dates not available',
+        'DATES_AVAILABLE'       => 'Dates available',
+        'DATES_NOT_AVAILABLE'   => 'Dates not available',
         'REQUEST_MEDICAL_HISTORY' => 'REQUEST HISTORY',
-        'REQUEST_LABS' => 'REQUEST LABS',
-        'REQUEST_IMAGING' => 'REQUEST IMAGING',
-        'REQUEST_PHOTOS' => 'REQUEST PHOTOS',
-        'FINAL_APPROVED' => 'FINAL_APPROVED',
-        'FINAL_NOT_ELIGIBLE' => 'FINAL_NOT_ELIGIBLE'
+        'REQUEST_LABS'          => 'REQUEST LABS',
+        'REQUEST_IMAGING'       => 'REQUEST IMAGING',
+        'REQUEST_PHOTOS'        => 'REQUEST PHOTOS',
+        'DOCS_CONFIRMED'        => 'DOCS_CONFIRMED',
+        'DOCS_REVISION_NEEDED'  => 'DOCS_REVISION_NEEDED',
+        'FINAL_APPROVED'        => 'FINAL_APPROVED',
+        'FINAL_NOT_ELIGIBLE'    => 'FINAL_NOT_ELIGIBLE',
     ];
     if ($key === '' || !isset($quickReplies[$key])) {
         admin_inbox_err('invalid_reply_key', 422);

@@ -1369,10 +1369,10 @@ if ($action === 'send_quick_action') {
 
     $actionKey = strtoupper(trim((string)($_POST['action_key'] ?? '')));
     $quickActions = [
-        'REQUEST_AVAILABILITY' => 'Please confirm availability for my dates.',
-        'DATES_FLEXIBLE' => 'My dates are flexible.',
-        'DOCS_UPLOADED' => 'I have uploaded medical documents.',
-        'DOCS_NOT_AVAILABLE' => 'I don\'t have the requested documents yet.'
+        'REQUEST_AVAILABILITY' => 'REQUEST_AVAILABILITY',
+        'DATES_FLEXIBLE'       => 'DATES_FLEXIBLE',
+        'DOCS_UPLOADED'        => 'DOCS_UPLOADED',
+        'DOCS_NOT_AVAILABLE'   => 'DOCS_NOT_AVAILABLE',
     ];
     if ($actionKey === '' || !isset($quickActions[$actionKey])) {
         client_inbox_err('invalid_action_key', 422);

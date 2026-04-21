@@ -25,16 +25,16 @@ function client_doc_ok($data = [])
 function client_doc_document_label($type)
 {
     $map = [
-        'medical_history' => 'Medical history',
-        'lab_results' => 'Exam / lab result',
-        'diagnostic_imaging' => 'Diagnostic image',
-        'photos' => 'Clinical image',
-        'quote' => 'Quote / estimate',
-        'consent_form' => 'Consent form',
-        'medical_order' => 'Medical order',
-        'prescription' => 'Prescription',
-        'administrative_document' => 'Administrative document',
-        'other' => 'Other'
+        'medical_history' => 'Historia clínica',
+        'lab_results' => 'Resultados de laboratorio',
+        'diagnostic_imaging' => 'Imagen diagnóstica',
+        'photos' => 'Fotografías clínicas',
+        'quote' => 'Cotización',
+        'consent_form' => 'Consentimiento informado',
+        'medical_order' => 'Orden médica',
+        'prescription' => 'Prescripción',
+        'administrative_document' => 'Documento administrativo',
+        'other' => 'Otro'
     ];
     $key = client_doc_normalize_document_type($type);
     return isset($map[$key]) ? $map[$key] : ($key !== '' ? $key : 'Other');
@@ -88,7 +88,7 @@ function client_doc_normalize_document_type($value)
     return isset($map[$key]) ? $map[$key] : 'other';
 }
 
-function client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $documentType)
+function client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $documentType, $messageId = 0)
 {
     if (!function_exists('send_interaction_email')) {
         return;
@@ -101,29 +101,26 @@ function client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $
     }
 
     $meta = interaction_email_request_meta($conexion, $threadType, $bookingId, $itemId);
-    $serviceTitle = trim((string)($meta['title'] ?? 'Request #' . $bookingId));
+    $serviceTitle = trim((string)($meta['title'] ?? 'Solicitud #' . $bookingId));
     $destination = trim((string)($meta['subtitle'] ?? ''));
     $docLabel = client_doc_document_label($documentType);
-    $actorLabel = interaction_email_actor_label('CLIENT');
-    $snippet = 'A medical document was uploaded: ' . $docLabel;
+    $snippet = 'El paciente subió un documento: ' . $docLabel;
 
-    $subject = 'MedTravel update - ' . $actorLabel . ' uploaded a document for Request #' . $bookingId;
-    $contentHtml = '<p><strong>Actor:</strong> ' . htmlspecialchars($actorLabel, ENT_QUOTES, 'UTF-8') . '</p>'
-        . '<p><strong>Request:</strong> #' . $bookingId . '<br>'
-        . '<strong>Service:</strong> ' . htmlspecialchars($serviceTitle, ENT_QUOTES, 'UTF-8') . '</p>';
+    $subject = 'MedTravel — Paciente subió documento para Solicitud #' . $bookingId;
+    $contentHtml = '<p><strong>Servicio:</strong> ' . htmlspecialchars($serviceTitle, ENT_QUOTES, 'UTF-8') . '</p>';
     if ($destination !== '') {
-        $contentHtml .= '<p><strong>Destination:</strong> ' . htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') . '</p>';
+        $contentHtml .= '<p><strong>Destino:</strong> ' . htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') . '</p>';
     }
-    $contentHtml .= '<p><strong>Update:</strong> ' . htmlspecialchars($snippet, ENT_QUOTES, 'UTF-8') . '</p>';
+    $contentHtml .= '<p><strong>Actualización:</strong> ' . htmlspecialchars($snippet, ENT_QUOTES, 'UTF-8') . '</p>';
 
     $ctaUrl = 'https://medtravel.com.co/admin/app_inbox.php?request_id=' . $bookingId
         . '&thread_type=' . urlencode((string)$meta['thread_type'])
         . '&item_id=' . (int)$meta['item_id'];
-    $textBody = "Actor: {$actorLabel}\nRequest: #{$bookingId}\nService: {$serviceTitle}";
+    $textBody = "Servicio: {$serviceTitle}";
     if ($destination !== '') {
-        $textBody .= "\nDestination: {$destination}";
+        $textBody .= "\nDestino: {$destination}";
     }
-    $textBody .= "\nUpdate: {$snippet}\nInbox: {$ctaUrl}";
+    $textBody .= "\nActualización: {$snippet}\nInbox: {$ctaUrl}";
 
     $adminEmail = interaction_email_resolve_patientcare_email($conexion);
     $providerEmail = ($threadType === 'ITEM' && $itemId > 0)
@@ -132,7 +129,7 @@ function client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $
 
     $metaSend = [
         'preheader' => $snippet,
-        'cta' => ['text' => 'Open Inbox', 'url' => $ctaUrl],
+        'cta' => ['text' => 'Abrir Inbox', 'url' => $ctaUrl],
     ];
 
     if (filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
@@ -140,6 +137,18 @@ function client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $
     }
     if (filter_var($providerEmail, FILTER_VALIDATE_EMAIL)) {
         send_interaction_email($providerEmail, $subject, $contentHtml, $textBody, $metaSend, $conexion);
+    }
+
+    if (function_exists('mt_realtime_emit_inbox_message') && function_exists('inbox_thread_id')) {
+        $threadId = inbox_thread_id($threadType, $bookingId, $itemId);
+        if ($threadId !== '') {
+            mt_realtime_emit_inbox_message([
+                'thread_id'   => $threadId,
+                'message_id'  => (int)$messageId,
+                'sender_role' => 'CLIENT',
+                'created_at'  => date('c'),
+            ]);
+        }
     }
 }
 
@@ -819,7 +828,35 @@ foreach ($files as $index => $file) {
     mysqli_stmt_close($stmtInsert);
     $uploadedCount++;
 
-    client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $documentType);
+    // Publicar documento al hilo del chat creando un registro en inbox_messages
+    $docMessageId = 0;
+    if (function_exists('inbox_thread_id') && $threadType !== '' && $bookingId > 0) {
+        $docMsgThreadId = inbox_thread_id($threadType, $bookingId, $itemId);
+        if ($docMsgThreadId !== '' && client_table_exists($conexion, 'inbox_messages')) {
+            $docMsgTitle = $title !== '' ? $title : client_doc_clean_title_fallback($originalFilename);
+            $docMsgBody = '[DOC_UPLOADED] ' . json_encode([
+                'document_id'       => $documentId,
+                'title'             => $docMsgTitle,
+                'document_type'     => $documentType,
+                'original_filename' => $originalFilename,
+                'file_path'         => $filePath,
+            ], JSON_UNESCAPED_UNICODE);
+            $stmtDocMsg = mysqli_prepare(
+                $conexion,
+                "INSERT INTO inbox_messages (thread_id, thread_type, request_id, item_id, sender_role, sender_user_id, body) VALUES (?, ?, ?, ?, 'CLIENT', ?, ?)"
+            );
+            if ($stmtDocMsg) {
+                $docMsgItem = $itemId > 0 ? $itemId : 0;
+                mysqli_stmt_bind_param($stmtDocMsg, 'ssiiis', $docMsgThreadId, $threadType, $bookingId, $docMsgItem, $clientUserId, $docMsgBody);
+                if (mysqli_stmt_execute($stmtDocMsg)) {
+                    $docMessageId = (int)mysqli_insert_id($conexion);
+                }
+                mysqli_stmt_close($stmtDocMsg);
+            }
+        }
+    }
+
+    client_doc_notify_upload($conexion, $threadType, $bookingId, $itemId, $documentType, $docMessageId);
 
     $successItem = [
         'index' => $index,

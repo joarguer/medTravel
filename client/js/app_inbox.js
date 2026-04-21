@@ -53,9 +53,11 @@
             DATES_NOT_AVAILABLE: 'Dates not available',
             REQUEST_MEDICAL_HISTORY: 'Medical history requested',
             REQUEST_HISTORY: 'Medical history requested',
-            REQUEST_LABS: 'Lab results requested',
-            REQUEST_IMAGING: 'Diagnostic imaging requested',
+            REQUEST_LABS: 'Labs requested',
+            REQUEST_IMAGING: 'Diagnostic images requested',
             REQUEST_PHOTOS: 'Clinical photos requested',
+            DOCS_CONFIRMED: 'Documents received',
+            DOCS_REVISION_NEEDED: 'Revision or re-upload required',
             FINAL_APPROVED: 'Final approval',
             FINAL_NOT_ELIGIBLE: 'Not eligible',
             NOT_ELIGIBLE: 'Not eligible'
@@ -66,9 +68,13 @@
     function clientVisibleActionLabel(rawValue) {
         var normalized = String(rawValue || '').trim().split(/\r?\n/, 1)[0].toUpperCase().replace(/^\[(ACTION|REPLY)\]\s*/i, '');
         var map = {
-            FINAL_ACCEPT_AND_PAY: 'Accepted the next step with the provider',
-            FINAL_DECLINE: 'Declined to continue',
-            PROPOSE_NEW_DATES: 'Requested new dates'
+            FINAL_ACCEPT_AND_PAY:   'Accepted and proceeding to next step',
+            FINAL_DECLINE:          'Declined to proceed',
+            PROPOSE_NEW_DATES:      'Requested new dates',
+            REQUEST_AVAILABILITY:   'Checking availability for travel dates',
+            DATES_FLEXIBLE:         'My dates are flexible',
+            DOCS_UPLOADED:          'I have uploaded medical documents for review',
+            DOCS_NOT_AVAILABLE:     "I don't have the requested documents yet"
         };
         return map[normalized] || '';
     }
@@ -801,12 +807,21 @@
         return match ? match[1] : '';
     }
 
-    function resolveSharedMessageDocument(ref) {
+    function parseInboxTimestamp(rawValue) {
+        var raw = String(rawValue || '').trim();
+        if (!raw) {
+            return NaN;
+        }
+        var parsed = new Date(raw.replace(' ', 'T')).getTime();
+        return isNaN(parsed) ? NaN : parsed;
+    }
+
+    function resolveSharedMessageDocument(ref, messageContext) {
         var reference = ref && typeof ref === 'object'
             ? [ref.lookup_name, ref.file_name, ref.title].filter(function (value) { return String(value || '').trim() !== ''; })
             : [ref];
-        var bestDoc = null;
-        var bestScore = -1;
+        var rankedMatches = [];
+        var messageTime = parseInboxTimestamp(messageContext && (messageContext.time || messageContext.created_at || ''));
         if (!reference.length || !currentDocuments || !currentDocuments.length) {
             return null;
         }
@@ -855,20 +870,48 @@
                             overlap++;
                         }
                     });
-                    if (overlap >= 3 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
+                    if (overlap >= 2 && (!targetExt || !candidateExt || targetExt === candidateExt)) {
                         docBestScore = Math.max(docBestScore, 70 + overlap);
                     }
                 });
             });
 
-            if (docBestScore > bestScore) {
-                bestScore = docBestScore;
-                bestDoc = doc;
+            if (docBestScore >= 0) {
+                rankedMatches.push({
+                    doc: doc,
+                    score: docBestScore,
+                    docTime: parseInboxTimestamp(doc.uploaded_at || doc.created_at || '')
+                });
             }
         });
 
-        if (bestScore >= 70) {
-            return bestDoc;
+        rankedMatches.sort(function (left, right) {
+            if (right.score !== left.score) {
+                return right.score - left.score;
+            }
+            if (!isNaN(messageTime)) {
+                var leftBefore = !isNaN(left.docTime) && left.docTime <= messageTime;
+                var rightBefore = !isNaN(right.docTime) && right.docTime <= messageTime;
+                if (leftBefore !== rightBefore) {
+                    return leftBefore ? -1 : 1;
+                }
+                if (leftBefore && rightBefore && right.docTime !== left.docTime) {
+                    return right.docTime - left.docTime;
+                }
+                if (!leftBefore && !rightBefore && !isNaN(left.docTime) && !isNaN(right.docTime) && left.docTime !== right.docTime) {
+                    return left.docTime - right.docTime;
+                }
+            }
+            var leftId = parseInt(left.doc && left.doc.id ? left.doc.id : 0, 10);
+            var rightId = parseInt(right.doc && right.doc.id ? right.doc.id : 0, 10);
+            if (isFinite(leftId) && isFinite(rightId) && rightId !== leftId) {
+                return rightId - leftId;
+            }
+            return 0;
+        });
+
+        if (rankedMatches.length && rankedMatches[0].score >= 70) {
+            return rankedMatches[0].doc;
         }
         if (currentDocuments.length === 1) {
             return currentDocuments[0];
@@ -876,7 +919,7 @@
         return null;
     }
 
-    function renderSharedDocumentsBlock(entries) {
+    function renderSharedDocumentsBlock(entries, messageContext) {
         if (!entries || !entries.length) {
             return '';
         }
@@ -895,8 +938,8 @@
             return '';
         }
         var itemsHtml = entries.map(function (entry) {
-            var doc = resolveSharedMessageDocument(entry);
-            if (!doc && entries.length === 1 && currentDocuments && currentDocuments.length) {
+            var doc = resolveSharedMessageDocument(entry, messageContext);
+            if (!doc && entries.length === 1 && currentDocuments && currentDocuments.length === 1) {
                 doc = currentDocuments[0];
                 if (window.console && typeof window.console.warn === 'function') {
                     window.console.warn('[inbox] shared document fallback to latest thread document', {
@@ -962,7 +1005,9 @@
                 ? ('<div class="mt-shared-doc-actions">' +
                     '<a class="mt-shared-doc-link" href="' + encodedHref + '" data-doc-id="' + docIdAttr + '" data-url="' + encodedHref + '" target="_blank" rel="noopener">Open document</a>' +
                 '</div>')
-                : '';
+                : ('<div class="mt-shared-doc-actions">' +
+                    '<span class="text-muted mt-shared-doc-unavailable">Document not available</span>' +
+                '</div>');
             return '<div class="mt-shared-doc-card">' +
                 '<div class="mt-shared-doc-label"><i class="fa fa-paperclip" aria-hidden="true"></i> Shared document</div>' +
                 titleHtml +
@@ -1698,7 +1743,7 @@
         cancelledMeetingKeys = collectCancelledMeetingKeys(messages);
         var html = '';
         messages.forEach(function (m) {
-            var bodyHtml = formatMessageBody(m.body || '');
+            var bodyHtml = formatMessageBody(m.body || '', m);
             html += buildClientMsgHtml(m, bodyHtml);
         });
 
@@ -1740,7 +1785,7 @@
         }
         annotateGrouping(filtered, lastMeta);
         filtered.forEach(function (m) {
-            var bodyHtml = formatMessageBody(m.body || '');
+            var bodyHtml = formatMessageBody(m.body || '', m);
             html += buildClientMsgHtml(m, bodyHtml);
             appended = true;
         });
@@ -1778,6 +1823,16 @@
             if (!res || res.ok !== true) {
                 return;
             }
+            var freshDocs = $.isArray(res.documents) ? res.documents : [];
+            if (freshDocs.length) {
+                var freshIds = freshDocs.map(function (d) { return parseInt(d.id || 0, 10); });
+                var localOnly = currentDocuments.filter(function (d) {
+                    var id = parseInt(d.id || 0, 10);
+                    return id > 0 && freshIds.indexOf(id) === -1;
+                });
+                currentDocuments = freshDocs.concat(localOnly);
+            }
+            syncThreadDocumentsPanel();
             var isCurrentCareThread = !!(
                 currentThread &&
                 String(currentThread.thread_id || '') === thread &&
@@ -1923,6 +1978,26 @@
         }
     }
 
+    function setFeeActionsExpanded(expanded, immediate) {
+        var isExpanded = !!expanded;
+        var $toggle = $('#client-inbox-fee-actions-toggle');
+        var $content = $('#client-inbox-fee-actions-content');
+        if (!$toggle.length || !$content.length) {
+            return;
+        }
+        $toggle.attr('aria-expanded', isExpanded ? 'true' : 'false');
+        $content.attr('aria-hidden', isExpanded ? 'false' : 'true');
+        if (immediate) {
+            if (isExpanded) {
+                $content.show();
+            } else {
+                $content.hide();
+            }
+            return;
+        }
+        $content.stop(true, true)[isExpanded ? 'slideDown' : 'slideUp'](160);
+    }
+
     function setFeeGateState(enabled, message) {
         feeGateActive = !!enabled;
         var $alert = $('#client-inbox-fee-alert');
@@ -1933,7 +2008,9 @@
         if ($actions.length) {
             if (feeGateActive) {
                 $actions.show();
+                setFeeActionsExpanded(false, true);
             } else {
+                setFeeActionsExpanded(false, true);
                 $actions.hide();
             }
         }
@@ -2019,7 +2096,52 @@
         $alert.show();
     }
 
-    function formatMessageBody(body) {
+    function renderDocUploadedCard(text) {
+        var jsonStr = text.replace(/^\[DOC_UPLOADED\]\s*/i, '');
+        var payload = null;
+        try { payload = JSON.parse(jsonStr); } catch (e) {}
+        if (!payload) {
+            return '<span class="label label-default" style="margin-right:6px;">Document</span>' + esc(jsonStr);
+        }
+        var docId = parseInt(payload.document_id || 0, 10);
+        var title = String(payload.title || payload.original_filename || 'Document').trim();
+        var docType = String(payload.document_type || 'other');
+        var typeKey = normalizeDocumentTypeKey(docType);
+        var typeLabel = docTypeLabel(typeKey);
+        var typeCls = {
+            lab_results: 'label-info',
+            diagnostic_imaging: 'label-primary',
+            photos: 'label-success',
+            medical_history: 'label-warning',
+            prescription: 'label-success',
+            other: 'label-default'
+        };
+        var cls = typeCls[typeKey] || 'label-default';
+        var viewHtml = '';
+        if (docId > 0) {
+            var docFromStore = findDocumentById(String(docId));
+            var resolvedUrl = (docFromStore && docFromStore.download_url)
+                ? docFromStore.download_url
+                : buildClientDocumentUrl(String(payload.file_path || ''));
+            var encodedUrl = resolvedUrl && resolvedUrl !== '#' ? encodeURIComponent(resolvedUrl) : '';
+            viewHtml = '<div style="margin-top:6px;"><a class="mt-shared-doc-link btn btn-xs btn-default"' +
+                ' href="' + esc(resolvedUrl || '#') + '"' +
+                ' data-doc-id="' + esc(String(docId)) + '"' +
+                ' data-url="' + esc(encodedUrl) + '"' +
+                ' title="View document"><i class="fa fa-eye" aria-hidden="true"></i> View document</a></div>';
+        }
+        return '<div style="border-left:3px solid #5bc0de;padding:8px 12px;background:#f7fbff;border-radius:3px;">' +
+            '<div style="margin-bottom:4px;display:flex;align-items:center;gap:6px;">' +
+                '<i class="fa fa-upload" aria-hidden="true" style="color:#5bc0de;"></i>' +
+                '<strong>Document uploaded</strong>' +
+                '&nbsp;<span class="label ' + cls + '">' + esc(typeLabel) + '</span>' +
+            '</div>' +
+            '<div style="color:#555;">' + esc(title) + '</div>' +
+            viewHtml +
+        '</div>';
+    }
+
+    function formatMessageBody(body, messageContext) {
         var text = String(body || '');
         var trimmed = text.trim();
 
@@ -2062,7 +2184,7 @@
                 var bodyHtml = parsedShared.body
                     ? '<div style="white-space:pre-wrap;">' + esc(parsedShared.body) + '</div>'
                     : '';
-                return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries);
+                return bodyHtml + renderSharedDocumentsBlock(parsedShared.entries, messageContext);
             }
             if (isStructuredSystemText(text)) {
                 return renderStructuredSummaryFallback(text);
@@ -2103,7 +2225,7 @@
             }
             if (structuredReplyUpper.indexOf('REQUEST IMAGING') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="imaging">UPLOAD IMAGING</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="imaging">UPLOAD IMAGES</button>' +
                     '</div>';
             }
             if (structuredReplyUpper.indexOf('REQUEST PHOTOS') !== -1) {
@@ -2113,7 +2235,7 @@
             }
             if (structuredReplyUpper.indexOf('REQUEST HISTORY') !== -1) {
                 messageHtml += '<div style="margin-top:8px;">' +
-                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="history">UPLOAD HISTORY</button>' +
+                    '<button type="button" class="btn btn-default btn-xs client-structured-upload" data-upload-type="history">UPLOAD MEDICAL HISTORY</button>' +
                     '</div>';
             }
             if (structuredReplyUpper.indexOf('DATES NOT AVAILABLE') !== -1 && isItemThread) {
@@ -3538,6 +3660,11 @@
         });
         $('#client-inbox-message').on('blur', function () {
             emitTyping('stop');
+        });
+
+        $('#client-inbox-fee-actions-toggle').on('click', function () {
+            var expanded = $(this).attr('aria-expanded') === 'true';
+            setFeeActionsExpanded(!expanded, false);
         });
 
         $('#client-inbox-fee-actions').on('click', '.client-quick-action', function () {
