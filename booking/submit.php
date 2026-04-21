@@ -2455,6 +2455,32 @@ if ($saved && $booking_request_id > 0) {
             }
         }
 
+        $medicalItemsCount = 0;
+        $complementaryItemsCount = 0;
+        foreach ($createdItems as $createdItem) {
+            $itemType = (string)($createdItem['item_type'] ?? '');
+            if ($itemType === 'medical_offer') {
+                $medicalItemsCount++;
+            } elseif ($itemType === 'complementary_service') {
+                $complementaryItemsCount++;
+            }
+        }
+        $patientcareAlert = interaction_email_send_patientcare_booking_alert($conexion, $booking_request_id, [
+            'patient_name' => (string)($summaryPayload['patient_name'] ?? ($booking['name'] ?? '')),
+            'patient_email' => (string)($summaryPayload['patient_email'] ?? ($booking['email'] ?? '')),
+            'patient_phone' => (string)($summaryPayload['patient_phone'] ?? ($booking['phone'] ?? '')),
+            'destination' => (string)($summaryPayload['destination'] ?? ($booking['destination'] ?? '')),
+            'timeline' => (string)($summaryPayload['timeline'] ?? $timeline),
+            'creation_source' => (string)($booking['creation_source'] ?? 'public_booking'),
+            'agent_channel' => (string)($booking['agent_channel'] ?? ''),
+            'items_count' => count($createdItems),
+            'medical_items_count' => $medicalItemsCount,
+            'complementary_items_count' => $complementaryItemsCount,
+        ]);
+        if (is_array($patientcareAlert) && empty($patientcareAlert['success'])) {
+            error_log('booking_submit: patientcare alert failed booking_id=' . intval($booking_request_id) . ' payload=' . json_encode($patientcareAlert));
+        }
+
         send_booking_confirmation_email(
             $conexion,
             (string)$booking['email'],

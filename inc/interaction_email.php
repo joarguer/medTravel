@@ -145,6 +145,89 @@ if (!function_exists('interaction_email_resolve_patientcare_email')) {
     }
 }
 
+if (!function_exists('interaction_email_send_patientcare_booking_alert')) {
+    function interaction_email_send_patientcare_booking_alert($conexion, $bookingRequestId, array $payload = [])
+    {
+        if (!function_exists('sendEmail')) {
+            return ['success' => false, 'error' => 'sendEmail_unavailable'];
+        }
+
+        $bookingRequestId = (int)$bookingRequestId;
+        if ($bookingRequestId <= 0) {
+            return ['success' => false, 'error' => 'invalid_booking_request_id'];
+        }
+
+        $adminEmail = interaction_email_resolve_patientcare_email($conexion);
+        if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+            return ['success' => false, 'error' => 'patientcare_email_not_found'];
+        }
+
+        $patientName = trim((string)($payload['patient_name'] ?? $payload['name'] ?? ''));
+        $patientEmail = trim((string)($payload['patient_email'] ?? $payload['email'] ?? ''));
+        $patientPhone = trim((string)($payload['patient_phone'] ?? $payload['phone'] ?? ''));
+        $destination = trim((string)($payload['destination'] ?? ''));
+        $timeline = trim((string)($payload['timeline'] ?? ''));
+        $creationSource = trim((string)($payload['creation_source'] ?? $payload['origin'] ?? ''));
+        $agentChannel = trim((string)($payload['agent_channel'] ?? ''));
+        $itemsCount = max(0, (int)($payload['items_count'] ?? 0));
+        $medicalItemsCount = max(0, (int)($payload['medical_items_count'] ?? 0));
+        $complementaryItemsCount = max(0, (int)($payload['complementary_items_count'] ?? 0));
+        $caseUrl = 'https://medtravel.com.co/admin/my_booking_requests.php?request_id=' . $bookingRequestId;
+
+        $subject = '[ADMIN] New booking created - case #' . $bookingRequestId;
+        $contentHtml = '<p>A new booking has been created in MedTravel.</p>'
+            . '<p><strong>Request ID:</strong> #' . htmlspecialchars((string)$bookingRequestId, ENT_QUOTES, 'UTF-8') . '</p>'
+            . ($patientName !== '' ? '<p><strong>Patient:</strong> ' . htmlspecialchars($patientName, ENT_QUOTES, 'UTF-8') . '</p>' : '')
+            . ($patientEmail !== '' ? '<p><strong>Email:</strong> ' . htmlspecialchars($patientEmail, ENT_QUOTES, 'UTF-8') . '</p>' : '')
+            . ($patientPhone !== '' ? '<p><strong>Phone:</strong> ' . htmlspecialchars($patientPhone, ENT_QUOTES, 'UTF-8') . '</p>' : '')
+            . ($destination !== '' ? '<p><strong>Destination:</strong> ' . htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') . '</p>' : '')
+            . ($timeline !== '' ? '<p><strong>Timeline:</strong> ' . htmlspecialchars($timeline, ENT_QUOTES, 'UTF-8') . '</p>' : '')
+            . ($creationSource !== '' ? '<p><strong>Creation source:</strong> ' . htmlspecialchars($creationSource, ENT_QUOTES, 'UTF-8') . '</p>' : '')
+            . ($agentChannel !== '' ? '<p><strong>Agent channel:</strong> ' . htmlspecialchars($agentChannel, ENT_QUOTES, 'UTF-8') . '</p>' : '')
+            . '<p><strong>Items:</strong> ' . htmlspecialchars((string)$itemsCount, ENT_QUOTES, 'UTF-8')
+            . ' total';
+        if ($medicalItemsCount > 0 || $complementaryItemsCount > 0) {
+            $contentHtml .= ' (' . htmlspecialchars((string)$medicalItemsCount, ENT_QUOTES, 'UTF-8') . ' medical / '
+                . htmlspecialchars((string)$complementaryItemsCount, ENT_QUOTES, 'UTF-8') . ' complementary)';
+        }
+        $contentHtml .= '</p><p>Please review the case in the admin portal.</p>';
+
+        $htmlBody = function_exists('renderMedTravelEmail')
+            ? renderMedTravelEmail(
+                'New booking created',
+                'A new booking requires MedTravel coordination review.',
+                $contentHtml,
+                'Internal MedTravel notification.',
+                ['text' => 'Open case in MedTravel', 'url' => $caseUrl],
+                'MedTravel Coordination Team'
+            )
+            : $contentHtml;
+
+        $altBody = "A new booking has been created in MedTravel.\n"
+            . "Request ID: #{$bookingRequestId}\n"
+            . ($patientName !== '' ? "Patient: {$patientName}\n" : '')
+            . ($patientEmail !== '' ? "Email: {$patientEmail}\n" : '')
+            . ($patientPhone !== '' ? "Phone: {$patientPhone}\n" : '')
+            . ($destination !== '' ? "Destination: {$destination}\n" : '')
+            . ($timeline !== '' ? "Timeline: {$timeline}\n" : '')
+            . ($creationSource !== '' ? "Creation source: {$creationSource}\n" : '')
+            . ($agentChannel !== '' ? "Agent channel: {$agentChannel}\n" : '')
+            . 'Items: ' . $itemsCount . ' total'
+            . (($medicalItemsCount > 0 || $complementaryItemsCount > 0)
+                ? " ({$medicalItemsCount} medical / {$complementaryItemsCount} complementary)"
+                : '')
+            . "\n\nOpen case: {$caseUrl}\n";
+
+        try {
+            $result = sendEmail($adminEmail, $subject, $htmlBody, 'patientcare', ['alt_body' => $altBody], $conexion);
+        } catch (Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+
+        return $result === true ? ['success' => true] : (is_array($result) ? $result : ['success' => false, 'error' => 'unknown_send_result']);
+    }
+}
+
 if (!function_exists('interaction_email_fetch_provider_email')) {
     function interaction_email_fetch_provider_email($conexion, $itemId, &$source = null)
     {

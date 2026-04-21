@@ -1483,6 +1483,25 @@ if ($action === 'submit') {
         }
     }
 
+    $patientcareAlert = interaction_email_send_patientcare_booking_alert($conexion, $bookingRequestId, [
+        'patient_name' => $name,
+        'patient_email' => $email,
+        'patient_phone' => $phone,
+        'destination' => $destination,
+        'timeline' => $timeline,
+        'creation_source' => 'agent_assisted',
+        'agent_channel' => $agentChannel,
+        'items_count' => count($createdItems),
+        'medical_items_count' => count($createdItems),
+        'complementary_items_count' => 0,
+    ]);
+    if (is_array($patientcareAlert) && empty($patientcareAlert['success'])) {
+        ab_submit_log(
+            'patientcare_alert_failed request_id=' . $bookingRequestId
+            . ' error=' . (string)($patientcareAlert['error'] ?? 'unknown_error')
+        );
+    }
+
     // ── Success response ──────────────────────────────────────────────────────
     ab_json_response([
         'success'          => true,
