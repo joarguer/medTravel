@@ -19,6 +19,7 @@ require_once __DIR__ . '/../include/roles.php';
 require_once __DIR__ . '/../include/password_utils.php';
 require_once __DIR__ . '/../include/email_config.php';
 require_once __DIR__ . '/../include/booking_notification_recipients.php';
+require_once __DIR__ . '/../include/booking_patient_notifications.php';
 require_once __DIR__ . '/../include/provider_medical_staff_helpers.php';
 require_once __DIR__ . '/../../inc/email_template.php';
 require_once __DIR__ . '/../../inc/interaction_email.php';
@@ -1422,50 +1423,38 @@ if ($action === 'submit') {
         }
     }
 
-    // ── Send credentials email to patient ────────────────────────────────────
-    if ($isNewUser && $clientUserId > 0) {
-        $resetUrl = 'https://medtravel.com.co/set_password.php' . ($resetToken !== '' ? '?token=' . urlencode($resetToken) : '');
-        $loginUrl = 'https://medtravel.com.co/login.php';
-
-        $subjectEmail = "Your MedTravel booking (case #{$bookingRequestId}) — Activate your account";
-        $bodyHtml = '';
-        if (function_exists('renderMedTravelEmail')) {
-            $contentHtml = '<p>Hello ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . ',</p>'
-                . '<p>A MedTravel coordinator has created a booking on your behalf (Case #' . $bookingRequestId . ').</p>'
-                . '<p>To track your case and manage your appointments, please activate your patient portal account by creating a password:</p>'
-                . '<p><strong>Username:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '</p>'
-                . '<p><strong>Important:</strong> On your first login you will be asked to review and accept the MedTravel Terms of Service to complete the activation.</p>'
-                . '<p style="margin:16px 0;"><a href="' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '" style="background:#0b4ea2;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold;">Create my password</a></p>'
-                . '<p style="font-size:12px;color:#666;">If the button does not work, copy and paste this link: ' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '<br>This link expires in 24 hours.</p>'
-                . '<p>After activation, sign in at: <a href="' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . '</a></p>';
-
-            $bodyHtml = renderMedTravelEmail(
-                'Your booking has been created',
-                'Activate your patient portal account',
-                $contentHtml,
-                'This is an automated message from MedTravel.',
-                ['text' => 'Create my password', 'url' => $resetUrl]
-            );
-        }
-
-        if ($bodyHtml === '') {
-            $bodyHtml = '<h2>Your MedTravel booking</h2>'
-                . '<p>Hello ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . ',</p>'
-                . '<p>A MedTravel coordinator has opened case #' . $bookingRequestId . ' on your behalf.</p>'
-                . '<p><strong>Activate your account:</strong> <a href="' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($resetUrl, ENT_QUOTES, 'UTF-8') . '</a></p>'
-                . '<p>You will need to accept the Terms of Service on first login.</p>';
-        }
-
-        $altBody = "Hello {$name},\n\n"
-            . "A MedTravel coordinator has created booking #{$bookingRequestId} on your behalf.\n\n"
-            . "Activate your account:\n{$resetUrl}\n\n"
-            . "Note: You will be asked to accept the Terms of Service on first login.\n\n"
-            . "Sign in at: {$loginUrl}\n";
+    // ── Send patient notification email ──────────────────────────────────────
+    $patientEmailSent = false;
+    if ($clientUserId > 0) {
+        $patientEmailPayload = booking_patient_build_email_payload([
+            'flow' => 'assisted',
+            'booking_id' => $bookingRequestId,
+            'patient_name' => $name,
+            'patient_email' => $email,
+            'destination' => $destination,
+            'timeline' => $timeline,
+            'is_new_user' => $isNewUser,
+            'reset_token' => $resetToken,
+        ]);
 
         try {
-            sendEmail($email, $subjectEmail, $bodyHtml, 'patientcare', ['alt_body' => $altBody, 'password_reset_url' => $resetUrl], $conexion);
+            $patientEmailResult = sendEmail(
+                $email,
+                (string)($patientEmailPayload['subject'] ?? "Your MedTravel booking (case #{$bookingRequestId}) — Created by your coordinator"),
+                (string)($patientEmailPayload['body_html'] ?? ''),
+                'patientcare',
+                [
+                    'alt_body' => (string)($patientEmailPayload['alt_body'] ?? ''),
+                    'password_reset_url' => (string)($patientEmailPayload['access_url'] ?? ''),
+                ],
+                $conexion
+            );
+            $patientEmailSent = ($patientEmailResult === true);
+            if (!$patientEmailSent) {
+                error_log('booking_asistido: patient email returned non-true result for user_id=' . $clientUserId . ' email=' . $email . ' payload=' . json_encode($patientEmailResult));
+            }
         } catch (Exception $ex) {
-            error_log('booking_asistido: credentials email failed for user_id=' . $clientUserId . ' email=' . $email . ': ' . $ex->getMessage());
+            error_log('booking_asistido: patient email failed for user_id=' . $clientUserId . ' email=' . $email . ': ' . $ex->getMessage());
         }
     }
 
@@ -1511,14 +1500,19 @@ if ($action === 'submit') {
         'items_created'    => count($createdItems),
         'warning_code'     => $accountWarningCode,
         'warning_message'  => $accountWarningMessage,
-        'credentials_sent' => ($isNewUser && $clientUserId > 0),
+        'credentials_sent' => ($isNewUser && $patientEmailSent),
+        'patient_email_sent' => $patientEmailSent,
         'message'          => $isNewUser
-            ? 'Booking created. Credentials sent to patient.'
+            ? ($patientEmailSent
+                ? 'Booking created. Activation email sent to patient.'
+                : 'Booking created. Patient portal account created, but email delivery could not be confirmed.')
             : ($accountWarningCode !== ''
                 ? 'Booking created. No patient portal account was linked because the email belongs to an internal MedTravel user.'
-                : ($clientUserId > 0
-                    ? 'Booking created. Existing patient account reused.'
-                    : 'Booking created.'))
+                : ($patientEmailSent
+                    ? 'Booking created. Existing patient account reused and patient notified.'
+                    : ($clientUserId > 0
+                        ? 'Booking created. Existing patient account reused.'
+                        : 'Booking created.')))
         ,
     ]);
 }

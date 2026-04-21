@@ -6,6 +6,7 @@ require_once __DIR__ . '/../admin/include/password_utils.php';
 require_once __DIR__ . '/../admin/include/email_config.php';
 require_once __DIR__ . '/../admin/include/booking_notification_recipients.php';
 require_once __DIR__ . '/../admin/include/provider_medical_staff_helpers.php';
+require_once __DIR__ . '/../admin/include/booking_patient_notifications.php';
 require_once __DIR__ . '/../inc/email_template.php';
 require_once __DIR__ . '/../inc/interaction_email.php';
 require_once __DIR__ . '/../inc/calendar_utils.php';
@@ -1182,8 +1183,9 @@ function insert_booking_items_mvp($conexion, $booking_request_id, $selected_offe
     return $createdItems;
 }
 
-function find_or_create_client_user_for_booking($conexion, $booking)
+function find_or_create_client_user_for_booking($conexion, $booking, &$isNewUser = null)
 {
+    $isNewUser = false;
     $email = trim((string)($booking['email'] ?? ''));
     if ($email === '') {
         return 0;
@@ -1368,6 +1370,7 @@ function find_or_create_client_user_for_booking($conexion, $booking)
     $newId = mysqli_insert_id($conexion);
     booking_runtime_log_local('create_client_user ok email=' . $email . ' user_id=' . intval($newId));
     mysqli_stmt_close($stmtInsert);
+    $isNewUser = ($newId > 0);
     return intval($newId);
 }
 
@@ -1993,20 +1996,21 @@ function build_booking_confirmation_content_html($summaryPayload, $passwordReset
     return $content;
 }
 
-function send_booking_confirmation_email($conexion, $email, $summaryPayload, $resetToken)
+function send_booking_confirmation_email($conexion, $email, $summaryPayload, $resetToken, $isNewUser = false, $hasLinkedPatientAccount = true)
 {
     $email = trim((string)$email);
     if ($email === '') {
         return;
     }
 
-    if (trim((string)$resetToken) === '') {
+    if ($isNewUser && trim((string)$resetToken) === '') {
         $fallbackBooking = [
             'email' => $email,
             'name' => (string)($summaryPayload['patient_name'] ?? ''),
             'phone' => (string)($summaryPayload['patient_phone'] ?? ''),
         ];
-        $fallbackUserId = find_or_create_client_user_for_booking($conexion, $fallbackBooking);
+        $fallbackIsNewUser = false;
+        $fallbackUserId = find_or_create_client_user_for_booking($conexion, $fallbackBooking, $fallbackIsNewUser);
         if ($fallbackUserId > 0) {
             $fallbackReset = set_password_reset_token_for_user($conexion, $fallbackUserId);
             if (!empty($fallbackReset['saved']) && !empty($fallbackReset['token'])) {
@@ -2016,67 +2020,33 @@ function send_booking_confirmation_email($conexion, $email, $summaryPayload, $re
     }
 
     $bookingId = (int)($summaryPayload['booking_id'] ?? 0);
-    $subject = "MedTravel – Request received (ID #{$bookingId})";
-
-    $passwordResetUrl = $resetToken !== ''
-        ? 'https://medtravel.com.co/set_password.php?token=' . urlencode($resetToken)
-        : '';
-    $accessUrl = $passwordResetUrl !== '' ? $passwordResetUrl : 'https://medtravel.com.co/set_password.php';
-    $loginLink = 'https://medtravel.com.co/login.php';
-    if ($passwordResetUrl === '') {
-        error_log('booking_submit: password reset token unavailable for booking_id=' . $bookingId . ' email=' . $email . ' using fallback set_password URL');
+    if ($isNewUser && trim((string)$resetToken) === '') {
+        error_log('booking_submit: password reset token unavailable for booking_id=' . $bookingId . ' email=' . $email . ' using generic access page');
     }
 
-    $body = '';
-    if (function_exists('renderMedTravelEmail')) {
-        $contentHtml = build_booking_confirmation_content_html($summaryPayload, $passwordResetUrl, $loginLink);
-        $body = renderMedTravelEmail(
-            'Request received',
-            'We received your request and opened your MedTravel case.',
-            $contentHtml,
-            'This is an automated message.',
-            [
-                'text' => 'Create your password',
-                'url' => $accessUrl,
-            ]
-        );
-    }
-
-    if ($body === '') {
-        // Fallback legacy body when template renderer/template file is not deployed yet.
-        $body = '<h2>MedTravel request confirmation</h2>'
-            . '<p>Thank you. We have received your request and created your case.</p>'
-            . '<p><strong>Booking ID:</strong> #' . $bookingId . '</p>'
-            . '<p><strong>Patient:</strong> ' . htmlspecialchars((string)($summaryPayload['patient_name'] ?? ''), ENT_QUOTES, 'UTF-8') . '<br>'
-            . '<strong>Email:</strong> ' . htmlspecialchars((string)($summaryPayload['patient_email'] ?? ''), ENT_QUOTES, 'UTF-8') . '</p>'
-            . '<p><strong>Total estimated:</strong> ' . htmlspecialchars((string)($summaryPayload['total_display'] ?? 'Price on request'), ENT_QUOTES, 'UTF-8') . '</p>'
-            . '<p><strong>Login:</strong> <a href="' . htmlspecialchars($loginLink, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($loginLink, ENT_QUOTES, 'UTF-8') . '</a></p>';
-        $body .= '<p><strong>Create your password:</strong> <a href="' . htmlspecialchars($accessUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($accessUrl, ENT_QUOTES, 'UTF-8') . '</a></p>'
-            . '<p>If the button does not work, copy and paste this link:<br><a href="' . htmlspecialchars($accessUrl, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($accessUrl, ENT_QUOTES, 'UTF-8') . '</a></p>';
-    }
-
-    $altBody = "MedTravel - Request received (ID #{$bookingId})\n";
-    $altBody .= "Patient: " . trim((string)($summaryPayload['patient_name'] ?? '')) . "\n";
-    $altBody .= "Email: " . trim((string)($summaryPayload['patient_email'] ?? '')) . "\n";
-    $altBody .= "Destination: " . trim((string)($summaryPayload['destination'] ?? '')) . "\n";
-    $altBody .= "Timeline: " . trim((string)($summaryPayload['timeline'] ?? '')) . "\n\n";
-    $altBody .= "Access your MedTravel Patient Portal\n";
-    $altBody .= "We have created a secure patient account for you.\n";
-    $altBody .= "Username: " . trim((string)($summaryPayload['patient_email'] ?? '')) . "\n";
-    $altBody .= "Create your password:\n" . $accessUrl . "\n";
-    $altBody .= "If the button does not work, copy and paste this link:\n" . $accessUrl . "\n";
-    $altBody .= "For security reasons, this link expires in 24 hours. If it expires, you can request a new one on the same page.\n";
-    $altBody .= "\nAfter creating your password, you can sign in here:\n" . $loginLink . "\n";
+    $emailPayload = booking_patient_build_email_payload([
+        'flow' => 'public',
+        'booking_id' => $bookingId,
+        'patient_name' => (string)($summaryPayload['patient_name'] ?? ''),
+        'patient_email' => (string)($summaryPayload['patient_email'] ?? $email),
+        'destination' => (string)($summaryPayload['destination'] ?? ''),
+        'timeline' => (string)($summaryPayload['timeline'] ?? ''),
+        'total_display' => (string)($summaryPayload['total_display'] ?? 'Price on request'),
+        'items' => (isset($summaryPayload['items']) && is_array($summaryPayload['items'])) ? $summaryPayload['items'] : [],
+        'is_new_user' => !empty($isNewUser),
+        'has_linked_patient_account' => !empty($hasLinkedPatientAccount),
+        'reset_token' => (string)$resetToken,
+    ]);
 
     try {
         $emailResult = sendEmail(
             $email,
-            $subject,
-            $body,
+            (string)($emailPayload['subject'] ?? "MedTravel – Request received (ID #{$bookingId})"),
+            (string)($emailPayload['body_html'] ?? ''),
             'patientcare',
             [
-                'alt_body' => $altBody,
-                'password_reset_url' => $accessUrl,
+                'alt_body' => (string)($emailPayload['alt_body'] ?? ''),
+                'password_reset_url' => (string)($emailPayload['access_url'] ?? ''),
             ],
             $conexion
         );
@@ -2254,10 +2224,11 @@ $special_request = isset($booking['special_request']) ? $booking['special_reques
 $saved = false;
 $booking_request_id = 0;
 $client_user_id = 0;
+$client_user_is_new = false;
 $summaryPayload = [];
 
 try {
-    $client_user_id = find_or_create_client_user_for_booking($conexion, $booking);
+    $client_user_id = find_or_create_client_user_for_booking($conexion, $booking, $client_user_is_new);
 } catch (Throwable $e) {
     error_log('booking_submit: pre-insert client lookup error: ' . $e->getMessage());
 }
@@ -2417,7 +2388,11 @@ if ($saved && $booking_request_id > 0) {
     $resetInfo = ['enabled' => false, 'saved' => false, 'token' => ''];
     try {
         if ($client_user_id <= 0) {
-            $client_user_id = find_or_create_client_user_for_booking($conexion, $booking);
+            $retryClientUserIsNew = false;
+            $client_user_id = find_or_create_client_user_for_booking($conexion, $booking, $retryClientUserIsNew);
+            if ($client_user_id > 0) {
+                $client_user_is_new = $retryClientUserIsNew;
+            }
         }
         if ($client_user_id > 0) {
             update_booking_client_user($conexion, $booking_request_id, $client_user_id);
@@ -2485,7 +2460,9 @@ if ($saved && $booking_request_id > 0) {
             $conexion,
             (string)$booking['email'],
             $summaryPayload,
-            ($resetInfo['saved'] ? (string)$resetInfo['token'] : '')
+            ($resetInfo['saved'] ? (string)$resetInfo['token'] : ''),
+            !empty($client_user_is_new),
+            ($client_user_id > 0)
         );
     } catch (Throwable $e) {
         error_log('booking_submit: post-save email/summary error booking_id=' . intval($booking_request_id) . ' msg=' . $e->getMessage());
