@@ -16,6 +16,7 @@
 
 require_once '../include/conexion.php';
 require_once '../include/roles.php';
+require_once '../include/booking_notification_recipients.php';
 require_once '../include/provider_medical_staff_helpers.php';
 require_once '../include/password_utils.php';
 require_once '../include/email_config.php';
@@ -304,88 +305,7 @@ function pms_owner_role_priority_sql()
 
 function pms_fetch_provider_owner_user($conexion, $providerId)
 {
-    if ($providerId <= 0 || !pms_table_has_column($conexion, 'usuarios', 'id')) {
-        return null;
-    }
-
-    $select = [
-        'u.id',
-        pms_table_has_column($conexion, 'usuarios', 'nombre') ? 'u.nombre' : "'' AS nombre",
-        pms_table_has_column($conexion, 'usuarios', 'usuario') ? 'u.usuario' : "'' AS usuario",
-        pms_table_has_column($conexion, 'usuarios', 'email') ? 'u.email' : "'' AS email",
-        pms_table_has_column($conexion, 'usuarios', 'telefono') ? 'u.telefono' : "'' AS telefono",
-        pms_table_has_column($conexion, 'usuarios', 'activo') ? 'u.activo' : '1 AS activo',
-        pms_table_has_column($conexion, 'usuarios', 'provider_id') ? 'u.provider_id' : 'NULL AS provider_id',
-        pms_table_has_column($conexion, 'usuarios', 'service_provider_id') ? 'u.service_provider_id' : 'NULL AS service_provider_id',
-        pms_table_has_column($conexion, 'usuarios', 'role_id') ? 'u.role_id' : 'NULL AS role_id',
-        pms_table_has_column($conexion, 'usuarios', 'rol') ? 'u.rol' : 'NULL AS rol',
-        pms_table_has_column($conexion, 'usuarios', 'ppal') ? 'u.ppal' : '0 AS ppal',
-    ];
-
-    if (pms_owner_mapping_table_ready($conexion)) {
-        $sql = 'SELECT ' . implode(', ', $select) . ', pu.role_in_provider
-                  FROM provider_users pu
-                  INNER JOIN usuarios u ON u.id = pu.user_id
-                 WHERE pu.provider_id = ?
-                   AND u.id <> 1';
-        if (pms_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
-            $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
-        }
-        if (pms_table_has_column($conexion, 'usuarios', 'is_deleted')) {
-            $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
-        }
-        $sql .= ' ORDER BY ' . pms_owner_role_priority_sql() . ', u.id ASC LIMIT 1';
-
-        $stmt = mysqli_prepare($conexion, $sql);
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, 'i', $providerId);
-            mysqli_stmt_execute($stmt);
-            $res = mysqli_stmt_get_result($stmt);
-            $row = $res ? mysqli_fetch_assoc($res) : null;
-            mysqli_stmt_close($stmt);
-            if ($row) {
-                $row['owner_source'] = 'provider_users';
-                return $row;
-            }
-        }
-    }
-
-    if (!pms_table_has_column($conexion, 'usuarios', 'provider_id')) {
-        return null;
-    }
-
-    $sql = 'SELECT ' . implode(', ', $select) . "
-              FROM usuarios u
-             WHERE u.provider_id = ?
-               AND u.id <> 1";
-    if (pms_table_has_column($conexion, 'usuarios', 'service_provider_id')) {
-        $sql .= ' AND COALESCE(u.service_provider_id, 0) = 0';
-    }
-    if (pms_table_has_column($conexion, 'usuarios', 'is_deleted')) {
-        $sql .= ' AND COALESCE(u.is_deleted, 0) = 0';
-    }
-
-    $ppalPriority = pms_table_has_column($conexion, 'usuarios', 'ppal')
-        ? 'CASE WHEN COALESCE(u.ppal, 0) = 1 THEN 0 ELSE 1 END'
-        : '1';
-    $rolePriority = pms_table_has_column($conexion, 'usuarios', 'role_id')
-        ? 'CASE WHEN u.role_id = ' . (int)ROLE_PROVIDER_ADMIN . ' THEN 0 WHEN u.role_id = ' . (int)ROLE_PROVIDER . ' THEN 1 ELSE 5 END'
-        : '5';
-    $sql .= ' ORDER BY ' . $ppalPriority . ', ' . $rolePriority . ', u.id ASC LIMIT 1';
-
-    $stmt = mysqli_prepare($conexion, $sql);
-    if (!$stmt) {
-        return null;
-    }
-    mysqli_stmt_bind_param($stmt, 'i', $providerId);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-    $row = $res ? mysqli_fetch_assoc($res) : null;
-    mysqli_stmt_close($stmt);
-    if ($row) {
-        $row['owner_source'] = 'legacy_fallback';
-    }
-    return $row ?: null;
+    return booking_notification_fetch_provider_owner_user($conexion, $providerId);
 }
 
 function pms_find_staff_by_linked_user_id($conexion, $providerId, $userId)
