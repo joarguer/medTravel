@@ -161,6 +161,9 @@ if ($hasProviderVerification) {
 
 // Cargar ofertas activas de proveedores con información completa
 $offers = [];
+$offerDeletedCondition = mt_column_exists($conexion, 'provider_service_offers', 'is_deleted')
+    ? ' AND o.is_deleted = 0'
+    : '';
 $offers_sql = "SELECT 
                 o.id, o.title, o.description, o.price_from, o.currency, o.provider_id,
                 p.name AS provider_name, p.city AS provider_city, p.logo AS provider_logo,
@@ -173,7 +176,7 @@ $offers_sql = "SELECT
                {$verificationJoin}
                INNER JOIN service_catalog sc ON o.service_id = sc.id
                LEFT JOIN service_categories cat ON sc.category_id = cat.id
-               WHERE o.is_active = 1
+               WHERE o.is_active = 1{$offerDeletedCondition}
                ORDER BY COALESCE(cat.sort_order, 9999) ASC, cat.name ASC, sc.sort_order ASC, o.id DESC";
 $offers_res = mysqli_query($conexion, $offers_sql);
 if ($offers_res) {

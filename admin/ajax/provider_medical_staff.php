@@ -1546,9 +1546,12 @@ function pms_resolve_provider_service_id($conexion, $providerId, $serviceId = 0,
     $select = pms_table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id')
         ? 'provider_catalog_service_id, service_id'
         : 'NULL AS provider_catalog_service_id, service_id';
+    $offerDeletedCondition = pms_table_has_column($conexion, 'provider_service_offers', 'is_deleted')
+        ? ' AND is_deleted = 0'
+        : '';
     $stmt = mysqli_prepare(
         $conexion,
-        'SELECT ' . $select . ' FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1'
+        'SELECT ' . $select . ' FROM provider_service_offers WHERE id = ? AND provider_id = ?' . $offerDeletedCondition . ' LIMIT 1'
     );
     if (!$stmt) {
         return ['error' => 'db_prepare_failed'];

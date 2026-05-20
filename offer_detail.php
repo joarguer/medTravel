@@ -83,6 +83,9 @@ if ($hasProviderVerification) {
     $verificationSelect = "'' AS verification_status, '' AS verification_level,";
     $verificationJoin = "";
 }
+$offerDeletedCondition = (function_exists('mt_db_table_has_column') && mt_db_table_has_column($conexion, 'provider_service_offers', 'is_deleted'))
+    ? ' AND o.is_deleted = 0'
+    : '';
 
 $query = "
     SELECT 
@@ -94,6 +97,7 @@ $query = "
     INNER JOIN providers p ON o.provider_id = p.id
     {$verificationJoin}
     WHERE o.id = ?
+    {$offerDeletedCondition}
     LIMIT 1
 ";
 

@@ -30,7 +30,34 @@ $session_provider_id = isset($_SESSION['provider_id']) ? (int)$_SESSION['provide
 $tipo = isset($_REQUEST['tipo']) ? $_REQUEST['tipo'] : '';
 $is_admin = function_exists('is_role_admin_session') ? is_role_admin_session() : false;
 
-function json_error($msg, $code = 400){ http_response_code($code); echo json_encode(['ok'=>false,'error'=>$msg]); exit(); }
+function json_error($msg, $code = 400, $message = null){
+    http_response_code($code);
+    $payload = ['ok'=>false,'error'=>$msg];
+    if ($message !== null) {
+        $payload['message'] = $message;
+    }
+    echo json_encode($payload);
+    exit();
+}
+
+function table_exists($conexion, $table){
+    static $cache = [];
+    if (isset($cache[$table])) {
+        return $cache[$table];
+    }
+    $sql = "SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1";
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        $cache[$table] = false;
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 's', $table);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $cache[$table] = $res && mysqli_fetch_row($res) ? true : false;
+    mysqli_stmt_close($stmt);
+    return $cache[$table];
+}
 
 function table_has_column($conexion, $table, $column){
     static $cache = [];
@@ -50,6 +77,36 @@ function table_has_column($conexion, $table, $column){
     $cache[$key] = $res && mysqli_fetch_row($res) ? true : false;
     mysqli_stmt_close($stmt);
     return $cache[$key];
+}
+
+function provider_offers_not_deleted_condition($conexion, $alias = 'o'){
+    return table_has_column($conexion, 'provider_service_offers', 'is_deleted')
+        ? " AND {$alias}.is_deleted = 0"
+        : '';
+}
+
+function provider_offers_active_usage_count($conexion, $offerId){
+    $offerId = (int)$offerId;
+    if ($offerId <= 0 || !table_exists($conexion, 'booking_request_items')) {
+        return 0;
+    }
+
+    $sql = 'SELECT COUNT(*) AS total FROM booking_request_items WHERE offer_id = ?';
+    if (table_has_column($conexion, 'booking_request_items', 'is_deleted')) {
+        $sql .= ' AND COALESCE(is_deleted, 0) = 0';
+    }
+
+    $stmt = mysqli_prepare($conexion, $sql);
+    if (!$stmt) {
+        json_error('DB_PREPARE_OFFER_USAGE', 500);
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $offerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    return $row ? (int)$row['total'] : 0;
 }
 
 function bind_stmt_params($stmt, $types, array &$params){
@@ -414,7 +471,7 @@ if ($tipo === 'list') {
 
     $hasOfferProviderCatalogServiceId = table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id');
     $selectProviderCatalogServiceId = $hasOfferProviderCatalogServiceId ? 'o.provider_catalog_service_id,' : 'NULL AS provider_catalog_service_id,';
-    $sql = "SELECT o.id, o.title, o.price_from, o.currency, o.is_active, o.service_id, {$selectProviderCatalogServiceId} sc.name AS service_name, IFNULL(p.name,'') AS provider_name FROM provider_service_offers o LEFT JOIN service_catalog sc ON sc.id = o.service_id LEFT JOIN providers p ON p.id = o.provider_id WHERE o.provider_id = ? ORDER BY o.created_at DESC";
+    $sql = "SELECT o.id, o.title, o.price_from, o.currency, o.is_active, o.service_id, {$selectProviderCatalogServiceId} sc.name AS service_name, IFNULL(p.name,'') AS provider_name FROM provider_service_offers o LEFT JOIN service_catalog sc ON sc.id = o.service_id LEFT JOIN providers p ON p.id = o.provider_id WHERE o.provider_id = ?" . provider_offers_not_deleted_condition($conexion, 'o') . " ORDER BY o.created_at DESC";
     $stmt = mysqli_prepare($conexion, $sql);
     mysqli_stmt_bind_param($stmt, 'i', $provider_id);
     mysqli_stmt_execute($stmt);
@@ -521,7 +578,7 @@ if ($tipo === 'get') {
     if (!$id) json_error('INVALID_ID');
     $hasOfferProviderCatalogServiceId = table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id');
     $selectProviderCatalogServiceId = $hasOfferProviderCatalogServiceId ? 'o.provider_catalog_service_id,' : 'NULL AS provider_catalog_service_id,';
-    $sql = "SELECT o.*, {$selectProviderCatalogServiceId} sc.name AS service_name FROM provider_service_offers o LEFT JOIN service_catalog sc ON sc.id = o.service_id WHERE o.id = ? AND o.provider_id = ? LIMIT 1";
+    $sql = "SELECT o.*, {$selectProviderCatalogServiceId} sc.name AS service_name FROM provider_service_offers o LEFT JOIN service_catalog sc ON sc.id = o.service_id WHERE o.id = ? AND o.provider_id = ?" . provider_offers_not_deleted_condition($conexion, 'o') . " LIMIT 1";
     $stmt = mysqli_prepare($conexion, $sql);
     mysqli_stmt_bind_param($stmt, 'ii', $id, $provider_id);
     mysqli_stmt_execute($stmt);
@@ -596,7 +653,7 @@ if ($tipo === 'create' || $tipo === 'update') {
         if (!$id) json_error('INVALID_ID');
         $hasOfferProviderCatalogServiceId = table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id');
         $selectProviderCatalogServiceId = $hasOfferProviderCatalogServiceId ? 'provider_catalog_service_id,' : 'NULL AS provider_catalog_service_id,';
-        $chk = mysqli_prepare($conexion, "SELECT id, provider_id, service_id, {$selectProviderCatalogServiceId} title FROM provider_service_offers WHERE id = ? LIMIT 1");
+        $chk = mysqli_prepare($conexion, "SELECT id, provider_id, service_id, {$selectProviderCatalogServiceId} title FROM provider_service_offers WHERE id = ?" . provider_offers_not_deleted_condition($conexion, 'provider_service_offers') . " LIMIT 1");
         mysqli_stmt_bind_param($chk, 'i', $id);
         mysqli_stmt_execute($chk);
         $chkres = mysqli_stmt_get_result($chk);
@@ -660,7 +717,7 @@ if ($tipo === 'toggle') {
 
     $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
     if (!$id) json_error('INVALID_ID');
-    $chk = mysqli_prepare($conexion, "SELECT is_active FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1");
+    $chk = mysqli_prepare($conexion, "SELECT is_active FROM provider_service_offers WHERE id = ? AND provider_id = ?" . provider_offers_not_deleted_condition($conexion, 'provider_service_offers') . " LIMIT 1");
     mysqli_stmt_bind_param($chk, 'ii', $id, $provider_id);
     mysqli_stmt_execute($chk);
     $res = mysqli_stmt_get_result($chk);
@@ -671,6 +728,68 @@ if ($tipo === 'toggle') {
     mysqli_stmt_bind_param($up, 'ii', $new, $id);
     mysqli_stmt_execute($up);
     echo json_encode(['ok'=>true,'data'=>['is_active'=>$new]]);
+    exit();
+}
+
+if ($tipo === 'delete' || $tipo === 'archive') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
+    if (
+        !table_has_column($conexion, 'provider_service_offers', 'is_deleted') ||
+        !table_has_column($conexion, 'provider_service_offers', 'deleted_at') ||
+        !table_has_column($conexion, 'provider_service_offers', 'deleted_by')
+    ) {
+        json_error('SOFT_DELETE_MIGRATION_REQUIRED', 409, 'Soft delete columns are not available for provider offers.');
+    }
+
+    $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
+    if (!$id) json_error('INVALID_ID');
+
+    $chk = mysqli_prepare($conexion, "SELECT id FROM provider_service_offers WHERE id = ? AND provider_id = ? AND is_deleted = 0 LIMIT 1");
+    if (!$chk) {
+        json_error('DB_PREPARE_OFFER_DELETE', 500);
+    }
+    mysqli_stmt_bind_param($chk, 'ii', $id, $provider_id);
+    mysqli_stmt_execute($chk);
+    $res = mysqli_stmt_get_result($chk);
+    $offer = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($chk);
+    if (!$offer) json_error('NOT_FOUND', 404);
+
+    if (provider_offers_active_usage_count($conexion, $id) > 0) {
+        json_error(
+            'OFFER_HAS_HISTORY',
+            409,
+            'This offer has historical requests. Deactivate it instead to preserve traceability.'
+        );
+    }
+
+    $deletedBy = isset($_SESSION['id_usuario']) ? (int)$_SESSION['id_usuario'] : 0;
+    $up = mysqli_prepare($conexion, "UPDATE provider_service_offers SET is_deleted = 1, is_active = 0, deleted_at = NOW(), deleted_by = ? WHERE id = ? AND provider_id = ? AND is_deleted = 0 LIMIT 1");
+    if (!$up) {
+        json_error('DB_PREPARE_OFFER_DELETE', 500);
+    }
+    mysqli_stmt_bind_param($up, 'iii', $deletedBy, $id, $provider_id);
+    $ok = mysqli_stmt_execute($up);
+    if (!$ok) {
+        json_error('DB_ERR:'.mysqli_error($conexion), 500);
+    }
+    if (mysqli_stmt_affected_rows($up) <= 0) {
+        json_error('NOT_FOUND', 404);
+    }
+    mysqli_stmt_close($up);
+
+    echo json_encode(['ok'=>true,'message'=>'Offer archived successfully.']);
     exit();
 }
 
@@ -690,7 +809,7 @@ if ($tipo === 'upload_media') {
     $offer_id = isset($_REQUEST['offer_id']) ? (int)$_REQUEST['offer_id'] : 0;
     if (!$offer_id) json_error('INVALID_OFFER');
     // check ownership
-    $chk = mysqli_prepare($conexion, "SELECT id FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1");
+    $chk = mysqli_prepare($conexion, "SELECT id FROM provider_service_offers WHERE id = ? AND provider_id = ?" . provider_offers_not_deleted_condition($conexion, 'provider_service_offers') . " LIMIT 1");
     mysqli_stmt_bind_param($chk, 'ii', $offer_id, $provider_id);
     mysqli_stmt_execute($chk);
     $cres = mysqli_stmt_get_result($chk);
@@ -754,6 +873,7 @@ if ($tipo === 'delete_media') {
          FROM offer_media m
          INNER JOIN provider_service_offers o ON o.id = m.offer_id
          WHERE m.id = ?
+         " . provider_offers_not_deleted_condition($conexion, 'o') . "
          LIMIT 1"
     );
     mysqli_stmt_bind_param($sel, 'i', $media_id);

@@ -283,9 +283,12 @@ if ($es_admin) {
         $offers_month = [];
     }
 } else {
+    $offerSoftDeleteWhere = dashboard_column_exists($conexion, 'provider_service_offers', 'is_deleted')
+        ? ' AND COALESCE(is_deleted, 0) = 0'
+        : '';
     $metric_cards = [
         ['label' => 'Mis servicios publicados', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM medtravel_services_catalog WHERE is_active = 1 AND provider_id = ?", 'i', [$provider_id]), 'icon' => 'icon-grid', 'class' => 'font-green-sharp'],
-        ['label' => 'Ofertas activas', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM provider_service_offers WHERE is_active = 1 AND provider_id = ?", 'i', [$provider_id]), 'icon' => 'icon-tag', 'class' => 'font-red-haze'],
+        ['label' => 'Ofertas activas', 'value' => fetch_count($conexion, "SELECT COUNT(*) FROM provider_service_offers WHERE is_active = 1 AND provider_id = ?{$offerSoftDeleteWhere}", 'i', [$provider_id]), 'icon' => 'icon-tag', 'class' => 'font-red-haze'],
         ['label' => 'Bookings pendientes', 'value' => 0, 'icon' => 'icon-calendar', 'class' => 'font-blue-sharp'],
         ['label' => 'Solicitudes totales', 'value' => 0, 'icon' => 'icon-users', 'class' => 'font-purple-soft'],
     ];
@@ -295,11 +298,11 @@ if ($es_admin) {
     $chart2_subtitle = 'participación por tipo';
 
     $services_month = monthly_counts($conexion, 'medtravel_services_catalog', 'provider_id = ?', 'i', [$provider_id]);
-    $offers_month = monthly_counts($conexion, 'provider_service_offers', 'provider_id = ?', 'i', [$provider_id]);
+    $offers_month = monthly_counts($conexion, 'provider_service_offers', "provider_id = ?{$offerSoftDeleteWhere}", 'i', [$provider_id]);
 
     // Calcular bookings asociados a las ofertas del proveedor (búsqueda en JSON selected_offers)
     $offer_ids = [];
-    $offer_res = mysqli_query($conexion, "SELECT id FROM provider_service_offers WHERE provider_id = " . $provider_id);
+    $offer_res = mysqli_query($conexion, "SELECT id FROM provider_service_offers WHERE provider_id = " . $provider_id . $offerSoftDeleteWhere);
     if ($offer_res) {
         while ($row = mysqli_fetch_assoc($offer_res)) {
             $offer_ids[] = (int)$row['id'];

@@ -185,6 +185,9 @@ try{
         $targetProviderId = 0;
         $targetProviderName = '';
         $hasOfferProviderCatalogServiceId = service_catalog_table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id');
+        $offerSoftDeleteCondition = service_catalog_table_has_column($conexion, 'provider_service_offers', 'is_deleted')
+            ? " AND o.is_deleted = 0"
+            : "";
         $descriptionColumn = service_catalog_description_column($conexion);
 
         if ($isAdminPrincipal) {
@@ -226,8 +229,8 @@ try{
                     pcs.provider_id,
                     p.name AS provider_name,
                     " . ($hasOfferProviderCatalogServiceId
-                        ? "(SELECT COUNT(*) FROM provider_service_offers o WHERE o.provider_id = pcs.provider_id AND o.provider_catalog_service_id = pcs.id)"
-                        : "(SELECT COUNT(*) FROM provider_service_offers o WHERE o.provider_id = pcs.provider_id AND o.service_id = pcs.service_id)") . " AS offer_count
+                        ? "(SELECT COUNT(*) FROM provider_service_offers o WHERE o.provider_id = pcs.provider_id AND o.provider_catalog_service_id = pcs.id{$offerSoftDeleteCondition})"
+                        : "(SELECT COUNT(*) FROM provider_service_offers o WHERE o.provider_id = pcs.provider_id AND o.service_id = pcs.service_id{$offerSoftDeleteCondition})") . " AS offer_count
                 FROM service_catalog sc
                 INNER JOIN provider_catalog_services pcs
                     ON pcs.service_id = sc.id

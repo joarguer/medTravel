@@ -257,6 +257,9 @@ function provider_count_offer_metrics($conexion, $provider_id){
     $sql = 'SELECT COUNT(*) AS total, '
         . ($hasIsActive ? 'SUM(CASE WHEN COALESCE(is_active, 0) = 1 THEN 1 ELSE 0 END)' : '0')
         . ' AS active FROM provider_service_offers WHERE provider_id = ?';
+    if (table_has_column($conexion, 'provider_service_offers', 'is_deleted')) {
+        $sql .= ' AND COALESCE(is_deleted, 0) = 0';
+    }
     $stmt = mysqli_prepare($conexion, $sql);
     if (!$stmt) {
         return $metrics;

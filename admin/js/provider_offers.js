@@ -261,12 +261,16 @@ $(function(){
             },
             error: function(xhr, status, err){
                 var msg = 'NETWORK';
+                var response = null;
                 try {
-                    if (xhr && xhr.responseJSON && xhr.responseJSON.error) msg = xhr.responseJSON.error;
+                    if (xhr && xhr.responseJSON) {
+                        response = xhr.responseJSON;
+                        if (xhr.responseJSON.error) msg = xhr.responseJSON.error;
+                    }
                     else if (xhr && xhr.responseText) msg = xhr.responseText.substring(0, 500);
                 } catch(e){ /* ignore */ }
                 console.error('api error', status, err, xhr);
-                cb(msg, null, null);
+                cb(msg, null, response);
             }
         });
     }
@@ -277,6 +281,9 @@ $(function(){
         }
         if (err === 'NETWORK') {
             return 'Error de conexión al procesar la operación.';
+        }
+        if (err === 'OFFER_HAS_HISTORY') {
+            return 'This offer has historical requests. Deactivate it instead to preserve traceability.';
         }
         if (typeof err === 'string' && err.indexOf('DB_ERR:') === 0) {
             return 'Error de base de datos al guardar la oferta.';
@@ -443,6 +450,7 @@ $(function(){
                 }
                 var toggleLabel = (row.is_active==1) ? 'Desactivar' : 'Activar';
                 actions.append($('<button class="btn btn-xs btn-default">'+toggleLabel+'</button>').click(function(){ toggle(row.id); }));
+                actions.append($('<button class="btn btn-xs btn-danger ml5">Eliminar</button>').click(function(){ archiveOffer(row.id); }));
                 tr.append(actions);
                 tbody.append(tr);
             });
@@ -584,6 +592,19 @@ $(function(){
     }
 
     function toggle(id){ api({tipo:'toggle',id:id}, function(err,d,res){ if(err) return offersToast('error', parseApiError(err, res)); listOffers(); }); }
+
+    function archiveOffer(id){
+        if(!id) return offersToast('error', 'Oferta inválida.');
+        if(!window.confirm('This will hide the offer from the catalog. It will not affect historical requests.')) return;
+        api({tipo:'delete', id:id}, function(err, d, res){
+            if(err) {
+                return offersToast('error', parseApiError(err, res));
+            }
+            offersToast('success', 'Oferta eliminada del catálogo.');
+            renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
+            listOffers();
+        });
+    }
 
     function upload(){
         var id = $('#offer-id').val(); if(!id) return offersToast('warning', 'Abra o cree la oferta primero.');

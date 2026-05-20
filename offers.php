@@ -239,6 +239,10 @@ if ($hasProviderVerification) {
     $verificationJoin   = "";
 }
 
+$offerDeletedCondition = (function_exists('mt_db_table_has_column') && mt_db_table_has_column($conexion, 'provider_service_offers', 'is_deleted'))
+    ? ' AND o.is_deleted = 0'
+    : '';
+
 // Consulta de ofertas activas
 if ($requires_provider_service_context) {
     $stmt = null;
@@ -263,7 +267,7 @@ if ($requires_provider_service_context) {
             INNER JOIN providers p ON o.provider_id = p.id
             {$verificationJoin}
             INNER JOIN service_catalog sc ON o.service_id = sc.id
-            WHERE o.provider_id = ? AND o.service_id IN ({$_placeholders}) AND o.is_active = 1
+            WHERE o.provider_id = ? AND o.service_id IN ({$_placeholders}) AND o.is_active = 1{$offerDeletedCondition}
             ORDER BY o.id DESC
         ";
         $stmt = mysqli_prepare($conexion, $offers_query);
@@ -295,7 +299,7 @@ if ($requires_provider_service_context) {
         INNER JOIN providers p ON o.provider_id = p.id
         {$verificationJoin}
         INNER JOIN service_catalog sc ON o.service_id = sc.id
-        WHERE o.provider_id = ? AND o.service_id = ? AND o.is_active = 1
+        WHERE o.provider_id = ? AND o.service_id = ? AND o.is_active = 1{$offerDeletedCondition}
         ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);
@@ -311,7 +315,7 @@ if ($requires_provider_service_context) {
         INNER JOIN providers p ON o.provider_id = p.id
         {$verificationJoin}
         INNER JOIN service_catalog sc ON o.service_id = sc.id
-        WHERE sc.category_id = ? AND o.provider_id = ? AND o.is_active = 1
+        WHERE sc.category_id = ? AND o.provider_id = ? AND o.is_active = 1{$offerDeletedCondition}
         ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);
@@ -327,7 +331,7 @@ if ($requires_provider_service_context) {
         INNER JOIN providers p ON o.provider_id = p.id
         {$verificationJoin}
         INNER JOIN service_catalog sc ON o.service_id = sc.id
-        WHERE sc.category_id = ? AND o.is_active = 1
+        WHERE sc.category_id = ? AND o.is_active = 1{$offerDeletedCondition}
         ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);
@@ -343,7 +347,7 @@ if ($requires_provider_service_context) {
         INNER JOIN providers p ON o.provider_id = p.id
         {$verificationJoin}
         INNER JOIN service_catalog sc ON o.service_id = sc.id
-        WHERE o.provider_id = ? AND o.is_active = 1
+        WHERE o.provider_id = ? AND o.is_active = 1{$offerDeletedCondition}
         ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);
@@ -359,7 +363,7 @@ if ($requires_provider_service_context) {
         INNER JOIN providers p ON o.provider_id = p.id
         {$verificationJoin}
         INNER JOIN service_catalog sc ON o.service_id = sc.id
-        WHERE o.is_active = 1
+        WHERE o.is_active = 1{$offerDeletedCondition}
         ORDER BY o.id DESC
     ";
     $stmt = mysqli_prepare($conexion, $offers_query);

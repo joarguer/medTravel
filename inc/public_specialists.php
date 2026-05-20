@@ -279,6 +279,7 @@ if (!function_exists('mt_home_specialists_attach_offer_chips')) {
         $hasPcsTable  = mt_db_table_exists($conexion, 'provider_catalog_services');
         $hasScActive  = mt_db_table_has_column($conexion, 'service_catalog', 'is_active');
         $hasScDeleted = mt_db_table_has_column($conexion, 'service_catalog', 'is_deleted');
+        $hasOfferDeleted = mt_db_table_has_column($conexion, 'provider_service_offers', 'is_deleted');
 
         $serviceIdExpr = 'rel.service_id';
         $pcsJoin = '';
@@ -299,14 +300,15 @@ if (!function_exists('mt_home_specialists_attach_offer_chips')) {
              . $pcsJoin
              . ' INNER JOIN provider_service_offers o
                         ON o.provider_id = pms.provider_id
-                       AND o.service_id = ' . $serviceIdExpr . '
-                       AND o.is_active = 1
-                INNER JOIN service_catalog sc ON sc.id = o.service_id
-                WHERE rel.provider_medical_staff_id IN (' . $placeholders . ')';
+	                       AND o.service_id = ' . $serviceIdExpr . '
+	                       AND o.is_active = 1
+	                INNER JOIN service_catalog sc ON sc.id = o.service_id
+	                WHERE rel.provider_medical_staff_id IN (' . $placeholders . ')';
 
         if ($hasRelActive)   { $sql .= ' AND rel.active = 1'; }
         if ($hasScActive)    { $sql .= ' AND sc.is_active = 1'; }
         if ($hasScDeleted)   { $sql .= ' AND sc.is_deleted = 0'; }
+        if ($hasOfferDeleted) { $sql .= ' AND o.is_deleted = 0'; }
 
         $sql .= ' GROUP BY rel.provider_medical_staff_id, o.service_id'
               . ' ORDER BY rel.provider_medical_staff_id ASC, MIN(sc.name) ASC';

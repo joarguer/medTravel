@@ -118,6 +118,32 @@ function sanitize_slug(string $slug): string {
     return $slug;
 }
 
+function cbot_table_has_column(mysqli $db, string $table, string $column): bool {
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    $sql = "SELECT 1
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND COLUMN_NAME = ?
+            LIMIT 1";
+    $stmt = mysqli_prepare($db, $sql);
+    if (!$stmt) {
+        $cache[$key] = false;
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'ss', $table, $column);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $cache[$key] = $res && mysqli_fetch_row($res) ? true : false;
+    mysqli_stmt_close($stmt);
+    return $cache[$key];
+}
+
 // --- Routing -------------------------------------------------------------
 $path = detect_path();
 require_api_key($API_KEY, $META_SOURCE);
@@ -146,10 +172,13 @@ switch (true) {
 
 // --- Handlers ------------------------------------------------------------
 function list_services(mysqli $db, string $source): void {
+    $offerDeletedCondition = cbot_table_has_column($db, 'provider_service_offers', 'is_deleted')
+        ? ' AND o.is_deleted = 0'
+        : '';
     $sql = "SELECT sc.id, sc.name, sc.slug, COALESCE(sc.short_description, '') AS description, sc.is_active,
                    MIN(CASE WHEN o.currency = 'USD' THEN o.price_from END) AS price_from_usd
             FROM service_catalog sc
-            INNER JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1
+            INNER JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1{$offerDeletedCondition}
             WHERE sc.is_active = 1
             GROUP BY sc.id, sc.name, sc.slug, sc.short_description, sc.is_active
             ORDER BY sc.name ASC";
@@ -177,10 +206,13 @@ function list_services(mysqli $db, string $source): void {
 }
 
 function service_detail(mysqli $db, string $slug, string $source): void {
+    $offerDeletedCondition = cbot_table_has_column($db, 'provider_service_offers', 'is_deleted')
+        ? ' AND o.is_deleted = 0'
+        : '';
     $sql = "SELECT sc.id, sc.name, sc.slug, COALESCE(sc.short_description, '') AS description, sc.is_active,
                    MIN(CASE WHEN o.currency = 'USD' THEN o.price_from END) AS price_from_usd
             FROM service_catalog sc
-            INNER JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1
+            INNER JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1{$offerDeletedCondition}
             WHERE sc.slug = ? AND sc.is_active = 1
             GROUP BY sc.id, sc.name, sc.slug, sc.short_description, sc.is_active
             LIMIT 1";
