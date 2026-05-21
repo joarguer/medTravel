@@ -138,6 +138,17 @@ $new_offer_label = $is_admin ? 'Nueva oferta comercial' : 'Nueva oferta';
                                         Selecciona un prestador médico para listar y administrar sus ofertas comerciales. Esta vista no muestra ofertas de todos los prestadores mezcladas sin contexto.
                                     </div>
                                     <?php endif; ?>
+                                    <ul class="nav nav-tabs" id="provider-offer-status-tabs" style="margin-bottom:15px;">
+                                        <li class="active">
+                                            <a href="#" data-offer-status="active">Vigentes</a>
+                                        </li>
+                                        <li>
+                                            <a href="#" data-offer-status="inactive">Inactivas</a>
+                                        </li>
+                                        <li>
+                                            <a href="#" data-offer-status="deleted">Eliminadas</a>
+                                        </li>
+                                    </ul>
                                     <table class="table table-striped table-bordered" id="tbl-offers">
                                         <thead>
                                             <tr>

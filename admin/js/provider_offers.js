@@ -3,6 +3,7 @@ $(function(){
     var isAdminMedical = !!offersCtx.isAdmin;
     var scopedMedicalProviderId = offersCtx.providerId ? parseInt(offersCtx.providerId, 10) : 0;
     var adminSelectedProviderId = 0;
+    var currentOfferStatus = 'active';
     var defaultServiceHelp = 'La oferta comercial se construye sobre un servicio ya habilitado en Mis Servicios.';
     var pageParams = (function(){
         try {
@@ -111,10 +112,38 @@ $(function(){
 
     function renderEmptyState(message){
         $('#tbl-offers tbody').html(
-            '<tr><td colspan="5" class="text-center text-muted" style="padding:24px 12px;">'
+            '<tr><td colspan="' + getOfferTableColspan() + '" class="text-center text-muted" style="padding:24px 12px;">'
             + escapeHtml(message)
             + '</td></tr>'
         );
+    }
+
+    function getOfferTableColspan(){
+        return currentOfferStatus === 'deleted' ? 6 : 5;
+    }
+
+    function getEmptyOfferMessage(){
+        if (currentOfferStatus === 'deleted') {
+            return 'No hay ofertas eliminadas.';
+        }
+        if (currentOfferStatus === 'inactive') {
+            return 'No hay ofertas inactivas.';
+        }
+        return 'No hay ofertas vigentes.';
+    }
+
+    function renderOfferTableHeader(){
+        var columns;
+        if (currentOfferStatus === 'deleted') {
+            columns = ['Servicio', 'Título', 'Precio desde', 'Eliminada', 'Eliminado por', 'Acciones'];
+        } else {
+            columns = ['Servicio', 'Título', 'Precio desde', 'Activo', 'Acciones'];
+        }
+        var row = $('<tr>');
+        $.each(columns, function(i, label){
+            row.append($('<th>').text(label));
+        });
+        $('#tbl-offers thead').html(row);
     }
 
     function renderGalleryPlaceholder(message){
@@ -383,13 +412,14 @@ $(function(){
     }
 
     function listOffers(cb){
+        renderOfferTableHeader();
         if(isAdminMedical && !hasProviderContext()){
             updateAdminContextState();
             if (cb) cb(false, null, { require_provider_context: true });
             return;
         }
 
-        api({tipo:'list'}, function(err,data,res){
+        api({tipo:'list', status: currentOfferStatus}, function(err,data,res){
             if(err) {
                 offersToast('error', parseApiError(err, res));
                 if (cb) cb(false, data, res);
@@ -419,13 +449,7 @@ $(function(){
                 } else {
                     updateNextStepCta('', 0, 0, '');
                 }
-                renderEmptyState(
-                    deepLinkedProviderCatalogServiceId > 0
-                        ? 'Este servicio habilitado todavía no tiene ofertas comerciales registradas.'
-                        : isAdminMedical
-                        ? 'No hay ofertas comerciales registradas para el prestador seleccionado.'
-                        : 'No hay ofertas comerciales registradas todavía.'
-                );
+                renderEmptyState(getEmptyOfferMessage());
                 renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
                 if (cb) cb(true, filteredData, res);
                 return;
@@ -440,17 +464,23 @@ $(function(){
                 tr.append($('<td>').text(row.service_name));
                 tr.append($('<td>').text(row.title));
                 tr.append($('<td>').text(row.price_from));
-                tr.append($('<td>').text(row.is_active==1? 'Sí':'No'));
                 var actions = $('<td>');
-                actions.append($('<button class="btn btn-xs btn-primary mr5">Editar</button>').click(function(){ openEdit(row.id); }));
-                actions.append($('<button class="btn btn-xs btn-warning mr5">Fotos</button>').click(function(){ loadGallery(row.id); }));
-                actions.append($('<button class="btn btn-xs btn-success mr5">Copiar link</button>').click(function(){ copyPublicOfferUrl(row.id); }));
-                if (!isAdminMedical && parseInt(row.provider_catalog_service_id || 0, 10) > 0) {
-                    actions.append($('<a class="btn btn-xs btn-info mr5">Asignar a staff</a>').attr('href', buildStaffAssignmentUrl(parseInt(row.provider_catalog_service_id || 0, 10), parseInt(row.service_id || 0, 10))));
+                if (currentOfferStatus === 'deleted') {
+                    tr.append($('<td>').text(row.deleted_at || ''));
+                    tr.append($('<td>').text(row.deleted_by ? ('Usuario #' + row.deleted_by) : ''));
+                    actions.append($('<button class="btn btn-xs btn-success">Restaurar</button>').click(function(){ restoreOffer(row.id); }));
+                } else {
+                    tr.append($('<td>').text(row.is_active==1? 'Sí':'No'));
+                    actions.append($('<button class="btn btn-xs btn-primary mr5">Editar</button>').click(function(){ openEdit(row.id); }));
+                    actions.append($('<button class="btn btn-xs btn-warning mr5">Fotos</button>').click(function(){ loadGallery(row.id); }));
+                    actions.append($('<button class="btn btn-xs btn-success mr5">Copiar link</button>').click(function(){ copyPublicOfferUrl(row.id); }));
+                    if (currentOfferStatus === 'active' && !isAdminMedical && parseInt(row.provider_catalog_service_id || 0, 10) > 0) {
+                        actions.append($('<a class="btn btn-xs btn-info mr5">Asignar a staff</a>').attr('href', buildStaffAssignmentUrl(parseInt(row.provider_catalog_service_id || 0, 10), parseInt(row.service_id || 0, 10))));
+                    }
+                    var toggleLabel = (row.is_active==1) ? 'Desactivar' : 'Activar';
+                    actions.append($('<button class="btn btn-xs btn-default mr5">'+toggleLabel+'</button>').click(function(){ toggle(row.id); }));
+                    actions.append($('<button class="btn btn-xs btn-danger">Eliminar</button>').click(function(){ archiveOffer(row.id); }));
                 }
-                var toggleLabel = (row.is_active==1) ? 'Desactivar' : 'Activar';
-                actions.append($('<button class="btn btn-xs btn-default">'+toggleLabel+'</button>').click(function(){ toggle(row.id); }));
-                actions.append($('<button class="btn btn-xs btn-danger ml5">Eliminar</button>').click(function(){ archiveOffer(row.id); }));
                 tr.append(actions);
                 tbody.append(tr);
             });
@@ -606,6 +636,18 @@ $(function(){
         });
     }
 
+    function restoreOffer(id){
+        if(!id) return offersToast('error', 'Oferta inválida.');
+        if(!window.confirm('Esta oferta volverá a quedar vigente y visible en el catálogo. ¿Deseas continuar?')) return;
+        api({tipo:'restore', id:id}, function(err, d, res){
+            if(err) {
+                return offersToast('error', parseApiError(err, res));
+            }
+            offersToast('success', (res && res.message) || 'Offer restored successfully.');
+            listOffers();
+        });
+    }
+
     function upload(){
         var id = $('#offer-id').val(); if(!id) return offersToast('warning', 'Abra o cree la oferta primero.');
         var f = $('#offer-file')[0].files[0]; if(!f) return offersToast('warning', 'Seleccione un archivo.');
@@ -732,6 +774,18 @@ $(function(){
     });
     $('#offer-save').click(save);
     $('#offer-upload').click(upload);
+    $('#provider-offer-status-tabs a[data-offer-status]').click(function(e){
+        e.preventDefault();
+        var nextStatus = String($(this).data('offer-status') || 'active');
+        if (['active', 'inactive', 'deleted'].indexOf(nextStatus) === -1) {
+            nextStatus = 'active';
+        }
+        currentOfferStatus = nextStatus;
+        $('#provider-offer-status-tabs li').removeClass('active');
+        $(this).parent('li').addClass('active');
+        renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
+        listOffers();
+    });
 
     function loadMedicalProviders(){
         if(!isAdminMedical){

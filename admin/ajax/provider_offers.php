@@ -85,6 +85,12 @@ function provider_offers_not_deleted_condition($conexion, $alias = 'o'){
         : '';
 }
 
+function provider_offers_soft_delete_schema_available($conexion){
+    return table_has_column($conexion, 'provider_service_offers', 'is_deleted')
+        && table_has_column($conexion, 'provider_service_offers', 'deleted_at')
+        && table_has_column($conexion, 'provider_service_offers', 'deleted_by');
+}
+
 function provider_offers_active_usage_count($conexion, $offerId){
     $offerId = (int)$offerId;
     if ($offerId <= 0 || !table_exists($conexion, 'booking_request_items')) {
@@ -469,9 +475,32 @@ if ($tipo === 'list') {
         json_error($contextError, provider_offers_context_error_status($contextError));
     }
 
+    $status = isset($_REQUEST['status']) ? strtolower(trim((string)$_REQUEST['status'])) : '';
+    if ($status === '' && isset($_REQUEST['tab'])) {
+        $status = strtolower(trim((string)$_REQUEST['tab']));
+    }
+    if (!in_array($status, ['active', 'inactive', 'deleted'], true)) {
+        $status = 'active';
+    }
+
     $hasOfferProviderCatalogServiceId = table_has_column($conexion, 'provider_service_offers', 'provider_catalog_service_id');
+    $hasOfferDeleted = table_has_column($conexion, 'provider_service_offers', 'is_deleted');
+    $hasDeletedAt = table_has_column($conexion, 'provider_service_offers', 'deleted_at');
+    $hasDeletedBy = table_has_column($conexion, 'provider_service_offers', 'deleted_by');
     $selectProviderCatalogServiceId = $hasOfferProviderCatalogServiceId ? 'o.provider_catalog_service_id,' : 'NULL AS provider_catalog_service_id,';
-    $sql = "SELECT o.id, o.title, o.price_from, o.currency, o.is_active, o.service_id, {$selectProviderCatalogServiceId} sc.name AS service_name, IFNULL(p.name,'') AS provider_name FROM provider_service_offers o LEFT JOIN service_catalog sc ON sc.id = o.service_id LEFT JOIN providers p ON p.id = o.provider_id WHERE o.provider_id = ?" . provider_offers_not_deleted_condition($conexion, 'o') . " ORDER BY o.created_at DESC";
+    $selectDeletedAt = $hasDeletedAt ? 'o.deleted_at' : 'NULL AS deleted_at';
+    $selectDeletedBy = $hasDeletedBy ? 'o.deleted_by' : 'NULL AS deleted_by';
+    $sql = "SELECT o.id, o.title, o.price_from, o.currency, o.is_active, o.service_id, {$selectProviderCatalogServiceId} {$selectDeletedAt}, {$selectDeletedBy}, sc.name AS service_name, IFNULL(p.name,'') AS provider_name FROM provider_service_offers o LEFT JOIN service_catalog sc ON sc.id = o.service_id LEFT JOIN providers p ON p.id = o.provider_id WHERE o.provider_id = ?";
+    if ($status === 'deleted') {
+        $sql .= $hasOfferDeleted ? " AND o.is_deleted = 1" : " AND 1 = 0";
+    } elseif ($status === 'inactive') {
+        $sql .= $hasOfferDeleted ? " AND o.is_deleted = 0" : "";
+        $sql .= " AND o.is_active = 0";
+    } else {
+        $sql .= $hasOfferDeleted ? " AND o.is_deleted = 0" : "";
+        $sql .= " AND o.is_active = 1";
+    }
+    $sql .= " ORDER BY " . ($status === 'deleted' && $hasDeletedAt ? "o.deleted_at DESC, " : "") . "o.created_at DESC";
     $stmt = mysqli_prepare($conexion, $sql);
     mysqli_stmt_bind_param($stmt, 'i', $provider_id);
     mysqli_stmt_execute($stmt);
@@ -481,7 +510,7 @@ if ($tipo === 'list') {
         $row = provider_offers_hydrate_offer_service($conexion, $provider_id, $row);
         $data[] = $row;
     }
-    echo json_encode(['ok'=>true,'data'=>$data, 'provider_name' => provider_offers_fetch_provider_name($conexion, $provider_id)]);
+    echo json_encode(['ok'=>true,'data'=>$data, 'status' => $status, 'provider_name' => provider_offers_fetch_provider_name($conexion, $provider_id)]);
     exit();
 }
 
@@ -744,11 +773,7 @@ if ($tipo === 'delete' || $tipo === 'archive') {
         json_error($contextError, provider_offers_context_error_status($contextError));
     }
 
-    if (
-        !table_has_column($conexion, 'provider_service_offers', 'is_deleted') ||
-        !table_has_column($conexion, 'provider_service_offers', 'deleted_at') ||
-        !table_has_column($conexion, 'provider_service_offers', 'deleted_by')
-    ) {
+    if (!provider_offers_soft_delete_schema_available($conexion)) {
         json_error('SOFT_DELETE_MIGRATION_REQUIRED', 409, 'Soft delete columns are not available for provider offers.');
     }
 
@@ -790,6 +815,60 @@ if ($tipo === 'delete' || $tipo === 'archive') {
     mysqli_stmt_close($up);
 
     echo json_encode(['ok'=>true,'message'=>'Offer archived successfully.']);
+    exit();
+}
+
+if ($tipo === 'restore') {
+    $requestedProviderId = isset($_REQUEST['provider_id']) ? (int)$_REQUEST['provider_id'] : 0;
+    list($provider_id, $contextError) = provider_offers_resolve_context_provider_id(
+        $conexion,
+        $is_admin,
+        $session_provider_id,
+        $requestedProviderId,
+        true
+    );
+    if ($contextError) {
+        json_error($contextError, provider_offers_context_error_status($contextError));
+    }
+
+    if (!provider_offers_soft_delete_schema_available($conexion)) {
+        json_error('SOFT_DELETE_MIGRATION_REQUIRED', 409, 'Soft delete columns are not available for provider offers.');
+    }
+
+    $id = isset($_REQUEST['id']) ? (int)$_REQUEST['id'] : 0;
+    if (!$id) json_error('INVALID_ID');
+
+    $chk = mysqli_prepare($conexion, "SELECT id, is_deleted FROM provider_service_offers WHERE id = ? AND provider_id = ? LIMIT 1");
+    if (!$chk) {
+        json_error('DB_PREPARE_OFFER_RESTORE', 500);
+    }
+    mysqli_stmt_bind_param($chk, 'ii', $id, $provider_id);
+    mysqli_stmt_execute($chk);
+    $res = mysqli_stmt_get_result($chk);
+    $offer = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($chk);
+    if (!$offer) {
+        json_error('NOT_FOUND', 404);
+    }
+    if ((int)$offer['is_deleted'] !== 1) {
+        json_error('OFFER_NOT_DELETED', 409, 'This offer is not archived.');
+    }
+
+    $up = mysqli_prepare($conexion, "UPDATE provider_service_offers SET is_deleted = 0, is_active = 1, deleted_at = NULL, deleted_by = NULL WHERE id = ? AND provider_id = ? AND is_deleted = 1 LIMIT 1");
+    if (!$up) {
+        json_error('DB_PREPARE_OFFER_RESTORE', 500);
+    }
+    mysqli_stmt_bind_param($up, 'ii', $id, $provider_id);
+    $ok = mysqli_stmt_execute($up);
+    if (!$ok) {
+        json_error('DB_ERR:'.mysqli_error($conexion), 500);
+    }
+    if (mysqli_stmt_affected_rows($up) <= 0) {
+        json_error('OFFER_NOT_DELETED', 409, 'This offer is not archived.');
+    }
+    mysqli_stmt_close($up);
+
+    echo json_encode(['ok'=>true,'message'=>'Offer restored successfully.']);
     exit();
 }
 
