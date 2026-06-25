@@ -1278,7 +1278,8 @@ include('inc/include.php');
                                     </div>
 
                                     <div class="card-actions">
-                                        <a href="booking.php?offer_id=<?php echo $offer_id_int; echo $_utm_qs; ?>" class="btn-book-offer">
+                                        <a href="booking.php?offer_id=<?php echo $offer_id_int; echo $_utm_qs; ?>"
+                                           class="btn-book-offer">
                                             <i class="fas fa-calendar-check me-1"></i>Book Now
                                         </a>
                                         <a href="offer_detail.php?id=<?php echo $offer_id_int; echo $_utm_qs; ?>" class="btn-details-offer">

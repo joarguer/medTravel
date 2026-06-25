@@ -20,7 +20,10 @@ app/
     │   ├── 11_TECH_ARCH_AND_RUNTIME.md  # Arquitectura técnica
     │   ├── 12_EXECUTION_BACKLOG.md  # Backlog de ejecución
     │   ├── 13_CHANGELOG_DECISIONS.md   # Decisiones arquitectónicas
-    │   └── 14_CALENDAR_MEET_INTEGRATION_MODEL.md  # Spec Calendar/Meet
+    │   ├── 14_CALENDAR_MEET_INTEGRATION_MODEL.md  # Spec Calendar/Meet
+    │   ├── 15_DOCUMENTS_MODEL.md      # Modelo de documentos de caso
+    │   ├── 16_ACTORS_AND_DOMAINS.md   # Actores, dominios y fronteras
+    │   └── 30_MARKETING_AND_TRACKING.md  # Meta Ads, Pixel/CAPI y privacidad
     ├── conectarbot_api.md           # Referencia API ConectarBot
     ├── data_deletion_workflow.md    # Flujo de eliminación de datos
     └── ops/                         # Scripts operativos (pendiente revisión)

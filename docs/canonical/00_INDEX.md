@@ -36,6 +36,7 @@ Si existe un archivo específico de proveedor o modelo como `CLAUDE.md`, se cons
 | `docs/canonical/14_CALENDAR_MEET_INTEGRATION_MODEL.md` | Spec Google Calendar/Meet |
 | `docs/canonical/15_DOCUMENTS_MODEL.md` | Modelo canónico de `client_documents` y flujo de documentos del caso |
 | `docs/canonical/16_ACTORS_AND_DOMAINS.md` | Actores del sistema, dominios operativos y fronteras explícitas |
+| `docs/canonical/30_MARKETING_AND_TRACKING.md` | Marketing, Meta Ads, Pixel/CAPI, eventos permitidos y privacidad de tracking |
 
 ---
 

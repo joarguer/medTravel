@@ -20,6 +20,18 @@ if(!defined('EMAIL_ENCRYPTION_KEY')) {
     define('EMAIL_ENCRYPTION_KEY', 'MedTravel2026SecureKey!@#$%');
 }
 
+function email_config_mask_address($email) {
+    $email = trim((string)$email);
+    if ($email === '' || strpos($email, '@') === false) {
+        return '';
+    }
+    list($local, $domain) = explode('@', $email, 2);
+    $domainParts = explode('.', $domain);
+    $domainPrefix = substr((string)($domainParts[0] ?? ''), 0, 2);
+    $domainSuffix = count($domainParts) > 1 ? '.' . end($domainParts) : '';
+    return substr($local, 0, 2) . '***@' . $domainPrefix . '***' . $domainSuffix;
+}
+
 /**
  * Desencriptar contraseña de email
  */
@@ -138,11 +150,8 @@ function getMailer($account_type = 'patientcare', $conexion = null) {
         $mail->isHTML(true);
         $mail->Timeout = 30;
         
-        // Debug SMTP - capturar salida
-        $mail->SMTPDebug = 2; // 0=off, 1=client, 2=client+server
-        $mail->Debugoutput = function($str, $level) {
-            error_log("SMTP Debug [$level]: " . trim($str));
-        };
+        // Keep SMTP transcript off in production logs; PHPMailer exceptions still expose delivery errors.
+        $mail->SMTPDebug = 0;
         
         return $mail;
         
@@ -265,10 +274,10 @@ function sendEmail($to, $subject, $body, $account_type = 'patientcare', $options
         
         // Log exitoso
         if ($result) {
-            error_log("✓ Email enviado a: $to | Asunto: $subject | Cuenta: $account_type | MessageID: " . $mail->getLastMessageID());
+            error_log("✓ Email enviado a: " . email_config_mask_address($to) . " | Asunto: $subject | Cuenta: $account_type | MessageID: " . $mail->getLastMessageID());
             return true;
         } else {
-            $error_msg = "✗ Email NO enviado a: $to | Error: " . $mail->ErrorInfo;
+            $error_msg = "✗ Email NO enviado a: " . email_config_mask_address($to) . " | Error: " . $mail->ErrorInfo;
             error_log($error_msg);
             return array('success' => false, 'error' => $mail->ErrorInfo, 'smtp_error' => true, 'smtp_log' => $smtp_log);
         }
@@ -279,9 +288,9 @@ function sendEmail($to, $subject, $body, $account_type = 'patientcare', $options
             'error' => $e->getMessage(),
             'error_info' => isset($mail) ? $mail->ErrorInfo : 'Mailer no inicializado',
             'account_type' => $account_type,
-            'to' => $to
+            'to' => email_config_mask_address($to)
         );
-        error_log("EXCEPCION enviando email a $to: " . json_encode($error_details));
+        error_log("EXCEPCION enviando email a " . email_config_mask_address($to) . ": " . json_encode($error_details));
         throw $e; // Re-lanzar para que paquetes.php lo capture
     }
 }

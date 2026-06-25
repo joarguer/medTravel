@@ -53,8 +53,7 @@ function mt_asset_url(string $path): string {
         return $path;
     }
 
-    $prefix = str_starts_with($path, '/') ? '/' : '';
-    return $prefix . $trimmed . '?v=' . $version;
+    return '/' . $trimmed . '?v=' . $version;
 }
 
 if (!function_exists('mt_has_public_complementary_services')) {
@@ -208,6 +207,7 @@ $style_css_url = htmlspecialchars(mt_asset_url('css/style.css'), ENT_QUOTES, 'UT
 $toastr_js_url = htmlspecialchars(mt_asset_url('assets/global/plugins/bootstrap-toastr/toastr.min.js'), ENT_QUOTES, 'UTF-8');
 $booking_summary_js_url = htmlspecialchars(mt_asset_url('/js/booking_summary.js'), ENT_QUOTES, 'UTF-8');
 $meta_pixel_head = '<!-- Meta Pixel Code -->
+    <!-- MT_PIXEL_DEBUG_VERSION: 2026-06-25-02 -->
     <script>
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -217,18 +217,26 @@ $meta_pixel_head = '<!-- Meta Pixel Code -->
         t.src=v;s=b.getElementsByTagName(e)[0];
         s.parentNode.insertBefore(t,s)}(window, document,\'script\',
         \'https://connect.facebook.net/en_US/fbevents.js\');
-        fbq(\'init\', \'2081221109277505\');
+        fbq(\'init\', \'2206493506836761\');
         fbq(\'track\', \'PageView\');
+        window.mtPixelDebug = {
+            version: \'2026-06-25-02\',
+            pixelId: \'2206493506836761\',
+            hasFbq: typeof window.fbq
+        };
+        if (window.console && console.debug) {
+            console.debug(\'[MedTravel Pixel] debug version 2026-06-25-02 loaded\', location.pathname);
+        }
     </script>
     <!-- End Meta Pixel Code -->';
 $meta_pixel_noscript = '<noscript><img height="1" width="1" style="display:none"
-    src="https://www.facebook.com/tr?id=2081221109277505&ev=PageView&noscript=1"
+    src="https://www.facebook.com/tr?id=2206493506836761&ev=PageView&noscript=1"
     alt="" /></noscript>';
 
 if (empty($GLOBALS['mt_meta_pixel_output_buffer_started'] ?? false)) {
     $GLOBALS['mt_meta_pixel_output_buffer_started'] = true;
     ob_start(static function ($buffer) use ($meta_pixel_noscript) {
-        if (stripos($buffer, '<body') === false || stripos($buffer, 'facebook.com/tr?id=2081221109277505') !== false) {
+        if (stripos($buffer, '<body') === false || stripos($buffer, 'facebook.com/tr?id=2206493506836761') !== false) {
             return $buffer;
         }
 

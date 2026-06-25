@@ -1,6 +1,17 @@
 <?php
 session_start();
 include(__DIR__ . '/../inc/include.php');
+
+function mt_pixel_runtime_log($message)
+{
+    $dir = __DIR__ . '/../admin/logs';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $line = date('Y-m-d H:i:s') . ' | ' . $message . PHP_EOL;
+    @file_put_contents($dir . '/booking_submit_runtime.log', $line, FILE_APPEND | LOCK_EX);
+}
+
 $booking = isset($_SESSION['booking_request']) ? $_SESSION['booking_request'] : [];
 $submission_status = isset($_SESSION['booking_request_status']) ? $_SESSION['booking_request_status'] : '';
 $submission_message = isset($_SESSION['booking_request_message']) ? $_SESSION['booking_request_message'] : '';
@@ -43,14 +54,29 @@ $consent_privacy_checked = ((string)($booking['consent_privacy'] ?? '') === '1' 
 $consent_insurance_checked = ((string)($booking['consent_insurance'] ?? '') === '1' || (string)($booking['terms_accepted'] ?? '') === '1');
 $step1_consents_complete = ($consent_terms_checked && $consent_privacy_checked && $consent_insurance_checked);
 $step1_recovery_needed = (!$step1_contact_complete || !$step1_consents_complete);
-$mt_meta_pixel_lead_payload = [];
 $mt_meta_pixel_lead_event_id = '';
-if (!$step1_recovery_needed && !empty($_SESSION['mt_meta_pixel_lead_pending'])) {
-    $mt_meta_pixel_lead_payload = mt_booking_pixel_payload($conexion, $preselected_offer_id, $preselected_service_id);
-    $mt_meta_pixel_lead_payload['event_source'] = 'booking_step_1_valid';
-    $mt_meta_pixel_lead_event_id = preg_replace('/[^A-Za-z0-9_:-]/', '', (string)($_SESSION['mt_meta_pixel_lead_event_id'] ?? ''));
+$mt_meta_pixel_lead_should_render = false;
+$mt_meta_pixel_lead_should_clear_session = false;
+if (!empty($_SESSION['mt_meta_pixel_lead_pending'])) {
+    if ($step1_recovery_needed) {
+        error_log('[MedTravel Pixel] Lead skipped reason=step1_recovery_needed');
+        mt_pixel_runtime_log('pixel_lead_skipped reason=step1_recovery_needed');
+        $mt_meta_pixel_lead_should_clear_session = true;
+    }
 }
-unset($_SESSION['mt_meta_pixel_lead_pending'], $_SESSION['mt_meta_pixel_lead_event_id']);
+if (!$step1_recovery_needed && !empty($_SESSION['mt_meta_pixel_lead_pending'])) {
+    $mt_meta_pixel_lead_event_id = preg_replace('/[^A-Za-z0-9_:-]/', '', (string)($_SESSION['mt_meta_pixel_lead_event_id'] ?? ''));
+    if ($mt_meta_pixel_lead_event_id !== '') {
+        $mt_meta_pixel_lead_should_render = true;
+        error_log('[MedTravel Pixel] Lead rendered');
+        mt_pixel_runtime_log('pixel_lead_rendered event_id=' . $mt_meta_pixel_lead_event_id);
+        $mt_meta_pixel_lead_should_clear_session = true;
+    } else {
+        error_log('[MedTravel Pixel] Lead skipped reason=empty_event_id');
+        mt_pixel_runtime_log('pixel_lead_skipped reason=empty_event_id');
+        $mt_meta_pixel_lead_should_clear_session = true;
+    }
+}
 
 $wizard_ui_texts = [
     'add' => 'Add',
@@ -444,6 +470,30 @@ if ($flow === 'addon' && !empty($addon_route)) {
             font-size: 1.2rem; 
             margin-bottom: 12px;
             color: #1e293b;
+        }
+        .wizard-submit-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.38);
+            backdrop-filter: blur(2px);
+        }
+        .wizard-submit-overlay[hidden] {
+            display: none;
+        }
+        .wizard-submit-panel {
+            min-width: 220px;
+            max-width: calc(100vw - 32px);
+            padding: 20px 24px;
+            border-radius: 10px;
+            background: #fff;
+            color: #1e293b;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+            text-align: center;
+            font-weight: 600;
         }
         
         /* Estilos para ofertas de proveedores */
@@ -1115,12 +1165,18 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                     <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars($prev_step_url); ?>"><i class="fas fa-arrow-left me-2"></i><?php echo htmlspecialchars($wizard_ui_texts['previous']); ?></a>
                                 <?php endif; ?>
                             </div>
-                            <button type="submit" id="wizard-submit-button" class="btn btn-primary px-4 py-3" <?php echo $step1_recovery_needed ? 'disabled' : ''; ?>>
-                                <i class="fas fa-paper-plane me-2"></i>Submit Request
+                            <button type="submit" id="wizard-submit-button" class="btn btn-primary px-4 py-3" data-default-label="Submit Request" <?php echo $step1_recovery_needed ? 'disabled' : ''; ?>>
+                                <span class="wizard-submit-default"><i class="fas fa-paper-plane me-2"></i>Submit Request</span>
+                                <span class="wizard-submit-loading d-none"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Sending...</span>
                             </button>
                         </div>
                     </div>
                 </form>
+                <div id="wizard-submit-overlay" class="wizard-submit-overlay" hidden aria-hidden="true">
+                    <div class="wizard-submit-panel">
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Sending your request...
+                    </div>
+                </div>
             <?php endif; ?>
             <?php include __DIR__ . '/../inc/wizard_package_summary.php'; ?>
         <?php else: ?>
@@ -1212,27 +1268,52 @@ if ($flow === 'addon' && !empty($addon_route)) {
     <?php echo $script; ?>
     <script src="../js/main.js"></script>
 
-    <?php if (!empty($mt_meta_pixel_lead_payload) && $mt_meta_pixel_lead_event_id !== ''): ?>
-    <script>
-        (function() {
-            var payload = <?php
-                $mt_meta_pixel_lead_payload_json = json_encode($mt_meta_pixel_lead_payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                echo $mt_meta_pixel_lead_payload_json !== false ? $mt_meta_pixel_lead_payload_json : '{}';
-            ?>;
-            var eventId = <?php echo json_encode($mt_meta_pixel_lead_event_id); ?>;
-            var storageKey = 'mt_pixel_lead_' + eventId;
+	    <?php if ($mt_meta_pixel_lead_should_render && $mt_meta_pixel_lead_event_id !== ''): ?>
+	    <!-- MT_LEAD_RENDERED -->
+	    <script>
+	        (function() {
+	            var eventId = <?php echo json_encode($mt_meta_pixel_lead_event_id); ?>;
+	            var maxAttempts = 20;
+	            var delayMs = 250;
 
-            try {
-                if (sessionStorage.getItem(storageKey) === '1') return;
-            } catch (e) {}
+	            if (window.console && console.debug) {
+	                console.debug(
+	                    '[MedTravel Pixel] MT_LEAD_RENDERED present',
+	                    document.documentElement.innerHTML.includes('MT_LEAD_RENDERED')
+	                );
+	                console.debug('[MedTravel Pixel] Lead script rendered');
+	            }
 
-            if (typeof window.fbq === 'function') {
-                window.fbq('track', 'Lead', payload, { eventID: eventId });
-                try { sessionStorage.setItem(storageKey, '1'); } catch (e) {}
-            }
-        })();
-    </script>
-    <?php endif; ?>
+	            function fireLead(attempt) {
+	                if (typeof window.fbq !== 'function') {
+	                    if (attempt < maxAttempts) {
+	                        window.setTimeout(function() {
+	                            fireLead(attempt + 1);
+	                        }, delayMs);
+	                        return;
+	                    }
+	                    if (window.console && console.debug) {
+	                        console.debug('[MedTravel Pixel] Lead skipped: fbq unavailable');
+	                    }
+	                    return;
+	                }
+	                window.fbq('track', 'Lead', {}, { eventID: eventId });
+	                if (window.console && console.debug) {
+	                    console.debug('[MedTravel Pixel] Lead fired');
+	                }
+	            }
+
+	            fireLead(0);
+	        })();
+	    </script>
+	    <?php
+	    if ($mt_meta_pixel_lead_should_clear_session && !empty($_SESSION['mt_meta_pixel_lead_pending'])) {
+	        unset($_SESSION['mt_meta_pixel_lead_pending'], $_SESSION['mt_meta_pixel_lead_event_id'], $_SESSION['mt_meta_pixel_lead_payload']);
+	        error_log('[MedTravel Pixel] Lead session cleared');
+	        mt_pixel_runtime_log('pixel_lead_session_cleared');
+	    }
+	    ?>
+	    <?php endif; ?>
 
     <script>
         const WIZARD_UI_TEXTS = <?php echo json_encode($wizard_ui_texts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
@@ -1397,7 +1478,7 @@ if ($flow === 'addon' && !empty($addon_route)) {
             const step1Complete = isWizardStep1Complete();
             const submitButton = document.getElementById('wizard-submit-button');
             if (submitButton) {
-                submitButton.disabled = !step1Complete;
+                submitButton.disabled = submitButton.dataset.submitting === '1' || !step1Complete;
             }
 
             const summary = document.getElementById('wizard-step1-summary');
@@ -1838,6 +1919,11 @@ if ($flow === 'addon' && !empty($addon_route)) {
             const bookingForm = document.getElementById('booking-wizard-form');
             if (bookingForm) {
                 bookingForm.addEventListener('submit', function(e) {
+                    const submitButton = document.getElementById('wizard-submit-button');
+                    if (submitButton && submitButton.dataset.submitting === '1') {
+                        e.preventDefault();
+                        return;
+                    }
                     syncWizardContactEditor();
                     if (!isWizardStep1Complete()) {
                         e.preventDefault();
@@ -1861,6 +1947,20 @@ if ($flow === 'addon' && !empty($addon_route)) {
                     }
                     hydrateHiddenBookingContextFromDraft();
                     renderHiddenSelectionsForSubmit();
+                    if (submitButton) {
+                        submitButton.dataset.submitting = '1';
+                        submitButton.disabled = true;
+                        const defaultLabel = submitButton.querySelector('.wizard-submit-default');
+                        const loadingLabel = submitButton.querySelector('.wizard-submit-loading');
+                        if (defaultLabel) defaultLabel.classList.add('d-none');
+                        if (loadingLabel) loadingLabel.classList.remove('d-none');
+                    }
+                    bookingForm.setAttribute('aria-busy', 'true');
+                    const submitOverlay = document.getElementById('wizard-submit-overlay');
+                    if (submitOverlay) {
+                        submitOverlay.hidden = false;
+                        submitOverlay.setAttribute('aria-hidden', 'false');
+                    }
                 });
             }
         });

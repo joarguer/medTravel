@@ -351,8 +351,148 @@ function run_dynamic_insert_local($conexion, $table, $data, $requiredCols = [], 
 
 function booking_runtime_log_local($message)
 {
+    $dir = __DIR__ . '/../admin/logs';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
     $line = date('Y-m-d H:i:s') . ' | ' . $message . PHP_EOL;
-    @file_put_contents(__DIR__ . '/../admin/logs/booking_submit_runtime.log', $line, FILE_APPEND | LOCK_EX);
+    @file_put_contents($dir . '/booking_submit_runtime.log', $line, FILE_APPEND | LOCK_EX);
+}
+
+function booking_meta_env_local($key, $default = '')
+{
+    $value = getenv($key);
+    if ($value === false || trim((string)$value) === '') {
+        return $default;
+    }
+    return trim((string)$value);
+}
+
+function booking_meta_generate_event_id_local()
+{
+    try {
+        return 'mt_lead_' . bin2hex(random_bytes(16));
+    } catch (Throwable $e) {
+        try {
+            return 'mt_lead_' . hash('sha256', uniqid('', true) . '|' . random_int(PHP_INT_MIN, PHP_INT_MAX));
+        } catch (Throwable $fallback) {
+            return 'mt_lead_' . hash('sha256', uniqid('', true));
+        }
+    }
+}
+
+function booking_meta_client_ip_local()
+{
+    $raw = booking_client_ip_local();
+    $first = trim(explode(',', (string)$raw)[0] ?? '');
+    if ($first === '') {
+        return '';
+    }
+    return filter_var($first, FILTER_VALIDATE_IP) ? $first : '';
+}
+
+function booking_meta_cookie_value_local($key)
+{
+    $value = trim((string)($_COOKIE[$key] ?? ''));
+    if ($value === '') {
+        return '';
+    }
+    return preg_match('/^[A-Za-z0-9._-]{1,255}$/', $value) ? $value : '';
+}
+
+function booking_meta_send_capi_lead_local($eventId)
+{
+    $eventId = trim((string)$eventId);
+    if ($eventId === '') {
+        booking_runtime_log_local('meta_capi_lead_error status=missing_event_id');
+        return false;
+    }
+
+    $pixelId = booking_meta_env_local('META_PIXEL_ID', '2206493506836761');
+    $accessToken = booking_meta_env_local('META_CAPI_ACCESS_TOKEN', '');
+    if ($accessToken === '') {
+        booking_runtime_log_local('meta_capi_skipped_missing_token');
+        return false;
+    }
+    if ($pixelId === '') {
+        booking_runtime_log_local('meta_capi_lead_error status=missing_pixel_id');
+        return false;
+    }
+
+    $userData = [];
+    $clientIp = booking_meta_client_ip_local();
+    if ($clientIp !== '') {
+        $userData['client_ip_address'] = $clientIp;
+    }
+    $userAgent = trim((string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    if ($userAgent !== '') {
+        $userData['client_user_agent'] = substr($userAgent, 0, 1000);
+    }
+    $fbp = booking_meta_cookie_value_local('_fbp');
+    if ($fbp !== '') {
+        $userData['fbp'] = $fbp;
+    }
+    $fbc = booking_meta_cookie_value_local('_fbc');
+    if ($fbc !== '') {
+        $userData['fbc'] = $fbc;
+    }
+
+    $payload = [
+        'data' => [[
+            'event_name' => 'Lead',
+            'event_time' => time(),
+            'event_id' => $eventId,
+            'action_source' => 'website',
+            'event_source_url' => 'https://medtravel.com.co/booking/wizard.php',
+            'user_data' => $userData,
+        ]],
+    ];
+
+    booking_runtime_log_local('meta_capi_lead_send_start event_id=' . $eventId);
+
+    if (!function_exists('curl_init')) {
+        booking_runtime_log_local('meta_capi_lead_error status=curl_unavailable');
+        return false;
+    }
+
+    $encodedPayload = json_encode($payload, JSON_UNESCAPED_SLASHES);
+    if ($encodedPayload === false) {
+        booking_runtime_log_local('meta_capi_lead_error status=json_encode_failed');
+        return false;
+    }
+
+    $url = 'https://graph.facebook.com/' . rawurlencode($pixelId) . '/events?access_token=' . rawurlencode($accessToken);
+    $ch = curl_init($url);
+    if (!$ch) {
+        booking_runtime_log_local('meta_capi_lead_error status=curl_init_failed');
+        return false;
+    }
+
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_POSTFIELDS => $encodedPayload,
+        CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_TIMEOUT => 4,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpStatus = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $httpStatus < 200 || $httpStatus >= 300) {
+        $status = $httpStatus > 0 ? (string)$httpStatus : 'curl_error';
+        booking_runtime_log_local('meta_capi_lead_error status=' . $status);
+        if ($curlError !== '') {
+            error_log('[MedTravel Pixel] CAPI Lead error status=' . $status . ' msg=' . $curlError);
+        }
+        return false;
+    }
+
+    booking_runtime_log_local('meta_capi_lead_sent status=' . $httpStatus);
+    return true;
 }
 
 function booking_user_is_privileged_local($row)
@@ -1890,6 +2030,43 @@ function escape_html_local($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function booking_mask_email_local($email)
+{
+    $email = trim((string)$email);
+    if ($email === '' || strpos($email, '@') === false) {
+        return '';
+    }
+    [$local, $domain] = explode('@', $email, 2);
+    $localPrefix = substr($local, 0, 2);
+    $domainParts = explode('.', $domain);
+    $domainPrefix = substr((string)($domainParts[0] ?? ''), 0, 2);
+    $domainSuffix = count($domainParts) > 1 ? '.' . end($domainParts) : '';
+    return $localPrefix . '***@' . $domainPrefix . '***' . $domainSuffix;
+}
+
+function booking_fetch_patient_email_for_request_local($conexion, $bookingRequestId)
+{
+    $bookingRequestId = (int)$bookingRequestId;
+    if ($bookingRequestId <= 0 || !table_has_column_local($conexion, 'booking_requests', 'email')) {
+        return '';
+    }
+
+    $stmt = mysqli_prepare($conexion, 'SELECT email FROM booking_requests WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return '';
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $bookingRequestId);
+    $email = '';
+    if (mysqli_stmt_execute($stmt)) {
+        $row = stmt_fetch_assoc_local($stmt);
+        if ($row && isset($row['email'])) {
+            $email = trim((string)$row['email']);
+        }
+    }
+    mysqli_stmt_close($stmt);
+    return $email;
+}
+
 function build_submission_summary_payload($bookingRequestId, $booking, $timeline, $items)
 {
     $totals = build_totals_by_currency($items);
@@ -1999,8 +2176,21 @@ function build_booking_confirmation_content_html($summaryPayload, $passwordReset
 function send_booking_confirmation_email($conexion, $email, $summaryPayload, $resetToken, $isNewUser = false, $hasLinkedPatientAccount = true)
 {
     $email = trim((string)$email);
+    $bookingId = (int)($summaryPayload['booking_id'] ?? 0);
+    error_log('[MedTravel Email] patient email start booking_id=' . $bookingId);
+    error_log('[MedTravel Email] patient email recipient present=' . ($email !== '' ? 'yes' : 'no'));
+    booking_runtime_log_local('patient_email_start booking_id=' . $bookingId . ' recipient_present=' . ($email !== '' ? '1' : '0') . ' recipient=' . booking_mask_email_local($email));
     if ($email === '') {
-        return;
+        error_log('[MedTravel Email] patient email sent=no');
+        error_log('[MedTravel Email] patient email error: missing recipient');
+        booking_runtime_log_local('patient_email_sent booking_id=' . $bookingId . ' sent=0 error=missing_recipient');
+        return false;
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        error_log('[MedTravel Email] patient email sent=no');
+        error_log('[MedTravel Email] patient email error: invalid recipient ' . booking_mask_email_local($email));
+        booking_runtime_log_local('patient_email_sent booking_id=' . $bookingId . ' sent=0 error=invalid_recipient');
+        return false;
     }
 
     if ($isNewUser && trim((string)$resetToken) === '') {
@@ -2019,24 +2209,46 @@ function send_booking_confirmation_email($conexion, $email, $summaryPayload, $re
         }
     }
 
-    $bookingId = (int)($summaryPayload['booking_id'] ?? 0);
     if ($isNewUser && trim((string)$resetToken) === '') {
-        error_log('booking_submit: password reset token unavailable for booking_id=' . $bookingId . ' email=' . $email . ' using generic access page');
+        error_log('booking_submit: password reset token unavailable for booking_id=' . $bookingId . ' recipient=' . booking_mask_email_local($email) . ' using generic access page');
     }
 
-    $emailPayload = booking_patient_build_email_payload([
-        'flow' => 'public',
-        'booking_id' => $bookingId,
-        'patient_name' => (string)($summaryPayload['patient_name'] ?? ''),
-        'patient_email' => (string)($summaryPayload['patient_email'] ?? $email),
-        'destination' => (string)($summaryPayload['destination'] ?? ''),
-        'timeline' => (string)($summaryPayload['timeline'] ?? ''),
-        'total_display' => (string)($summaryPayload['total_display'] ?? 'Price on request'),
-        'items' => (isset($summaryPayload['items']) && is_array($summaryPayload['items'])) ? $summaryPayload['items'] : [],
-        'is_new_user' => !empty($isNewUser),
-        'has_linked_patient_account' => !empty($hasLinkedPatientAccount),
-        'reset_token' => (string)$resetToken,
-    ]);
+    $patientName = trim((string)($summaryPayload['patient_name'] ?? ''));
+    if ($patientName === '') {
+        $patientName = 'Patient';
+    }
+
+    try {
+        $emailPayload = booking_patient_build_email_payload([
+            'flow' => 'public',
+            'booking_id' => $bookingId,
+            'patient_name' => $patientName,
+            'patient_email' => (string)($summaryPayload['patient_email'] ?? $email),
+            'destination' => (string)($summaryPayload['destination'] ?? ''),
+            'timeline' => (string)($summaryPayload['timeline'] ?? ''),
+            'total_display' => (string)($summaryPayload['total_display'] ?? 'Price on request'),
+            'items' => (isset($summaryPayload['items']) && is_array($summaryPayload['items'])) ? $summaryPayload['items'] : [],
+            'is_new_user' => !empty($isNewUser),
+            'has_linked_patient_account' => !empty($hasLinkedPatientAccount),
+            'reset_token' => (string)$resetToken,
+        ]);
+    } catch (Throwable $e) {
+        error_log('[MedTravel Email] patient payload error booking_id=' . $bookingId . ': ' . $e->getMessage());
+        booking_runtime_log_local('patient_email_payload_error booking_id=' . $bookingId . ' msg=' . $e->getMessage());
+        $contentHtml = '<p>Hello ' . escape_html_local($patientName) . ',</p>'
+            . '<p>We received your request and opened your case with MedTravel.</p>'
+            . '<p><strong>Booking ID:</strong> #' . $bookingId . '</p>'
+            . '<p>Our coordination team will review your request and connect you with the appropriate professional.</p>'
+            . '<p>This message confirms receipt of your request; it does not confirm a medical procedure.</p>';
+        $emailPayload = [
+            'subject' => "MedTravel - Request received (ID #{$bookingId})",
+            'body_html' => function_exists('renderMedTravelEmail')
+                ? renderMedTravelEmail('Request received', 'We received your request and opened your MedTravel case.', $contentHtml, 'This is an automated message from MedTravel.')
+                : $contentHtml,
+            'alt_body' => "Hello {$patientName},\n\nWe received your request and opened your case with MedTravel.\n\nBooking ID: #{$bookingId}\n\nOur coordination team will review your request and connect you with the appropriate professional.\n\nThis message confirms receipt of your request; it does not confirm a medical procedure.\n",
+            'access_url' => '',
+        ];
+    }
 
     try {
         $emailResult = sendEmail(
@@ -2051,10 +2263,21 @@ function send_booking_confirmation_email($conexion, $email, $summaryPayload, $re
             $conexion
         );
         if ($emailResult !== true) {
-            error_log('booking_submit: confirmation email returned non-true result for ' . $email . ' payload=' . json_encode($emailResult));
+            $errorMessage = is_array($emailResult) ? (string)($emailResult['error'] ?? 'unknown_error') : 'unknown_error';
+            error_log('[MedTravel Email] patient email sent=no');
+            error_log('[MedTravel Email] patient email error: ' . $errorMessage);
+            booking_runtime_log_local('patient_email_sent booking_id=' . $bookingId . ' sent=0 error=' . $errorMessage);
+            return false;
         }
-    } catch (Exception $e) {
-        error_log('booking_submit: confirmation email exception for ' . $email . ': ' . $e->getMessage());
+        error_log('[MedTravel Email] patient email sent=yes');
+        booking_runtime_log_local('patient_email_sent booking_id=' . $bookingId . ' sent=1');
+        return true;
+    } catch (Throwable $e) {
+        error_log('[MedTravel Email] patient email sent=no');
+        error_log('[MedTravel Email] patient confirmation email error: ' . $e->getMessage());
+        error_log('[MedTravel Email] patient email error: ' . $e->getMessage());
+        booking_runtime_log_local('patient_email_sent booking_id=' . $bookingId . ' sent=0 error=' . $e->getMessage());
+        return false;
     }
 }
 
@@ -2064,7 +2287,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 try {
-$booking = (isset($_SESSION['booking_request']) && is_array($_SESSION['booking_request'])) ? $_SESSION['booking_request'] : [];
+    error_log('[MedTravel Booking] submit reached');
+    $booking = (isset($_SESSION['booking_request']) && is_array($_SESSION['booking_request'])) ? $_SESSION['booking_request'] : [];
 
 // Fallback for cases where wizard is opened without step-1 session but hidden fields exist.
 $fallbackBooking = [
@@ -2122,7 +2346,8 @@ if (empty($booking['origin'])) {
 $_SESSION['booking_request'] = $booking;
 booking_runtime_log_local(
     'submit_start'
-    . ' email=' . (string)($booking['email'] ?? '')
+    . ' email_present=' . (!empty($booking['email']) ? '1' : '0')
+    . ' email=' . booking_mask_email_local((string)($booking['email'] ?? ''))
     . ' name_present=' . (!empty($booking['name']) ? '1' : '0')
     . ' has_selected_offers=' . (isset($_POST['selected_offers']) ? '1' : '0')
     . ' has_medtravel_services=' . (isset($_POST['medtravel_services']) ? '1' : '0')
@@ -2377,13 +2602,33 @@ if (!$saved) {
     }
 }
 
+error_log('[MedTravel Booking] saved flag=' . ($saved ? '1' : '0'));
+error_log('[MedTravel Booking] booking_request_id=' . intval($booking_request_id));
+
 if ($saved && $booking_request_id > 0) {
+    error_log('[MedTravel Booking] booking saved id=' . intval($booking_request_id));
     $createdItems = [];
     try {
         $createdItems = insert_booking_items_mvp($conexion, $booking_request_id, $selected_offers, $medtravel_services);
     } catch (Throwable $e) {
         error_log('booking_submit: post-save items error booking_id=' . intval($booking_request_id) . ' msg=' . $e->getMessage());
     }
+
+    $mtLeadEventId = booking_meta_generate_event_id_local();
+    booking_runtime_log_local('pixel_lead_event_id_created event_id=' . $mtLeadEventId);
+    $_SESSION['mt_meta_pixel_lead_pending'] = '1';
+    $_SESSION['mt_meta_pixel_lead_event_id'] = $mtLeadEventId;
+    unset($_SESSION['mt_meta_pixel_lead_payload']);
+    error_log('[MedTravel Pixel] Lead pending set booking_id=' . intval($booking_request_id));
+    booking_runtime_log_local('pixel_lead_pending_set booking_id=' . intval($booking_request_id));
+    try {
+        booking_meta_send_capi_lead_local($mtLeadEventId);
+    } catch (Throwable $e) {
+        booking_runtime_log_local('meta_capi_lead_error status=exception');
+        error_log('[MedTravel Pixel] CAPI Lead exception: ' . $e->getMessage());
+    }
+
+    $summaryPayload = build_submission_summary_payload($booking_request_id, $booking, $timeline, []);
 
     $resetInfo = ['enabled' => false, 'saved' => false, 'token' => ''];
     try {
@@ -2456,16 +2701,37 @@ if ($saved && $booking_request_id > 0) {
             error_log('booking_submit: patientcare alert failed booking_id=' . intval($booking_request_id) . ' payload=' . json_encode($patientcareAlert));
         }
 
-        send_booking_confirmation_email(
-            $conexion,
-            (string)$booking['email'],
-            $summaryPayload,
-            ($resetInfo['saved'] ? (string)$resetInfo['token'] : ''),
-            !empty($client_user_is_new),
-            ($client_user_id > 0)
-        );
     } catch (Throwable $e) {
-        error_log('booking_submit: post-save email/summary error booking_id=' . intval($booking_request_id) . ' msg=' . $e->getMessage());
+        error_log('booking_submit: post-save summary/notification error booking_id=' . intval($booking_request_id) . ' msg=' . $e->getMessage());
+    }
+
+    try {
+        error_log('[MedTravel Booking] patient email attempted');
+        $patientEmailForConfirmation = booking_fetch_patient_email_for_request_local($conexion, $booking_request_id);
+        if ($patientEmailForConfirmation === '') {
+            $patientEmailForConfirmation = (string)($booking['email'] ?? '');
+        }
+        if ($patientEmailForConfirmation !== '') {
+            $summaryPayload['patient_email'] = $patientEmailForConfirmation;
+        }
+        $patientEmailSessionKey = 'mt_patient_confirmation_sent_' . intval($booking_request_id);
+        if (empty($_SESSION[$patientEmailSessionKey])) {
+            $patientEmailSent = send_booking_confirmation_email(
+                $conexion,
+                $patientEmailForConfirmation,
+                $summaryPayload,
+                ($resetInfo['saved'] ? (string)$resetInfo['token'] : ''),
+                !empty($client_user_is_new),
+                ($client_user_id > 0)
+            );
+            if ($patientEmailSent) {
+                $_SESSION[$patientEmailSessionKey] = '1';
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('booking_submit: patient confirmation email error booking_id=' . intval($booking_request_id) . ' msg=' . $e->getMessage());
+        error_log('[MedTravel Email] patient email sent=no');
+        error_log('[MedTravel Email] patient email error: ' . $e->getMessage());
     }
 }
 

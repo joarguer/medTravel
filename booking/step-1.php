@@ -65,18 +65,5 @@ if (!empty($missing)) {
 
 unset($_SESSION['booking_step1_error']);
 
-$lead_key_parts = [
-    strtolower((string)$input['email']),
-    (string)$input['preselected_offer'],
-    (string)$input['preselected_service'],
-    (string)$input['origin'],
-];
-$lead_key = sha1(implode('|', $lead_key_parts));
-if (($_SESSION['mt_meta_pixel_lead_last_key'] ?? '') !== $lead_key) {
-    $_SESSION['mt_meta_pixel_lead_pending'] = '1';
-    $_SESSION['mt_meta_pixel_lead_event_id'] = 'mt_lead_' . substr($lead_key, 0, 24);
-    $_SESSION['mt_meta_pixel_lead_last_key'] = $lead_key;
-}
-
 header('Location: /booking/wizard.php');
 exit;
