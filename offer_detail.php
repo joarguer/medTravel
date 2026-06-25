@@ -167,6 +167,21 @@ $page_schema_jsonld = [$service_schema];
 
 include('inc/include.php');
 
+$mt_offer_booking_pixel_payload = [
+    'content_category' => 'Medical Booking',
+    'content_name' => $offer_title,
+    'content_ids' => [(string)(int)$offer['id']],
+    'currency' => $offer_currency !== '' ? strtoupper($offer_currency) : 'USD',
+    'event_source' => 'offer_detail_cta',
+];
+if ($offer_price > 0) {
+    $mt_offer_booking_pixel_payload['value'] = $offer_price;
+}
+$mt_offer_booking_pixel_payload_json = json_encode($mt_offer_booking_pixel_payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+if ($mt_offer_booking_pixel_payload_json === false) {
+    $mt_offer_booking_pixel_payload_json = '{}';
+}
+
 $hideProviderDirectContact = false;
 $feeGuardMessage = 'Unlock after Coordination Fee';
 $contextBookingId = isset($_GET['booking_id']) ? (int)$_GET['booking_id'] : (isset($_GET['request_id']) ? (int)$_GET['request_id'] : 0);
@@ -572,7 +587,7 @@ if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_s
                         <?php echo htmlspecialchars($offer['currency']); ?> 
                         <?php echo number_format($offer['price_from'], 2); ?>
                     </div>
-                    <a href="booking.php?offer_id=<?php echo (int)$offer['id']; echo $_utm_qs; ?>" class="btn btn-book">
+                    <a href="booking.php?offer_id=<?php echo (int)$offer['id']; echo $_utm_qs; ?>" class="btn btn-book" data-mt-pixel-booking-intent="offer_detail_book_service" data-mt-pixel-payload="<?php echo htmlspecialchars($mt_offer_booking_pixel_payload_json, ENT_QUOTES, 'UTF-8'); ?>">
                         <i class="fas fa-calendar-check me-2"></i>Book This Service
                     </a>
                     <?php if ($hideProviderDirectContact): ?>

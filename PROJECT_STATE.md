@@ -10,7 +10,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 - **Plataforma:** operativa en desarrollo local
 - **Último bundle conocido:** `medtravel_local_backup_20260410.bundle`
 - **Base de datos:** entorno local moderno validado en `medtravel_rebuild_20260415` (MySQL, reconstruida desde dump real del servidor). `medtravel` queda preservada solo como referencia/backup local legacy y no debe usarse para validar el dominio moderno de providers/staff/services. Producción: `medtravelcom_medtravel`
-- **Fecha última actualización de este archivo:** 2026-04-21 (cierre de sesión — gating remoto cleanup.php validado y canonizado)
+- **Fecha última actualización de este archivo:** 2026-06-25 (cierre de sesión — tracking Meta Pixel para embudo público de booking)
 
 ---
 
@@ -27,6 +27,7 @@ Workspace operativo actual: `/Volumes/SSD-SAMSUNG/01_Proyectos_Desarrollo/Desarr
 ---
 
 ## Frentes completados recientes
+- **2026-06-25** — feat(tracking): Meta Pixel mantiene el base `PageView` existente en `inc/include.php` sin duplicarlo y agrega medición del embudo público de booking. `BookingIntent` se dispara desde el CTA principal de oferta y al iniciar/enviar el formulario global; `Lead` se dispara una sola vez al llegar a `booking/wizard.php` después de validación servidor en `booking/step-1.php` con datos mínimos y consentimientos completos. No se implementan eventos de compra.
 - **2026-04-21** — ops(runtime): gating remoto de `admin/cleanup.php` validado en servidor. `APP_ENV=dev` + `ALLOW_DEV_RESET=1` en `.env` no habilitan Execute en host público porque `conexion.php` fuerza `APP_ENV` a `prod` sin `ALLOW_REMOTE_DEV=1`. Triple condición necesaria en remoto: `APP_ENV=dev` + `ALLOW_REMOTE_DEV=1` + `ALLOW_DEV_RESET=1`. Las dos últimas son temporales y deben retirarse del servidor tras completar el reset. Canonizado en `13_CHANGELOG_DECISIONS.md` y `11_TECH_ARCH_AND_RUNTIME.md`.
 - **2026-04-20** — feat(booking): `admin/booking_asistido.php` acepta prefill GET completo desde ConectarBot/Chatwoot (10 params: `prefill_email`, `prefill_name`, `prefill_phone`, `prefill_channel`, `prefill_city`, `prefill_country`, `prefill_bio`, `prefill_company`, `cw_conversation_id`, `cw_contact_id`). Banner chatwoot. Auto-lookup no pisa campos ya prefillados. `city`+`country` → `origin`; `bio`+`company` → `special_request`. `cw_conversation_id` persiste en `booking_requests`. Migración: `sql/2026_04_20_booking_cw_conversation.sql`. Flujo sigue siendo 100% agent-assisted.
 - **2026-04-18** — feat(provider-profile): `providers` incorpora redes institucionales del prestador (`instagram_url`, `facebook_url`, `linkedin_url`, `youtube_url`, `whatsapp_url`) con edición desde `admin/mi_empresa.php` para dominio médico. `admin/ajax/mi_empresa.php` valida host básico por canal, hace `trim` y guarda vacío como `NULL`. Se crea helper reutilizable `inc/provider_public_links.php` para validar y resolver links públicos. `inc/public_specialists.php` expone links institucionales del provider al payload público del staff; `index.php`, `specialists.php` y `blog.php` muestran de forma discreta máximo 2 iconos (`website`, `instagram`) como señal de credibilidad sin mezclar identidad del staff.

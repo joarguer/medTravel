@@ -39,6 +39,75 @@ function booking_background_style($booking_texts = null) {
     return 'style="--booking-bg-image: url(\'' . htmlspecialchars($path, ENT_QUOTES) . '\')"';
 }
 
+function mt_booking_pixel_payload($conexion, $offerId = 0, $serviceId = 0) {
+    $payload = [
+        'content_category' => 'Medical Booking',
+        'currency' => 'USD',
+    ];
+
+    $offerId = (int)$offerId;
+    $serviceId = (int)$serviceId;
+
+    if ($conexion && $offerId > 0) {
+        $stmt = mysqli_prepare($conexion, "
+            SELECT
+                o.id,
+                o.title,
+                o.price_from,
+                o.currency,
+                sc.name AS service_name
+            FROM provider_service_offers o
+            LEFT JOIN service_catalog sc ON sc.id = o.service_id
+            WHERE o.id = ?
+            LIMIT 1
+        ");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $offerId);
+            if (mysqli_stmt_execute($stmt)) {
+                $res = mysqli_stmt_get_result($stmt);
+                if ($res && ($row = mysqli_fetch_assoc($res))) {
+                    $contentName = trim((string)($row['title'] ?? ''));
+                    if ($contentName === '') {
+                        $contentName = trim((string)($row['service_name'] ?? ''));
+                    }
+                    if ($contentName !== '') {
+                        $payload['content_name'] = $contentName;
+                    }
+                    $payload['content_ids'] = [(string)(int)$row['id']];
+                    $price = isset($row['price_from']) ? (float)$row['price_from'] : 0;
+                    if ($price > 0) {
+                        $payload['value'] = $price;
+                    }
+                    $currency = strtoupper(trim((string)($row['currency'] ?? '')));
+                    if ($currency !== '') {
+                        $payload['currency'] = $currency;
+                    }
+                }
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    if ($conexion && $offerId <= 0 && $serviceId > 0) {
+        $stmt = mysqli_prepare($conexion, "SELECT name FROM service_catalog WHERE id = ? LIMIT 1");
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $serviceId);
+            if (mysqli_stmt_execute($stmt)) {
+                $res = mysqli_stmt_get_result($stmt);
+                if ($res && ($row = mysqli_fetch_assoc($res))) {
+                    $contentName = trim((string)($row['name'] ?? ''));
+                    if ($contentName !== '') {
+                        $payload['content_name'] = $contentName;
+                    }
+                }
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    return $payload;
+}
+
 function render_booking_form($origin = 'booking_page', $preselected_offer_id = null, $preload = [], $preselected_service_id = 0) {
     global $conexion;
     // Read UTM params from URL to forward through the booking form
@@ -108,6 +177,12 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
         'additional_services_suffix' => 'additional services',
     ];
     $termsVersion = defined('TERMS_VERSION') ? TERMS_VERSION : 'v1.1';
+    $booking_pixel_payload = mt_booking_pixel_payload($conexion, (int)$preselected_offer_id, (int)$preselected_service_id);
+    $booking_pixel_payload['event_source'] = 'booking_form';
+    $booking_pixel_payload_json = json_encode($booking_pixel_payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($booking_pixel_payload_json === false) {
+        $booking_pixel_payload_json = '{}';
+    }
     ?>
     <style>
     /* Scoped styles: improve contrast for legal links inside booking blocks */
@@ -245,6 +320,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
             var RETRY_DELAYS = [0, 250, 1000];
             var DEBUG = !!window.MT_DEBUG;
             var UI_TEXTS = <?php echo json_encode($booking_form_ui_texts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+            var PIXEL_BOOKING_PAYLOAD = <?php echo $booking_pixel_payload_json; ?>;
 
             function logDebug() {
                 if (!DEBUG || !window.console || !console.log) return;
@@ -256,6 +332,75 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
             function parseJson(raw) {
                 if (!raw) return null;
                 try { return JSON.parse(raw); } catch (e) { return null; }
+            }
+
+            function clonePixelPayload(payload) {
+                var cloned = {};
+                payload = payload || {};
+                Object.keys(payload).forEach(function(key) {
+                    cloned[key] = payload[key];
+                });
+                return cloned;
+            }
+
+            function pixelIntentKey(payload) {
+                payload = payload || {};
+                var ids = Array.isArray(payload.content_ids) ? payload.content_ids.join(',') : '';
+                return 'mt_pixel_booking_intent_' + [
+                    payload.event_source || 'booking',
+                    payload.content_name || '',
+                    ids,
+                    payload.value || ''
+                ].join('|');
+            }
+
+            function safeSessionGet(key) {
+                try { return sessionStorage.getItem(key); } catch (e) { return null; }
+            }
+
+            function safeSessionSet(key, value) {
+                try { sessionStorage.setItem(key, value); } catch (e) {}
+            }
+
+            function trackBookingIntent(reason, payload) {
+                if (typeof window.fbq !== 'function') return;
+                var eventPayload = clonePixelPayload(payload || PIXEL_BOOKING_PAYLOAD);
+                eventPayload.intent_source = reason || 'booking_form';
+                var storageKey = pixelIntentKey(eventPayload);
+                if (safeSessionGet(storageKey) === '1') return;
+
+                window.fbq('trackCustom', 'BookingIntent', eventPayload);
+                safeSessionSet(storageKey, '1');
+                logDebug('Meta Pixel BookingIntent', eventPayload);
+            }
+
+            function bindExternalBookingIntentTriggers() {
+                if (window.__mtPixelBookingIntentTriggersBound) return;
+                window.__mtPixelBookingIntentTriggersBound = true;
+
+                var triggers = document.querySelectorAll('[data-mt-pixel-booking-intent]');
+                Array.prototype.forEach.call(triggers, function(trigger) {
+                    trigger.addEventListener('click', function() {
+                        var payload = parseJson(trigger.getAttribute('data-mt-pixel-payload')) || PIXEL_BOOKING_PAYLOAD;
+                        trackBookingIntent(trigger.getAttribute('data-mt-pixel-booking-intent') || 'booking_cta', payload);
+                    });
+                });
+            }
+
+            function bindBookingIntent(form) {
+                if (!form || form.dataset.mtPixelIntentBound === '1') return;
+                form.dataset.mtPixelIntentBound = '1';
+
+                var started = false;
+                function trackStarted(reason) {
+                    if (started) return;
+                    started = true;
+                    trackBookingIntent(reason, PIXEL_BOOKING_PAYLOAD);
+                }
+
+                form.addEventListener('focusin', function() { trackStarted('booking_form_focus'); });
+                form.addEventListener('input', function() { trackStarted('booking_form_input'); });
+                form.addEventListener('change', function() { trackStarted('booking_form_change'); });
             }
 
             function isDateCompatible(value) {
@@ -304,6 +449,7 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 form.dataset.mtSubmitBound = '1';
 
                 form.addEventListener('submit', function() {
+                    trackBookingIntent('booking_form_submit', PIXEL_BOOKING_PAYLOAD);
                     try {
                         function getFieldValue(name) {
                             var field = form.querySelector('[name="' + name + '"]');
@@ -435,6 +581,8 @@ function render_booking_form($origin = 'booking_page', $preselected_offer_id = n
                 }
 
                 bindSubmitPersistence(form);
+                bindBookingIntent(form);
+                bindExternalBookingIntentTriggers();
                 configureTermsGate(form);
                 logDebug('hydrated form', form);
             }

@@ -43,6 +43,15 @@ $consent_privacy_checked = ((string)($booking['consent_privacy'] ?? '') === '1' 
 $consent_insurance_checked = ((string)($booking['consent_insurance'] ?? '') === '1' || (string)($booking['terms_accepted'] ?? '') === '1');
 $step1_consents_complete = ($consent_terms_checked && $consent_privacy_checked && $consent_insurance_checked);
 $step1_recovery_needed = (!$step1_contact_complete || !$step1_consents_complete);
+$mt_meta_pixel_lead_payload = [];
+$mt_meta_pixel_lead_event_id = '';
+if (!$step1_recovery_needed && !empty($_SESSION['mt_meta_pixel_lead_pending'])) {
+    $mt_meta_pixel_lead_payload = mt_booking_pixel_payload($conexion, $preselected_offer_id, $preselected_service_id);
+    $mt_meta_pixel_lead_payload['event_source'] = 'booking_step_1_valid';
+    $mt_meta_pixel_lead_event_id = preg_replace('/[^A-Za-z0-9_:-]/', '', (string)($_SESSION['mt_meta_pixel_lead_event_id'] ?? ''));
+}
+unset($_SESSION['mt_meta_pixel_lead_pending'], $_SESSION['mt_meta_pixel_lead_event_id']);
+
 $wizard_ui_texts = [
     'add' => 'Add',
     'remove' => 'Remove',
@@ -1202,6 +1211,28 @@ if ($flow === 'addon' && !empty($addon_route)) {
     <script src="../lib/lightbox/js/lightbox.min.js"></script>
     <?php echo $script; ?>
     <script src="../js/main.js"></script>
+
+    <?php if (!empty($mt_meta_pixel_lead_payload) && $mt_meta_pixel_lead_event_id !== ''): ?>
+    <script>
+        (function() {
+            var payload = <?php
+                $mt_meta_pixel_lead_payload_json = json_encode($mt_meta_pixel_lead_payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                echo $mt_meta_pixel_lead_payload_json !== false ? $mt_meta_pixel_lead_payload_json : '{}';
+            ?>;
+            var eventId = <?php echo json_encode($mt_meta_pixel_lead_event_id); ?>;
+            var storageKey = 'mt_pixel_lead_' + eventId;
+
+            try {
+                if (sessionStorage.getItem(storageKey) === '1') return;
+            } catch (e) {}
+
+            if (typeof window.fbq === 'function') {
+                window.fbq('track', 'Lead', payload, { eventID: eventId });
+                try { sessionStorage.setItem(storageKey, '1'); } catch (e) {}
+            }
+        })();
+    </script>
+    <?php endif; ?>
 
     <script>
         const WIZARD_UI_TEXTS = <?php echo json_encode($wizard_ui_texts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
