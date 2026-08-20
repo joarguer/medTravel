@@ -503,7 +503,7 @@ if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_s
         <div class="hero-content">
             <div class="container text-center">
                 <p class="hero-subtitle mb-2"><?php echo htmlspecialchars($detail_header_subtitle_1); ?></p>
-                <h1 class="hero-title"><?php echo htmlspecialchars($detail_header_title); ?></h1>
+                <h1 class="hero-title"><?php echo htmlspecialchars($offer_title); ?></h1>
                 <p class="hero-subtitle mt-2"><?php echo htmlspecialchars($detail_header_subtitle_2); ?></p>
             </div>
         </div>
