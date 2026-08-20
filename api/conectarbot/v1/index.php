@@ -639,12 +639,17 @@ function cbot_fetch_offer_core(mysqli $db, int $offerId): ?array {
     $providerSlug = cbot_table_has_column($db, 'providers', 'slug') ? 'p.slug' : "'' AS slug";
     $providerType = cbot_table_has_column($db, 'providers', 'type') ? 'p.type' : "'' AS type";
     $providerCity = cbot_table_has_column($db, 'providers', 'city') ? 'p.city' : "'' AS city";
-    $providerVerified = cbot_table_has_column($db, 'providers', 'is_verified') ? 'p.is_verified' : '0 AS is_verified';
+    $providerDescription = cbot_table_has_column($db, 'providers', 'description')
+        ? 'p.description AS provider_description'
+        : "'' AS provider_description";
 
+    // provider.verified is derived solely from provider_verification.status
+    // (see cbot_fetch_provider_verification / offer_detail) so it can never
+    // contradict provider.verification.*; providers.is_verified is not read here.
     $sql = "SELECT o.id AS offer_id, o.provider_id, o.service_id, {$offerPcsSelect},
                    o.title, o.description AS offer_description, o.price_from, o.currency,
                    sc.name AS service_name, sc.slug AS service_slug, {$serviceDescriptionSelect}, sc.is_active AS service_active,
-                   p.name AS provider_name, {$providerSlug}, {$providerType}, {$providerCity}, {$providerVerified}
+                   p.name AS provider_name, {$providerSlug}, {$providerType}, {$providerCity}, {$providerDescription}
             FROM provider_service_offers o
             INNER JOIN service_catalog sc ON sc.id = o.service_id AND sc.is_active = 1{$serviceDeletedWhere}
             INNER JOIN providers p ON p.id = o.provider_id{$providerStatusWhere}{$providerDeletedWhere}
@@ -692,6 +697,158 @@ function cbot_offer_pcs_valid(mysqli $db, ?int $pcsId, int $providerId, int $ser
     return $ok;
 }
 
+function cbot_verification_label(?string $status, ?string $level): ?string {
+    if ($status === null) {
+        return null;
+    }
+    switch ($status) {
+        case 'verified':
+            if ($level === 'premium') {
+                return 'Verified Premium';
+            }
+            if ($level === 'standard') {
+                return 'Verified Standard';
+            }
+            return 'Verified';
+        case 'pending':
+            return 'Pending Verification';
+        case 'in_review':
+            return 'Under Review';
+        case 'rejected':
+            return 'Not Verified';
+        case 'suspended':
+            return 'Verification Suspended';
+        default:
+            return 'Unverified';
+    }
+}
+
+function cbot_fetch_provider_verification(mysqli $db, int $providerId): array {
+    $result = ['status' => null, 'level' => null, 'label' => null, 'license_item_checked' => false];
+
+    if (cbot_table_exists($db, 'provider_verification')) {
+        $sql = "SELECT status, verification_level FROM provider_verification WHERE provider_id = ? LIMIT 1";
+        $stmt = mysqli_prepare($db, $sql);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $providerId);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $row = $res ? mysqli_fetch_assoc($res) : null;
+            mysqli_stmt_close($stmt);
+            if ($row) {
+                $result['status'] = cbot_nullable_string($row['status'] ?? null);
+                $result['level'] = cbot_nullable_string($row['verification_level'] ?? null);
+            }
+        }
+    }
+    $result['label'] = cbot_verification_label($result['status'], $result['level']);
+
+    // Real-validation signal for professional_license_verified: an admin actually
+    // checked the provider's "medical_license" verification item. Never inferred
+    // from the mere presence of a license number on the staff row.
+    if (cbot_table_exists($db, 'provider_verification_items') && cbot_table_has_column($db, 'provider_verification_items', 'item_key')) {
+        $sql = "SELECT 1 FROM provider_verification_items
+                WHERE provider_id = ? AND item_key = 'medical_license' AND is_checked = 1 LIMIT 1";
+        $stmt = mysqli_prepare($db, $sql);
+        if ($stmt) {
+            mysqli_stmt_bind_param($stmt, 'i', $providerId);
+            mysqli_stmt_execute($stmt);
+            $res = mysqli_stmt_get_result($stmt);
+            $result['license_item_checked'] = $res && mysqli_fetch_row($res) ? true : false;
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    return $result;
+}
+
+function cbot_fetch_staff_services(mysqli $db, int $providerId, int $staffId): array {
+    if (
+        !cbot_table_exists($db, 'provider_medical_staff_services') ||
+        !cbot_table_exists($db, 'service_catalog') ||
+        !cbot_table_exists($db, 'provider_service_offers')
+    ) {
+        return [];
+    }
+
+    $relActiveWhere = cbot_table_has_column($db, 'provider_medical_staff_services', 'active')
+        ? ' AND rel.active = 1'
+        : '';
+    $serviceDeletedWhere = cbot_table_has_column($db, 'service_catalog', 'is_deleted')
+        ? ' AND sc.is_deleted = 0'
+        : '';
+    $offerDeletedWhere = cbot_table_has_column($db, 'provider_service_offers', 'is_deleted')
+        ? ' AND o.is_deleted = 0'
+        : '';
+    $hasRelPcs = cbot_table_has_column($db, 'provider_medical_staff_services', 'provider_catalog_service_id');
+    $hasOfferPcs = cbot_table_has_column($db, 'provider_service_offers', 'provider_catalog_service_id');
+    $pcsExactApplicable = $hasRelPcs && $hasOfferPcs;
+    $relPcsSelect = $hasRelPcs ? 'rel.provider_catalog_service_id' : 'NULL';
+    $offerPcsSelect = $hasOfferPcs ? 'o.provider_catalog_service_id' : 'NULL';
+
+    // When the schema models PCS on both sides, require an exact, non-NULL
+    // match — NULL is never treated as a wildcard here (SQL "=" already
+    // excludes NULL vs NULL/non-NULL, so this alone enforces that). When PCS
+    // isn't modeled on both sides, PCS matching doesn't apply: fall back to
+    // provider+service (no invented association).
+    $pcsCoherenceWhere = $pcsExactApplicable
+        ? ' AND rel.provider_catalog_service_id = o.provider_catalog_service_id'
+        : '';
+
+    // Additionally require the matched provider_catalog_services row itself
+    // to be active, when that column exists.
+    $pcsActiveJoin = '';
+    $pcsActiveWhere = '';
+    if ($pcsExactApplicable && cbot_table_exists($db, 'provider_catalog_services')) {
+        $pcsActiveJoin = ' INNER JOIN provider_catalog_services pcs ON pcs.id = o.provider_catalog_service_id';
+        $pcsActiveWhere = cbot_table_has_column($db, 'provider_catalog_services', 'is_active')
+            ? ' AND pcs.is_active = 1'
+            : '';
+    }
+
+    $sql = "SELECT sc.id, sc.slug, sc.name, o.id AS offer_id, o.title AS offer_title,
+                   COALESCE({$relPcsSelect}, {$offerPcsSelect}) AS provider_catalog_service_id
+            FROM provider_medical_staff_services rel
+            INNER JOIN service_catalog sc ON sc.id = rel.service_id AND sc.is_active = 1{$serviceDeletedWhere}
+            INNER JOIN provider_service_offers o
+              ON o.provider_id = ?
+             AND o.service_id = rel.service_id
+             AND o.is_active = 1{$offerDeletedWhere}{$pcsCoherenceWhere}
+            {$pcsActiveJoin}
+            WHERE rel.provider_medical_staff_id = ?{$relActiveWhere}{$pcsActiveWhere}
+            ORDER BY sc.name ASC, o.price_from IS NULL ASC, o.price_from ASC, o.id ASC";
+
+    $stmt = mysqli_prepare($db, $sql);
+    if (!$stmt) {
+        error_log('conectarbot staff services prepare error: ' . mysqli_error($db));
+        return [];
+    }
+    mysqli_stmt_bind_param($stmt, 'ii', $providerId, $staffId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $services = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $serviceId = (int)$row['id'];
+        if (isset($services[$serviceId])) {
+            continue;
+        }
+        $services[$serviceId] = [
+            'id' => $serviceId,
+            'slug' => $row['slug'],
+            'name' => $row['name'],
+            'offer_id' => (int)$row['offer_id'],
+            'title' => cbot_nullable_string($row['offer_title'] ?? null),
+            'provider_catalog_service_id' => isset($row['provider_catalog_service_id']) && $row['provider_catalog_service_id'] !== null
+                ? (int)$row['provider_catalog_service_id']
+                : null,
+        ];
+    }
+    mysqli_stmt_close($stmt);
+
+    return array_values($services);
+}
+
 function offer_detail(mysqli $db, int $offerId, string $source): void {
     $offer = cbot_fetch_offer_core($db, $offerId);
     if (!$offer) {
@@ -709,10 +866,22 @@ function offer_detail(mysqli $db, int $offerId, string $source): void {
     }
 
     $providerCity = cbot_nullable_string($offer['city'] ?? null);
+    $verification = cbot_fetch_provider_verification($db, $providerId);
+    // Single canonical source for both fields: provider_verification.status.
+    // Keeps provider.verified and provider.verification.* impossible to contradict.
+    $providerVerified = $verification['status'] === 'verified';
 
     $staff = cbot_fetch_service_staff($db, $serviceId, $providerId, $pcsId);
     foreach ($staff as &$person) {
         $person['description'] = cbot_redact_contact_info($person['description']);
+        // declared bio, not a verified credential — see professional_license_verified below
+        $person['public_experience'] = $person['description'];
+        $person['professional_license_verified'] = $verification['license_item_checked']
+            && $person['professional_license'] !== null;
+        // No canonical signal authorizes publishing the raw license number;
+        // keep only the verified indicator (see docs: PUBLIC_AI policy).
+        unset($person['professional_license']);
+        $person['services'] = cbot_fetch_staff_services($db, $providerId, $person['id']);
     }
     unset($person);
 
@@ -743,7 +912,13 @@ function offer_detail(mysqli $db, int $offerId, string $source): void {
             'name' => $offer['provider_name'],
             'slug' => cbot_nullable_string($offer['slug'] ?? null),
             'type' => cbot_nullable_string($offer['type'] ?? null),
-            'verified' => (int)($offer['is_verified'] ?? 0) === 1,
+            'description' => cbot_redact_contact_info(cbot_public_text($offer['provider_description'] ?? null)) ?? '',
+            'verified' => $providerVerified,
+            'verification' => [
+                'status' => $verification['status'],
+                'level' => $verification['level'],
+                'label' => $verification['label'],
+            ],
             'location' => ['city' => $providerCity],
         ],
         'staff' => $staff,
