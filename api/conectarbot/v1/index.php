@@ -6,6 +6,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../../admin/include/conexion.php';
+require_once __DIR__ . '/../../../inc/commission_gate.php';
 
 $configPath = __DIR__ . '/../../../config/conectarbot_api.php';
 if (!is_file($configPath)) {
@@ -177,6 +178,16 @@ function cbot_nullable_float($value): ?float {
     return $value !== null && $value !== '' ? (float)$value : null;
 }
 
+function cbot_redact_contact_info(?string $text): ?string {
+    if ($text === null || $text === '') {
+        return $text;
+    }
+    if (function_exists('commission_gate_redact_sensitive')) {
+        return commission_gate_redact_sensitive($text);
+    }
+    return $text;
+}
+
 function cbot_public_text($value): ?string {
     $value = preg_replace('/<\s*\/?(p|div|br|li|ul|ol|h[1-6])[^>]*>/i', ' ', (string)$value);
     $value = trim(strip_tags((string)$value));
@@ -254,6 +265,14 @@ switch (true) {
             respond_error('INVALID_SLUG', 'Slug must match [a-z0-9-]', 400, $META_SOURCE);
         }
         service_detail($conexion, $slug, $META_SOURCE);
+        break;
+
+    case preg_match('#^catalog/offer/(\d+)$#', $path, $m):
+        $offerId = (int)$m[1];
+        if ($offerId <= 0) {
+            respond_error('NOT_FOUND', 'Offer not found', 404, $META_SOURCE);
+        }
+        offer_detail($conexion, $offerId, $META_SOURCE);
         break;
 
     default:
@@ -427,7 +446,7 @@ function cbot_fetch_service_offers(mysqli $db, int $serviceId): array {
     return $offers;
 }
 
-function cbot_fetch_service_staff(mysqli $db, int $serviceId): array {
+function cbot_fetch_service_staff(mysqli $db, int $serviceId, ?int $providerId = null, ?int $pcsId = null): array {
     if (
         !cbot_table_exists($db, 'provider_medical_staff') ||
         !cbot_table_exists($db, 'provider_medical_staff_services') ||
@@ -452,9 +471,8 @@ function cbot_fetch_service_staff(mysqli $db, int $serviceId): array {
         ? ' AND p.is_active = 1'
         : '';
 
-    $relPcs = cbot_table_has_column($db, 'provider_medical_staff_services', 'provider_catalog_service_id')
-        ? 'rel.provider_catalog_service_id'
-        : 'NULL AS provider_catalog_service_id';
+    $hasPcsColumn = cbot_table_has_column($db, 'provider_medical_staff_services', 'provider_catalog_service_id');
+    $relPcs = $hasPcsColumn ? 'rel.provider_catalog_service_id' : 'NULL AS provider_catalog_service_id';
     $roleTitle = cbot_table_has_column($db, 'provider_medical_staff', 'role_title') ? 'pms.role_title' : "'' AS role_title";
     $specialty = cbot_table_has_column($db, 'provider_medical_staff', 'specialty') ? 'pms.specialty' : "'' AS specialty";
     $bioShort = cbot_table_has_column($db, 'provider_medical_staff', 'bio_short') ? 'pms.bio_short' : "'' AS bio_short";
@@ -463,13 +481,19 @@ function cbot_fetch_service_staff(mysqli $db, int $serviceId): array {
     $providerCity = cbot_table_has_column($db, 'providers', 'city') ? 'p.city AS provider_city' : "'' AS provider_city";
     $staffSort = cbot_table_has_column($db, 'provider_medical_staff', 'sort_order') ? 'pms.sort_order' : 'pms.id';
 
+    // pcsId is only enforced at the SQL level when the schema actually models
+    // per-PCS staff relations; otherwise the relation can't express that
+    // granularity and we fall back to provider+service (no invented match).
+    $providerFilterWhere = $providerId !== null ? ' AND pms.provider_id = ?' : '';
+    $pcsFilterWhere = ($pcsId !== null && $hasPcsColumn) ? ' AND rel.provider_catalog_service_id = ?' : '';
+
     $sql = "SELECT pms.id, pms.provider_id, pms.full_name, {$roleTitle}, {$specialty}, {$bioShort},
                    {$license}, {$clinicName}, {$relPcs},
                    p.name AS provider_name, {$providerCity}
             FROM provider_medical_staff_services rel
             INNER JOIN provider_medical_staff pms ON pms.id = rel.provider_medical_staff_id
             INNER JOIN providers p ON p.id = pms.provider_id
-            WHERE rel.service_id = ?{$relActiveWhere}{$staffStatusWhere}{$publicStaffWhere}{$providerStatusWhere}{$providerDeletedWhere}
+            WHERE rel.service_id = ?{$providerFilterWhere}{$pcsFilterWhere}{$relActiveWhere}{$staffStatusWhere}{$publicStaffWhere}{$providerStatusWhere}{$providerDeletedWhere}
             ORDER BY p.name ASC, {$staffSort} ASC, pms.full_name ASC";
 
     $stmt = mysqli_prepare($db, $sql);
@@ -477,7 +501,18 @@ function cbot_fetch_service_staff(mysqli $db, int $serviceId): array {
         error_log('conectarbot staff prepare error: ' . mysqli_error($db));
         return [];
     }
-    mysqli_stmt_bind_param($stmt, 'i', $serviceId);
+
+    $types = 'i';
+    $params = [$serviceId];
+    if ($providerFilterWhere !== '') {
+        $types .= 'i';
+        $params[] = $providerId;
+    }
+    if ($pcsFilterWhere !== '') {
+        $types .= 'i';
+        $params[] = $pcsId;
+    }
+    mysqli_stmt_bind_param($stmt, $types, ...$params);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
 
@@ -567,6 +602,152 @@ function service_detail(mysqli $db, string $slug, string $source): void {
         'staff' => $staff,
         'locations' => cbot_locations_from_catalog($providers, $staff),
         'offers' => $offers,
+    ];
+
+    respond(true, $data, null, 200, $source);
+}
+
+function cbot_fetch_offer_core(mysqli $db, int $offerId): ?array {
+    if (
+        !cbot_table_exists($db, 'provider_service_offers') ||
+        !cbot_table_exists($db, 'service_catalog') ||
+        !cbot_table_exists($db, 'providers')
+    ) {
+        return null;
+    }
+
+    $offerDeletedWhere = cbot_table_has_column($db, 'provider_service_offers', 'is_deleted')
+        ? ' AND o.is_deleted = 0'
+        : '';
+    $offerPcsSelect = cbot_table_has_column($db, 'provider_service_offers', 'provider_catalog_service_id')
+        ? 'o.provider_catalog_service_id'
+        : 'NULL AS provider_catalog_service_id';
+
+    $serviceDeletedWhere = cbot_table_has_column($db, 'service_catalog', 'is_deleted')
+        ? ' AND sc.is_deleted = 0'
+        : '';
+    $serviceDescriptionSelect = cbot_table_has_column($db, 'service_catalog', 'description')
+        ? "COALESCE(NULLIF(sc.short_description, ''), NULLIF(sc.description, ''), '') AS service_description"
+        : "COALESCE(sc.short_description, '') AS service_description";
+
+    $providerDeletedWhere = cbot_table_has_column($db, 'providers', 'is_deleted')
+        ? ' AND p.is_deleted = 0'
+        : '';
+    $providerStatusWhere = cbot_table_has_column($db, 'providers', 'is_active')
+        ? ' AND p.is_active = 1'
+        : '';
+    $providerSlug = cbot_table_has_column($db, 'providers', 'slug') ? 'p.slug' : "'' AS slug";
+    $providerType = cbot_table_has_column($db, 'providers', 'type') ? 'p.type' : "'' AS type";
+    $providerCity = cbot_table_has_column($db, 'providers', 'city') ? 'p.city' : "'' AS city";
+    $providerVerified = cbot_table_has_column($db, 'providers', 'is_verified') ? 'p.is_verified' : '0 AS is_verified';
+
+    $sql = "SELECT o.id AS offer_id, o.provider_id, o.service_id, {$offerPcsSelect},
+                   o.title, o.description AS offer_description, o.price_from, o.currency,
+                   sc.name AS service_name, sc.slug AS service_slug, {$serviceDescriptionSelect}, sc.is_active AS service_active,
+                   p.name AS provider_name, {$providerSlug}, {$providerType}, {$providerCity}, {$providerVerified}
+            FROM provider_service_offers o
+            INNER JOIN service_catalog sc ON sc.id = o.service_id AND sc.is_active = 1{$serviceDeletedWhere}
+            INNER JOIN providers p ON p.id = o.provider_id{$providerStatusWhere}{$providerDeletedWhere}
+            WHERE o.id = ? AND o.is_active = 1{$offerDeletedWhere}
+            LIMIT 1";
+
+    $stmt = mysqli_prepare($db, $sql);
+    if (!$stmt) {
+        error_log('conectarbot offer_detail prepare error: ' . mysqli_error($db));
+        return null;
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $offerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $row = $res ? mysqli_fetch_assoc($res) : null;
+    mysqli_stmt_close($stmt);
+
+    return $row ?: null;
+}
+
+function cbot_offer_pcs_valid(mysqli $db, ?int $pcsId, int $providerId, int $serviceId): bool {
+    if ($pcsId === null) {
+        return true;
+    }
+    if (!cbot_table_exists($db, 'provider_catalog_services')) {
+        return true;
+    }
+
+    $activeWhere = cbot_table_has_column($db, 'provider_catalog_services', 'is_active')
+        ? ' AND is_active = 1'
+        : '';
+    $sql = "SELECT 1 FROM provider_catalog_services WHERE id = ? AND provider_id = ? AND service_id = ?{$activeWhere} LIMIT 1";
+
+    $stmt = mysqli_prepare($db, $sql);
+    if (!$stmt) {
+        error_log('conectarbot offer_pcs_valid prepare error: ' . mysqli_error($db));
+        return false;
+    }
+    mysqli_stmt_bind_param($stmt, 'iii', $pcsId, $providerId, $serviceId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $ok = $res && mysqli_fetch_row($res) ? true : false;
+    mysqli_stmt_close($stmt);
+
+    return $ok;
+}
+
+function offer_detail(mysqli $db, int $offerId, string $source): void {
+    $offer = cbot_fetch_offer_core($db, $offerId);
+    if (!$offer) {
+        respond_error('NOT_FOUND', 'Offer not found', 404, $source);
+    }
+
+    $providerId = (int)$offer['provider_id'];
+    $serviceId = (int)$offer['service_id'];
+    $pcsId = isset($offer['provider_catalog_service_id']) && $offer['provider_catalog_service_id'] !== null
+        ? (int)$offer['provider_catalog_service_id']
+        : null;
+
+    if (!cbot_offer_pcs_valid($db, $pcsId, $providerId, $serviceId)) {
+        respond_error('NOT_FOUND', 'Offer not found', 404, $source);
+    }
+
+    $providerCity = cbot_nullable_string($offer['city'] ?? null);
+
+    $staff = cbot_fetch_service_staff($db, $serviceId, $providerId, $pcsId);
+    foreach ($staff as &$person) {
+        $person['description'] = cbot_redact_contact_info($person['description']);
+    }
+    unset($person);
+
+    $providersForLocations = [[
+        'id' => $providerId,
+        'name' => $offer['provider_name'],
+        'location' => ['city' => $providerCity],
+    ]];
+
+    $data = [
+        'offer_id' => (int)$offer['offer_id'],
+        'active' => true,
+        'title' => cbot_nullable_string($offer['title'] ?? null) ?? '',
+        'description' => cbot_redact_contact_info(cbot_public_text($offer['offer_description'] ?? null)) ?? '',
+        'price' => [
+            'from' => cbot_nullable_float($offer['price_from'] ?? null),
+            'currency' => cbot_nullable_string($offer['currency'] ?? null),
+        ],
+        'service' => [
+            'id' => $serviceId,
+            'slug' => $offer['service_slug'],
+            'name' => $offer['service_name'],
+            'description' => cbot_redact_contact_info(cbot_public_text($offer['service_description'] ?? null)) ?? '',
+            'active' => $offer['service_active'] == 1,
+        ],
+        'provider' => [
+            'id' => $providerId,
+            'name' => $offer['provider_name'],
+            'slug' => cbot_nullable_string($offer['slug'] ?? null),
+            'type' => cbot_nullable_string($offer['type'] ?? null),
+            'verified' => (int)($offer['is_verified'] ?? 0) === 1,
+            'location' => ['city' => $providerCity],
+        ],
+        'staff' => $staff,
+        'locations' => cbot_locations_from_catalog($providersForLocations, $staff),
     ];
 
     respond(true, $data, null, 200, $source);
