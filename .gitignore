@@ -32,6 +32,7 @@ config/conectarbot_api.php
 
 # Runtime noise — nunca versionar
 nohup.out
+.serena/
 
 # Media / uploads — housekeeping
 admin/img/providers/
