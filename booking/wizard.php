@@ -519,6 +519,22 @@ if ($flow === 'addon' && !empty($addon_route)) {
             border-color: #667eea;
             background: #f0f4ff;
         }
+        .offer-card .card-img-top {
+            height: 200px;
+            overflow: hidden;
+            position: relative;
+            background: #f1f5f9;
+        }
+        .offer-card .card-img-top img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .offer-card .card-img-top img.card-img-placeholder {
+            object-fit: contain;
+            padding: 16px;
+            background: #f8fafc;
+        }
         .offer-card .card-header {
             background: white;
             border-bottom: 1px solid #e5e7eb;
@@ -1002,17 +1018,20 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                                id="offer-<?php echo $offer['id']; ?>">
 
                                         <?php
-                                        $img_query = mysqli_query($conexion, "SELECT path FROM offer_media WHERE offer_id = {$offer['id']} ORDER BY sort_order ASC, id ASC LIMIT 1");
+                                        $offer_image_src = '../img/site/placeholder-medical.svg';
+                                        $offer_image_is_placeholder = true;
+                                        $img_query = mysqli_query($conexion, "SELECT path FROM offer_media WHERE offer_id = {$offer['id']} AND is_active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1");
                                         if ($img_query && $img_row = mysqli_fetch_assoc($img_query)) {
-                                            $image_path = htmlspecialchars($img_row['path']);
+                                            $offer_image_src = '../' . htmlspecialchars($img_row['path']);
+                                            $offer_image_is_placeholder = false;
+                                        }
                                         ?>
-                                            <div class="card-img-top" style="height: 200px; overflow: hidden; position: relative;">
-                                                <img src="../<?php echo $image_path; ?>"
-                                                     alt="<?php echo htmlspecialchars($offer['title']); ?>"
-                                                     style="width: 100%; height: 100%; object-fit: cover;"
-                                                     onerror="this.parentElement.style.display='none';">
-                                            </div>
-                                        <?php } ?>
+                                        <div class="card-img-top">
+                                            <img src="<?php echo $offer_image_src; ?>"
+                                                 alt="<?php echo htmlspecialchars($offer['title']); ?>"
+                                                 class="<?php echo $offer_image_is_placeholder ? 'card-img-placeholder' : ''; ?>"
+                                                 onerror="this.onerror=null; this.src='../img/site/placeholder-medical.svg'; this.classList.add('card-img-placeholder');">
+                                        </div>
 
                                         <div class="card-header">
                                             <?php
