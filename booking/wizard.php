@@ -1052,10 +1052,22 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                             <div class="offer-title">
                                                 <?php echo htmlspecialchars($offer['title'] ?: $offer['service_name']); ?>
                                             </div>
-                                            <?php if (!empty($offer['description'])): ?>
+                                            <?php
+                                            $offer_desc_plain = preg_replace('/\s+/', ' ', trim(strip_tags(html_entity_decode((string)($offer['description'] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8'))));
+                                            ?>
+                                            <?php if ($offer_desc_plain !== ''): ?>
                                                 <div class="offer-description">
-                                                    <?php echo htmlspecialchars(substr($offer['description'], 0, 120)); ?>
-                                                    <?php if (strlen($offer['description']) > 120): ?>...<?php endif; ?>
+                                                    <?php
+                                                    $offer_desc_truncated = mb_substr($offer_desc_plain, 0, 120, 'UTF-8');
+                                                    if (mb_strlen($offer_desc_plain, 'UTF-8') > 120) {
+                                                        $offer_desc_last_space = mb_strrpos($offer_desc_truncated, ' ', 0, 'UTF-8');
+                                                        if ($offer_desc_last_space !== false) {
+                                                            $offer_desc_truncated = mb_substr($offer_desc_truncated, 0, $offer_desc_last_space, 'UTF-8');
+                                                        }
+                                                    }
+                                                    echo htmlspecialchars($offer_desc_truncated, ENT_QUOTES, 'UTF-8');
+                                                    ?>
+                                                    <?php if (mb_strlen($offer_desc_plain, 'UTF-8') > 120): ?>...<?php endif; ?>
                                                 </div>
                                             <?php endif; ?>
                                             <a href="../offer_detail.php?id=<?php echo $offer['id']; ?>"
