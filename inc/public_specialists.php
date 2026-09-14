@@ -1,55 +1,7 @@
 <?php
 
+require_once __DIR__ . '/media_resolver.php';
 require_once __DIR__ . '/provider_public_links.php';
-
-if (!function_exists('mt_home_specialist_placeholder_photo')) {
-    function mt_home_specialist_placeholder_photo()
-    {
-        $jpg = 'img/site/placeholder-medical.jpg';
-        if (is_file(__DIR__ . '/../' . $jpg)) {
-            return $jpg;
-        }
-
-        $svg = 'img/site/placeholder-medical.svg';
-        if (is_file(__DIR__ . '/../' . $svg)) {
-            return $svg;
-        }
-
-        return '';
-    }
-}
-
-if (!function_exists('mt_home_specialist_resolve_photo')) {
-    function mt_home_specialist_resolve_photo($photo)
-    {
-        $photo = trim((string)$photo);
-        $fallback = mt_home_specialist_placeholder_photo();
-        if ($photo === '') {
-            return $fallback;
-        }
-
-        if (preg_match('~^https?://~i', $photo)) {
-            return $photo;
-        }
-
-        $photoPath = parse_url($photo, PHP_URL_PATH);
-        $photoPath = is_string($photoPath) ? ltrim($photoPath, '/') : '';
-        if ($photoPath !== '' && is_file(__DIR__ . '/../' . $photoPath)) {
-            return ltrim($photo, '/');
-        }
-
-        // Legacy avatars from admin profile are saved under admin/img/perfil.
-        if ($photoPath !== '' && strpos($photoPath, 'img/perfil/') === 0) {
-            $adminPath = 'admin/' . $photoPath;
-            if (is_file(__DIR__ . '/../' . $adminPath)) {
-                $query = parse_url($photo, PHP_URL_QUERY);
-                return $adminPath . ($query ? ('?' . $query) : '');
-            }
-        }
-
-        return $fallback !== '' ? $fallback : $photo;
-    }
-}
 
 if (!function_exists('mt_home_specialist_is_legacy_placeholder')) {
     function mt_home_specialist_is_legacy_placeholder($photo)
@@ -210,9 +162,7 @@ if (!function_exists('mt_home_specialists_fetch')) {
             if ($photo === $photoFallback && $linkedUserAvatar !== '' && $primaryPhoto !== $linkedUserAvatar) {
                 $photo = mt_home_specialist_resolve_photo($linkedUserAvatar);
             }
-            if ($providerLogo !== '' && strpos($providerLogo, '://') === false && strpos($providerLogo, '/') === false && $providerId > 0) {
-                $providerLogo = 'img/providers/' . $providerId . '/' . $providerLogo;
-            }
+            $providerLogo = mt_provider_logo_public_path($providerLogo, $providerId);
 
             $items[] = [
                 'id' => (int)($row['id'] ?? 0),

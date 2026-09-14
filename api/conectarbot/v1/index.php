@@ -7,6 +7,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../../admin/include/conexion.php';
 require_once __DIR__ . '/../../../inc/commission_gate.php';
+require_once __DIR__ . '/../../../inc/media_resolver.php';
 
 $configPath = __DIR__ . '/../../../config/conectarbot_api.php';
 if (!is_file($configPath)) {
@@ -24,6 +25,9 @@ $cfg = require $configPath;
 $API_KEY = isset($cfg['API_KEY']) ? trim((string)$cfg['API_KEY']) : '';
 $RATE_LIMIT = isset($cfg['RATE_LIMIT_PER_MIN']) ? (int)$cfg['RATE_LIMIT_PER_MIN'] : 60;
 $META_SOURCE = isset($cfg['SOURCE']) ? (string)$cfg['SOURCE'] : 'medtravel';
+$PUBLIC_BASE_URL = isset($cfg['PUBLIC_BASE_URL']) && trim((string)$cfg['PUBLIC_BASE_URL']) !== ''
+    ? rtrim(trim((string)$cfg['PUBLIC_BASE_URL']), '/')
+    : 'https://medtravel.com.co';
 
 if ($API_KEY === '') {
     http_response_code(500);
@@ -245,6 +249,95 @@ function cbot_locations_from_catalog(array $providers, array $staff): array {
     return $locations;
 }
 
+// Converts a raw stored path/URL (offer_media.path, providers.logo,
+// provider_medical_staff.photo) into an absolute public URL. Already-absolute
+// http(s) values pass through untouched (avoids double-prefixing); relative
+// paths are joined to the configured public base with a single slash.
+function cbot_resolve_public_url(?string $raw, string $baseUrl): ?string {
+    $raw = trim((string)$raw);
+    if ($raw === '') {
+        return null;
+    }
+    if (preg_match('/^https?:\/\//i', $raw)) {
+        return $raw;
+    }
+    $path = ltrim($raw, '/');
+    if ($path === '') {
+        return null;
+    }
+    return rtrim($baseUrl, '/') . '/' . $path;
+}
+
+function cbot_fetch_offer_media(mysqli $db, int $offerId): array {
+    if (!cbot_table_exists($db, 'offer_media')) {
+        return [];
+    }
+
+    $activeWhere = cbot_table_has_column($db, 'offer_media', 'is_active') ? ' AND is_active = 1' : '';
+    $sql = "SELECT path, sort_order FROM offer_media WHERE offer_id = ?{$activeWhere} ORDER BY sort_order ASC, id ASC";
+
+    $stmt = mysqli_prepare($db, $sql);
+    if (!$stmt) {
+        error_log('conectarbot offer_media prepare error: ' . mysqli_error($db));
+        return [];
+    }
+    mysqli_stmt_bind_param($stmt, 'i', $offerId);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $media = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $path = cbot_nullable_string($row['path'] ?? null);
+        if ($path === null) {
+            continue;
+        }
+        $media[] = [
+            'path' => $path,
+            'sort_order' => isset($row['sort_order']) ? (int)$row['sort_order'] : 0,
+        ];
+    }
+    mysqli_stmt_close($stmt);
+
+    return $media;
+}
+
+// Batch-fetches raw provider_medical_staff.photo values by staff id, indexed
+// by id. Kept separate from cbot_fetch_service_staff() on purpose: that
+// function is shared with service_detail() and its output is used as-is
+// there (no per-field resolution pass), so adding photo resolution there
+// would leak an unresolved value into that endpoint's response.
+function cbot_fetch_staff_photos(mysqli $db, array $staffIds): array {
+    $staffIds = array_values(array_unique(array_map('intval', $staffIds)));
+    if (
+        empty($staffIds) ||
+        !cbot_table_exists($db, 'provider_medical_staff') ||
+        !cbot_table_has_column($db, 'provider_medical_staff', 'photo')
+    ) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($staffIds), '?'));
+    $sql = "SELECT id, photo FROM provider_medical_staff WHERE id IN ({$placeholders})";
+
+    $stmt = mysqli_prepare($db, $sql);
+    if (!$stmt) {
+        error_log('conectarbot staff photos prepare error: ' . mysqli_error($db));
+        return [];
+    }
+    $types = str_repeat('i', count($staffIds));
+    mysqli_stmt_bind_param($stmt, $types, ...$staffIds);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+
+    $photos = [];
+    while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $photos[(int)$row['id']] = cbot_nullable_string($row['photo'] ?? null);
+    }
+    mysqli_stmt_close($stmt);
+
+    return $photos;
+}
+
 // --- Routing -------------------------------------------------------------
 $path = detect_path();
 require_api_key($API_KEY, $META_SOURCE);
@@ -272,7 +365,7 @@ switch (true) {
         if ($offerId <= 0) {
             respond_error('NOT_FOUND', 'Offer not found', 404, $META_SOURCE);
         }
-        offer_detail($conexion, $offerId, $META_SOURCE);
+        offer_detail($conexion, $offerId, $META_SOURCE, $PUBLIC_BASE_URL);
         break;
 
     default:
@@ -642,17 +735,31 @@ function cbot_fetch_offer_core(mysqli $db, int $offerId): ?array {
     $providerDescription = cbot_table_has_column($db, 'providers', 'description')
         ? 'p.description AS provider_description'
         : "'' AS provider_description";
+    $providerLogo = cbot_table_has_column($db, 'providers', 'logo') ? 'p.logo' : 'NULL AS logo';
+
+    $categoryJoin = '';
+    $categorySelect = 'NULL AS category_name';
+    if (
+        cbot_table_has_column($db, 'service_catalog', 'category_id') &&
+        cbot_table_exists($db, 'service_categories') &&
+        cbot_table_has_column($db, 'service_categories', 'id') &&
+        cbot_table_has_column($db, 'service_categories', 'name')
+    ) {
+        $categoryJoin = ' LEFT JOIN service_categories cat ON cat.id = sc.category_id';
+        $categorySelect = 'cat.name AS category_name';
+    }
 
     // provider.verified is derived solely from provider_verification.status
     // (see cbot_fetch_provider_verification / offer_detail) so it can never
     // contradict provider.verification.*; providers.is_verified is not read here.
     $sql = "SELECT o.id AS offer_id, o.provider_id, o.service_id, {$offerPcsSelect},
                    o.title, o.description AS offer_description, o.price_from, o.currency,
-                   sc.name AS service_name, sc.slug AS service_slug, {$serviceDescriptionSelect}, sc.is_active AS service_active,
-                   p.name AS provider_name, {$providerSlug}, {$providerType}, {$providerCity}, {$providerDescription}
+                   sc.name AS service_name, sc.slug AS service_slug, {$serviceDescriptionSelect}, sc.is_active AS service_active, {$categorySelect},
+                   p.name AS provider_name, {$providerSlug}, {$providerType}, {$providerCity}, {$providerDescription}, {$providerLogo}
             FROM provider_service_offers o
             INNER JOIN service_catalog sc ON sc.id = o.service_id AND sc.is_active = 1{$serviceDeletedWhere}
             INNER JOIN providers p ON p.id = o.provider_id{$providerStatusWhere}{$providerDeletedWhere}
+            {$categoryJoin}
             WHERE o.id = ? AND o.is_active = 1{$offerDeletedWhere}
             LIMIT 1";
 
@@ -762,7 +869,7 @@ function cbot_fetch_provider_verification(mysqli $db, int $providerId): array {
     return $result;
 }
 
-function cbot_fetch_staff_services(mysqli $db, int $providerId, int $staffId): array {
+function cbot_fetch_staff_services(mysqli $db, int $providerId, int $staffId, ?int $contextOfferId = null): array {
     if (
         !cbot_table_exists($db, 'provider_medical_staff_services') ||
         !cbot_table_exists($db, 'service_catalog') ||
@@ -806,6 +913,16 @@ function cbot_fetch_staff_services(mysqli $db, int $providerId, int $staffId): a
             : '';
     }
 
+    // When a contextual offer_id is given (catalog/offer/{id} building its own
+    // ficha), it must win the per-service dedup below over price-based
+    // ordering — otherwise a cheaper/older active offer for the same
+    // service+provider(+PCS) could be picked instead, and top-level offer_id
+    // would disagree with staff[].services[].offer_id for that same service.
+    // This never affects other services in the result: o.id is globally
+    // unique, so the tie-breaker can only match the row belonging to its own
+    // service_id/provider_id group.
+    $contextOfferPriority = $contextOfferId !== null ? ' (o.id = ?) DESC,' : '';
+
     $sql = "SELECT sc.id, sc.slug, sc.name, o.id AS offer_id, o.title AS offer_title,
                    COALESCE({$relPcsSelect}, {$offerPcsSelect}) AS provider_catalog_service_id
             FROM provider_medical_staff_services rel
@@ -816,14 +933,20 @@ function cbot_fetch_staff_services(mysqli $db, int $providerId, int $staffId): a
              AND o.is_active = 1{$offerDeletedWhere}{$pcsCoherenceWhere}
             {$pcsActiveJoin}
             WHERE rel.provider_medical_staff_id = ?{$relActiveWhere}{$pcsActiveWhere}
-            ORDER BY sc.name ASC, o.price_from IS NULL ASC, o.price_from ASC, o.id ASC";
+            ORDER BY sc.name ASC,{$contextOfferPriority} o.price_from IS NULL ASC, o.price_from ASC, o.id ASC";
 
     $stmt = mysqli_prepare($db, $sql);
     if (!$stmt) {
         error_log('conectarbot staff services prepare error: ' . mysqli_error($db));
         return [];
     }
-    mysqli_stmt_bind_param($stmt, 'ii', $providerId, $staffId);
+    $types = 'ii';
+    $params = [$providerId, $staffId];
+    if ($contextOfferId !== null) {
+        $types .= 'i';
+        $params[] = $contextOfferId;
+    }
+    mysqli_stmt_bind_param($stmt, $types, ...$params);
     mysqli_stmt_execute($stmt);
     $res = mysqli_stmt_get_result($stmt);
 
@@ -849,7 +972,7 @@ function cbot_fetch_staff_services(mysqli $db, int $providerId, int $staffId): a
     return array_values($services);
 }
 
-function offer_detail(mysqli $db, int $offerId, string $source): void {
+function offer_detail(mysqli $db, int $offerId, string $source, string $publicBaseUrl): void {
     $offer = cbot_fetch_offer_core($db, $offerId);
     if (!$offer) {
         respond_error('NOT_FOUND', 'Offer not found', 404, $source);
@@ -866,12 +989,18 @@ function offer_detail(mysqli $db, int $offerId, string $source): void {
     }
 
     $providerCity = cbot_nullable_string($offer['city'] ?? null);
+    // providers.logo commonly stores a bare filename uploaded under
+    // img/providers/{provider_id}/ (see admin/ajax/mi_empresa.php upload_logo
+    // and inc/public_specialists.php::mt_home_specialists_fetch() for the
+    // same canonical convention); already-complete paths/URLs pass through.
+    $providerLogoPath = mt_provider_logo_public_path($offer['logo'] ?? '', $providerId);
     $verification = cbot_fetch_provider_verification($db, $providerId);
     // Single canonical source for both fields: provider_verification.status.
     // Keeps provider.verified and provider.verification.* impossible to contradict.
     $providerVerified = $verification['status'] === 'verified';
 
     $staff = cbot_fetch_service_staff($db, $serviceId, $providerId, $pcsId);
+    $staffPhotos = cbot_fetch_staff_photos($db, array_column($staff, 'id'));
     foreach ($staff as &$person) {
         $person['description'] = cbot_redact_contact_info($person['description']);
         // declared bio, not a verified credential — see professional_license_verified below
@@ -881,9 +1010,26 @@ function offer_detail(mysqli $db, int $offerId, string $source): void {
         // No canonical signal authorizes publishing the raw license number;
         // keep only the verified indicator (see docs: PUBLIC_AI policy).
         unset($person['professional_license']);
-        $person['services'] = cbot_fetch_staff_services($db, $providerId, $person['id']);
+        $person['services'] = cbot_fetch_staff_services($db, $providerId, $person['id'], (int)$offer['offer_id']);
+        // Reuses the same public photo semantics as the home "Our Specialists"
+        // section (validated file existence + placeholder fallback) before
+        // converting the result into an absolute URL.
+        $resolvedPhoto = mt_home_specialist_resolve_photo($staffPhotos[$person['id']] ?? '');
+        $person['photo'] = cbot_resolve_public_url($resolvedPhoto, $publicBaseUrl);
     }
     unset($person);
+
+    $offerMedia = cbot_fetch_offer_media($db, (int)$offer['offer_id']);
+    $gallery = array_map(static function (array $item) use ($publicBaseUrl): array {
+        return [
+            'url' => cbot_resolve_public_url($item['path'], $publicBaseUrl),
+            'sort_order' => $item['sort_order'],
+        ];
+    }, $offerMedia);
+    $images = [
+        'primary' => $gallery[0] ?? null,
+        'gallery' => $gallery,
+    ];
 
     $providersForLocations = [[
         'id' => $providerId,
@@ -900,12 +1046,14 @@ function offer_detail(mysqli $db, int $offerId, string $source): void {
             'from' => cbot_nullable_float($offer['price_from'] ?? null),
             'currency' => cbot_nullable_string($offer['currency'] ?? null),
         ],
+        'images' => $images,
         'service' => [
             'id' => $serviceId,
             'slug' => $offer['service_slug'],
             'name' => $offer['service_name'],
             'description' => cbot_redact_contact_info(cbot_public_text($offer['service_description'] ?? null)) ?? '',
             'active' => $offer['service_active'] == 1,
+            'category' => cbot_nullable_string($offer['category_name'] ?? null),
         ],
         'provider' => [
             'id' => $providerId,
@@ -913,6 +1061,7 @@ function offer_detail(mysqli $db, int $offerId, string $source): void {
             'slug' => cbot_nullable_string($offer['slug'] ?? null),
             'type' => cbot_nullable_string($offer['type'] ?? null),
             'description' => cbot_redact_contact_info(cbot_public_text($offer['provider_description'] ?? null)) ?? '',
+            'logo' => cbot_resolve_public_url(cbot_nullable_string($providerLogoPath), $publicBaseUrl),
             'verified' => $providerVerified,
             'verification' => [
                 'status' => $verification['status'],
