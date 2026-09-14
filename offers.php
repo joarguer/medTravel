@@ -706,8 +706,13 @@ include('inc/include.php');
             border-color: #99f6e4;
         }
         .offer-card .card-img-top {
-            height: 210px;
+            height: 200px;
             object-fit: cover;
+        }
+        .offer-card .card-img-top.card-img-placeholder {
+            object-fit: contain;
+            padding: 16px;
+            background: #f8fafc;
         }
         .offer-card .card-body {
             padding: 20px 20px 16px;
@@ -1217,22 +1222,24 @@ include('inc/include.php');
                             <div class="offer-card card h-100">
                                 <div class="position-relative">
                                     <?php
-                                    $image_path = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f0f0f0" width="400" height="300"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="18"%3EMedical Service%3C/text%3E%3C/svg%3E';
-                                    $img_query  = mysqli_prepare($conexion, "SELECT path FROM offer_media WHERE offer_id = ? ORDER BY sort_order ASC, id ASC LIMIT 1");
+                                    $image_path = 'img/site/placeholder-medical.svg';
+                                    $image_is_placeholder = true;
+                                    $img_query  = mysqli_prepare($conexion, "SELECT path FROM offer_media WHERE offer_id = ? AND is_active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1");
                                     if ($img_query) {
                                         mysqli_stmt_bind_param($img_query, 'i', $offer_id_int);
                                         mysqli_stmt_execute($img_query);
                                         $img_result = mysqli_stmt_get_result($img_query);
                                         if ($img_row = mysqli_fetch_assoc($img_result)) {
                                             $image_path = htmlspecialchars($img_row['path'], ENT_QUOTES, 'UTF-8');
+                                            $image_is_placeholder = false;
                                         }
                                         mysqli_stmt_close($img_query);
                                     }
                                     ?>
                                     <img src="<?php echo $image_path; ?>"
-                                         class="card-img-top"
+                                         class="card-img-top<?php echo $image_is_placeholder ? ' card-img-placeholder' : ''; ?>"
                                          alt="<?php echo htmlspecialchars($offer['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                         onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f0f0f0%22 width=%22400%22 height=%22300%22/%3E%3Ctext fill=%22%23999%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-family=%22Arial%22 font-size=%2218%22%3EMedical Service%3C/text%3E%3C/svg%3E';">
+                                         onerror="this.onerror=null; this.src='img/site/placeholder-medical.svg'; this.classList.add('card-img-placeholder');">
 
                                     <?php if ($offer['logo']): ?>
                                         <img src="admin/img/providers/<?php echo (int)$offer['provider_id']; ?>/<?php echo htmlspecialchars($offer['logo'], ENT_QUOTES, 'UTF-8'); ?>"
