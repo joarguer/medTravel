@@ -197,7 +197,7 @@ $(function(){
                 .addClass('alert-info')
                 .text('Selecciona un prestador médico para listar y administrar sus ofertas comerciales. Esta vista no muestra ofertas de todos los prestadores mezcladas sin contexto.');
             renderEmptyState('Seleccione un prestador médico para ver sus ofertas comerciales.');
-            renderGalleryPlaceholder('Selecciona una oferta del prestador en contexto para gestionar su galería de imágenes.');
+            renderGalleryPlaceholder('Selecciona una oferta del prestador en contexto para gestionar su galería de imágenes y videos.');
             return;
         }
 
@@ -450,7 +450,7 @@ $(function(){
                     updateNextStepCta('', 0, 0, '');
                 }
                 renderEmptyState(getEmptyOfferMessage());
-                renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
+                renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes y videos.');
                 if (cb) cb(true, filteredData, res);
                 return;
             }
@@ -472,7 +472,7 @@ $(function(){
                 } else {
                     tr.append($('<td>').text(row.is_active==1? 'Sí':'No'));
                     actions.append($('<button class="btn btn-xs btn-primary mr5">Editar</button>').click(function(){ openEdit(row.id); }));
-                    actions.append($('<button class="btn btn-xs btn-warning mr5">Fotos</button>').click(function(){ loadGallery(row.id); }));
+                    actions.append($('<button class="btn btn-xs btn-warning mr5">Media</button>').click(function(){ loadGallery(row.id); }));
                     actions.append($('<button class="btn btn-xs btn-success mr5">Copiar link</button>').click(function(){ copyPublicOfferUrl(row.id); }));
                     if (currentOfferStatus === 'active' && !isAdminMedical && parseInt(row.provider_catalog_service_id || 0, 10) > 0) {
                         actions.append($('<a class="btn btn-xs btn-info mr5">Asignar a staff</a>').attr('href', buildStaffAssignmentUrl(parseInt(row.provider_catalog_service_id || 0, 10), parseInt(row.service_id || 0, 10))));
@@ -609,12 +609,12 @@ $(function(){
                 }
                 listOffers(function(ok){
                     if (!ok) {
-                        offersToast('error', 'La oferta se guardó y la imagen se subió, pero no fue posible refrescar el listado.');
+                        offersToast('error', 'La oferta se guardó y el archivo se subió, pero no fue posible refrescar el listado.');
                         return;
                     }
                     offersToast('success', successMessage);
                     $('#offer-file').val('');
-                    // Mantener modal abierto y mostrar pestaña de galería con la imagen recién subida
+                    // Mantener modal abierto y mostrar pestaña de galería con el archivo recién subido
                     $('.nav-tabs a[href="#tab-gallery"]').tab('show');
                 });
             });
@@ -631,7 +631,7 @@ $(function(){
                 return offersToast('error', parseApiError(err, res));
             }
             offersToast('success', 'Oferta eliminada del catálogo.');
-            renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
+            renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes y videos.');
             listOffers();
         });
     }
@@ -654,8 +654,24 @@ $(function(){
         uploadForOffer(id, f, function(err){
             if (err) return offersToast('error', parseApiError(err, null));
             $('#offer-file').val('');
-            offersToast('success', 'Imagen subida exitosamente.', 'Éxito');
+            offersToast('success', 'Archivo subido exitosamente.', 'Éxito');
         });
+    }
+
+    function validateOfferMediaFile(file){
+        var name = (file && file.name) ? file.name : '';
+        var ext = name.split('.').pop().toLowerCase();
+        var imageExts = ['jpg','jpeg','png','webp'];
+        var videoExts = ['mp4'];
+        if (imageExts.indexOf(ext) !== -1) {
+            if (file.size > 3 * 1024 * 1024) return 'La imagen supera el tamaño máximo permitido (3 MB).';
+            return null;
+        }
+        if (videoExts.indexOf(ext) !== -1) {
+            if (file.size > 18 * 1024 * 1024) return 'El video supera el tamaño máximo permitido (18 MB).';
+            return null;
+        }
+        return 'Formato no soportado. Use JPG, PNG, WEBP o MP4.';
     }
 
     function refreshOfferMedia(offerId, cb){
@@ -671,6 +687,8 @@ $(function(){
     }
 
     function uploadForOffer(offerId, file, cb){
+        var validationError = validateOfferMediaFile(file);
+        if (validationError) return cb(validationError);
         var fd = new FormData();
         fd.append('tipo', 'upload_media');
         fd.append('offer_id', offerId);
@@ -706,16 +724,23 @@ $(function(){
         $.getJSON('ajax/provider_offers.php', withProviderContext({tipo:'get', id: offer_id}), function(res){ if(!res.ok) return offersToast('error', res.message || res.error || 'No fue posible cargar la galería.'); renderGallery(res.data.media||[], offer_id); });
     }
 
+    function renderOfferMediaElement(m, css){
+        if (m.media_type === 'VIDEO') {
+            return $('<video controls preload="metadata">').attr('src','../'+m.path).css(css);
+        }
+        return $('<img>').addClass('img-responsive').attr('src','../'+m.path).css(css);
+    }
+
     function renderGalleryInModal(list, offerId){
         var cont = $('#gallery-preview').empty();
         if(!list || list.length==0) { 
-            cont.html('<div class="col-md-12"><div class="alert alert-info"><i class="fa fa-info-circle"></i> No hay imágenes subidas aún. Use el botón "Subir Imagen" para agregar fotos.</div></div>'); 
+            cont.html('<div class="col-md-12"><div class="alert alert-info"><i class="fa fa-info-circle"></i> No hay archivos subidos aún. Use el botón "Subir Archivo" para agregar imágenes o videos.</div></div>');
             return; 
         }
         $.each(list, function(i,m){
             var col = $('<div class="col-xs-6 col-sm-4 col-md-3" style="margin-bottom:15px;">');
             var imgWrap = $('<div style="position:relative; border:2px solid #e9ecef; border-radius:8px; overflow:hidden; padding:5px; background:#fff;">');
-            imgWrap.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'border-radius':'4px', 'width':'100%', 'height':'150px', 'object-fit':'cover'}));
+            imgWrap.append(renderOfferMediaElement(m, {'border-radius':'4px', 'width':'100%', 'height':'150px', 'object-fit':'cover'}));
             var deleteBtn = $('<button type="button" class="btn btn-xs btn-danger" style="position:absolute;top:8px;right:8px;z-index:3;"><i class="fa fa-trash"></i> Eliminar</button>');
             deleteBtn.on('click', function(e){
                 e.preventDefault();
@@ -730,12 +755,12 @@ $(function(){
     
     function renderGallery(list, offerId){
         var cont = $('#offer-gallery').empty();
-        if(!list || list.length==0) { cont.html('<p>No hay fotos</p>'); return; }
+        if(!list || list.length==0) { cont.html('<p>No hay archivos</p>'); return; }
         var row = $('<div class="row">');
         $.each(list, function(i,m){
             var col = $('<div class="col-xs-3">');
             var wrap = $('<div style="position:relative; margin-bottom:10px;">');
-            wrap.append($('<img>').addClass('img-responsive').attr('src','../'+m.path).css({'margin-bottom':'10px'}));
+            wrap.append(renderOfferMediaElement(m, {'margin-bottom':'10px', 'width':'100%'}));
             var deleteBtn = $('<button type="button" class="btn btn-xs btn-danger" style="position:absolute;top:6px;right:6px;z-index:3;"><i class="fa fa-trash"></i></button>');
             deleteBtn.on('click', function(e){
                 e.preventDefault();
@@ -750,14 +775,14 @@ $(function(){
     }
 
     function deleteMedia(mediaId, offerId){
-        if (!mediaId) return offersToast('error', 'Imagen inválida.');
+        if (!mediaId) return offersToast('error', 'Archivo inválido.');
         if (!offerId) return offersToast('error', 'Oferta inválida.');
-        if (!window.confirm('¿Desea eliminar esta imagen de la galería?')) return;
+        if (!window.confirm('¿Desea eliminar este archivo de la galería?')) return;
         api({tipo:'delete_media', image_id: mediaId, offer_id: offerId}, function(err, data, res){
             if (err) return offersToast('error', parseApiError(err, res));
             refreshOfferMedia(offerId, function(refreshErr){
                 if (refreshErr) return offersToast('error', parseApiError(refreshErr, null));
-                offersToast('success', 'Imagen eliminada.', 'Éxito');
+                offersToast('success', 'Archivo eliminado.', 'Éxito');
             });
         });
     }
@@ -783,7 +808,7 @@ $(function(){
         currentOfferStatus = nextStatus;
         $('#provider-offer-status-tabs li').removeClass('active');
         $(this).parent('li').addClass('active');
-        renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes.');
+        renderGalleryPlaceholder('Selecciona una oferta de la tabla para gestionar su galería de imágenes y videos.');
         listOffers();
     });
 

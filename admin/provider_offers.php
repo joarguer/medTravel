@@ -177,7 +177,7 @@ $new_offer_label = $is_admin ? 'Nueva oferta comercial' : 'Nueva oferta';
                                 </div>
                                 <div class="portlet-body">
                                     <div id="offer-gallery">
-                                        <p class="text-muted"><i class="fa fa-images"></i> Selecciona una oferta de la tabla para gestionar su galería de imágenes.</p>
+                                        <p class="text-muted"><i class="fa fa-images"></i> Selecciona una oferta de la tabla para gestionar su galería de imágenes y videos.</p>
                                     </div>
                                 </div>
                             </div>
@@ -349,22 +349,22 @@ $new_offer_label = $is_admin ? 'Nueva oferta comercial' : 'Nueva oferta';
                                     
                                     <div class="form-group">
                                         <label class="control-label">
-                                            <i class="fa fa-camera"></i> Subir fotografías de la oferta
+                                            <i class="fa fa-camera"></i> Subir imagen o video de la oferta
                                         </label>
                                         <div class="input-group" style="width: 100%;">
                                             <input type="file" id="offer-file" class="form-control" 
-                                                   accept="image/jpeg,image/jpg,image/png,image/webp" />
+                                                   accept="image/jpeg,image/jpg,image/png,image/webp,video/mp4,.mp4" />
                                             <span class="input-group-btn">
                                                 <button type="button" id="offer-upload" class="btn btn-primary" 
                                                         style="height: 34px;">
-                                                    <i class="fa fa-upload"></i> Subir Imagen
+                                                    <i class="fa fa-upload"></i> Subir Archivo
                                                 </button>
                                             </span>
                                         </div>
                                         <span class="help-block">
                                             <i class="fa fa-info-circle"></i> 
-                                            Formatos: JPG, PNG, WEBP | Tamaño máximo: 3MB | 
-                                            Recomendado: 1200x800px
+                                            Formatos: JPG, PNG, WEBP, MP4 | IMAGE máximo 3 MB. VIDEO MP4 máximo 18 MB. |
+                                            Recomendado: 1200x800px (imágenes)
                                         </span>
                                     </div>
                                     

@@ -243,6 +243,8 @@ $offerDeletedCondition = (function_exists('mt_db_table_has_column') && mt_db_tab
     ? ' AND o.is_deleted = 0'
     : '';
 
+$offerMediaHasType = (function_exists('mt_db_table_has_column') && mt_db_table_has_column($conexion, 'offer_media', 'media_type'));
+
 // Consulta de ofertas activas
 if ($requires_provider_service_context) {
     $stmt = null;
@@ -1224,7 +1226,7 @@ include('inc/include.php');
                                     <?php
                                     $image_path = 'img/site/placeholder-medical.svg';
                                     $image_is_placeholder = true;
-                                    $img_query  = mysqli_prepare($conexion, "SELECT path FROM offer_media WHERE offer_id = ? AND is_active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1");
+                                    $img_query  = mysqli_prepare($conexion, "SELECT path FROM offer_media WHERE offer_id = ?" . ($offerMediaHasType ? " AND media_type = 'IMAGE'" : '') . " AND is_active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1");
                                     if ($img_query) {
                                         mysqli_stmt_bind_param($img_query, 'i', $offer_id_int);
                                         mysqli_stmt_execute($img_query);

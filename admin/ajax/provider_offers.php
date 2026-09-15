@@ -616,7 +616,11 @@ if ($tipo === 'get') {
     if (!$offer) json_error('NOT_FOUND',404);
     $offer = provider_offers_hydrate_offer_service($conexion, $provider_id, $offer);
     // media
-    $mstmt = mysqli_prepare($conexion, "SELECT id,path,sort_order,is_active FROM offer_media WHERE offer_id = ? ORDER BY sort_order ASC, id ASC");
+    $hasMediaTypeCol = table_has_column($conexion, 'offer_media', 'media_type');
+    $hasMimeTypeCol = table_has_column($conexion, 'offer_media', 'mime_type');
+    $mediaTypeSelect = $hasMediaTypeCol ? 'media_type' : "'IMAGE' AS media_type";
+    $mimeTypeSelect = $hasMimeTypeCol ? 'mime_type' : 'NULL AS mime_type';
+    $mstmt = mysqli_prepare($conexion, "SELECT id,path,{$mediaTypeSelect},{$mimeTypeSelect},sort_order,is_active FROM offer_media WHERE offer_id = ? ORDER BY sort_order ASC, id ASC");
     mysqli_stmt_bind_param($mstmt, 'i', $id);
     mysqli_stmt_execute($mstmt);
     $mres = mysqli_stmt_get_result($mstmt);
@@ -897,22 +901,45 @@ if ($tipo === 'upload_media') {
     if (empty($_FILES) || !isset($_FILES['file'])) json_error('NO_FILE');
     $f = $_FILES['file'];
     if ($f['error'] !== UPLOAD_ERR_OK) json_error('UPLOAD_ERR');
-    if ($f['size'] > 3 * 1024 * 1024) json_error('TOO_LARGE');
-    $allowed = ['jpg','jpeg','png','webp'];
+    if ((int)$f['size'] <= 0) json_error('EMPTY_FILE');
+
     $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
-    if (!in_array($ext, $allowed)) json_error('BAD_EXT');
-    $mime = detect_mime_type($f['tmp_name']);
-    if (!$mime) {
-        $ext_map = [
-            'jpg' => 'image/jpeg',
-            'jpeg' => 'image/jpeg',
-            'png' => 'image/png',
-            'webp' => 'image/webp'
-        ];
-        $mime = isset($ext_map[$ext]) ? $ext_map[$ext] : '';
+    $image_exts = ['jpg','jpeg','png','webp'];
+    $video_exts = ['mp4'];
+    $hasMediaType = table_has_column($conexion, 'offer_media', 'media_type');
+    $hasMimeType = table_has_column($conexion, 'offer_media', 'mime_type');
+
+    if (in_array($ext, $image_exts, true)) {
+        $media_type = 'IMAGE';
+        if ($f['size'] > 3 * 1024 * 1024) json_error('TOO_LARGE');
+        $mime = detect_mime_type($f['tmp_name']);
+        if (!$mime) {
+            $ext_map = [
+                'jpg' => 'image/jpeg',
+                'jpeg' => 'image/jpeg',
+                'png' => 'image/png',
+                'webp' => 'image/webp'
+            ];
+            $mime = isset($ext_map[$ext]) ? $ext_map[$ext] : '';
+        }
+        $m_allowed = ['image/jpeg','image/png','image/webp'];
+        if (!in_array($mime, $m_allowed, true)) json_error('BAD_MIME');
+    } elseif (in_array($ext, $video_exts, true)) {
+        if (!$hasMediaType || !$hasMimeType) {
+            json_error('MIGRATION_REQUIRED', 409, 'Video uploads require the offer_media media_type/mime_type migration. Run the SQL migration first.');
+        }
+        // NOTE codec (H.264/AAC) cannot be verified server-side with the
+        // mechanisms available in this runtime (finfo/mime_content_type only,
+        // no ffprobe/ffmpeg). We verify real MIME + extension only; playback
+        // compatibility of the actual codec inside the MP4 container is not
+        // guaranteed and is not asserted here.
+        $media_type = 'VIDEO';
+        if ($f['size'] > 18 * 1024 * 1024) json_error('TOO_LARGE');
+        $mime = detect_mime_type($f['tmp_name']);
+        if ($mime !== 'video/mp4') json_error('BAD_MIME');
+    } else {
+        json_error('BAD_EXT');
     }
-    $m_allowed = ['image/jpeg','image/png','image/webp'];
-    if (!in_array($mime, $m_allowed)) json_error('BAD_MIME');
 
     $dir = __DIR__ . '/../../img/offers/';
     if (!is_dir($dir)) mkdir($dir, 0755, true);
@@ -920,11 +947,21 @@ if ($tipo === 'upload_media') {
     $dest = $dir . $name;
     if (!move_uploaded_file($f['tmp_name'], $dest)) json_error('MOVE_ERR');
     $rel = 'img/offers/' . $name;
-    $ins = mysqli_prepare($conexion, "INSERT INTO offer_media (offer_id,path,sort_order,is_active) VALUES (?,?,1,1)");
-    mysqli_stmt_bind_param($ins, 'is', $offer_id, $rel);
-    mysqli_stmt_execute($ins);
+
+    if ($hasMediaType && $hasMimeType) {
+        $ins = mysqli_prepare($conexion, "INSERT INTO offer_media (offer_id,path,media_type,mime_type,sort_order,is_active) VALUES (?,?,?,?,1,1)");
+        mysqli_stmt_bind_param($ins, 'isss', $offer_id, $rel, $media_type, $mime);
+    } else {
+        $ins = mysqli_prepare($conexion, "INSERT INTO offer_media (offer_id,path,sort_order,is_active) VALUES (?,?,1,1)");
+        mysqli_stmt_bind_param($ins, 'is', $offer_id, $rel);
+    }
+    $ok = mysqli_stmt_execute($ins);
+    if (!$ok) {
+        @unlink($dest);
+        json_error('DB_ERR:'.mysqli_error($conexion));
+    }
     $mid = mysqli_insert_id($conexion);
-    echo json_encode(['ok'=>true,'data'=>['path'=>$rel,'id'=>$mid]]);
+    echo json_encode(['ok'=>true,'data'=>['path'=>$rel,'id'=>$mid,'media_type'=>$media_type,'mime_type'=>$mime]]);
     exit();
 }
 

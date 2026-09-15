@@ -375,7 +375,8 @@ if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_s
             transform: translateY(-5px);
             box-shadow: 0 8px 24px rgba(0,0,0,0.15);
         }
-        .gallery-item img {
+        .gallery-item img,
+        .gallery-item video {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -516,13 +517,20 @@ if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_s
             <div class="col-lg-8">
                 <!-- Galería de Fotos -->
                 <?php
-                // Obtener fotos de la oferta
-                $photos_query = mysqli_query($conexion, "SELECT id, path FROM offer_media WHERE offer_id = {$offer['id']} AND is_active = 1 ORDER BY sort_order ASC, id ASC");
+                // Obtener fotos y videos de la oferta
+                $offerMediaHasType = (function_exists('mt_db_table_has_column') && mt_db_table_has_column($conexion, 'offer_media', 'media_type'));
+                $offerMediaTypeSelect = $offerMediaHasType ? 'media_type' : "'IMAGE' AS media_type";
+                $photos_stmt = mysqli_prepare($conexion, "SELECT id, path, {$offerMediaTypeSelect} FROM offer_media WHERE offer_id = ? AND is_active = 1 ORDER BY sort_order ASC, id ASC");
                 $photos = [];
-                if ($photos_query) {
-                    while ($photo = mysqli_fetch_assoc($photos_query)) {
+                if ($photos_stmt) {
+                    $offer_id_for_media = (int)$offer['id'];
+                    mysqli_stmt_bind_param($photos_stmt, 'i', $offer_id_for_media);
+                    mysqli_stmt_execute($photos_stmt);
+                    $photos_result = mysqli_stmt_get_result($photos_stmt);
+                    while ($photo = mysqli_fetch_assoc($photos_result)) {
                         $photos[] = $photo;
                     }
+                    mysqli_stmt_close($photos_stmt);
                 }
                 ?>
                 
@@ -534,14 +542,20 @@ if ($contextBookingId > 0 && function_exists('is_client_session') && is_client_s
                     </h2>
                     <div class="gallery-grid">
                         <?php foreach ($photos as $photo): ?>
-                            <a href="<?php echo htmlspecialchars($photo['path']); ?>" 
-                               data-lightbox="offer-gallery" 
-                               data-title="<?php echo htmlspecialchars($offer['title']); ?>" 
-                               class="gallery-item">
-                                <img src="<?php echo htmlspecialchars($photo['path']); ?>" 
-                                     alt="<?php echo htmlspecialchars($offer['title']); ?>"
-                                     loading="lazy">
-                            </a>
+                            <?php if ($photo['media_type'] === 'VIDEO'): ?>
+                                <div class="gallery-item">
+                                    <video controls preload="metadata" src="<?php echo htmlspecialchars($photo['path']); ?>"></video>
+                                </div>
+                            <?php else: ?>
+                                <a href="<?php echo htmlspecialchars($photo['path']); ?>"
+                                   data-lightbox="offer-gallery"
+                                   data-title="<?php echo htmlspecialchars($offer['title']); ?>"
+                                   class="gallery-item">
+                                    <img src="<?php echo htmlspecialchars($photo['path']); ?>"
+                                         alt="<?php echo htmlspecialchars($offer['title']); ?>"
+                                         loading="lazy">
+                                </a>
+                            <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>

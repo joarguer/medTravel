@@ -357,6 +357,7 @@ $requested_cat = isset($_GET['cat']) ? trim((string)$_GET['cat']) : '';
 $current_category_name = '';
 $current_addon_services = [];
 $current_medical_offers = [];
+$offerMediaHasType = (function_exists('mt_db_table_has_column') && mt_db_table_has_column($conexion, 'offer_media', 'media_type'));
 $prev_step_url = '';
 $next_step_url = '';
 
@@ -1020,10 +1021,17 @@ if ($flow === 'addon' && !empty($addon_route)) {
                                         <?php
                                         $offer_image_src = '../img/site/placeholder-medical.svg';
                                         $offer_image_is_placeholder = true;
-                                        $img_query = mysqli_query($conexion, "SELECT path FROM offer_media WHERE offer_id = {$offer['id']} AND is_active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1");
-                                        if ($img_query && $img_row = mysqli_fetch_assoc($img_query)) {
-                                            $offer_image_src = '../' . htmlspecialchars($img_row['path']);
-                                            $offer_image_is_placeholder = false;
+                                        $img_query = mysqli_prepare($conexion, "SELECT path FROM offer_media WHERE offer_id = ?" . ($offerMediaHasType ? " AND media_type = 'IMAGE'" : '') . " AND is_active = 1 ORDER BY sort_order ASC, id ASC LIMIT 1");
+                                        if ($img_query) {
+                                            $offer_id_for_media = (int)$offer['id'];
+                                            mysqli_stmt_bind_param($img_query, 'i', $offer_id_for_media);
+                                            mysqli_stmt_execute($img_query);
+                                            $img_result = mysqli_stmt_get_result($img_query);
+                                            if ($img_row = mysqli_fetch_assoc($img_result)) {
+                                                $offer_image_src = '../' . htmlspecialchars($img_row['path']);
+                                                $offer_image_is_placeholder = false;
+                                            }
+                                            mysqli_stmt_close($img_query);
                                         }
                                         ?>
                                         <div class="card-img-top">

@@ -32,10 +32,14 @@ CREATE TABLE IF NOT EXISTS `offer_media` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `offer_id` INT NOT NULL,
   `path` VARCHAR(255) NOT NULL,
+  `media_type` ENUM('IMAGE','VIDEO') NOT NULL DEFAULT 'IMAGE',
+  `mime_type` VARCHAR(100) NULL,
+  `poster_path` VARCHAR(255) NULL,
   `sort_order` INT NOT NULL DEFAULT 1,
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   KEY `idx_offer_id` (`offer_id`),
+  KEY `idx_offer_media_offer_media_type` (`offer_id`, `media_type`),
   CONSTRAINT `fk_media_offer` FOREIGN KEY (`offer_id`) REFERENCES `provider_service_offers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
