@@ -274,7 +274,9 @@ function cbot_fetch_offer_media(mysqli $db, int $offerId): array {
     }
 
     $activeWhere = cbot_table_has_column($db, 'offer_media', 'is_active') ? ' AND is_active = 1' : '';
-    $sql = "SELECT path, sort_order FROM offer_media WHERE offer_id = ?{$activeWhere} ORDER BY sort_order ASC, id ASC";
+    $mediaTypeSelect = cbot_table_has_column($db, 'offer_media', 'media_type') ? 'media_type' : "'IMAGE' AS media_type";
+    $mimeTypeSelect = cbot_table_has_column($db, 'offer_media', 'mime_type') ? 'mime_type' : 'NULL AS mime_type';
+    $sql = "SELECT path, sort_order, {$mediaTypeSelect}, {$mimeTypeSelect} FROM offer_media WHERE offer_id = ?{$activeWhere} ORDER BY sort_order ASC, id ASC";
 
     $stmt = mysqli_prepare($db, $sql);
     if (!$stmt) {
@@ -294,6 +296,8 @@ function cbot_fetch_offer_media(mysqli $db, int $offerId): array {
         $media[] = [
             'path' => $path,
             'sort_order' => isset($row['sort_order']) ? (int)$row['sort_order'] : 0,
+            'media_type' => cbot_nullable_string($row['media_type'] ?? null),
+            'mime_type' => cbot_nullable_string($row['mime_type'] ?? null),
         ];
     }
     mysqli_stmt_close($stmt);
@@ -1020,16 +1024,29 @@ function offer_detail(mysqli $db, int $offerId, string $source, string $publicBa
     unset($person);
 
     $offerMedia = cbot_fetch_offer_media($db, (int)$offer['offer_id']);
+    $offerImages = array_values(array_filter($offerMedia, static function (array $item): bool {
+        return $item['media_type'] === 'IMAGE';
+    }));
+    $offerVideos = array_values(array_filter($offerMedia, static function (array $item): bool {
+        return $item['media_type'] === 'VIDEO';
+    }));
     $gallery = array_map(static function (array $item) use ($publicBaseUrl): array {
         return [
             'url' => cbot_resolve_public_url($item['path'], $publicBaseUrl),
             'sort_order' => $item['sort_order'],
         ];
-    }, $offerMedia);
+    }, $offerImages);
     $images = [
         'primary' => $gallery[0] ?? null,
         'gallery' => $gallery,
     ];
+    $videos = array_map(static function (array $item) use ($publicBaseUrl): array {
+        return [
+            'url' => cbot_resolve_public_url($item['path'], $publicBaseUrl),
+            'sort_order' => $item['sort_order'],
+            'mime_type' => $item['mime_type'],
+        ];
+    }, $offerVideos);
 
     $providersForLocations = [[
         'id' => $providerId,
@@ -1047,6 +1064,7 @@ function offer_detail(mysqli $db, int $offerId, string $source, string $publicBa
             'currency' => cbot_nullable_string($offer['currency'] ?? null),
         ],
         'images' => $images,
+        'videos' => $videos,
         'service' => [
             'id' => $serviceId,
             'slug' => $offer['service_slug'],

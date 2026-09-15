@@ -139,6 +139,25 @@ Formato esperado cuando el ID es válido/elegible. Incluye el contrato vigente y
       "from": 120.0,
       "currency": "USD"
     },
+    "images": {
+      "primary": {
+        "url": "https://<host>/img/offers/1700000000_abc123.jpg",
+        "sort_order": 1
+      },
+      "gallery": [
+        {
+          "url": "https://<host>/img/offers/1700000000_abc123.jpg",
+          "sort_order": 1
+        }
+      ]
+    },
+    "videos": [
+      {
+        "url": "https://<host>/img/offers/1700000001_def456.mp4",
+        "sort_order": 2,
+        "mime_type": "video/mp4"
+      }
+    ],
     "service": {
       "id": 1,
       "slug": "face-up-thread-lift",
@@ -222,6 +241,8 @@ Notas de contrato:
 - `staff[].services[]` debe salir de relaciones reales y elegibles del modelo: staff del mismo provider, relación activa en `provider_medical_staff_services`, servicio activo/no eliminado, oferta activa/no eliminada cuando se incluya `offer_id`. Si el esquema modela PCS en ambos lados (`provider_medical_staff_services.provider_catalog_service_id` y `provider_service_offers.provider_catalog_service_id`), el match debe ser exacto y no-NULL (NULL nunca actúa como comodín) y, si existe `provider_catalog_services.is_active`, esa fila debe estar activa. Si el esquema no modela PCS en ambos lados, se mantiene el fallback histórico por provider+servicio.
 - `provider.verification` puede exponer un resumen público (`status`, `level`, `label`) derivado del proceso MedTravel. No debe incluir checklist, documentos, `trust_score`, usuarios internos, fechas internas ni notas. `provider.verified` se deriva de la misma fuente canónica que `provider.verification.status` (`provider_verification.status = 'verified'`); no existe una fuente separada, por lo que `verified=false` con `verification.label="Verified Premium"` es estructuralmente imposible.
 - `provider.description`, `offer.description`, `service.description`, `staff[].description` y `staff[].public_experience` son textos libres públicos y deben pasar por redacción automática de contacto (emails, teléfonos, handles de WhatsApp/Telegram/redes) antes de responder; el contenido médico/comercial se conserva, solo se enmascara el dato de contacto.
+- `images` expone únicamente filas de `offer_media` con `media_type = 'IMAGE'`. `images.primary` es la primera imagen de `images.gallery` (mismo orden que `offer_media.sort_order ASC, id ASC`) o `null` si la oferta no tiene imágenes. `images.gallery` es `[]` cuando no hay imágenes. En esquemas legacy sin columna `media_type`, todas las filas de `offer_media` se tratan como `IMAGE` (comportamiento histórico preservado).
+- `videos` es un campo aditivo nuevo: expone únicamente filas con `media_type = 'VIDEO'`, en el mismo orden de `offer_media`. Cada elemento trae `url`, `sort_order` y `mime_type` (puede ser `null` si el archivo no tiene MIME registrado). No existe un "primary" para videos, no se genera poster ni duración, y no se infiere ningún dato que el modelo no tenga. Si la oferta no tiene videos, o el esquema no modela `media_type` todavía, `videos` es `[]`. Una fila con `media_type` distinto de `IMAGE`/`VIDEO` no aparece ni en `images` ni en `videos`.
 
 #### Error y fallback genérico
 Respuesta esperada para ID inválido, inactivo, eliminado o no elegible:
