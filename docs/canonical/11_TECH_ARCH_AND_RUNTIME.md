@@ -620,6 +620,7 @@ Server → Client
 **Managed directories**
 - `img/blog/`
 - `img/blog/videos/`
+- `img/offers/`
 - `img/site/blog/`
 - `img/site/booking/`
 - `img/site/contact/`
@@ -627,6 +628,7 @@ Server → Client
 **Responsibilities**
 - `img/blog/`: uploaded blog cover images
 - `img/blog/videos/`: uploaded local MP4 files for blog posts
+- `img/offers/`: uploaded offer media (`offer_media`), IMAGE + VIDEO
 - `img/site/blog/`: shared public hero/header image for blog listing and blog detail
 - `img/site/booking/`: booking page header image
 - `img/site/contact/`: contact page header image
@@ -635,6 +637,40 @@ Server → Client
 - File deletion is restricted to managed paths owned by the corresponding module.
 - Replacement uploads remove the previous managed file only when the old path is within the expected module directory.
 - Missing files on disk do not block content updates or deletes.
+
+## Offer Media IMAGE + VIDEO (desde 2026-09-15)
+
+**Modelo**
+- `offer_media` es la media de una oferta comercial (`provider_service_offers`) y soporta dos tipos: `IMAGE` y `VIDEO`.
+- Los archivos permanecen en filesystem; la BD almacena la ruta (`path`) y metadata. No se almacenan binarios en la BD.
+- `media_type`: `ENUM('IMAGE','VIDEO') NOT NULL DEFAULT 'IMAGE'`.
+- `mime_type`: `VARCHAR(100) NULL`.
+- `poster_path` existe en el schema (nullable) pero **no tiene lógica funcional asociada** hoy: no se genera ni se renderiza poster. No debe tratarse como funcionalidad activa.
+- Las filas históricas/legacy sin `media_type` se consideran `IMAGE` (DEFAULT del schema y fallback del runtime).
+
+**Migración y compatibilidad**
+- El soporte VIDEO (`media_type`, `mime_type`, índice `(offer_id, media_type)`) requiere la migración `sql/2026_09_15_offer_media_type.sql`.
+- Sin el schema migrado, la subida de VIDEO falla cerrado (`MIGRATION_REQUIRED`); no se degrada a un comportamiento parcial.
+- La detección de columnas usa el patrón has_column guard (ver "Patron de compatibilidad para columnas opcionales"); en esquemas legacy todas las filas de `offer_media` se tratan como `IMAGE`.
+- IMAGE mantiene compatibilidad legacy completa (subida, listado y render).
+
+**Límites y formato**
+- IMAGE: máximo 3 MB; JPG/JPEG/PNG/WEBP.
+- VIDEO: máximo 18 MB; actualmente solo MP4.
+- El runtime valida extensión y MIME real (`finfo`/`mime_content_type`). **No hay validación fiable de códec H.264/AAC** (el runtime no dispone de `ffprobe`/`ffmpeg`); la compatibilidad de reproducción del códec dentro del contenedor MP4 no está garantizada ni verificada.
+
+**Consumidores (runtime)**
+- `admin/provider_offers.php` + `admin/js/provider_offers.js`: administran la galería de la oferta con IMAGE + VIDEO.
+- `offers.php` y `booking/wizard.php`: usan exclusivamente IMAGE como thumbnail de la oferta, aunque la oferta tenga VIDEO.
+- `offer_detail.php`: galería con IMAGE + VIDEO. IMAGE conserva `<img>` + lightbox; VIDEO se renderiza como `<video controls preload="metadata">`.
+- **Regla:** un VIDEO se renderiza como `<video controls preload="metadata">`, sin `autoplay`, y nunca como `<img>`.
+
+**API ConectarBot**
+- `images` mantiene contrato retrocompatible y contiene **exclusivamente** IMAGE (`primary` + `gallery`).
+- `videos` es un campo aditivo; cada video expone `url`, `sort_order` y `mime_type`.
+- Una oferta puede tener solo IMAGE, solo VIDEO, ambos o ninguna media.
+- **Regla:** un VIDEO nunca debe contaminar `images`.
+- Contrato detallado y ejemplos: `docs/conectarbot_api.md` (no se duplica aquí).
 
 ## Flujo canónico de seleccion de oferta: categoria → servicio → oferta (desde 2026-04-02)
 

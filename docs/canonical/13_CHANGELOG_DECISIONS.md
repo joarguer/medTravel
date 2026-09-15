@@ -1,5 +1,28 @@
 # Changelog Decisions
 
+## 2026-09-15 — feat(offers): soporte IMAGE + VIDEO en `offer_media`
+
+**Outcome**
+- `offer_media` soporta `media_type` `IMAGE`/`VIDEO` con `mime_type` nullable; los archivos permanecen en `img/offers/` y la BD guarda ruta + metadata. Las filas históricas/legacy se consideran `IMAGE`.
+- Límites actuales: IMAGE 3 MB (JPG/JPEG/PNG/WEBP), VIDEO 18 MB (MP4). El runtime valida extensión y MIME real; no valida de forma fiable el códec H.264/AAC.
+- `poster_path` existe en el schema pero sin lógica funcional asociada.
+- Sin schema migrado, la subida de VIDEO falla cerrado (`MIGRATION_REQUIRED`); no hay degradación parcial.
+- `admin/provider_offers.php` administra IMAGE + VIDEO; `offers.php` y `booking/wizard.php` usan exclusivamente IMAGE como thumbnail; `offer_detail.php` renderiza galería IMAGE + VIDEO (`<video controls preload="metadata">`, sin `autoplay`, nunca `<img>`).
+- API ConectarBot: `images` retrocompatible y exclusivo de IMAGE (`primary` + `gallery`); `videos` aditivo con `url`/`sort_order`/`mime_type`. Una oferta puede tener IMAGE, VIDEO, ambos o ninguna media.
+
+**Decision**
+- VIDEO es una extensión de `offer_media`; no se crea tabla ni entidad paralela.
+- El thumbnail público de oferta se mantiene exclusivamente IMAGE; el VIDEO solo se reproduce en la galería de detalle.
+- La especificación canónica vive en `11_TECH_ARCH_AND_RUNTIME.md` ("Offer Media IMAGE + VIDEO"). El contrato detallado de la API vive en `docs/conectarbot_api.md` y no se duplica aquí.
+
+**Trazabilidad**
+- Commits: `9e7dd36` (feat(offers): add image and video media support), `257ce80` (feat(conectarbot): expose offer videos in catalog API).
+- Migración: `sql/2026_09_15_offer_media_type.sql` aplicada en producción (phpMyAdmin) y verificada.
+- Desplegado en producción vía FTP: `admin/ajax/provider_offers.php`, `admin/js/provider_offers.js`, `admin/provider_offers.php`, `booking/wizard.php`, `offer_detail.php`, `offers.php`, `api/conectarbot/v1/index.php`.
+- Smoke producción PASS: `admin/provider_offers.php` (IMAGE visible, picker IMAGE+MP4, límites 3/18 MB), upload/refresh/delete de VIDEO, `offer_detail.php` con `<video controls preload="metadata">` sin autoplay y sin `<img>`, cards `offers.php`/`booking/wizard.php` con thumbnail IMAGE, API `images` retrocompatible + `videos` aditivo, 404 intacto.
+
+---
+
 ## 2026-04-21 — ops(runtime): gating remoto de admin/cleanup.php validado — triple condición efectiva para habilitar reset
 
 **Outcome**
