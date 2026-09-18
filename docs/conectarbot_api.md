@@ -94,11 +94,16 @@ Datos prohibidos en respuestas públicas de ConectarBot:
   "slug": "consulta-dermatologica",
   "description": "...",
   "active": true,
-  "price_from_usd": 100.0
+  "price_from_usd": 100.0,
+  "has_images": true,
+  "image_count": 3,
+  "has_videos": false,
+  "video_count": 0
 }
 ```
 - Orden: activos primero (desc), luego nombre asc.
 - `price_from_usd` toma el mínimo `provider_service_offers.price_from` en USD si existe; de lo contrario `null`.
+- `has_images`/`image_count`/`has_videos`/`video_count` son campos aditivos: agregan `offer_media` (activa, `path` no vacío tras `trim()`) de las ofertas del servicio, restringido a oferta activa/no-borrada, servicio no-borrado, proveedor activo/no-borrado (cuando esas columnas existen) y, si aplica, vínculo a `provider_catalog_services` válido — el mismo conjunto de condiciones que usan `cbot_fetch_offer_core()`/`cbot_offer_pcs_valid()`, pero implementado como agregación SQL propia en `list_services()`, no una llamada a esas funciones. `image_count`/`video_count` son enteros; `has_images`/`has_videos` son `count > 0`. En schema legacy sin `media_type` toda fila válida de `offer_media` cuenta como IMAGE (`image_count` refleja el total, `has_images` puede ser `true`) y `video_count`/`has_videos` quedan en `0`/`false`. Si `offer_media` no existe, los cuatro campos son `0`/`false`.
 
 ### 3) Detalle de servicio
 - `GET /api/conectarbot/v1/catalog/service/{slug}`

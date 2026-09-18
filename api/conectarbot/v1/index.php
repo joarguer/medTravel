@@ -381,11 +381,49 @@ function list_services(mysqli $db, string $source): void {
     $offerDeletedCondition = cbot_table_has_column($db, 'provider_service_offers', 'is_deleted')
         ? ' AND o.is_deleted = 0'
         : '';
+    $serviceDeletedCondition = cbot_table_has_column($db, 'service_catalog', 'is_deleted')
+        ? ' AND sc.is_deleted = 0'
+        : '';
+
+    // Media counts must only reflect offers that would be publicly eligible per
+    // cbot_fetch_offer_core()/cbot_offer_pcs_valid() (provider active + PCS link valid),
+    // not just the base offer/service join already used for price_from_usd.
+    $mediaJoins = '';
+    $imageCountExpr = '0';
+    $videoCountExpr = '0';
+
+    if (cbot_table_exists($db, 'providers')) {
+        $providerStatusWhere = cbot_table_has_column($db, 'providers', 'is_active') ? ' AND p.is_active = 1' : '';
+        $providerDeletedWhere = cbot_table_has_column($db, 'providers', 'is_deleted') ? ' AND p.is_deleted = 0' : '';
+        $mediaJoins .= " LEFT JOIN providers p ON p.id = o.provider_id{$providerStatusWhere}{$providerDeletedWhere}";
+
+        $pcsValidExpr = '1';
+        if (
+            cbot_table_has_column($db, 'provider_service_offers', 'provider_catalog_service_id') &&
+            cbot_table_exists($db, 'provider_catalog_services')
+        ) {
+            $pcsActiveWhere = cbot_table_has_column($db, 'provider_catalog_services', 'is_active') ? ' AND pcs.is_active = 1' : '';
+            $mediaJoins .= " LEFT JOIN provider_catalog_services pcs ON pcs.id = o.provider_catalog_service_id AND pcs.provider_id = o.provider_id AND pcs.service_id = o.service_id{$pcsActiveWhere}";
+            $pcsValidExpr = '(o.provider_catalog_service_id IS NULL OR pcs.id IS NOT NULL)';
+        }
+
+        if (cbot_table_exists($db, 'offer_media')) {
+            $mediaActiveWhere = cbot_table_has_column($db, 'offer_media', 'is_active') ? ' AND om.is_active = 1' : '';
+            $mediaTypeExpr = cbot_table_has_column($db, 'offer_media', 'media_type') ? 'om.media_type' : "'IMAGE'";
+            $mediaJoins .= " LEFT JOIN offer_media om ON om.offer_id = o.id AND TRIM(om.path) <> ''{$mediaActiveWhere}";
+            $mediaEligibleExpr = "p.id IS NOT NULL AND {$pcsValidExpr}";
+            $imageCountExpr = "COUNT(DISTINCT CASE WHEN om.id IS NOT NULL AND {$mediaEligibleExpr} AND {$mediaTypeExpr} = 'IMAGE' THEN om.id END)";
+            $videoCountExpr = "COUNT(DISTINCT CASE WHEN om.id IS NOT NULL AND {$mediaEligibleExpr} AND {$mediaTypeExpr} = 'VIDEO' THEN om.id END)";
+        }
+    }
+
     $sql = "SELECT sc.id, sc.name, sc.slug, COALESCE(sc.short_description, '') AS description, sc.is_active,
-                   MIN(CASE WHEN o.currency = 'USD' THEN o.price_from END) AS price_from_usd
+                   MIN(CASE WHEN o.currency = 'USD' THEN o.price_from END) AS price_from_usd,
+                   {$imageCountExpr} AS image_count,
+                   {$videoCountExpr} AS video_count
             FROM service_catalog sc
-            INNER JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1{$offerDeletedCondition}
-            WHERE sc.is_active = 1
+            INNER JOIN provider_service_offers o ON o.service_id = sc.id AND o.is_active = 1{$offerDeletedCondition}{$mediaJoins}
+            WHERE sc.is_active = 1{$serviceDeletedCondition}
             GROUP BY sc.id, sc.name, sc.slug, sc.short_description, sc.is_active
             ORDER BY sc.name ASC";
 
@@ -397,6 +435,8 @@ function list_services(mysqli $db, string $source): void {
 
     $rows = [];
     while ($r = mysqli_fetch_assoc($res)) {
+        $imageCount = isset($r['image_count']) ? (int)$r['image_count'] : 0;
+        $videoCount = isset($r['video_count']) ? (int)$r['video_count'] : 0;
         $rows[] = [
             'id' => (int)$r['id'],
             'name' => $r['name'],
@@ -404,6 +444,10 @@ function list_services(mysqli $db, string $source): void {
             'description' => $r['description'],
             'active' => $r['is_active'] == 1,
             'price_from_usd' => isset($r['price_from_usd']) && $r['price_from_usd'] !== null ? (float)$r['price_from_usd'] : null,
+            'has_images' => $imageCount > 0,
+            'image_count' => $imageCount,
+            'has_videos' => $videoCount > 0,
+            'video_count' => $videoCount,
         ];
     }
     mysqli_free_result($res);
