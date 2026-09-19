@@ -108,6 +108,8 @@ Datos prohibidos en respuestas públicas de ConectarBot:
 ### 3) Detalle de servicio
 - `GET /api/conectarbot/v1/catalog/service/{slug}`
 - Slug permitido: `[a-z0-9-]`. Si el slug no existe → HTTP 404, `error.code="NOT_FOUND"`.
+- `offers[]` solo incluye ofertas con PCS válido cuando la oferta trae `provider_catalog_service_id` (mismo criterio que `cbot_offer_pcs_valid()`/`/catalog/offer/{id}`: debe existir en `provider_catalog_services` para ese provider/servicio y, si existe `provider_catalog_services.is_active`, estar activo); una oferta con PCS inválido no aparece en `offers[]`, igual que sería rechazada por `/catalog/offer/{id}`.
+- Cada elemento de `offers[]` incluye los campos aditivos `has_images`/`image_count`/`has_videos`/`video_count`, calculados con la misma semántica de media que `/catalog/offer/{id}` (`offer_media` activa con `path` no vacío tras `trim()`; sin `media_type` toda fila válida cuenta como IMAGE y `video_count`/`has_videos` quedan en `0`/`false`). No exponen URLs ni datos de contacto, solo conteos/flags booleanos.
 
 ### 4) Detalle de oferta por campaña Meta / WhatsApp
 - `GET /api/conectarbot/v1/catalog/offer/{id}`

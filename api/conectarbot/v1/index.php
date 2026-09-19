@@ -550,15 +550,41 @@ function cbot_fetch_service_offers(mysqli $db, int $serviceId): array {
     $providerStatusWhere = cbot_table_has_column($db, 'providers', 'is_active')
         ? ' AND p.is_active = 1'
         : '';
-    $offerPcs = cbot_table_has_column($db, 'provider_service_offers', 'provider_catalog_service_id')
-        ? 'o.provider_catalog_service_id'
-        : 'NULL AS provider_catalog_service_id';
+    $hasPcsColumn = cbot_table_has_column($db, 'provider_service_offers', 'provider_catalog_service_id');
+    $offerPcs = $hasPcsColumn ? 'o.provider_catalog_service_id' : 'NULL AS provider_catalog_service_id';
+    $offerPcsGroupBy = $hasPcsColumn ? ', o.provider_catalog_service_id' : '';
 
-    $sql = "SELECT o.id, o.provider_id, {$offerPcs}, o.title, o.description, o.price_from, o.currency
+    // image_count/video_count reuse the same eligibility/media semantics as
+    // /catalog/offer/{id} (cbot_offer_pcs_valid() + cbot_fetch_offer_media()'s
+    // active/path/media_type rules), aggregated in this one query (no N+1).
+    $mediaJoins = '';
+    $imageCountExpr = '0';
+    $videoCountExpr = '0';
+
+    $pcsValidExpr = '1';
+    if ($hasPcsColumn && cbot_table_exists($db, 'provider_catalog_services')) {
+        $pcsActiveWhere = cbot_table_has_column($db, 'provider_catalog_services', 'is_active') ? ' AND pcs.is_active = 1' : '';
+        $mediaJoins .= " LEFT JOIN provider_catalog_services pcs ON pcs.id = o.provider_catalog_service_id AND pcs.provider_id = o.provider_id AND pcs.service_id = o.service_id{$pcsActiveWhere}";
+        $pcsValidExpr = '(o.provider_catalog_service_id IS NULL OR pcs.id IS NOT NULL)';
+    }
+
+    if (cbot_table_exists($db, 'offer_media')) {
+        $mediaActiveWhere = cbot_table_has_column($db, 'offer_media', 'is_active') ? ' AND om.is_active = 1' : '';
+        $mediaTypeExpr = cbot_table_has_column($db, 'offer_media', 'media_type') ? 'om.media_type' : "'IMAGE'";
+        $mediaJoins .= " LEFT JOIN offer_media om ON om.offer_id = o.id AND TRIM(om.path) <> ''{$mediaActiveWhere}";
+        $imageCountExpr = "COUNT(DISTINCT CASE WHEN om.id IS NOT NULL AND {$pcsValidExpr} AND {$mediaTypeExpr} = 'IMAGE' THEN om.id END)";
+        $videoCountExpr = "COUNT(DISTINCT CASE WHEN om.id IS NOT NULL AND {$pcsValidExpr} AND {$mediaTypeExpr} = 'VIDEO' THEN om.id END)";
+    }
+
+    $sql = "SELECT o.id, o.provider_id, {$offerPcs}, o.title, o.description, o.price_from, o.currency,
+                   {$imageCountExpr} AS image_count,
+                   {$videoCountExpr} AS video_count
             FROM provider_service_offers o
-            INNER JOIN providers p ON p.id = o.provider_id
+            INNER JOIN providers p ON p.id = o.provider_id{$mediaJoins}
             WHERE o.service_id = ?
               AND o.is_active = 1{$offerDeletedCondition}{$providerStatusWhere}{$providerDeletedWhere}
+              AND {$pcsValidExpr}
+            GROUP BY o.id, o.provider_id{$offerPcsGroupBy}, o.title, o.description, o.price_from, o.currency
             ORDER BY o.price_from IS NULL ASC, o.price_from ASC, o.id ASC";
 
     $stmt = mysqli_prepare($db, $sql);
@@ -572,6 +598,8 @@ function cbot_fetch_service_offers(mysqli $db, int $serviceId): array {
 
     $offers = [];
     while ($res && ($row = mysqli_fetch_assoc($res))) {
+        $imageCount = isset($row['image_count']) ? (int)$row['image_count'] : 0;
+        $videoCount = isset($row['video_count']) ? (int)$row['video_count'] : 0;
         $offers[] = [
             'id' => (int)$row['id'],
             'provider_id' => (int)$row['provider_id'],
@@ -580,6 +608,10 @@ function cbot_fetch_service_offers(mysqli $db, int $serviceId): array {
             'description' => cbot_public_text($row['description'] ?? null),
             'price_from' => cbot_nullable_float($row['price_from'] ?? null),
             'currency' => cbot_nullable_string($row['currency'] ?? null),
+            'has_images' => $imageCount > 0,
+            'image_count' => $imageCount,
+            'has_videos' => $videoCount > 0,
+            'video_count' => $videoCount,
         ];
     }
     mysqli_stmt_close($stmt);
